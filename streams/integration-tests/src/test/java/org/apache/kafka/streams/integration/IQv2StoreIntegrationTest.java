@@ -67,6 +67,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -363,6 +364,11 @@ public class IQv2StoreIntegrationTest {
                     for (final String kind : Arrays.asList("DSL", "PAPI")) {
                         for (final String groupProtocol : Arrays.asList("classic", "streams")) {
                             for (final boolean withHeaders : Arrays.asList(true, false)) {
+                                // DSL_STORE_FORMAT_CONFIG only affects DSL stores built without an
+                                // explicit supplier; for PAPI and global stores it is a no-op, so
+                                // skip the redundant withHeaders=true duplicates.
+                                if (withHeaders && (!"DSL".equals(kind) || toTest.global()))
+                                    continue;
                                 values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol, withHeaders));
                             }
                         }
@@ -1817,7 +1823,7 @@ public class IQv2StoreIntegrationTest {
         final Integer key,
         final Instant timeFrom,
         final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
+        final Function<V, Integer> valueExtractor,
         final Set<Integer> expectedValues) {
 
         final WindowKeyQuery<Integer, V> query = WindowKeyQuery.withKeyAndWindowStartRange(
@@ -1858,7 +1864,7 @@ public class IQv2StoreIntegrationTest {
 
                 try (final WindowStoreIterator<V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
@@ -1871,7 +1877,7 @@ public class IQv2StoreIntegrationTest {
     public <V> void shouldHandleWindowRangeQuery(
         final Instant timeFrom,
         final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
+        final Function<V, Integer> valueExtractor,
         final Set<Integer> expectedValues) {
 
         final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withWindowStartRange(timeFrom, timeTo);
@@ -1908,7 +1914,7 @@ public class IQv2StoreIntegrationTest {
 
                 try (final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
@@ -2048,9 +2054,7 @@ public class IQv2StoreIntegrationTest {
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
-        if (withHeaders) {
-            config.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
-        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
         return config;
     }
 }

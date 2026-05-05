@@ -1586,8 +1586,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 new DeleteRecordsPartitionResult().setPartitionIndex(topicPartition.partition)
                   .setLowWatermark(partitionResult.lowWatermark)
                   .setErrorCode(partitionResult.errorCode)
-              }.toList.asJava.iterator()))
-          }.toList.asJava.iterator()))))
+              }.toList.asJava))
+          }.toList.asJava))))
     }
 
     if (authorizedForDeleteTopicOffsets.isEmpty)
@@ -2057,7 +2057,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         txnOffsetCommitRequest.data.topics.asScala
       )(_.name)
 
-      val responseBuilder = new TxnOffsetCommitResponse.Builder()
+      val responseBuilder = TxnOffsetCommitResponse.newBuilder()
       val authorizedTopicCommittedOffsets = new mutable.ArrayBuffer[TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic]()
       txnOffsetCommitRequest.data.topics.forEach { topic =>
         if (!authorizedTopics.contains(topic.name)) {
@@ -2827,9 +2827,10 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             } else {
               // Compute group-specific timeout for caching errors (2 * heartbeat interval)
-              val heartbeatIntervalMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
-                .map(_.streamsHeartbeatIntervalMs().toLong)
-                .getOrElse(config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs().toLong)
+              val heartbeatIntervalMs = groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId)
+                .flatMap[java.lang.Integer](gc => gc.streamsHeartbeatIntervalMs())
+                .orElseGet(() => config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs())
+                .toLong
               val timeoutMs = heartbeatIntervalMs * 2
 
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
@@ -3460,7 +3461,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareFetchRequest.maxWait,
         fetchMinBytes,
         fetchMaxBytes,
-        FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).map(_.shareIsolationLevel()).orElse(GroupConfig.defaultShareIsolationLevel)),
+        FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).flatMap(_.shareIsolationLevel()).orElse(GroupConfig.defaultShareIsolationLevel)),
         clientMetadata,
         true
       )
@@ -4173,10 +4174,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       // record the bytes out metrics only when the response is being sent.
       response.data.responses.forEach { topicResponse =>
         topicResponse.partitions.forEach { data =>
-          // If the topic name was not known, we will have no bytes out.
-          if (topicResponse.topicId != null) {
-            val tp = new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicIdNames.get(topicResponse.topicId), data.partitionIndex))
-            brokerTopicStats.updateBytesOut(tp.topic, false, false, ShareFetchResponse.recordsSize(data))
+          // If the topic name was not known, we will have no bytes out. This can happen if the topic
+          // was deleted and the fetch request was received, or if the topic id in the request was invalid.
+          // In both cases, the error code for the partition will be set accordingly, and we won't have
+          // a topic name to record metrics with.
+          val topicName = topicIdNames.get(topicResponse.topicId)
+          if (topicName != null) {
+            brokerTopicStats.updateBytesOut(topicName, false, false, ShareFetchResponse.recordsSize(data))
           }
         }
       }

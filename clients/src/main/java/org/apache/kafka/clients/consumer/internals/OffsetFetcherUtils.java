@@ -34,8 +34,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -165,11 +165,25 @@ class OffsetFetcherUtils {
             return new OffsetFetcherUtils.ListOffsetResult(fetchedOffsets, partitionsToRetry);
     }
 
-    <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
-        return partitionMap.entrySet()
-                .stream()
-                .collect(Collectors.groupingBy(entry -> metadata.fetch().leaderFor(entry.getKey()),
-                        Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+    <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(
+            Map<TopicPartition, T> partitionMap,
+            Set<TopicPartition> partitionsToRetry) {
+        Map<Node, Map<TopicPartition, T>> partitionsByNode = new HashMap<>();
+
+        final var cluster = metadata.fetch();
+
+        partitionMap.forEach((tp, value) -> {
+            Node leader = cluster.leaderFor(tp);
+            if (leader == null) {
+                log.debug("Leader for partition {} is unknown while regrouping partition map by node", tp);
+                partitionsToRetry.add(tp);
+                return;
+            }
+            partitionsByNode.computeIfAbsent(leader, __ -> new HashMap<>())
+                .put(tp, value);
+        });
+
+        return partitionsByNode;
     }
 
     Map<TopicPartition, SubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate() {
@@ -279,9 +293,9 @@ class OffsetFetcherUtils {
                 }
             } else {
                 if (isolationLevel == IsolationLevel.READ_COMMITTED) {
-                    log.warn("Not updating last stable offset for partition {} as it is no longer assigned", partition);
+                    log.debug("Not updating last stable offset for partition {} as it is no longer assigned", partition);
                 } else {
-                    log.warn("Not updating high watermark for partition {} as it is no longer assigned", partition);
+                    log.debug("Not updating high watermark for partition {} as it is no longer assigned", partition);
                 }
             }
         }
