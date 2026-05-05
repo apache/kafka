@@ -1742,7 +1742,7 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+  @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT, enableUnstableLastVersion = false)
   def shouldReplaceCoordinatorNotAvailableWithLoadInProcessInTxnOffsetCommitWithOlderClient(version: Short): Unit = {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
