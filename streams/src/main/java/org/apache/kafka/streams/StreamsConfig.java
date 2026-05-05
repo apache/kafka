@@ -1563,7 +1563,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
             if (getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG) != 0) {
                 log.warn("Warmup replicas are not supported yet with the streams protocol and will be ignored. "
                     + "If you want to use warmup replicas, please set group.protocol=classic.");
