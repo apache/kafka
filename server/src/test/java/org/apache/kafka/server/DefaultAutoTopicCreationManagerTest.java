@@ -97,7 +97,6 @@ public class DefaultAutoTopicCreationManagerTest {
         props.setProperty(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, String.valueOf(internalTopicPartitions));
         props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, String.valueOf(internalTopicPartitions));
 
-        // Match Scala TestUtils.createBrokerConfig defaults
         props.setProperty(ServerLogConfigs.NUM_PARTITIONS_CONFIG, "1");
         props.setProperty(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "1");
 

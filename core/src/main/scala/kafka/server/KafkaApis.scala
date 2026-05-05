@@ -1285,7 +1285,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (topicMetadata.headOption.isEmpty) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request.session, request.header.clientId)
-        autoTopicCreationManager.createTopics(Seq(internalTopicName).toSet, controllerMutationQuota, None)
+        autoTopicCreationManager.createTopics(internalTopics, controllerMutationQuota, Optional.empty)
         (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       } else {
         if (topicMetadata.head.errorCode != Errors.NONE.code) {

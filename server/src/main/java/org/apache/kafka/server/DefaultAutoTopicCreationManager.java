@@ -105,7 +105,11 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     }
 
     @Override
-    public List<MetadataResponseTopic> createTopics(Set<String> topics, ControllerMutationQuota controllerMutationQuota, Optional<RequestContext> metadataRequestContext) {
+    public List<MetadataResponseTopic> createTopics(
+            Set<String> topics,
+            ControllerMutationQuota controllerMutationQuota,
+            Optional<RequestContext> metadataRequestContext
+    ) {
         var creatableTopics = new HashMap<String, CreatableTopic>();
         var uncreatableTopicResponses = new ArrayList<MetadataResponseTopic>();
         topics.forEach(topic -> {

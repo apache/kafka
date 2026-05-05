@@ -54,11 +54,7 @@ public interface AutoTopicCreationManager {
      *                  for this duration to avoid repeated failed attempts and provide consistent error responses
      *                  during streams group heartbeat requests.
      */
-    void createStreamsInternalTopics(
-            Map<String, CreatableTopic> topics,
-            RequestContext metadataRequestContext,
-            long timeoutMs
-    );
+    void createStreamsInternalTopics(Map<String, CreatableTopic> topics, RequestContext metadataRequestContext, long timeoutMs);
 
     /**
      * Retrieve cached topic creation errors for the specified streams internal topics.
