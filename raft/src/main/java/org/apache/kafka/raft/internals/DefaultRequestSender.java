@@ -21,7 +21,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.NetworkChannel;
 import org.apache.kafka.raft.RaftMessageQueue;
 import org.apache.kafka.raft.RaftRequest;

@@ -37,11 +37,11 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.UUIDDeserializer;
 import org.apache.kafka.common.serialization.UUIDSerializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -92,7 +92,7 @@ public class CompletedFetchTest {
     @Test
     public void testAbortedTransactionRecordsRemoved() {
         int numRecords = 10;
-        Records rawRecords = newTranscactionalRecords(ControlRecordType.ABORT, numRecords);
+        Records rawRecords = newTransactionalRecords(ControlRecordType.ABORT, numRecords);
 
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(rawRecords)
@@ -114,7 +114,7 @@ public class CompletedFetchTest {
     @Test
     public void testCommittedTransactionRecordsIncluded() {
         int numRecords = 10;
-        Records rawRecords = newTranscactionalRecords(ControlRecordType.COMMIT, numRecords);
+        Records rawRecords = newTransactionalRecords(ControlRecordType.COMMIT, numRecords);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(rawRecords);
         CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
@@ -258,7 +258,7 @@ public class CompletedFetchTest {
         }
     }
 
-    private Records newTranscactionalRecords(ControlRecordType controlRecordType, int numRecords) {
+    private Records newTransactionalRecords(ControlRecordType controlRecordType, int numRecords) {
         Time time = new MockTime();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 

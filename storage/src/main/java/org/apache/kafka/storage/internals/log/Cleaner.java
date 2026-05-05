@@ -26,10 +26,10 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.storage.internals.utils.Throttler;
 
 import org.slf4j.Logger;
@@ -253,7 +253,11 @@ public class Cleaner {
                 // Note that it is important to collect aborted transactions from the full log segment
                 // range since we need to rebuild the full transaction index for the new segment.
                 long startOffset = currentSegment.baseOffset();
-                long upperBoundOffset = nextSegmentOpt.map(LogSegment::baseOffset).orElse(currentSegment.readNextOffset());
+                // readNextOffset() is expensive — keep it lazy. orElse() evaluates eagerly,
+                // and orElseGet() can't be used because readNextOffset() throws IOException.
+                long upperBoundOffset = nextSegmentOpt.isPresent()
+                        ? nextSegmentOpt.get().baseOffset()
+                        : currentSegment.readNextOffset();
                 List<AbortedTxn> abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset);
                 transactionMetadata.addAbortedTransactions(abortedTransactions);
 

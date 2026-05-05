@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.VoterSetTest;
 

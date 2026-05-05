@@ -28,9 +28,9 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -245,12 +245,17 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * <p>Similarly, we may have to unblock the application thread to send a {@link AsyncPollEvent} to make sure
      * our poll timer will not expire while we are polling.
      *
-     * <p>In the event that heartbeats are currently being skipped, this still returns the next heartbeat
-     * delay rather than {@code Long.MAX_VALUE} so that the application thread remains responsive.
+     * <p>When the member is {@link MemberState#UNSUBSCRIBED} (for example, with manual assignment),
+     * this returns {@code Long.MAX_VALUE} to indicate there is no next heartbeat to wait for,
+     * allowing the application thread to block for the full user-specified poll timeout rather than
+     * spinning in a busy loop.
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
         pollTimer.update(currentTimeMs);
+        if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
+            return Long.MAX_VALUE;
+        }
         if (pollTimer.isExpired() || (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())) {
             return 0L;
         }
