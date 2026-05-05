@@ -48,7 +48,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -442,14 +441,6 @@ public class LogTestUtils {
         } else {
             return logManager;
         }
-    }
-
-    public static boolean deleteDirectory(File dir) {
-        File[] files = dir.listFiles();
-        if (files != null) {
-            Arrays.stream(files).forEach(LogTestUtils::deleteDirectory);
-        }
-        return dir.delete();
     }
 
     public static class LogConfigBuilder {

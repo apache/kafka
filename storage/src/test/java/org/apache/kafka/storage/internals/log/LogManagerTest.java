@@ -213,15 +213,13 @@ public class LogManagerTest {
         // during LogManager.shutdown().
         File logDir1 = TestUtils.tempDirectory();
         File logDir2 = TestUtils.tempDirectory();
-        Optional<LogManager> logManagerForTest = Optional.empty();
+        LogManager manager = createLogManager(List.of(logDir1, logDir2));
         try {
-            logManagerForTest = Optional.of(createLogManager(List.of(logDir1, logDir2)));
+            assertEquals(2, manager.liveLogDirs().size());
+            manager.startup(Set.of());
 
-            assertEquals(2, logManagerForTest.get().liveLogDirs().size());
-            logManagerForTest.get().startup(Set.of());
-
-            UnifiedLog log1 = logManagerForTest.get().getOrCreateLog(new TopicPartition(NAME, 0), Optional.empty());
-            UnifiedLog log2 = logManagerForTest.get().getOrCreateLog(new TopicPartition(NAME, 1), Optional.empty());
+            UnifiedLog log1 = manager.getOrCreateLog(new TopicPartition(NAME, 0), Optional.empty());
+            UnifiedLog log2 = manager.getOrCreateLog(new TopicPartition(NAME, 1), Optional.empty());
 
             File logFile1 = new File(logDir1, NAME + "-0");
             assertTrue(logFile1.exists());
@@ -237,16 +235,15 @@ public class LogManagerTest {
             log2.appendAsLeader(LogTestUtils.singletonRecords("test2".getBytes()), 0);
 
             // This should cause log1.close() to fail during LogManger shutdown sequence.
-            LogTestUtils.deleteDirectory(logFile1);
+            Utils.delete(logFile1);
 
-            logManagerForTest.get().shutdown(3);
+            manager.shutdown(3);
 
             assertFalse(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath()));
             assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath()));
-            assertEquals(OptionalLong.empty(), logManagerForTest.get().readBrokerEpochFromCleanShutdownFiles());
+            assertEquals(OptionalLong.empty(), manager.readBrokerEpochFromCleanShutdownFiles());
         } finally {
-            if (logManagerForTest.isPresent()) {
-                LogManager manager = logManagerForTest.get();
+            if (manager != null) {
                 for (File log : manager.liveLogDirs()) {
                     Utils.delete(log);
                 }
@@ -258,28 +255,25 @@ public class LogManagerTest {
     public void testCleanShutdownFileWithBrokerEpoch() throws Exception {
         File logDir1 = TestUtils.tempDirectory();
         File logDir2 = TestUtils.tempDirectory();
-        Optional<LogManager> logManagerForTest = Optional.empty();
+        LogManager manager = createLogManager(List.of(logDir1, logDir2));
         try {
-            logManagerForTest = Optional.of(createLogManager(List.of(logDir1, logDir2)));
-
-            assertEquals(2, logManagerForTest.get().liveLogDirs().size());
-            logManagerForTest.get().startup(Set.of());
-            logManagerForTest.get().getOrCreateLog(new TopicPartition(NAME, 0), Optional.empty());
-            logManagerForTest.get().getOrCreateLog(new TopicPartition(NAME, 1), Optional.empty());
+            assertEquals(2, manager.liveLogDirs().size());
+            manager.startup(Set.of());
+            manager.getOrCreateLog(new TopicPartition(NAME, 0), Optional.empty());
+            manager.getOrCreateLog(new TopicPartition(NAME, 1), Optional.empty());
 
             File logFile1 = new File(logDir1, NAME + "-0");
             assertTrue(logFile1.exists());
             File logFile2 = new File(logDir2, NAME + "-1");
             assertTrue(logFile2.exists());
 
-            logManagerForTest.get().shutdown(3);
+            manager.shutdown(3);
 
             assertTrue(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath()));
             assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath()));
-            assertEquals(OptionalLong.of(3L), logManagerForTest.get().readBrokerEpochFromCleanShutdownFiles());
+            assertEquals(OptionalLong.of(3L), manager.readBrokerEpochFromCleanShutdownFiles());
         } finally {
-            if (logManagerForTest.isPresent()) {
-                LogManager manager = logManagerForTest.get();
+            if (manager != null) {
                 for (File log : manager.liveLogDirs()) {
                     Utils.delete(log);
                 }
@@ -357,6 +351,7 @@ public class LogManagerTest {
         List<File> dirs = List.of(logDir, new File("\u0000"));
 
         logManager.shutdown();
+        Utils.delete(logDir);
         logManager = createLogManager(dirs);
         logManager.startup(Set.of());
 
