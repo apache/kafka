@@ -528,22 +528,47 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
     val controllerListenersValue = controllerListeners
 
-    controllerListenerNames.flatMap { name =>
+    def nameToEndpoint(name: String, isDefault: Boolean): Option[EndPoint] = {
       controllerAdvertisedListeners
         .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
-        .orElse(
-          // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
-          // which match listener names in controller.listener.names.
-          // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
-          // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+        .orElse {
           controllerListenersValue
             .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
-            .map(endpoint => if (endpoint.host == "0.0.0.0") {
-              new EndPoint(null, endpoint.port, endpoint.listenerName, endpoint.securityProtocol)
-            } else {
-              endpoint
-            })
-        )
+            .map { endpoint =>
+              val voterListenerOverride = {
+                // the user did not provide an advertised listener for the default controller listener;
+                // if controller.quorum.voters defines an endpoint for this node, use that as the advertised listener
+                if (isDefault && (endpoint.host == null || endpoint.host == "0.0.0.0")) {
+                  val votersAddress = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId)
+                  votersAddress.map { socketAddress =>
+                    new EndPoint(
+                      socketAddress.getHostString,
+                      socketAddress.getPort,
+                      endpoint.listenerName,
+                      endpoint.securityProtocol
+                    )
+                  }
+                } else {
+                  None
+                }
+              }
+              voterListenerOverride.getOrElse {
+                // Removing "0.0.0.0" host to avoid validation errors.
+                // This is to be compatible with the old behavior before 3.9.
+                // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+                if (endpoint.host == "0.0.0.0") {
+                  new EndPoint(null, endpoint.port, endpoint.listenerName, endpoint.securityProtocol)
+                } else {
+                  endpoint
+                }
+              }
+            }
+        }
+    }
+
+    controllerListenerNames.toList match {
+      case Nil => Nil
+      case head :: tail => nameToEndpoint(head, true).toList ++ tail.flatMap(nameToEndpoint(_, false))
     }
   }
 
