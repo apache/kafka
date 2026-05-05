@@ -41,8 +41,6 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -52,7 +50,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -62,8 +59,8 @@ public class MetadataCacheTest {
 
     protected static final long BROKER_EPOCH = 0L;
 
-    public static Stream<MetadataCache> cacheProvider() {
-        return Stream.of(new KRaftMetadataCache(1, () -> KRaftVersion.KRAFT_VERSION_0));
+    public static MetadataCache createCache() {
+        return new KRaftMetadataCache(1, () -> KRaftVersion.KRAFT_VERSION_0);
     }
 
     public static void updateCache(MetadataCache cache, List<ApiMessage> records) {
@@ -91,18 +88,18 @@ public class MetadataCacheTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void getTopicMetadataNonExistingTopics(MetadataCache cache) {
+    @Test
+    public void getTopicMetadataNonExistingTopics() {
+        MetadataCache cache = createCache();
         String topic = "topic";
         List<MetadataResponseData.MetadataResponseTopic> topicMetadata = cache.getTopicMetadata(
             Set.of(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), false, false);
         assertTrue(topicMetadata.isEmpty());
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void getTopicMetadata(MetadataCache cache) {
+    @Test
+    public void getTopicMetadata() {
+        MetadataCache cache = createCache();
         String topic0 = "topic-0";
         String topic1 = "topic-1";
 
@@ -204,9 +201,9 @@ public class MetadataCacheTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void getTopicMetadataPartitionLeaderNotAvailable(MetadataCache cache) {
+    @Test
+    public void getTopicMetadataPartitionLeaderNotAvailable() {
+        MetadataCache cache = createCache();
         SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         List<RegisterBrokerRecord> brokers = List.of(
@@ -229,9 +226,9 @@ public class MetadataCacheTest {
             1, Errors.LEADER_NOT_AVAILABLE, true);
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void getTopicMetadataPartitionListenerNotAvailableOnLeader(MetadataCache cache) {
+    @Test
+    public void getTopicMetadataPartitionListenerNotAvailableOnLeader() {
+        MetadataCache cache = createCache();
         // when listener name is not present in the metadata cache for a broker, getTopicMetadata should
         // return LEADER_NOT_AVAILABLE or LISTENER_NOT_FOUND errors for old and new versions respectively.
         ListenerName plaintextListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
@@ -318,9 +315,9 @@ public class MetadataCacheTest {
         assertEquals(List.of(0), partitionMetadata.replicaNodes());
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void getTopicMetadataReplicaNotAvailable(MetadataCache cache) {
+    @Test
+    public void getTopicMetadataReplicaNotAvailable() {
+        MetadataCache cache = createCache();
         String topic = "topic";
         Uuid topicId = Uuid.randomUuid();
 
@@ -393,9 +390,9 @@ public class MetadataCacheTest {
         assertEquals(List.of(0), partitionMetadataWithError.isrNodes());
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void getTopicMetadataIsrNotAvailable(MetadataCache cache) {
+    @Test
+    public void getTopicMetadataIsrNotAvailable() {
+        MetadataCache cache = createCache();
         String topic = "topic";
         Uuid topicId = Uuid.randomUuid();
 
@@ -467,9 +464,9 @@ public class MetadataCacheTest {
         assertEquals(List.of(0), partitionMetadataWithError.isrNodes());
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void getTopicMetadataWithNonSupportedSecurityProtocol(MetadataCache cache) {
+    @Test
+    public void getTopicMetadataWithNonSupportedSecurityProtocol() {
+        MetadataCache cache = createCache();
         String topic = "topic";
         Uuid topicId = Uuid.randomUuid();
         SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
@@ -512,9 +509,9 @@ public class MetadataCacheTest {
         assertEquals(RecordBatch.NO_PARTITION_LEADER_EPOCH, topicMetadata.get(0).partitions().get(0).leaderId());
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void getAliveBrokersShouldNotBeMutatedByUpdateCache(MetadataCache cache) {
+    @Test
+    public void getAliveBrokersShouldNotBeMutatedByUpdateCache() {
+        MetadataCache cache = createCache();
         String topic = "topic";
         Uuid topicId = Uuid.randomUuid();
         List<ApiMessage> topicRecords = List.of(
@@ -558,9 +555,9 @@ public class MetadataCacheTest {
         updateCache(cache, records);
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void testGetPartitionReplicaEndpoints(MetadataCache cache) {
+    @Test
+    public void testGetPartitionReplicaEndpoints() {
+        MetadataCache cache = createCache();
         SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
 
@@ -655,20 +652,59 @@ public class MetadataCacheTest {
         assertTrue(brokerIdToNodeMap.isEmpty());
     }
 
+    /**
+     * Returns every possible replica set (combination of broker IDs) for the given
+     * {@code numBrokers} and {@code replicationFactor}.
+     *
+     * <p>Broker IDs are in the range {@code [0, numBrokers)}.  The result contains all
+     * C(numBrokers, replicationFactor) ordered-ascending combinations, each represented
+     * as a {@code List<Integer>}.
+     *
+     * <p>The algorithm maintains an {@code indices} array of length {@code replicationFactor}
+     * whose entries are always strictly increasing broker IDs.  Each iteration records the
+     * current combination and then advances to the lexicographically next one using the
+     * standard "next k-combination" technique:
+     * <ol>
+     *   <li>Find the rightmost position {@code i} that can still be incremented (i.e.
+     *       {@code indices[i] < numBrokers - replicationFactor + i}).</li>
+     *   <li>Increment {@code indices[i]}.</li>
+     *   <li>Reset every position to the right of {@code i} to the smallest valid values
+     *       ({@code indices[j] = indices[j-1] + 1}).</li>
+     *   <li>If no such position exists ({@code i < 0}), all combinations have been
+     *       enumerated and the loop ends.</li>
+     * </ol>
+     *
+     * <p>Example – {@code numBrokers=3, replicationFactor=2} produces:
+     * {@code [[0,1], [0,2], [1,2]]}.
+     */
     private static List<List<Integer>> getAllReplicaSets(int numBrokers, int replicationFactor) {
         List<List<Integer>> result = new ArrayList<>();
+
+        // Start with the lexicographically smallest combination: [0, 1, 2, ..., replicationFactor-1]
         int[] indices = new int[replicationFactor];
         for (int i = 0; i < replicationFactor; i++) indices[i] = i;
+
         while (true) {
+            // Record the current combination
             List<Integer> combo = new ArrayList<>();
             for (int idx : indices) combo.add(idx);
             result.add(combo);
+
+            // Find the rightmost index that has not yet reached its maximum value.
+            // The maximum value for position i is (numBrokers - replicationFactor + i),
+            // which leaves enough room for all subsequent positions to have distinct IDs.
             int i = replicationFactor - 1;
             while (i >= 0 && indices[i] == numBrokers - replicationFactor + i) i--;
+
+            // All combinations have been generated; stop.
             if (i < 0) break;
+
+            // Increment the found position and reset everything to its right to
+            // the smallest contiguous values that keep the array strictly increasing.
             indices[i]++;
             for (int j = i + 1; j < replicationFactor; j++) indices[j] = indices[j - 1] + 1;
         }
+
         return result;
     }
 
@@ -921,9 +957,9 @@ public class MetadataCacheTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("cacheProvider")
-    public void testGetLeaderAndIsr(MetadataCache cache) {
+    @Test
+    public void testGetLeaderAndIsr() {
+        MetadataCache cache = createCache();
         String topic = "topic";
         Uuid topicId = Uuid.randomUuid();
         int partitionIndex = 0;
