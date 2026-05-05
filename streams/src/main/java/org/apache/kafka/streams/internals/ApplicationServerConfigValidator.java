@@ -20,16 +20,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
-import static org.apache.kafka.common.utils.Utils.getHost;
-import static org.apache.kafka.common.utils.Utils.getPort;
 
 public class ApplicationServerConfigValidator implements ConfigDef.Validator {
-
-    private static final ConfigDef.Validator INSTANCE = new ApplicationServerConfigValidator();
-
-    public static ConfigDef.Validator getInstance() {
-        return INSTANCE;
-    }
 
     @Override
     public void ensureValid(final String name, final Object value) {
@@ -43,10 +35,10 @@ public class ApplicationServerConfigValidator implements ConfigDef.Validator {
             return;
         }
 
-        final String host = getHost(endPoint);
+        final String host = Utils.getHost(endPoint);
         final Integer port;
         try {
-            port = getPort(endPoint);
+            port = Utils.getPort(endPoint);
         } catch (final NumberFormatException e) {
             throw new ConfigException(name, value, "Invalid port: " + e.getMessage());
         }

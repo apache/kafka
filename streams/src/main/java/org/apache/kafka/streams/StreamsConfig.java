@@ -1115,7 +1115,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(APPLICATION_SERVER_CONFIG,
                     Type.STRING,
                     "",
-                    ApplicationServerConfigValidator.getInstance(),
+                    new ApplicationServerConfigValidator(),
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
