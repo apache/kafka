@@ -2056,7 +2056,9 @@ public class GroupMetadataManager {
 
         // Get or create the member.
         StreamsGroupMember member;
+        Optional<String> maybeReplacedStaticMemberId;
         if (instanceId == null) {
+            maybeReplacedStaticMemberId = Optional.empty();
             member = getOrMaybeCreateDynamicStreamsGroupMember(
                 group,
                 memberId,
@@ -2067,6 +2069,10 @@ public class GroupMetadataManager {
                 isJoining
             );
         } else {
+            StreamsGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
+            maybeReplacedStaticMemberId = existingStaticMemberOrNull == null ?
+                    Optional.empty() :
+                    Optional.of(existingStaticMemberOrNull.memberId());
             member = getOrMaybeCreateStaticStreamsGroupMember(
                     group,
                     memberId,
@@ -2229,6 +2235,9 @@ public class GroupMetadataManager {
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
             group.invalidateCachedEndpointToPartitions(updatedMember.memberId());
+            if (maybeReplacedStaticMemberId.isPresent() && !maybeReplacedStaticMemberId.get().equals(updatedMember.memberId())) {
+                group.invalidateCachedEndpointToPartitions(maybeReplacedStaticMemberId.get());
+            }
             if (updatedMember.userEndpoint().isPresent()) {
                 // If no user endpoint is defined, there is no change in the endpoint information.
                 // Otherwise, bump the endpoint information epoch
@@ -2237,7 +2246,7 @@ public class GroupMetadataManager {
         }
 
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
-            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage));
+            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage, maybeReplacedStaticMemberId));
         }
         if (groups.containsKey(group.groupId())) {
             // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
