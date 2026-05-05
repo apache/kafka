@@ -245,7 +245,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         log.info("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
-        stateUpdatesListeners.forEach(listener -> listener.onConsumerMemberStateChange(nextState));
+        stateUpdatesListeners.forEach(listener -> listener.onMemberStateChange(nextState));
     }
 
     private static boolean isCompletingRebalance(MemberState currentState, MemberState nextState) {

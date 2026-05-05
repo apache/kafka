@@ -49,11 +49,11 @@ public interface MemberStateListener {
     }
 
     /**
-     * Called whenever the consumer group member transitions to a new state.
+     * Called whenever the member transitions to a new state.
      *
-     * @param memberState The new consumer group member state.
+     * @param memberState The member state.
      */
-    default void onConsumerMemberStateChange(MemberState memberState) {
+    default void onMemberStateChange(MemberState memberState) {
    
     }
 }
