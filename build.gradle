@@ -314,8 +314,15 @@ subprojects {
 
   apply plugin: 'java-library'
 
-  // Resolve conflict between testFixtures and shadow in :clients.
-  // Skip for :clients itself - it should use its own source sets, not its shadow JAR.
+  // Resolve conflict between testFixtures and shadow in clients:
+  // testFixtures(project(':clients)) depends on the raw main classpath for clients (apiElements) - see "Rewire
+  // test fixtures dependencies to avoid depending on the shadow JAR" in the clients project - and this creates
+  // a conflicting variant with the shadow jar. e.g. main classpath for streams depends the clients shadow jar,
+  // and the test classpath for streams depends on the client test fixtures, which transitively depends on
+  // clients raw main classpath (apiElements) conflicting with the shadow jar. To resolve this, we configure
+  // a resolution strategy for every other module that prefers the shadow jar. As an alternative to this general
+  // rule, each module that includes the test fixtures dependency could exclude the conflicting variant:
+  // testImplementation(testFixtures(project(':clients'))) { exclude group: 'org.apache.kafka', module: 'clients' }
   if (project.name != 'clients') {
     configurations.configureEach {
       resolutionStrategy.capabilitiesResolution.withCapability('org.apache.kafka:clients') {
@@ -323,6 +330,7 @@ subprojects {
       }
     }
   }
+
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
 
@@ -1903,6 +1911,7 @@ project(':clients') {
     shadowed
   }
 
+  // Rewire test fixtures dependencies to avoid depending on the shadow JAR:
   // java-test-fixtures creates dependencies testImplementation -> testFixturesApi -> (main artifact)
   // It prefers the main artifact over the raw main classpath so that dependents on fixtures get the same
   // packaged artifact as production consumers. In this module the main artifact is the shadow JAR,
