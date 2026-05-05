@@ -39,10 +39,12 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQ;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQRecordParameter;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimeoutHandler;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -90,12 +92,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Supplier;
 
-import static kafka.server.share.ShareFetchUtils.deliveryCountLimitOrDefault;
 import static kafka.server.share.ShareFetchUtils.offsetForEarliestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForLatestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForTimestamp;
-import static kafka.server.share.ShareFetchUtils.recordLockDurationMsOrDefault;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -194,11 +195,12 @@ public class SharePartition {
     private final AtomicReference<Uuid> fetchLock;
 
     /**
+     * This is the default value which is used unless the group has a configuration which overrides it.
      * The max in-flight records is used to limit the number of records that can be in-flight at any
      * given time. The max in-flight records is used to prevent the consumer from fetching too many
      * records from the leader and running out of memory.
      */
-    private final int maxInFlightRecords;
+    private final int defaultMaxInFlightRecords;
 
     /**
      * This is the default value which is used unless the group has a configuration which overrides it.
@@ -209,9 +211,9 @@ public class SharePartition {
     private final int defaultMaxDeliveryCount;
 
     /**
-     * The group config manager is used to retrieve the values for dynamic group configurations
+     * The provider used to retrieve share group dynamic configuration values.
      */
-    private final GroupConfigManager groupConfigManager;
+    private final ShareGroupConfigProvider configProvider;
 
     /**
      * This is the default value which is used unless the group has a configuration which overrides it.
@@ -327,23 +329,34 @@ public class SharePartition {
      */
     private long fetchLockIdleDurationMs;
 
+    /**
+     * Reference to the dlq manager implementation.
+     */
+    private final ShareGroupDLQ shareGroupDLQ = new NoOpShareGroupDLQManager();
+
+    /**
+     * Supplier to toggle dlq support.
+     */
+    private final Supplier<Boolean> shareGroupDlqEnableSupplier;
+
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightRecords,
+        int defaultMaxInFlightRecords,
         int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
         Persister persister,
         ReplicaManager replicaManager,
-        GroupConfigManager groupConfigManager,
-        SharePartitionListener listener
+        ShareGroupConfigProvider configProvider,
+        SharePartitionListener listener,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
-        this(groupId, topicIdPartition, leaderEpoch, maxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
-            timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener,
-            new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
+        this(groupId, topicIdPartition, leaderEpoch, defaultMaxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
+            timer, time, persister, replicaManager, configProvider, SharePartitionState.EMPTY, listener,
+            new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()), shareGroupDlqEnableSupplier);
     }
 
     // Visible for testing
@@ -352,22 +365,23 @@ public class SharePartition {
         String groupId,
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
-        int maxInFlightRecords,
+        int defaultMaxInFlightRecords,
         int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
         Persister persister,
         ReplicaManager replicaManager,
-        GroupConfigManager groupConfigManager,
+        ShareGroupConfigProvider configProvider,
         SharePartitionState sharePartitionState,
         SharePartitionListener listener,
-        SharePartitionMetrics sharePartitionMetrics
+        SharePartitionMetrics sharePartitionMetrics,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
         this.leaderEpoch = leaderEpoch;
-        this.maxInFlightRecords = maxInFlightRecords;
+        this.defaultMaxInFlightRecords = defaultMaxInFlightRecords;
         this.defaultMaxDeliveryCount = defaultMaxDeliveryCount;
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
@@ -380,7 +394,7 @@ public class SharePartition {
         this.persister = persister;
         this.partitionState = sharePartitionState;
         this.replicaManager = replicaManager;
-        this.groupConfigManager = groupConfigManager;
+        this.configProvider = configProvider;
         this.fetchOffsetMetadata = new OffsetMetadata();
         this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
@@ -388,6 +402,7 @@ public class SharePartition {
         this.timeoutHandler = releaseAcquisitionLockOnTimeout();
         this.registerGaugeMetrics();
         this.deliveryCompleteCount = new AtomicInteger(0);
+        this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
     }
 
     /**
@@ -1125,7 +1140,7 @@ public class SharePartition {
 
                 // Successfully updated the state of the offset and created a persister state batch for write to persister.
                 persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
-                    offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                    offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount()), null));
                 if (offsetState.getKey() >= startOffset && isStateTerminal(updateResult.state())) {
                     deliveryCompleteCount.incrementAndGet();
                 }
@@ -1166,7 +1181,7 @@ public class SharePartition {
 
             // Successfully updated the state of the batch and created a persister state batch for write to persister.
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
-                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount()), null));
             if (isStateTerminal(updateResult.state())) {
                 deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()));
             }
@@ -1482,7 +1497,7 @@ public class SharePartition {
         if (nextFetchOffset() != endOffset() + 1) {
             return true;
         }
-        return numInFlightRecords() < maxInFlightRecords;
+        return numInFlightRecords() < maxInFlightRecords();
     }
 
     /**
@@ -1675,6 +1690,7 @@ public class SharePartition {
         // and only acquire limited records.
         int maxRecordsToAcquire;
         long lastOffsetToAcquire = lastOffset;
+        int maxInFlightRecords = maxInFlightRecords();
         lock.readLock().lock();
         try {
             int inFlightRecordsCount = numInFlightRecords();
@@ -1851,7 +1867,7 @@ public class SharePartition {
                         null,
                         timeoutHandler,
                         sharePartitionMetrics);
-                    int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+                    int delayMs = configProvider.recordLockDurationMsOrDefault(groupId, defaultRecordLockDurationMs);
                     long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
                     inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
                     updateFindNextFetchOffset(true);
@@ -2298,6 +2314,11 @@ public class SharePartition {
                 byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(offsetState.getKey()) : batch.acknowledgeTypes().get(0);
 
                 if (ackType == AcknowledgeType.RENEW.id) {
+                    if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
+                        log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
+                        return Optional.of(new InvalidRecordStateException(
+                            "Renewing acquisition locks is not enabled for the group."));
+                    }
                     // If RENEW, renew the acquisition lock timer for this offset and continue without changing state.
                     // We do not care about recordState map here.
                     // Only valid for ACQUIRED offsets; the check above ensures this.
@@ -2313,7 +2334,8 @@ public class SharePartition {
                     // by the client, then use the batch record state. This will always be present as it is a static
                     // mapping between bytes and record state type. All ack types have been added except for RENEW which
                     // has been handled above.
-                    RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
+                    RecordState recordState = recordStateWithDlq(ackType);
+                    Throwable dlqCause = recordState == RecordState.ARCHIVING ? ShareGroupDLQ.CLIENT_REJECT : null;
                     if (recordState == null) {
                         return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
                     }
@@ -2332,9 +2354,10 @@ public class SharePartition {
                         return Optional.of(new InvalidRecordStateException(
                             "Unable to acknowledge records for the batch"));
                     }
+
                     // Successfully updated the state of the offset and created a persister state batch for write to persister.
                     persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
-                        offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                        offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount()), dlqCause));
                     if (isStateTerminal(updateResult.state())) {
                         deliveryCompleteCount.incrementAndGet();
                     }
@@ -2371,6 +2394,11 @@ public class SharePartition {
             // Before reaching this point, it should be verified that it is full batch ack and
             // not per offset ack as well as startOffset not moved.
             if (ackType == AcknowledgeType.RENEW.id) {
+                if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
+                    log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
+                    return Optional.of(new InvalidRecordStateException(
+                        "Renewing acquisition locks is not enabled for the group."));
+                }
                 // Renew the acquisition lock timer for the complete batch. We have already
                 // checked that the batchState is ACQUIRED above.
                 log.debug("Renewing acquisition lock for {}-{} with batch {}-{} for member {}.",
@@ -2387,7 +2415,8 @@ public class SharePartition {
             // The member id is reset to EMPTY_MEMBER_ID irrespective of the ack type as the batch is
             // either released or moved to a state where member id existence is not important. The member id
             // is only important when the batch is acquired.
-            RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
+            RecordState recordState = recordStateWithDlq(ackType);
+            Throwable dlqCause = recordState == RecordState.ARCHIVING ? ShareGroupDLQ.CLIENT_REJECT : null;
             if (recordState == null) {
                 return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
             }
@@ -2408,7 +2437,7 @@ public class SharePartition {
 
             // Successfully updated the state of the batch and created a persister state batch for write to persister.
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
-                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount())));
+                inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount()), dlqCause));
             if (isStateTerminal(updateResult.state())) {
                 deliveryCompleteCount.addAndGet((int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1));
             }
@@ -2455,9 +2484,9 @@ public class SharePartition {
         Throwable throwable,
         List<PersisterBatch> persisterBatches
     ) {
-        lock.writeLock().lock();
-        try {
-            if (throwable != null) {
+        if (throwable != null) {
+            lock.writeLock().lock();
+            try {
                 // Log in DEBUG to avoid flooding of logs for a faulty client.
                 log.debug("Request failed for updating state, rollback any changed state"
                     + " for the share partition: {}-{}", groupId, topicIdPartition);
@@ -2474,16 +2503,16 @@ public class SharePartition {
                         deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
                     }
                 });
-                future.completeExceptionally(throwable);
-                return;
+            } finally {
+                lock.writeLock().unlock();
             }
+            future.completeExceptionally(throwable);
+            return;
+        }
 
-            if (persisterBatches.isEmpty()) {
-                future.complete(null);
-                return;
-            }
-        } finally {
-            lock.writeLock().unlock();
+        if (persisterBatches.isEmpty()) {
+            future.complete(null);
+            return;
         }
 
         writeShareGroupState(persisterBatches.stream().map(PersisterBatch::stateBatch).toList())
@@ -2512,23 +2541,110 @@ public class SharePartition {
                                 deliveryCompleteCount.addAndGet(-numInFlightRecordsInBatch(persisterBatch.stateBatch.firstOffset(), persisterBatch.stateBatch.lastOffset()));
                             }
                         });
-                        future.completeExceptionally(exception);
                         return;
                     }
 
                     log.trace("State change request successful for share partition: {}-{}",
                         groupId, topicIdPartition);
-                    persisterBatches.forEach(persisterBatch -> {
+
+                    List<PersisterBatch> nonDlqBatches = new ArrayList<>(persisterBatches.size());
+                    List<PersisterBatch> dlqBatches = new ArrayList<>(persisterBatches.size());
+                    for (PersisterBatch persisterBatch : persisterBatches) {
+                        if (persisterBatch.updatedState.state() == RecordState.ARCHIVING) {
+                            dlqBatches.add(persisterBatch);
+                        } else {
+                            nonDlqBatches.add(persisterBatch);
+                        }
+                    }
+
+                    nonDlqBatches.forEach(persisterBatch -> {
                         persisterBatch.updatedState.completeStateTransition(true);
                         if (persisterBatch.updatedState.state() == RecordState.AVAILABLE) {
                             updateFindNextFetchOffset(true);
                         }
                     });
+
+                    dlqBatches.forEach(persisterBatch -> {
+                        persisterBatch.updatedState.completeStateTransition(true);
+                        shareGroupDLQ.enqueue(new ShareGroupDLQRecordParameter(
+                            groupId,
+                            topicIdPartition,
+                            persisterBatch.stateBatch.firstOffset(),
+                            persisterBatch.stateBatch.lastOffset(),
+                            Optional.of(persisterBatch.stateBatch.deliveryCount()),
+                            Optional.ofNullable(persisterBatch.dlqCause),
+                            false
+                        )).whenComplete((v1, dlqException) -> {
+                            PersisterStateBatch sb = persisterBatch.stateBatch;
+                            if (dlqException != null) {
+                                log.error("Failed to write to DLQ for share partition: {}-{}, offsets {}-{}. "
+                                        + "Proceeding to ARCHIVED state regardless.",
+                                    groupId, topicIdPartition, sb.firstOffset(), sb.lastOffset(), dlqException);
+                            }
+
+                            PersisterBatch phase2Batch;
+                            lock.writeLock().lock();
+                            try {
+                                // dlqBatch.updatedState() is the same InFlightState object in the cache,
+                                // now committed in ARCHIVING. Transition it directly.
+                                InFlightState updateResult = persisterBatch.updatedState().startStateTransition(
+                                    RecordState.ARCHIVED,
+                                    DeliveryCountOps.NO_OP,
+                                    maxDeliveryCount(),
+                                    EMPTY_MEMBER_ID
+                                );
+                                if (updateResult == null) {
+                                    log.error("Unable to transition ARCHIVING → ARCHIVED for offsets {}-{} "
+                                            + "in share partition: {}-{}", sb.firstOffset(), sb.lastOffset(),
+                                        groupId, topicIdPartition);
+                                    return;
+                                }
+                                phase2Batch = new PersisterBatch(updateResult, new PersisterStateBatch(
+                                    sb.firstOffset(), sb.lastOffset(),
+                                    updateResult.state().id(), (short) updateResult.deliveryCount()), null);
+                                deliveryCompleteCount.addAndGet(
+                                    numInFlightRecordsInBatch(sb.firstOffset(), sb.lastOffset()));
+                            } finally {
+                                lock.writeLock().unlock();
+                            }
+
+                            // Second persist: ARCHIVING → ARCHIVED
+                            writeShareGroupState(List.of(phase2Batch.stateBatch()))
+                                .whenComplete((v2, phase2Exception) -> {
+                                    boolean phase2CacheUpdated = false;
+                                    lock.writeLock().lock();
+                                    try {
+                                        if (phase2Exception != null) {
+                                            log.error("Failed to persist ARCHIVED state for DLQ phase 2, "
+                                                    + "share partition: {}-{}. Records remain in ARCHIVING.",
+                                                groupId, topicIdPartition, phase2Exception);
+                                            phase2Batch.updatedState().completeStateTransition(false);
+                                            if (isStateTerminal(RecordState.forId(phase2Batch.stateBatch().deliveryState()))
+                                                && !isStateTerminal(phase2Batch.updatedState().state())) {
+                                                deliveryCompleteCount.addAndGet(
+                                                    -numInFlightRecordsInBatch(sb.firstOffset(), sb.lastOffset()));
+                                            }
+                                            return;
+                                        }
+
+                                        phase2Batch.updatedState().completeStateTransition(true);
+                                        phase2CacheUpdated = maybeUpdateCachedStateAndOffsets();
+                                    } finally {
+                                        lock.writeLock().unlock();
+                                        maybeCompleteDelayedShareFetchRequest(phase2CacheUpdated);
+                                    }
+                                });
+                        });
+                    });
                     // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
                     cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
-                    future.complete(null);
                 } finally {
                     lock.writeLock().unlock();
+                    if (exception != null) {
+                        future.completeExceptionally(exception);
+                    } else {
+                        future.complete(null);
+                    }
                     // Maybe complete the delayed share fetch request if the state has been changed in cache
                     // which might have moved start offset ahead. Hence, the pending delayed share fetch
                     // request can be completed. The call should be made outside the lock to avoid deadlock.
@@ -2831,7 +2947,7 @@ public class SharePartition {
         // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
         // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
         // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
-        int recordLockDurationMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+        int recordLockDurationMs = configProvider.recordLockDurationMsOrDefault(groupId, defaultRecordLockDurationMs);
         return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 
@@ -3023,12 +3139,7 @@ public class SharePartition {
         if (partitionDataStartOffset != PartitionFactory.UNINITIALIZED_START_OFFSET) {
             return partitionDataStartOffset;
         }
-        ShareGroupAutoOffsetResetStrategy offsetResetStrategy;
-        if (groupConfigManager.groupConfig(groupId).isPresent()) {
-            offsetResetStrategy = groupConfigManager.groupConfig(groupId).get().shareAutoOffsetReset();
-        } else {
-            offsetResetStrategy = GroupConfig.defaultShareAutoOffsetReset();
-        }
+        ShareGroupAutoOffsetResetStrategy offsetResetStrategy = configProvider.autoOffsetReset(groupId);
 
         if (offsetResetStrategy.type() == ShareGroupAutoOffsetResetStrategy.StrategyType.LATEST) {
             return offsetForLatestTimestamp(topicIdPartition, replicaManager, leaderEpoch);
@@ -3221,6 +3332,13 @@ public class SharePartition {
         return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
     }
 
+    private RecordState recordStateWithDlq(byte ackType) {
+        if (shareGroupDlqEnableSupplier.get() && AcknowledgeType.REJECT.id == ackType) {
+            return RecordState.ARCHIVING;
+        }
+        return ACK_TYPE_TO_RECORD_STATE.get(ackType);
+    }
+
     // Visible for testing.
     boolean containsAbortMarker(RecordBatch batch) {
         if (!batch.isControlBatch())
@@ -3313,7 +3431,7 @@ public class SharePartition {
      * config if available, otherwise the broker default.
      */
     int maxDeliveryCount() {
-        return deliveryCountLimitOrDefault(groupConfigManager, groupId, defaultMaxDeliveryCount);
+        return configProvider.deliveryCountLimitOrDefault(groupId, defaultMaxDeliveryCount);
     }
 
     /**
@@ -3324,7 +3442,13 @@ public class SharePartition {
         return Math.max(MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT, (int) Math.ceil((double) maxDeliveryCount / 2));
     }
 
-
+    /**
+     * Returns the effective max in-flight records for this share partition, using the per-group dynamic
+     * config if available, otherwise the broker default.
+     */
+    int maxInFlightRecords() {
+        return configProvider.partitionMaxRecordLocksOrDefault(groupId, defaultMaxInFlightRecords);
+    }
 
     /**
      * The GapWindow class is used to record the gap start and end offset of the probable gaps
@@ -3387,7 +3511,8 @@ public class SharePartition {
      */
     private record PersisterBatch(
         InFlightState updatedState,
-        PersisterStateBatch stateBatch
+        PersisterStateBatch stateBatch,
+        Throwable dlqCause
     ) { }
 
     /**

@@ -27,7 +27,7 @@ import org.apache.kafka.common.metrics.stats.WindowedCount;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class OffsetCommitMetricsManager {
+public class OffsetCommitMetricsManager extends AbstractConsumerMetricsManager {
     final MetricName commitLatencyAvg;
     final MetricName commitLatencyMax;
     final MetricName commitRate;
@@ -35,6 +35,11 @@ public class OffsetCommitMetricsManager {
     private final Sensor commitSensor;
 
     public OffsetCommitMetricsManager(Metrics metrics) {
+        this(new MetricsLedger(metrics));
+    }
+
+    private OffsetCommitMetricsManager(MetricsLedger metrics) {
+        super(metrics);
         final String metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
         commitSensor = metrics.sensor("commit-latency");
         commitLatencyAvg = metrics.metricName("commit-latency-avg",

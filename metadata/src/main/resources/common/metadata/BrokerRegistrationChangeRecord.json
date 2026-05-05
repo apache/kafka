@@ -33,7 +33,8 @@
      "about": "0 if no change, 1 if the broker is in controlled shutdown." },
    { "name": "LogDirs", "type":  "[]uuid", "versions":  "2+", "taggedVersions": "2+", "tag": 2,
      "about": "Log directories configured in this broker which are available." },
-   { "name": "CordonedLogDirs", "type":  "[]uuid", "versions":  "3+", "taggedVersions": "3+", "tag": "3",
-     "about": "Log directories that are cordoned." }
+   { "name": "CordonedLogDirs", "type":  "[]uuid", "versions":  "3+", "taggedVersions": "3+", "tag": 3,
+     "nullableVersions": "3+", "default": "null",
+     "about": "Log directories that are cordoned or null if no change." }
   ]
 }

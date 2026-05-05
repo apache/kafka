@@ -26,7 +26,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
-import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
@@ -813,9 +814,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             val isRetry = retryOnEpochBump || retryOnOverflow
 
             def generateTxnTransitMetadataForTxnCompletion(nextState: TransactionState, noPartitionAdded: Boolean): ApiResult[(Int, TxnTransitMetadata)] = {
-              // Maybe allocate new producer ID if we are bumping epoch and epoch is exhausted
+              // EndTxn completion on TV2 bumps epoch, so rotate producer ID whenever the current epoch is exhausted.
+              // This must also apply to the epoch-fence path.
               val nextProducerIdOrErrors =
-                if (!isEpochFence && txnMetadata.isProducerEpochExhausted) {
+                if (txnMetadata.isProducerEpochExhausted) {
                   try {
                     Right(producerIdManager.generateProducerId())
                   } catch {

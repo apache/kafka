@@ -32,9 +32,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -136,6 +136,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                         .setPort(userEndpoint.port())
                     );
                 });
+                streamsRebalanceData.rackId().ifPresent(data::setRackId);
                 data.setClientTags(streamsRebalanceData.clientTags().entrySet().stream()
                     .map(entry -> new StreamsGroupHeartbeatRequestData.KeyValue()
                         .setKey(entry.getKey())
@@ -530,6 +531,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
         streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
+        streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
 
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));

@@ -20,7 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -33,7 +33,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
@@ -61,7 +60,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests local state store and global application cleanup.
  */
-@Tag("integration")
 @Timeout(600)
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
@@ -257,9 +255,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         };
 
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class, Mockito.CALLS_REAL_METHODS)) {
-            String output = ToolsTestUtils.captureStandardOut(() -> {
-                new StreamsResetter().execute(parameters);
-            });
+            String output = ToolsTestUtils.captureStandardOut(() -> new StreamsResetter().execute(parameters));
             assertTrue(output.contains("Option --config-file has been deprecated and will be removed in a future version. Use --command-config instead."));
 
             ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
@@ -308,9 +304,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
             // Mock Exit because CommandLineUtils.checkInvalidArgs calls exit
             Exit.setExitProcedure(new ToolsTestUtils.MockExitProcedure());
 
-            String output = ToolsTestUtils.captureStandardErr(() -> {
-                new StreamsResetter().execute(parameters);
-            });
+            String output = ToolsTestUtils.captureStandardErr(() -> new StreamsResetter().execute(parameters));
 
             assertTrue(output.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[config-file]", "[command-config]")));

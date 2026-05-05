@@ -27,8 +27,8 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.CompressionType;
-import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ConfigUtils;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
@@ -248,6 +248,7 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
+                .define(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC)
                 .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
 
@@ -279,6 +280,7 @@ public class LogConfig extends AbstractConfig {
     public final BrokerCompressionType compressionType;
     public final Optional<Compression> compression;
     public final boolean preallocate;
+    public final boolean errorsDeadletterqueueGroupEnable;
 
     public final TimestampType messageTimestampType;
 
@@ -335,6 +337,7 @@ public class LogConfig extends AbstractConfig {
         this.messageTimestampAfterMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
         this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
+        this.errorsDeadletterqueueGroupEnable = getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);
     }
@@ -387,6 +390,10 @@ public class LogConfig extends AbstractConfig {
             return 0;
     }
 
+    public boolean errorsDeadletterqueueGroupEnable() {
+        return errorsDeadletterqueueGroupEnable;
+    }
+
     public boolean remoteStorageEnable() {
         return remoteLogConfig.remoteStorageEnable;
     }
@@ -436,8 +443,8 @@ public class LogConfig extends AbstractConfig {
         return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
     }
 
-    public static List<String> configNames() {
-        return CONFIG.names().stream().sorted().toList();
+    public static Set<String> configNames() {
+        return CONFIG.names();
     }
 
     public static List<String> nonInternalConfigNames() {
@@ -455,9 +462,9 @@ public class LogConfig extends AbstractConfig {
     /**
      * Check that property names are valid
      */
-    public static void validateNames(Properties props) {
-        List<String> names = configNames();
-        for (Object name : props.keySet())
+    public static void validateNames(Map<String, String> props) {
+        Set<String> names = configNames();
+        for (String name : props.keySet())
             if (!names.contains(name))
                 throw new InvalidConfigurationException("Unknown topic config name: " + name);
     }
@@ -468,7 +475,7 @@ public class LogConfig extends AbstractConfig {
      * LogConfig class.
      * @param props The properties to be validated
      */
-    public static void validateValues(Map<?, ?> props) {
+    public static void validateValues(Map<String, ?> props) {
         long minCompactionLag = (Long) props.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
         long maxCompactionLag = (Long) props.get(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG);
         if (minCompactionLag > maxCompactionLag) {
@@ -484,7 +491,7 @@ public class LogConfig extends AbstractConfig {
      * The default values should be extracted from the KafkaConfig.
      * @param props The properties to be validated
      */
-    public static void validateBrokerLogConfigValues(Map<?, ?> props,
+    public static void validateBrokerLogConfigValues(Map<String, ?> props,
                                                      boolean isRemoteLogStorageSystemEnabled) {
         validateValues(props);
         if (isRemoteLogStorageSystemEnabled) {
@@ -502,7 +509,7 @@ public class LogConfig extends AbstractConfig {
      * @param isRemoteLogStorageSystemEnabled   true if system wise remote log storage is enabled
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
-                                                     Map<?, ?> newConfigs,
+                                                     Map<String, ?> newConfigs,
                                                      boolean isRemoteLogStorageSystemEnabled) {
         validateValues(newConfigs);
 
@@ -520,7 +527,7 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    public static void validateTurningOffRemoteStorageWithDelete(Map<?, ?> newConfigs, boolean wasRemoteLogEnabled, boolean isRemoteLogStorageEnabled) {
+    public static void validateTurningOffRemoteStorageWithDelete(Map<String, ?> newConfigs, boolean wasRemoteLogEnabled, boolean isRemoteLogStorageEnabled) {
         boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
         if (wasRemoteLogEnabled && !isRemoteLogStorageEnabled && !isRemoteLogDeleteOnDisable) {
             throw new InvalidConfigurationException("It is invalid to disable remote storage without deleting remote data. " +
@@ -529,7 +536,7 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    public static void validateRetentionConfigsWhenRemoteCopyDisabled(Map<?, ?> newConfigs, boolean isRemoteLogStorageEnabled) {
+    public static void validateRetentionConfigsWhenRemoteCopyDisabled(Map<String, ?> newConfigs, boolean isRemoteLogStorageEnabled) {
         boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, false);
         long retentionMs = (Long) newConfigs.get(TopicConfig.RETENTION_MS_CONFIG);
         long localRetentionMs = (Long) newConfigs.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
@@ -547,7 +554,7 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    public static void validateRemoteStorageOnlyIfSystemEnabled(Map<?, ?> props, boolean isRemoteLogStorageSystemEnabled, boolean isReceivingConfigFromStore) {
+    public static void validateRemoteStorageOnlyIfSystemEnabled(Map<String, ?> props, boolean isRemoteLogStorageSystemEnabled, boolean isReceivingConfigFromStore) {
         boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled && !isRemoteLogStorageSystemEnabled) {
             if (isReceivingConfigFromStore) {
@@ -560,14 +567,14 @@ public class LogConfig extends AbstractConfig {
     }
 
     @SuppressWarnings("unchecked")
-    private static void validateRemoteStorageRequiresDeleteCleanupPolicy(Map<?, ?> props) {
+    private static void validateRemoteStorageRequiresDeleteCleanupPolicy(Map<String, ?> props) {
         List<String> cleanupPolicy = (List<String>) props.get(TopicConfig.CLEANUP_POLICY_CONFIG);
         if (!cleanupPolicy.isEmpty() && (cleanupPolicy.size() != 1 || !TopicConfig.CLEANUP_POLICY_DELETE.equals(cleanupPolicy.get(0)))) {
             throw new ConfigException("Remote log storage only supports topics with cleanup.policy=delete or cleanup.policy being an empty list.");
         }
     }
 
-    private static void validateRemoteStorageRetentionSize(Map<?, ?> props) {
+    private static void validateRemoteStorageRetentionSize(Map<String, ?> props) {
         Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
         Long localRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         if (retentionBytes > -1 && localRetentionBytes != -2) {
@@ -584,7 +591,7 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    private static void validateRemoteStorageRetentionTime(Map<?, ?> props) {
+    private static void validateRemoteStorageRetentionTime(Map<String, ?> props) {
         Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
         Long localRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
         if (retentionMs != -1 && localRetentionMs != -2) {
@@ -604,22 +611,22 @@ public class LogConfig extends AbstractConfig {
     /**
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
-    public static void validate(Properties props) {
+    public static void validate(Map<String, String> props) {
         validate(Map.of(), props, Map.of(), false);
     }
 
     public static void validate(Map<String, String> existingConfigs,
-                                Properties props,
-                                Map<?, ?> configuredProps,
+                                Map<String, String> props,
+                                Map<String, ?> configuredProps,
                                 boolean isRemoteLogStorageSystemEnabled) {
         validateNames(props);
         if (configuredProps == null || configuredProps.isEmpty()) {
-            Map<?, ?> valueMaps = CONFIG.parse(props);
+            Map<String, ?> valueMaps = CONFIG.parse(props);
             validateValues(valueMaps);
         } else {
-            Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
+            Map<String, Object> combinedConfigs = new HashMap<>(configuredProps);
             combinedConfigs.putAll(props);
-            Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
+            Map<String, ?> valueMaps = CONFIG.parse(combinedConfigs);
             validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled);
         }
     }
@@ -652,6 +659,7 @@ public class LogConfig extends AbstractConfig {
                 ", followerReplicationThrottledReplicas=" + followerReplicationThrottledReplicas +
                 ", remoteLogConfig=" + remoteLogConfig +
                 ", maxMessageSize=" + maxMessageSize +
+                ", errorsDeadletterqueueGroupEnable=" + errorsDeadletterqueueGroupEnable +
                 '}';
     }
 

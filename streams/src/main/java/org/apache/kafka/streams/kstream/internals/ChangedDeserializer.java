@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 
@@ -141,7 +141,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>>, Wrapping
 
     @Override
     public Change<T> deserialize(final String topic, final byte[] data) {
-        return deserialize(topic, null, data);
+        throw new UnsupportedOperationException("ChangedDeserializer requires the headers-aware version of deserialize");
     }
 
     @Override

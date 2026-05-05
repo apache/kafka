@@ -54,6 +54,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -95,10 +96,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
-import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.yammerMetricValue;
+import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
+import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -119,11 +122,11 @@ public class SharePartitionTest {
 
     private static final String ACQUISITION_LOCK_NEVER_GOT_RELEASED = "Acquisition lock never got released.";
     private static final String GROUP_ID = "test-group";
-    private static final int MAX_DELIVERY_COUNT = 5;
+    private static final int DEFAULT_MAX_DELIVERY_COUNT = 5;
     private static final TopicIdPartition TOPIC_ID_PARTITION = new TopicIdPartition(Uuid.randomUuid(), 0, "test-topic");
     private static final String MEMBER_ID = "member-1";
     private static final Time MOCK_TIME = new MockTime();
-    private static final short MAX_IN_FLIGHT_RECORDS = 200;
+    private static final int DEFAULT_MAX_IN_FLIGHT_RECORDS = 200;
     private static final int ACQUISITION_LOCK_TIMEOUT_MS = 100;
     private static final int DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS = 120;
     private static final int BATCH_SIZE = 500;
@@ -136,7 +139,7 @@ public class SharePartitionTest {
 
     @BeforeEach
     public void setUp() {
-        kafka.utils.TestUtils.clearYammerMetrics();
+        clearYammerMetrics();
         mockTimer = new MockTimer();
         sharePartitionMetrics = new SharePartitionMetrics(GROUP_ID, TOPIC_ID_PARTITION.topic(), TOPIC_ID_PARTITION.partition());
     }
@@ -218,7 +221,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(ShareGroupAutoOffsetResetStrategy.EARLIEST);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -228,7 +231,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -269,7 +272,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(ShareGroupAutoOffsetResetStrategy.LATEST);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.LATEST));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -279,7 +282,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -329,7 +332,7 @@ public class SharePartitionTest {
         Mockito.when(resetStrategy.type()).thenReturn(ShareGroupAutoOffsetResetStrategy.StrategyType.BY_DURATION);
         Mockito.when(resetStrategy.timestamp()).thenReturn(expectedTimestamp);
 
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(resetStrategy);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(resetStrategy));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -340,7 +343,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
@@ -395,7 +398,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -442,7 +445,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -479,7 +482,7 @@ public class SharePartitionTest {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(ShareGroupAutoOffsetResetStrategy.EARLIEST);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST));
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
@@ -488,7 +491,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -530,7 +533,7 @@ public class SharePartitionTest {
         // final ShareGroupAutoOffsetResetStrategy resetStrategy = ShareGroupAutoOffsetResetStrategy.fromString("by_duration:PT1H");
         final ShareGroupAutoOffsetResetStrategy resetStrategy = Mockito.mock(ShareGroupAutoOffsetResetStrategy.class);
         final long expectedTimestamp = MOCK_TIME.milliseconds() - TimeUnit.HOURS.toMillis(1);
-        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(resetStrategy);
+        Mockito.when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(resetStrategy));
 
         Mockito.when(resetStrategy.type()).thenReturn(ShareGroupAutoOffsetResetStrategy.StrategyType.BY_DURATION);
         Mockito.when(resetStrategy.timestamp()).thenReturn(expectedTimestamp);
@@ -542,7 +545,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withReplicaManager(replicaManager)
             .build();
 
@@ -5275,7 +5278,7 @@ public class SharePartitionTest {
         // Ack subset of records by "member-2".
         sharePartition.acknowledge("member-2",
                 List.of(new ShareAcknowledgementBatch(5, 5, List.of(AcknowledgeType.ACCEPT.id))));
-        // After the acknowledgements, the startOffset will be upadated to 6, since offset 5 is Terminal. Hence
+        // After the acknowledgements, the startOffset will be updated to 6, since offset 5 is Terminal. Hence
         // deliveryCompleteCount will remain 9.
         assertEquals(9, sharePartition.deliveryCompleteCount());
 
@@ -5462,7 +5465,7 @@ public class SharePartitionTest {
         )));
 
         // After acknowledgements, since offsets 10 -> 12 are at the start of the caches state and are in Terminal state,
-        // the start offset will be updated to 13. From the remaining offstes in flight, only records (17 -> 19) are in Terminal state.
+        // the start offset will be updated to 13. From the remaining offsets in flight, only records (17 -> 19) are in Terminal state.
         assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Send next batch from offset 13, only 2 records should be acquired.
@@ -7150,14 +7153,14 @@ public class SharePartitionTest {
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         int expectedDurationMs = 500;
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(expectedDurationMs);
+        Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(Optional.of(expectedDurationMs));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withGroupConfigManager(groupConfigManager).build();
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager)).build();
 
         AcquisitionLockTimerTask timerTask = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(1)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs, timerTask.delayMs);
     }
@@ -7171,21 +7174,21 @@ public class SharePartitionTest {
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
         // First invocation of shareRecordLockDurationMs() returns 500, and the second invocation returns 1000
         Mockito.when(groupConfig.shareRecordLockDurationMs())
-            .thenReturn(expectedDurationMs1)
-            .thenReturn(expectedDurationMs2);
+            .thenReturn(Optional.of(expectedDurationMs1))
+            .thenReturn(Optional.of(expectedDurationMs2));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withGroupConfigManager(groupConfigManager).build();
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager)).build();
 
         AcquisitionLockTimerTask timerTask1 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(1)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs1, timerTask1.delayMs);
 
         AcquisitionLockTimerTask timerTask2 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(4)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig, Mockito.times(2)).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs2, timerTask2.delayMs);
     }
@@ -9706,7 +9709,7 @@ public class SharePartitionTest {
         TimerTask timerTask2 = sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask();
 
         // Acknowledge 1 offset in first batch as Accept to create offset tracking, accept complete
-        // sencond batch. And mark offset 0 as release so cached state do not move ahead.
+        // second batch. And mark offset 0 as release so cached state do not move ahead.
         sharePartition.acknowledge(MEMBER_ID, List.of(
             new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RELEASE.id)),
             new ShareAcknowledgementBatch(1, 1, List.of(AcknowledgeType.ACCEPT.id)),
@@ -10379,6 +10382,79 @@ public class SharePartitionTest {
 
         assertEquals(2, sharePartition.timer().size()); // Timer jobs one for batch and one for single renewal in per offset.
         Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testRenewAcknowledgeDisabledWithCompleteBatchAck() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .withConfigProvider(configProviderWithRenewDisabled())
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
+        assertEquals(1, records.size());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        CompletableFuture<Void> future = sharePartition.acknowledge(MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RENEW.id))));
+
+        assertTrue(future.isCompletedExceptionally());
+        try {
+            future.get();
+            fail("No exception thrown");
+        } catch (Exception e) {
+            assertNotNull(e);
+            assertInstanceOf(InvalidRecordStateException.class, e.getCause());
+            assertTrue(e.getCause().getMessage().contains("Renewing acquisition locks is not enabled for the group."));
+        }
+
+        // The batch should still be in ACQUIRED state since the renew was rejected.
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        assertEquals(RecordState.ACQUIRED, batch.batchState());
+        Mockito.verify(persister, Mockito.times(0)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testRenewAcknowledgeDisabledWithPerOffsetAck() {
+        Persister persister = Mockito.mock(Persister.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withPersister(persister)
+            .withConfigProvider(configProviderWithRenewDisabled())
+            .build();
+
+        List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 2), 2);
+        assertEquals(1, records.size());
+        assertEquals(1, sharePartition.cachedState().size());
+
+        CompletableFuture<Void> future = sharePartition.acknowledge(MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 1,
+                List.of(AcknowledgeType.RENEW.id, AcknowledgeType.ACCEPT.id))));
+
+        assertTrue(future.isCompletedExceptionally());
+        try {
+            future.get();
+            fail("No exception thrown");
+        } catch (Exception e) {
+            assertNotNull(e);
+            assertInstanceOf(InvalidRecordStateException.class, e.getCause());
+            assertTrue(e.getCause().getMessage().contains("Renewing acquisition locks is not enabled for the group."));
+        }
+
+        // The offsets should still be in ACQUIRED state since the renew was rejected
+        // at the first offset. The batch has per-offset state at this point because the
+        // ack had per-offset ack types.
+        InFlightBatch batch = sharePartition.cachedState().get(0L);
+        assertNotNull(batch.offsetState());
+        assertEquals(RecordState.ACQUIRED, batch.offsetState().get(0L).state());
+        assertEquals(RecordState.ACQUIRED, batch.offsetState().get(1L).state());
+        Mockito.verify(persister, Mockito.times(0)).writeState(Mockito.any());
     }
 
     @Test
@@ -12250,12 +12326,12 @@ public class SharePartitionTest {
     public void testMaxDeliveryCountUsesGroupConfigWhenPresent() {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.shareDeliveryCountLimit()).thenReturn(8);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(Optional.of(8));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxDeliveryCount(5)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12270,7 +12346,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxDeliveryCount(5)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12286,7 +12362,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxDeliveryCount(10)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12302,7 +12378,7 @@ public class SharePartitionTest {
 
         // Dynamically decrease the limit to 2 via group config BEFORE releasing.
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.shareDeliveryCountLimit()).thenReturn(2);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(Optional.of(2));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         // Release: archival check fires because deliveryCount(2) >= maxDeliveryCount(2),
@@ -12325,7 +12401,7 @@ public class SharePartitionTest {
 
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMaxDeliveryCount(2)
-            .withGroupConfigManager(groupConfigManager)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12338,7 +12414,7 @@ public class SharePartitionTest {
 
         // Now increase limit to 10 via group config before the second acquire.
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
-        when(groupConfig.shareDeliveryCountLimit()).thenReturn(10);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(Optional.of(10));
         when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
 
         // Second acquire: deliveryCount = 2. With old limit (2) this would archive.
@@ -12354,21 +12430,339 @@ public class SharePartitionTest {
         assertFalse(sharePartition.cachedState().isEmpty());
     }
 
+    @Test
+    public void testMaxInFlightRecordsUsesGroupConfigWhenPresent() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(5000));
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(2000)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // maxInFlightRecords() should return the group config value, not the default.
+        assertEquals(5000, sharePartition.maxInFlightRecords());
+    }
+
+    @Test
+    public void testMaxInFlightRecordsFallsBackToDefaultWhenNoGroupConfig() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(2000)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // maxInFlightRecords() should return the default value.
+        assertEquals(2000, sharePartition.maxInFlightRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksDecrease() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(0, 50);
+
+        // Acquire 50 records, which is under the default limit.
+        fetchAcquiredRecords(sharePartition, records, 50);
+
+        // Dynamically decrease the limit to 30 via group config.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(30));
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        // The effective limit should now be 30.
+        assertEquals(30, sharePartition.maxInFlightRecords());
+
+        // 50 in-flight > 30 limit, but canAcquireRecords checks nextFetchOffset != endOffset + 1
+        // first. Since all records [0-49] are acquired, nextFetchOffset == endOffset + 1 == 50,
+        // so the second check (numInFlightRecords < maxInFlightRecords) applies: 50 < 30 is false.
+        assertFalse(sharePartition.canAcquireRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksIncrease() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(10)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(0, 10);
+
+        // Acquire 10 records, hitting the default limit.
+        fetchAcquiredRecords(sharePartition, records, 10);
+
+        // canAcquireRecords should be false with default limit of 10.
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // Increase limit to 500 via group config.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(500));
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        assertEquals(500, sharePartition.maxInFlightRecords());
+
+        // Now canAcquireRecords should be true: 10 < 500.
+        assertTrue(sharePartition.canAcquireRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksExactBoundary() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxInflightRecords(50)
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(0, 50);
+
+        // Acquire exactly 50 records, hitting the default limit exactly.
+        fetchAcquiredRecords(sharePartition, records, 50);
+
+        // At exact boundary: 50 < 50 is false.
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // Dynamically set limit to exactly the in-flight count via group config.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(50));
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        // Still at boundary: 50 < 50 is false.
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // Increase by 1 to cross the boundary.
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(51));
+
+        // Now 50 < 51 is true.
+        assertTrue(sharePartition.canAcquireRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksRemoveGroupConfig() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(500));
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // Group config sets limit to 500.
+        assertEquals(500, sharePartition.maxInFlightRecords());
+
+        // Remove group config — should fall back to default.
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        assertEquals(DEFAULT_MAX_IN_FLIGHT_RECORDS, sharePartition.maxInFlightRecords());
+    }
+
+    @Test
+    public void testDynamicPartitionMaxRecordLocksDecreaseBelowInFlightAffectsMaxRecordsToAcquire() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.empty());
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records = memoryRecords(0, 50);
+
+        // Acquire 50 records.
+        fetchAcquiredRecords(sharePartition, records, 50);
+
+        // Decrease limit to 20, well below the 50 in-flight.
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(20));
+        when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+
+        // maxInFlightRecords - inFlightRecordsCount = 20 - 50 = -30, so maxRecordsToAcquire <= 0.
+        // canAcquireRecords should be false since nextFetchOffset == endOffset + 1.
+        assertFalse(sharePartition.canAcquireRecords());
+
+        // The existing 50 acquired records should still be intact — cached state is not cleared.
+        assertFalse(sharePartition.cachedState().isEmpty());
+    }
+
+    @Test
+    public void testAcknowledgeRejectWithDlqEnabled() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .build();
+
+        // Acquire 2 batches so that the first one stays in cache after being archived.
+        MemoryRecords records1 = memoryRecords(5, 5);
+        MemoryRecords records2 = memoryRecords(10, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge the first batch with REJECT.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // With NoOp DLQ manager and NoOp persister, the full 2-phase flow completes synchronously:
+        // ACQUIRED -> ARCHIVING (phase 1 persist) -> DLQ enqueue -> ARCHIVED (phase 2 persist).
+        // The final state should be ARCHIVED.
+        assertNull(sharePartition.cachedState().get(5L));
+        assertEquals(1, sharePartition.cachedState().size());
+
+        // The second batch should remain acquired.
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+
+        // Start offset advances past the archived batch.
+        assertEquals(10, sharePartition.startOffset());
+
+        // deliveryCompleteCount is 0 as evicted records are subtracted.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testAcknowledgeRejectWithDlqDisabled() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> false)
+            .build();
+
+        MemoryRecords records1 = memoryRecords(5, 5);
+        MemoryRecords records2 = memoryRecords(10, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge the first batch with REJECT when DLQ is disabled.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // Without DLQ, REJECT goes directly to ARCHIVED (no ARCHIVING intermediate state).
+        // Once ARCHIVED, the batch at start offset is evicted from cache.
+        assertEquals(1, sharePartition.cachedState().size());
+        assertNull(sharePartition.cachedState().get(5L));
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(10, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testAcknowledgePerOffsetRejectWithDlqEnabled() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .build();
+
+        // Acquire a batch with 5 records (offsets 0-4) and a second batch to keep cache populated.
+        MemoryRecords records1 = memoryRecords(5);
+        MemoryRecords records2 = memoryRecords(5, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge with per-offset ack types: ACCEPT for 0-2, REJECT for 3-4.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 4, List.of(
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                AcknowledgeType.REJECT.id, AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // With NoOp DLQ + NoOp persister, full 2-phase flow completes synchronously.
+        // Batch should have offset state since offsets have different states.
+        // Once all offsets reach terminal state, the batch at start offset is evicted.
+        assertNull(sharePartition.cachedState().get(0L));
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+    }
+
+    @Test
+    public void testAcknowledgePerOffsetRejectWithDlqDisabled() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> false)
+            .build();
+
+        MemoryRecords records1 = memoryRecords(5);
+        MemoryRecords records2 = memoryRecords(5, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge with per-offset ack types: ACCEPT for 0-2, REJECT for 3-4.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 4, List.of(
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                AcknowledgeType.REJECT.id, AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // Without DLQ, REJECT goes directly to ARCHIVED (no ARCHIVING intermediate state).
+        // All offsets in first batch reach terminal state, so it is evicted.
+        assertNull(sharePartition.cachedState().get(0L));
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+    }
+
+    private static ShareGroupConfigProvider configProviderWithRenewDisabled() {
+        ShareGroupConfigProvider configProvider = Mockito.mock(ShareGroupConfigProvider.class);
+        Mockito.when(configProvider.isRenewAcknowledgeEnabled(GROUP_ID)).thenReturn(false);
+        Mockito.when(configProvider.recordLockDurationMsOrDefault(GROUP_ID, ACQUISITION_LOCK_TIMEOUT_MS)).thenReturn(ACQUISITION_LOCK_TIMEOUT_MS);
+        Mockito.when(configProvider.partitionMaxRecordLocksOrDefault(GROUP_ID, DEFAULT_MAX_IN_FLIGHT_RECORDS)).thenReturn(DEFAULT_MAX_IN_FLIGHT_RECORDS);
+        Mockito.when(configProvider.deliveryCountLimitOrDefault(GROUP_ID, DEFAULT_MAX_DELIVERY_COUNT)).thenReturn(DEFAULT_MAX_DELIVERY_COUNT);
+        return configProvider;
+    }
+
     private static class SharePartitionBuilder {
 
         private int defaultAcquisitionLockTimeoutMs = 30000;
-        private int maxDeliveryCount = MAX_DELIVERY_COUNT;
-        private int maxInflightRecords = MAX_IN_FLIGHT_RECORDS;
+        private int defaultMaxDeliveryCount = DEFAULT_MAX_DELIVERY_COUNT;
+        private int defaultMaxInflightRecords = DEFAULT_MAX_IN_FLIGHT_RECORDS;
 
         private Persister persister = new NoOpStatePersister();
         private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
-        private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        private ShareGroupConfigProvider configProvider = new ShareGroupConfigProvider(Mockito.mock(GroupConfigManager.class));
         private SharePartitionState state = SharePartitionState.EMPTY;
         private Time time = MOCK_TIME;
         private SharePartitionMetrics sharePartitionMetrics = Mockito.mock(SharePartitionMetrics.class);
+        private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
 
-        private SharePartitionBuilder withMaxInflightRecords(int maxInflightRecords) {
-            this.maxInflightRecords = maxInflightRecords;
+        private SharePartitionBuilder withMaxInflightRecords(int defaultMaxInflightRecords) {
+            this.defaultMaxInflightRecords = defaultMaxInflightRecords;
             return this;
         }
 
@@ -12382,8 +12776,8 @@ public class SharePartitionTest {
             return this;
         }
 
-        private SharePartitionBuilder withMaxDeliveryCount(int maxDeliveryCount) {
-            this.maxDeliveryCount = maxDeliveryCount;
+        private SharePartitionBuilder withMaxDeliveryCount(int defaultMaxDeliveryCount) {
+            this.defaultMaxDeliveryCount = defaultMaxDeliveryCount;
             return this;
         }
 
@@ -12392,8 +12786,8 @@ public class SharePartitionTest {
             return this;
         }
 
-        private SharePartitionBuilder withGroupConfigManager(GroupConfigManager groupConfigManager) {
-            this.groupConfigManager = groupConfigManager;
+        private SharePartitionBuilder withConfigProvider(ShareGroupConfigProvider configProvider) {
+            this.configProvider = configProvider;
             return this;
         }
 
@@ -12412,14 +12806,19 @@ public class SharePartitionTest {
             return this;
         }
 
+        private SharePartitionBuilder withShareGroupDlqEnableSupplier(Supplier<Boolean> shareGroupDlqEnableSupplier) {
+            this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+            return this;
+        }
+
         public static SharePartitionBuilder builder() {
             return new SharePartitionBuilder();
         }
 
         public SharePartition build() {
-            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightRecords, maxDeliveryCount,
-                    defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, groupConfigManager,
-                    state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics);
+            return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, defaultMaxInflightRecords, defaultMaxDeliveryCount,
+                    defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, configProvider,
+                    state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics, shareGroupDlqEnableSupplier);
         }
     }
 }

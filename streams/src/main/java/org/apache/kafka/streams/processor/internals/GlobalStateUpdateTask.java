@@ -18,9 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -137,9 +137,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         // this could theoretically throw a ProcessorStateException caused by a ProducerFencedException,
         // but in practice this shouldn't happen for global state update tasks, since the stores are not
         // logged and there are no downstream operators after global stores.
-        stateMgr.flush();
         stateMgr.updateChangelogOffsets(offsets);
-        stateMgr.checkpoint();
+        stateMgr.commit();
     }
 
     public void close(final boolean wipeStateStore) throws IOException {

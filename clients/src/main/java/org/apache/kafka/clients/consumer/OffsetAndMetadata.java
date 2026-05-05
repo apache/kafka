@@ -75,6 +75,11 @@ public class OffsetAndMetadata implements Serializable {
         this(offset, "");
     }
 
+    /**
+     * Returns the offset to be committed.
+     *
+     * @return The offset
+     */
     public long offset() {
         return offset;
     }
@@ -82,7 +87,7 @@ public class OffsetAndMetadata implements Serializable {
     /**
      * Get the metadata of the previously consumed record.
      *
-     * @return the metadata or empty string if no metadata
+     * @return The metadata or empty string if no metadata
      */
     public String metadata() {
         return metadata;
@@ -93,7 +98,7 @@ public class OffsetAndMetadata implements Serializable {
      * if there exists a leader epoch which is larger than this epoch and begins at an offset earlier than
      * the committed offset.
      *
-     * @return the leader epoch or empty if not known
+     * @return The leader epoch or empty if not known
      */
     public Optional<Integer> leaderEpoch() {
         if (leaderEpoch == null || leaderEpoch < 0)

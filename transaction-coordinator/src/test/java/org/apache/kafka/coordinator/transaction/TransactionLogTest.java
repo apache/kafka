@@ -128,6 +128,62 @@ class TransactionLogTest {
     }
   
     @Test
+    void shouldRoundTripPreviousAndNextProducerIds() {
+        var txnTransitMetadata = new TxnTransitMetadata(
+            200L,       // producerId
+            100L,       // prevProducerId
+            201L,       // nextProducerId
+            (short) 5,  // producerEpoch
+            (short) 4,  // lastProducerEpoch
+            1000,       // txnTimeoutMs
+            TransactionState.PREPARE_COMMIT,
+            new HashSet<>(Set.of(new TopicPartition("topic", 0))),
+            0L,         // txnStartTimestamp
+            0L,         // txnLastUpdateTimestamp
+            TV_2
+        );
+
+        // Serialize to bytes and deserialize the raw TransactionLogValue
+        var bytes = TransactionLog.valueToBytes(txnTransitMetadata, TV_2);
+        var buffer = wrap(bytes);
+        buffer.getShort(); // skip version prefix
+        var value = new TransactionLogValue(new ByteBufferAccessor(buffer), (short) 1);
+
+        assertEquals(200L, value.producerId());
+        assertEquals(100L, value.previousProducerId());
+        assertEquals(201L, value.nextProducerId());
+    }
+
+    @Test
+    void shouldNotPersistProducerIdsAtVersion0() {
+        // Version 0 is non-flexible, so tagged fields (previousProducerId,
+        // nextProducerId) cannot be written. They fall back to defaults (-1).
+        var txnTransitMetadata = new TxnTransitMetadata(
+            200L,       // producerId
+            100L,       // prevProducerId — not persisted at v0
+            201L,       // nextProducerId — not persisted at v0
+            (short) 5,  // producerEpoch
+            (short) 4,  // lastProducerEpoch
+            1000,       // txnTimeoutMs
+            TransactionState.PREPARE_COMMIT,
+            new HashSet<>(Set.of(new TopicPartition("topic", 0))),
+            0L,         // txnStartTimestamp
+            0L,         // txnLastUpdateTimestamp
+            TV_0
+        );
+
+        var record = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(
+            TransactionLog.keyToBytes("transactionalId"),
+            TransactionLog.valueToBytes(txnTransitMetadata, TV_0)
+        )).records().iterator().next();
+        var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
+        var deserialized = readResult.metadata();
+
+        assertEquals(200L, deserialized.producerId());
+        assertEquals(-1L, deserialized.prevProducerId());
+    }
+
+    @Test
     void testSerializeTransactionLogValueToHighestNonFlexibleVersion() {
         var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_0);
         var txnLogValueBuffer = wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_0));

@@ -29,10 +29,20 @@ import java.util.Set;
  */
 public abstract class InvalidOffsetException extends KafkaException {
 
+    /**
+     * Constructs a new InvalidOffsetException with the specified detail message.
+     *
+     * @param message The detail message
+     */
     public InvalidOffsetException(String message) {
         super(message);
     }
 
+    /**
+     * Returns the set of partitions for which the offset was invalid.
+     *
+     * @return The set of partitions with invalid offsets
+     */
     public abstract Set<TopicPartition> partitions();
 
 }

@@ -43,6 +43,8 @@ import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.HostedPartition
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.partition.AlterPartitionManager
+import org.apache.kafka.server.quota.ReplicationQuotaManager
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
@@ -296,10 +298,14 @@ class ReplicaManagerConcurrencyTest extends Logging {
       val future = new CompletableFuture[ProduceResponse.PartitionResponse]()
       val topicIdPartition: common.TopicIdPartition = replicaManager.topicIdPartition(topicPartition)
 
-      def produceCallback(results: collection.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
+      def produceCallback(results: util.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
         try {
           assertEquals(1, results.size)
-          val (topicPartition, result) = results.head
+
+          val entry = results.entrySet().iterator().next()
+          val topicPartition = entry.getKey
+          val result = entry.getValue
+
           assertEquals(topicIdPartition, topicPartition)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)
@@ -484,6 +490,10 @@ class ReplicaManagerConcurrencyTest extends Logging {
     ): CompletableFuture[LeaderAndIsr] = {
       channel.alterIsr(topicPartition, leaderAndIsr)
     }
+
+    override def start(): Unit = {}
+
+    override def shutdown(): Unit = {}
   }
 
   private def registration(

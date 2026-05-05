@@ -18,9 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -908,6 +908,42 @@ public class StateDirectoryTest {
 
         assertFalse(directory.hasStartupTasks());
         assertFalse(store.isOpen());
+    }
+
+    @Test
+    public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusMaxDirAge() {
+        final TaskId task0 = new TaskId(0, 0);
+        final TaskId task1 = new TaskId(1, 0);
+        final TaskId task2 = new TaskId(2, 0);
+
+        final int dirMaxAgeMs = 60000;
+        final long outdatedModifiedTime = time.milliseconds() - dirMaxAgeMs - 1000;
+
+        assertTrue(new File(directory.getOrCreateDirectoryForTask(task0), "store").mkdir());
+        assertTrue(new File(directory.getOrCreateDirectoryForTask(task1), "store").mkdir());
+        assertTrue(new File(directory.getOrCreateDirectoryForTask(task2), "store").mkdir());
+
+        final File dir0File = new File(appDir, toTaskDirString(task0));
+        dir0File.setLastModified(outdatedModifiedTime);
+        final File dir1File = new File(appDir, toTaskDirString(task1));
+        dir1File.setLastModified(outdatedModifiedTime);
+        final File dir2File = new File(appDir, toTaskDirString(task2));
+
+        final TaskDirectory dir0 = new TaskDirectory(dir0File, null);
+        final TaskDirectory dir1 = new TaskDirectory(dir1File, null);
+        final TaskDirectory dir2 = new TaskDirectory(dir2File, null);
+
+        List<TaskDirectory> files = directory.listAllTaskDirectories();
+        assertEquals(Set.of(dir0, dir1, dir2), new HashSet<>(files));
+        files = directory.listNonEmptyTaskDirectories();
+        assertEquals(Set.of(dir0, dir1, dir2), new HashSet<>(files));
+
+        directory.cleanOutdatedDirsOnStartup(dirMaxAgeMs);
+
+        files = directory.listAllTaskDirectories();
+        assertEquals(Set.of(dir2), new HashSet<>(files));
+        files = directory.listNonEmptyTaskDirectories();
+        assertEquals(Set.of(dir2), new HashSet<>(files));
     }
 
     private StateStore initializeStartupStores(final TaskId taskId, final boolean createTaskDir) {

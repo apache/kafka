@@ -21,10 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -72,7 +68,11 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
 
         if (!(store instanceof HeadersBytesStore)) {
             if (store.persistent()) {
-                store = new TimestampedToHeadersWindowStoreAdapter(store);
+                if (store instanceof TimestampedBytesStore) {
+                    store = new TimestampedToHeadersWindowStoreAdapter(store);
+                } else {
+                    store = new PlainToHeadersWindowStoreAdapter(store);
+                }
             } else {
                 store = new InMemoryTimestampedWindowStoreWithHeadersMarker(store);
             }
@@ -102,18 +102,23 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
             return new TimeOrderedCachingWindowStore(
                 inner,
                 storeSupplier.windowSize(),
-                storeSupplier.segmentIntervalMs());
+                storeSupplier.segmentIntervalMs()
+            );
         }
 
         return new CachingWindowStore(
             inner,
             storeSupplier.windowSize(),
-            storeSupplier.segmentIntervalMs());
+            storeSupplier.segmentIntervalMs()
+        );
     }
 
     private boolean isTimeOrderedStore(final StateStore stateStore) {
         if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
             return true;
+        }
+        if (stateStore instanceof TimestampedToHeadersWindowStoreAdapter) {
+            return isTimeOrderedStore(((TimestampedToHeadersWindowStoreAdapter) stateStore).store);
         }
         if (stateStore instanceof WrappedStateStore) {
             return isTimeOrderedStore(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
@@ -212,13 +217,6 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
             return wrapped().backwardAll();
-        }
-
-        @Override
-        public <R> QueryResult<R> query(final Query<R> query,
-                                        final PositionBound positionBound,
-                                        final QueryConfig config) {
-            throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped window stores with headers yet.");
         }
 
         @Override

@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
@@ -28,8 +29,6 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,27 +64,25 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
         String transactionalId = "transactionalId";
         int producerId = 10;
         short producerEpoch = 1;
-        builder = new TxnOffsetCommitRequest.Builder(
-            transactionalId,
-            groupId,
-            producerId,
-            producerEpoch,
-            OFFSETS,
-            true
-        );
+        TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
+            .setTransactionalId(transactionalId)
+            .setGroupId(groupId)
+            .setProducerId(producerId)
+            .setProducerEpoch(producerEpoch)
+            .setTopics(TxnOffsetCommitRequest.getTopics(OFFSETS));
+        builder = TxnOffsetCommitRequest.Builder.forTopicNames(data, true);
 
         int generationId = 5;
-        builderWithGroupMetadata = new TxnOffsetCommitRequest.Builder(
-            transactionalId,
-            groupId,
-            producerId,
-            producerEpoch,
-            OFFSETS,
-            memberId,
-            generationId,
-            Optional.of(groupInstanceId),
-            true
-        );
+        TxnOffsetCommitRequestData dataWithGroupMetadata = new TxnOffsetCommitRequestData()
+            .setTransactionalId(transactionalId)
+            .setGroupId(groupId)
+            .setProducerId(producerId)
+            .setProducerEpoch(producerEpoch)
+            .setMemberId(memberId)
+            .setGenerationId(generationId)
+            .setGroupInstanceId(groupInstanceId)
+            .setTopics(TxnOffsetCommitRequest.getTopics(OFFSETS));
+        builderWithGroupMetadata = TxnOffsetCommitRequest.Builder.forTopicNames(dataWithGroupMetadata, true);
     }
 
     @Test
@@ -95,26 +92,23 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
         errorsMap.put(new TopicPartition(topicOne, partitionOne), Errors.NOT_COORDINATOR);
         errorsMap.put(new TopicPartition(topicTwo, partitionTwo), Errors.NOT_COORDINATOR);
 
-        List<TxnOffsetCommitRequestTopic> expectedTopics = Arrays.asList(
+        List<TxnOffsetCommitRequestTopic> expectedTopics = List.of(
             new TxnOffsetCommitRequestTopic()
                 .setName(topicOne)
-                .setPartitions(Collections.singletonList(
+                .setPartitions(List.of(
                     new TxnOffsetCommitRequestPartition()
                         .setPartitionIndex(partitionOne)
                         .setCommittedOffset(offset)
                         .setCommittedLeaderEpoch(leaderEpoch)
-                        .setCommittedMetadata(metadata)
-                )),
+                        .setCommittedMetadata(metadata))),
             new TxnOffsetCommitRequestTopic()
                 .setName(topicTwo)
-                .setPartitions(Collections.singletonList(
+                .setPartitions(List.of(
                     new TxnOffsetCommitRequestPartition()
                         .setPartitionIndex(partitionTwo)
                         .setCommittedOffset(offset)
                         .setCommittedLeaderEpoch(leaderEpoch)
-                        .setCommittedMetadata(metadata)
-                ))
-        );
+                        .setCommittedMetadata(metadata))));
 
         for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             final TxnOffsetCommitRequest request;
@@ -130,7 +124,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
                 request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
 
             assertEquals(errorsMap, response.errors());
-            assertEquals(Collections.singletonMap(Errors.NOT_COORDINATOR, 2), response.errorCounts());
+            assertEquals(Map.of(Errors.NOT_COORDINATOR, 2), response.errorCounts());
             assertEquals(throttleTimeMs, response.throttleTimeMs());
         }
     }
@@ -139,16 +133,16 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     @Override
     public void testGetErrorResponse() {
         TxnOffsetCommitResponseData expectedResponse = new TxnOffsetCommitResponseData()
-            .setTopics(Arrays.asList(
+            .setTopics(List.of(
                 new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
                     .setName(topicOne)
-                    .setPartitions(Collections.singletonList(
+                    .setPartitions(List.of(
                         new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
                             .setPartitionIndex(partitionOne))),
                 new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
                     .setName(topicTwo)
-                    .setPartitions(Collections.singletonList(
+                    .setPartitions(List.of(
                         new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
                             .setPartitionIndex(partitionTwo)))));

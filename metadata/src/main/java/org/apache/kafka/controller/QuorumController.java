@@ -88,9 +88,9 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.errors.ControllerExceptions;
 import org.apache.kafka.controller.errors.EventHandlerExceptionInfo;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
@@ -100,6 +100,7 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
@@ -209,6 +210,7 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
+        private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
         private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
@@ -345,6 +347,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setSupportedConfigChecker(SupportedConfigChecker supportedConfigChecker) {
+            this.supportedConfigChecker = supportedConfigChecker;
+            return this;
+        }
+
         public Builder setStaticConfig(Map<String, Object> staticConfig) {
             this.staticConfig = staticConfig;
             return this;
@@ -436,6 +443,7 @@ public final class QuorumController implements Controller {
                     createTopicPolicy,
                     alterConfigPolicy,
                     configurationValidator,
+                    supportedConfigChecker,
                     staticConfig,
                     bootstrapMetadata,
                     maxRecordsPerBatch,
@@ -1066,6 +1074,11 @@ public final class QuorumController implements Controller {
         }
 
         @Override
+        public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+            reader.close();
+        }
+
+        @Override
         public void handleLeaderChange(LeaderAndEpoch newLeader) {
             appendRaftEvent("handleLeaderChange[" + newLeader.epoch() + "]", () -> {
                 final String newLeaderName = newLeader.leaderId().isPresent() ?
@@ -1486,6 +1499,7 @@ public final class QuorumController implements Controller {
         Optional<CreateTopicPolicy> createTopicPolicy,
         Optional<AlterConfigPolicy> alterConfigPolicy,
         ConfigurationValidator configurationValidator,
+        SupportedConfigChecker supportedConfigChecker,
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
@@ -1548,6 +1562,7 @@ public final class QuorumController implements Controller {
             setStaticConfig(staticConfig).
             setNodeId(nodeId).
             setFeatureControl(featureControl).
+            setSupportedConfigChecker(supportedConfigChecker).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
@@ -1773,13 +1788,14 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<CreateTopicsResponseData> createTopics(
         ControllerRequestContext context,
-        CreateTopicsRequestData request, Set<String> describable
+        CreateTopicsRequestData request, Set<String> describable,
+        boolean forwarded
     ) {
         if (request.topics().isEmpty()) {
             return CompletableFuture.completedFuture(new CreateTopicsResponseData());
         }
         return appendWriteEvent("createTopics", context.deadlineNs(),
-            () -> replicationControl.createTopics(context, request, describable));
+            () -> replicationControl.createTopics(context, request, describable, forwarded));
     }
 
     @Override
@@ -1869,14 +1885,15 @@ public final class QuorumController implements Controller {
     public CompletableFuture<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
         ControllerRequestContext context,
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
-        boolean validateOnly
+        boolean validateOnly,
+        boolean forwarded
     ) {
         if (configChanges.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.incrementalAlterConfigs(configChanges, false);
+                configurationControl.incrementalAlterConfigs(configChanges, false, forwarded);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {
@@ -1914,14 +1931,16 @@ public final class QuorumController implements Controller {
     @Override
     public CompletableFuture<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         ControllerRequestContext context,
-        Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly
+        Map<ConfigResource, Map<String, String>> newConfigs,
+        boolean validateOnly,
+        boolean forwarded
     ) {
         if (newConfigs.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
-                configurationControl.legacyAlterConfigs(newConfigs, false);
+                configurationControl.legacyAlterConfigs(newConfigs, false, forwarded);
             if (validateOnly) {
                 return result.withoutRecords();
             } else {

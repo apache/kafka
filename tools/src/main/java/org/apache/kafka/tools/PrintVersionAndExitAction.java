@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.ArgumentAction;

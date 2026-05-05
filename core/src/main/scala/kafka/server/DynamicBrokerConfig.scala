@@ -21,20 +21,20 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.log.LogManager
 import kafka.network.DataPlaneAcceptor
 import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.Logging
-import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.Endpoint
+import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, SslConfigs}
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
-import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.utils.{BufferSupplier, ConfigUtils, Utils}
+import org.apache.kafka.common.utils.internals.LogContext
+import org.apache.kafka.common.utils.internals.BufferSupplier
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.ConfigUtils
 import org.apache.kafka.config
 import org.apache.kafka.network.SocketServer
 import org.apache.kafka.raft.KafkaRaftClient
@@ -46,8 +46,9 @@ import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricCon
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
 import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
 import org.apache.kafka.snapshot.RecordsSnapshotReader
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, LogManager}
 
+import java.util.stream.Collectors
 import scala.util.Using
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -430,6 +431,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
+    KafkaConfig.clampDynamicConfigs(newProps.asJava)
 
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false, doLog)
@@ -595,7 +597,7 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
 
   private def updateLogsConfig(newBrokerDefaults: Map[String, Object]): Unit = {
     logManager.brokerConfigUpdated()
-    logManager.allLogs.foreach { log =>
+    logManager.allLogs.forEach { log =>
       val props = mutable.Map.empty[Any, Any]
       props ++= newBrokerDefaults
       props ++= log.config.originals.asScala.filter { case (k, _) =>
@@ -609,20 +611,13 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
-
-    logManager.updateCordonedLogDirs(newConfig.cordonedLogDirs.asScala.toSet)
-    val newCordoned: Set[String] = newConfig.cordonedLogDirs.asScala.toSet -- oldConfig.cordonedLogDirs.asScala.toSet
-    val newUncordoned: Set[String] = oldConfig.cordonedLogDirs.asScala.toSet -- newConfig.cordonedLogDirs.asScala.toSet
-    if (newCordoned.nonEmpty) {
-      directoryEventHandler.handleCordoned(newCordoned.map(dir => logManager.directoryId(dir).get).toSet.asJava)
-    }
-    if (newUncordoned.nonEmpty) {
-      directoryEventHandler.handleUncordoned(newUncordoned.map(dir => logManager.directoryId(dir).get).toSet.asJava)
-    }
-
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
-
     updateLogsConfig(newBrokerDefaults.asScala)
+
+    logManager.updateCordonedLogDirs(util.Set.copyOf(newConfig.cordonedLogDirs))
+    directoryEventHandler.handleCordoned(newConfig.cordonedLogDirs.stream
+      .flatMap[Uuid](dir => logManager.directoryId(dir).stream)
+      .collect(Collectors.toSet[Uuid]))
   }
 }
 
