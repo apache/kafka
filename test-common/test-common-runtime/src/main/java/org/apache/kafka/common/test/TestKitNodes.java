@@ -163,9 +163,19 @@ public class TestKitNodes {
                 throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
             }
             // TODO: remove this assertion after https://issues.apache.org/jira/browse/KAFKA-16680 is finished
-            if ((brokerSecurityProtocol != SecurityProtocol.PLAINTEXT && brokerSecurityProtocol != SecurityProtocol.SASL_PLAINTEXT && brokerSecurityProtocol != SecurityProtocol.SASL_SSL) ||
-                (controllerSecurityProtocol != SecurityProtocol.PLAINTEXT && controllerSecurityProtocol != SecurityProtocol.SASL_PLAINTEXT && brokerSecurityProtocol != SecurityProtocol.SASL_SSL)) {
-                throw new IllegalArgumentException("Currently only support PLAINTEXT / SASL_PLAINTEXT / SASL_SSL security protocol");
+            var supportedProtocols = List.of(
+                    SecurityProtocol.PLAINTEXT,
+                    SecurityProtocol.SASL_PLAINTEXT,
+                    SecurityProtocol.SASL_SSL,
+                    SecurityProtocol.SSL
+            );
+            if (!supportedProtocols.contains(brokerSecurityProtocol) || !supportedProtocols.contains(controllerSecurityProtocol)) {
+                throw new IllegalArgumentException(String.format("Currently only support %s security protocol",
+                        supportedProtocols.stream().map(sp -> sp.name).collect(Collectors.joining(" / ")))
+                );
+            }
+            if ((brokerSecurityProtocol == SecurityProtocol.SSL) != (controllerSecurityProtocol == SecurityProtocol.SSL)) {
+                throw new IllegalArgumentException("Mixed broker and controller SSL security protocol configurations are not yet supported");
             }
             if (baseDirectory == null) {
                 this.baseDirectory = TestUtils.tempDirectory().toPath();
