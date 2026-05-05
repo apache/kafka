@@ -114,6 +114,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
         if (nextProducerIdBlock.get() != null) {
             return;
         }
+
         // KAFKA-20114 - Acquire requestInFlight before reading backoffDeadlineMs. The response handler
         // updates backoffDeadlineMs before clearing requestInFlight, so a successful CAS
         // after that clear observes the updated backoff and avoids a premature retry.
