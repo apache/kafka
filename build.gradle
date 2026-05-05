@@ -1016,7 +1016,6 @@ project(':server') {
     implementation libs.slf4jApi
     implementation log4j2Libs
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
 
     testImplementation libs.mockitoCore
@@ -1138,7 +1137,6 @@ project(':core') {
     implementation libs.slf4jApi
     implementation libs.re2j
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':group-coordinator').sourceSets.test.output
     testImplementation project(':share-coordinator').sourceSets.test.output
@@ -1417,7 +1415,6 @@ project(':metadata') {
     testImplementation libs.junitJupiter
     testImplementation libs.jqwik
     testImplementation libs.mockitoCore
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1541,7 +1538,6 @@ project(':group-coordinator') {
     implementation libs.slf4jApi
     implementation libs.hash4j
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':coordinator-common').sourceSets.test.output
@@ -1705,7 +1701,6 @@ project(':transaction-coordinator') {
     testImplementation testLog4j2Libs
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
@@ -1770,7 +1765,6 @@ project(':coordinator-common') {
     implementation libs.metrics
     implementation libs.hdrHistogram
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
@@ -1807,7 +1801,6 @@ project(':share-coordinator') {
     implementation libs.metrics
     implementation libs.slf4jApi
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':coordinator-common').sourceSets.test.output
@@ -1951,17 +1944,17 @@ project(':clients') {
     compileOnly libs.jacksonJDK8Datatypes
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
-
     testFixturesApi project(':test-common:test-common-util')
     testFixturesApi libs.bcpkix
+    testFixturesApi libs.junitJupiter
+    testFixturesApi libs.jqwik
+    testFixturesApi testLog4j2Libs
+
     testImplementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.jose4j
-    testFixturesApi libs.junitJupiter
-    testImplementation libs.jqwik
     testImplementation libs.spotbugs
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
-    testFixturesApi testLog4j2Libs
     testImplementation libs.testcontainersKeycloak
     testImplementation libs.testcontainersJunitJupiter
 
@@ -2130,7 +2123,6 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':server')
     testImplementation project(':storage')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     implementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -2171,7 +2163,6 @@ project(':raft') {
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
@@ -2269,7 +2260,6 @@ project(':server-common') {
     implementation libs.slf4jApi
 
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
@@ -2399,7 +2389,6 @@ project(':storage') {
     implementation libs.metrics
 
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
@@ -2593,7 +2582,6 @@ project(':tools') {
     compileOnly libs.spotbugs
 
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':server')
     testImplementation project(':server').sourceSets.test.output
@@ -2679,7 +2667,6 @@ project(':trogdor') {
     implementation project(':group-coordinator:group-coordinator-api')
 
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':group-coordinator')
     testImplementation libs.junitJupiter
@@ -2780,7 +2767,6 @@ project(':streams') {
     testCompileOnly project(':streams:test-utils')
     testCompileOnly libs.bndlib
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
@@ -2976,7 +2962,6 @@ project(':streams:integration-tests') {
     implementation libs.slf4jApi
     implementation libs.scalaLibrary
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':group-coordinator')
     testImplementation project(':server')
@@ -3031,7 +3016,6 @@ project(':streams:test-utils') {
 
     implementation libs.slf4jApi
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
@@ -3068,7 +3052,6 @@ project(':streams:examples') {
     implementation libs.jacksonAnnotations
 
     testImplementation project(':streams:test-utils')
-    testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testImplementation testFixtures(project(':clients'))
     testImplementation libs.junitJupiter
     testImplementation libs.hamcrest
@@ -3508,7 +3491,6 @@ project(':jmh-benchmarks') {
     implementation project(':connect:api')
     implementation project(':connect:transforms')
     implementation project(':connect:json')
-    implementation project(':clients').sourceSets.test.output
     implementation testFixtures(project(':clients'))
     implementation project(':server-common').sourceSets.test.output
     implementation project(':server').sourceSets.test.output
@@ -3567,7 +3549,6 @@ project(':connect:api') {
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation testLog4j2Libs
 
@@ -3603,7 +3584,6 @@ project(':connect:transforms') {
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation testLog4j2Libs
 
@@ -3644,7 +3624,6 @@ project(':connect:json') {
 
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
 
     testRuntimeOnly runtimeTestLibs
@@ -3719,7 +3698,6 @@ project(':connect:runtime') {
     swagger libs.jakartaServletApi
     swagger libs.jaxrs2Jakarta
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
     testImplementation project(':server')
@@ -3848,7 +3826,6 @@ project(':connect:file') {
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
@@ -3893,7 +3870,6 @@ project(':connect:basic-auth-extension') {
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
 
     testRuntimeOnly libs.jerseyContainerServlet
@@ -3955,7 +3931,6 @@ project(':connect:mirror') {
     testImplementation libs.junitJupiter
     testImplementation libs.bndlib
     testImplementation libs.mockitoCore
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
@@ -4027,7 +4002,6 @@ project(':connect:mirror-client') {
 
     testImplementation testLog4j2Libs
     testImplementation libs.junitJupiter
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
 
     testRuntimeOnly runtimeTestLibs
