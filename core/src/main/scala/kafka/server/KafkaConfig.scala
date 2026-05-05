@@ -453,18 +453,17 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
     val controllerListenersValue = controllerListeners
 
-    controllerListenerNames.asScala.flatMap { name =>
+    def nameToEndpoint(name: String, isDefault: Boolean): Option[Endpoint] = {
       controllerAdvertisedListeners
         .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
-        .orElse(
+        .orElse {
           controllerListenersValue
             .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
             .map { endpoint =>
               val voterListenerOverride = {
                 // the user did not provide an advertised listener for the default controller listener;
                 // if controller.quorum.voters defines an endpoint for this node, use that as the advertised listener
-                if (name == controllerListenerNames.asScala.head &&
-                  (endpoint.host == null || endpoint.host == "0.0.0.0")) {
+                if (isDefault && (endpoint.host == null || endpoint.host == "0.0.0.0")) {
                   val votersAddress = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId())
                   votersAddress.map { socketAddress =>
                     new Endpoint(
@@ -474,10 +473,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
                       socketAddress.getPort
                     )
                   }
+                } else {
+                  None
                 }
-                else None
               }
-              voterListenerOverride.getOrElse(
+              voterListenerOverride.getOrElse {
                 // Removing "0.0.0.0" host to avoid validation errors.
                 // This is to be compatible with the old behavior before 3.9.
                 // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
@@ -486,9 +486,14 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
                 } else {
                   endpoint
                 }
-              )
+              }
             }
-        )
+        }
+    }
+
+    controllerListenerNames.asScala.toList match {
+      case Nil => Nil
+      case head :: tail => nameToEndpoint(head, true).toList ++ tail.flatMap(nameToEndpoint(_, false))
     }
   }
 
