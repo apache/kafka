@@ -22,13 +22,6 @@ org.apache.kafka.clients.MetadataVersionIntegrationTest:
 - testUpgradeSameVersion
 org.apache.kafka.clients.MetricsDuringTopicCreationDeletionTest:
 - testMetricsDuringTopicCreateDelete
-org.apache.kafka.clients.TransactionsExpirationTest:
-- testFatalErrorAfterInvalidProducerIdMappingWithTV1
-- testFatalErrorAfterInvalidProducerIdMappingWithTV2
-- testTransactionAfterProducerIdExpiresWithTV1
-- testTransactionAfterProducerIdExpiresWithTV2
-org.apache.kafka.clients.TransactionsWithMaxInFlightOneTest:
-- testTransactionalProducerSingleBrokerMaxInFlightOne
 org.apache.kafka.clients.admin.AddPartitionsTest:
 - testIncrementPartitions
 - testManualAssignmentOfReplicas

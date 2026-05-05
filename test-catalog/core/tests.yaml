@@ -589,28 +589,6 @@ kafka.api.SslProducerSendTest:
 - testSendToPartitionWithFollowerShutdownShouldNotTimeout
 kafka.api.TransactionsBounceTest:
 - testWithGroupMetadata
-kafka.api.TransactionsTest:
-- testAbortTransactionTimeout
-- testBasicTransactions
-- testBumpTransactionalEpochWithTV2Disabled
-- testBumpTransactionalEpochWithTV2Enabled
-- testCommitTransactionTimeout
-- testConsecutivelyRunInitTransactions
-- testDelayedFetchIncludesAbortedTransaction
-- testEmptyAbortAfterCommit
-- testFailureToFenceEpoch
-- testFencingOnAddPartitions
-- testFencingOnCommit
-- testFencingOnSend
-- testFencingOnSendOffsets
-- testFencingOnTransactionExpiration
-- testInitTransactionsTimeout
-- testMultipleMarkersOneLeader
-- testOffsetMetadataInSendOffsetsToTransaction
-- testReadCommittedConsumerShouldNotSeeUndecidedData
-- testRecoveryFromEpochOverflow
-- testSendOffsetsToTransactionTimeout
-- testSendOffsetsWithGroupMetadata
 kafka.api.UserClientIdQuotaTest:
 - testProducerConsumerOverrideLowerQuota
 - testProducerConsumerOverrideUnthrottled
