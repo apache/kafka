@@ -740,6 +740,25 @@ public class MockProducerTest {
         }
     }
 
+    @Test
+    public void testNoNpeWithDefaultConstructor() {
+        // KAFKA-12861: default constructor passes null serializers
+        MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        assertDoesNotThrow(() -> producer.send(new ProducerRecord<>("topic", null, null)));
+        producer.close();
+    }
+
+    @Test
+    public void testNoNpeInPartitionMethodWithNullSerializers() {
+        // KAFKA-12861: partition() method accesses serializers when computing partition
+        PartitionInfo info = new PartitionInfo("topic", 0, null, null, null);
+        Cluster cluster = new Cluster(null, new ArrayList<>(0),
+            Collections.singletonList(info), Collections.emptySet(), Collections.emptySet());
+        MockProducer<byte[], byte[]> producer = new MockProducer<>(cluster, false, null, null, null);
+        assertDoesNotThrow(() -> producer.send(new ProducerRecord<>("topic", null, null)));
+        producer.close();
+    }
+
     private boolean isError(Future<?> future) {
         try {
             future.get();
