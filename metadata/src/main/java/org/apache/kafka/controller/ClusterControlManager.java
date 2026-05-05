@@ -432,9 +432,6 @@ public class ClusterControlManager {
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             record.setLogDirs(request.logDirs());
         }
-        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
-            record.setCordonedLogDirs(request.cordonedLogDirs());
-        }
         if (!request.incarnationId().equals(prevIncarnationId)) {
             int prevNumRecords = records.size();
             boolean isCleanShutdown = cleanShutdownDetectionEnabled ?
@@ -555,22 +552,6 @@ public class ClusterControlManager {
         return OptionalLong.empty();
     }
 
-    public void updateCordonedLogDirs(int brokerId, List<Uuid> cordonedLogDirs) {
-        brokerRegistrations.compute(brokerId,
-                (k, brokerRegistration) -> new BrokerRegistration.Builder().
-                        setId(brokerId).
-                        setEpoch(brokerRegistration.epoch()).
-                        setIncarnationId(brokerRegistration.incarnationId()).
-                        setListeners(brokerRegistration.listeners()).
-                        setSupportedFeatures(brokerRegistration.supportedFeatures()).
-                        setRack(brokerRegistration.rack()).
-                        setFenced(brokerRegistration.fenced()).
-                        setInControlledShutdown(brokerRegistration.inControlledShutdown()).
-                        setDirectories(brokerRegistration.directories()).
-                        setCordonedDirectories(cordonedLogDirs).
-                        build());
-    }
-
     public void replay(RegisterBrokerRecord record, long offset) {
         registerBrokerRecordOffsets.put(record.brokerId(), offset);
         int brokerId = record.brokerId();
@@ -663,7 +644,7 @@ public class ClusterControlManager {
                 () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
                     "value for inControlledShutdown field: %x", record, record.inControlledShutdown())));
         Optional<List<Uuid>> directoriesChange = Optional.ofNullable(record.logDirs()).filter(list -> !list.isEmpty());
-        Optional<List<Uuid>> cordonedDirectoriesChange = Optional.ofNullable(record.cordonedLogDirs()).filter(list -> !list.isEmpty());
+        Optional<List<Uuid>> cordonedDirectoriesChange = Optional.ofNullable(record.cordonedLogDirs());
         replayRegistrationChange(
             record,
             record.brokerId(),

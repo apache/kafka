@@ -16,111 +16,362 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import kafka.api.TransactionsTest;
-import kafka.server.KafkaBroker;
-
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.server.HostedPartition;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.TestKitDefaults;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper.TransactionHooks;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-
-import scala.jdk.javaapi.CollectionConverters;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createTopicConfigForRemoteStorage;
 
-public class TransactionsWithTieredStoreTest extends TransactionsTest {
+/**
+ * Runs transaction tests with tiered storage enabled.
+ * <p>
+ * This test uses {@link TransactionsTestHelper} for the shared test flow methods,
+ * providing tiered-storage-specific hook implementations for verifying log offsets
+ * and segment uploads.
+ */
+public class TransactionsWithTieredStoreTest {
 
-    private String testClassName;
-    private String storageDirPath;
+    private static final String TEST_CLASS_NAME = "transactionswithtiredstoretest";
+    private static final int BROKER_COUNT = 3;
+    
+    private static Map<String, String> baseServerProperties() {
+        String storageDirPath = TestUtils.tempDirectory(
+                "kafka-remote-tier-" + TEST_CLASS_NAME).getAbsolutePath();
 
-    @BeforeEach
-    @Override
-    public void setUp(TestInfo testInfo) {
-        testClassName = testInfo.getTestClass().get().getSimpleName().toLowerCase(Locale.getDefault());
-        storageDirPath = TestUtils.tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath();
-        super.setUp(testInfo);
+        Map<String, String> serverProps = new HashMap<>();
+        serverProps.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false");
+        serverProps.put("offsets.topic.num.partitions", "1");
+        serverProps.put("transaction.state.log.num.partitions", "3");
+        serverProps.put("transaction.state.log.replication.factor", "2");
+        serverProps.put("transaction.state.log.min.isr", "2");
+        serverProps.put("controlled.shutdown.enable", "true");
+        serverProps.put("unclean.leader.election.enable", "false");
+        serverProps.put("auto.leader.rebalance.enable", "false");
+        serverProps.put("group.initial.rebalance.delay.ms", "0");
+        serverProps.put("transaction.abort.timed.out.transaction.cleanup.interval.ms", "200");
+
+        Properties tieredProps = createPropsForRemoteStorage(
+                TEST_CLASS_NAME, storageDirPath, BROKER_COUNT, 3, new Properties());
+        tieredProps.forEach((k, v) -> serverProps.put(k.toString(), v.toString()));
+
+        serverProps.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+                TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME);
+
+        return serverProps;
     }
 
-    @Override
-    public Properties overridingProps() {
-        Properties props = super.overridingProps();
-        int numRemoteLogMetadataPartitions = 3;
-        return createPropsForRemoteStorage(testClassName, storageDirPath, brokerCount(),
-                numRemoteLogMetadataPartitions, props);
+    private static List<ClusterConfig> tieredStorageClusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.CO_KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(baseServerProperties())
+                .build());
     }
 
-    @Override
-    public Properties topicConfig() {
-        boolean enableRemoteStorage = true;
-        int maxBatchCountPerSegment = 1;
-        Properties overridingTopicProps = super.topicConfig();
-        overridingTopicProps.putAll(createTopicConfigForRemoteStorage(
-                enableRemoteStorage, maxBatchCountPerSegment));
-        return overridingTopicProps;
+    private static List<ClusterConfig> tieredStorageClusterConfigTV1() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.CO_KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(baseServerProperties())
+                .setFeatures(Map.of(Feature.TRANSACTION_VERSION, (short) 1))
+                .build());
     }
 
-    @Override
-    public void maybeWaitForAtLeastOneSegmentUpload(scala.collection.Seq<TopicPartition> topicPartitions) {
-        CollectionConverters.asJava(topicPartitions).forEach(topicPartition -> {
-            List<BrokerLocalStorage> localStorages = CollectionConverters.asJava(brokers()).stream()
-                    .map(b -> new BrokerLocalStorage(b.config().brokerId(), Set.copyOf(b.config().logDirs()), STORAGE_WAIT_TIMEOUT_SEC))
-                    .toList();
-            localStorages
-                    .stream()
-                    // Select brokers which are assigned a replica of the topic-partition
-                    .filter(s -> isAssignedReplica(topicPartition, s.getBrokerId()))
-                    // Filter out inactive brokers, which may still contain log segments we would expect
-                    // to be deleted based on the retention configuration.
-                    .filter(s -> isAlive(s.getBrokerId()))
-                    .forEach(localStorage ->
-                            // Wait until the brokers local storage have been cleared from the inactive log segments.
-                            localStorage.waitForAtLeastEarliestLocalOffset(topicPartition, 1L));
-        });
+    private static List<ClusterConfig> tieredStorageClusterConfigTV2() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.CO_KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(baseServerProperties())
+                .setFeatures(Map.of(Feature.TRANSACTION_VERSION, (short) 2))
+                .build());
     }
 
-    @Override
-    public void maybeVerifyLocalLogStartOffsets(scala.collection.immutable.Map<TopicPartition, Long> partitionLocalStartOffsets) throws InterruptedException {
-        Map<Integer, Long> offsets = new HashMap<>();
-        TestUtils.waitForCondition(() ->
-                CollectionConverters.asJava(brokers()).stream().allMatch(broker ->
-                        CollectionConverters.asJava(partitionLocalStartOffsets)
-                                .entrySet().stream().allMatch(entry -> {
+    private static Map<String, String> topicConfig() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2");
+        config.putAll(createTopicConfigForRemoteStorage(true, 1));
+        return config;
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicBasicTransactions(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testBasicTransactions(
+                clusterInstance, GroupProtocol.CLASSIC, createTieredHooks(clusterInstance), topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncBasicTransactions(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testBasicTransactions(
+                clusterInstance, GroupProtocol.CONSUMER, createTieredHooks(clusterInstance), topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicDelayedFetchIncludesAbortedTransaction(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testDelayedFetchIncludesAbortedTransaction(
+                clusterInstance, GroupProtocol.CLASSIC, createTieredHooks(clusterInstance), topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncDelayedFetchIncludesAbortedTransaction(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testDelayedFetchIncludesAbortedTransaction(
+                clusterInstance, GroupProtocol.CONSUMER, createTieredHooks(clusterInstance), topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicSendOffsetsWithGroupMetadata(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testSendOffsetsWithGroupMetadata(
+                clusterInstance, GroupProtocol.CLASSIC, createTieredHooks(clusterInstance), topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncSendOffsetsWithGroupMetadata(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testSendOffsetsWithGroupMetadata(
+                clusterInstance, GroupProtocol.CONSUMER, createTieredHooks(clusterInstance), topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicReadCommittedConsumerShouldNotSeeUndecidedData(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testReadCommittedConsumerShouldNotSeeUndecidedData(
+                clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncReadCommittedConsumerShouldNotSeeUndecidedData(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testReadCommittedConsumerShouldNotSeeUndecidedData(
+                clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicFencingOnCommit(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnCommit(clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncFencingOnCommit(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnCommit(clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicFencingOnSendOffsets(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnSendOffsets(clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncFencingOnSendOffsets(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnSendOffsets(clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicOffsetMetadataInSendOffsetsToTransaction(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testOffsetMetadataInSendOffsetsToTransaction(
+                clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncOffsetMetadataInSendOffsetsToTransaction(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testOffsetMetadataInSendOffsetsToTransaction(
+                clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testInitTransactionsTimeout(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testInitTransactionsTimeout(clusterInstance, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testSendOffsetsToTransactionTimeout(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testSendOffsetsToTransactionTimeout(clusterInstance, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testCommitTransactionTimeout(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testCommitTransactionTimeout(clusterInstance, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAbortTransactionTimeout(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testAbortTransactionTimeout(clusterInstance, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicFencingOnSend(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnSend(clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncFencingOnSend(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnSend(clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicFencingOnAddPartitions(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnAddPartitions(clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncFencingOnAddPartitions(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnAddPartitions(clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicFencingOnTransactionExpiration(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnTransactionExpiration(clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncFencingOnTransactionExpiration(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFencingOnTransactionExpiration(clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testClassicMultipleMarkersOneLeader(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testMultipleMarkersOneLeader(clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testAsyncMultipleMarkersOneLeader(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testMultipleMarkersOneLeader(clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testConsecutivelyRunInitTransactions(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testConsecutivelyRunInitTransactions(clusterInstance);
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfig")
+    public void testRecoveryFromEpochOverflow(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testRecoveryFromEpochOverflow(clusterInstance, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfigTV1")
+    public void testClassicBumpTransactionalEpochWithTV2Disabled(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testBumpTransactionalEpochWithTV2Disabled(
+                clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfigTV1")
+    public void testAsyncBumpTransactionalEpochWithTV2Disabled(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testBumpTransactionalEpochWithTV2Disabled(
+                clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfigTV2")
+    public void testClassicBumpTransactionalEpochWithTV2Enabled(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testBumpTransactionalEpochWithTV2Enabled(
+                clusterInstance, GroupProtocol.CLASSIC, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfigTV2")
+    public void testAsyncBumpTransactionalEpochWithTV2Enabled(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testBumpTransactionalEpochWithTV2Enabled(
+                clusterInstance, GroupProtocol.CONSUMER, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfigTV1")
+    public void testFailureToFenceEpochWithTV1(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFailureToFenceEpoch(clusterInstance, false, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfigTV2")
+    public void testFailureToFenceEpochWithTV2(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testFailureToFenceEpoch(clusterInstance, true, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfigTV1")
+    public void testEmptyAbortAfterCommitWithTV1(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, topicConfig());
+    }
+
+    @ClusterTemplate("tieredStorageClusterConfigTV2")
+    public void testEmptyAbortAfterCommitWithTV2(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, topicConfig());
+    }
+
+    private TransactionHooks createTieredHooks(ClusterInstance clusterInstance) {
+        return new TransactionHooks() {
+            @Override
+            public void verifyLogStartOffsets(Map<TopicPartition, Long> expectedOffsets) throws InterruptedException {
+                Map<Integer, Long> offsets = new HashMap<>();
+                TestUtils.waitForCondition(() ->
+                        clusterInstance.brokers().values().stream().allMatch(broker ->
+                                expectedOffsets.entrySet().stream().allMatch(entry -> {
+                                    long lso = broker.replicaManager().localLog(entry.getKey()).get().logStartOffset();
+                                    offsets.put(broker.config().brokerId(), lso);
+                                    return entry.getValue() == lso;
+                                })
+                        ), () -> "log start offset doesn't change to the expected position: " + expectedOffsets
+                        + ", current position: " + offsets);
+            }
+
+            @Override
+            public void maybeVerifyLocalLogStartOffsets(Map<TopicPartition, Long> expectedOffsets) throws InterruptedException {
+                Map<Integer, Long> offsets = new HashMap<>();
+                TestUtils.waitForCondition(() ->
+                        clusterInstance.brokers().values().stream().allMatch(broker ->
+                                expectedOffsets.entrySet().stream().allMatch(entry -> {
                                     long offset = broker.replicaManager().localLog(entry.getKey()).get().localLogStartOffset();
                                     offsets.put(broker.config().brokerId(), offset);
                                     return entry.getValue() == offset;
                                 })
-                ), () -> "local log start offset doesn't change to the expected position:" + partitionLocalStartOffsets + ", current position:" + offsets);
-    }
-
-    private boolean isAssignedReplica(TopicPartition topicPartition,
-                                      Integer replicaId) {
-        Optional<KafkaBroker> brokerOpt = CollectionConverters.asJava(brokers())
-                .stream()
-                .filter(b -> b.config().brokerId() == replicaId).findFirst();
-        boolean isAssigned = false;
-        if (brokerOpt.isPresent()) {
-            HostedPartition hostedPartition = brokerOpt.get().replicaManager().getPartition(topicPartition);
-            if (hostedPartition instanceof HostedPartition.Online) {
-                isAssigned = true;
+                        ), () -> "local log start offset doesn't change to the expected position: " + expectedOffsets
+                        + ", current position: " + offsets);
             }
-        }
-        return isAssigned;
+
+            @Override
+            public void maybeWaitForAtLeastOneSegmentUpload(List<TopicPartition> topicPartitions) {
+                for (TopicPartition topicPartition : topicPartitions) {
+                    List<BrokerLocalStorage> localStorages = clusterInstance.brokers().values().stream()
+                            .map(b -> new BrokerLocalStorage(b.config().brokerId(),
+                                    Set.copyOf(b.config().logDirs()), STORAGE_WAIT_TIMEOUT_SEC))
+                            .toList();
+                    Set<Integer> assignedReplicas = getAssignedReplicaIds(clusterInstance, topicPartition);
+                    localStorages.stream()
+                            .filter(s -> assignedReplicas.contains(s.getBrokerId()))
+                            .filter(s -> isAlive(clusterInstance, s.getBrokerId()))
+                            .forEach(localStorage ->
+                                    localStorage.waitForAtLeastEarliestLocalOffset(topicPartition, 1L));
+                }
+            }
+        };
     }
 
-    private boolean isAlive(Integer brokerId) {
-        return aliveBrokers().exists(b -> b.config().brokerId() == brokerId);
+    private static Set<Integer> getAssignedReplicaIds(ClusterInstance clusterInstance, TopicPartition topicPartition) {
+        try (var admin = clusterInstance.admin()) {
+            return admin.describeTopics(List.of(topicPartition.topic()))
+                    .allTopicNames().get()
+                    .get(topicPartition.topic())
+                    .partitions().stream()
+                    .filter(p -> p.partition() == topicPartition.partition())
+                    .flatMap(p -> p.replicas().stream())
+                    .map(Node::id)
+                    .collect(Collectors.toSet());
+        } catch (Exception e) {
+            return Set.of();
+        }
+    }
+
+    private static boolean isAlive(ClusterInstance clusterInstance, int brokerId) {
+        return clusterInstance.aliveBrokers().containsKey(brokerId);
     }
 }
