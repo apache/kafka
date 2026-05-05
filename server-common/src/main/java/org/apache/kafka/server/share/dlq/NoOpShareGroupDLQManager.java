@@ -35,4 +35,9 @@ public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
         log.trace("Enqueuing share group dlq record parameter: {}", param);
         return CompletableFuture.completedFuture(null);
     }
+
+    @Override
+    public void stop() {
+        // noop
+    }
 }

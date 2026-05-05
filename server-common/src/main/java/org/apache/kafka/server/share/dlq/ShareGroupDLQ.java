@@ -41,4 +41,9 @@ public interface ShareGroupDLQ {
      * @return A completable future of Void type, mainly to signal exceptions.
      */
     CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param);
+
+    /**
+     * Perform cleanup and interrupt any threads.
+     */
+    void stop();
 }
