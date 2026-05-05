@@ -124,6 +124,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
         var retryTimestamp = backoffDeadlineMs.get();
         var now = time.milliseconds();
 
+        // Don't send a request if there is a retry deadline and the deadline has not passed yet.
         if (retryTimestamp != NO_RETRY && now < retryTimestamp) {
             requestInFlight.set(false);
             return;
