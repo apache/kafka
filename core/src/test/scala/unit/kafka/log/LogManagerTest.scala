@@ -1163,7 +1163,7 @@ class LogManagerTest {
     assertEquals(Optional.empty, logManager.directoryId(dirs(2).getAbsolutePath))
     assertEquals(Optional.of(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
     assertTrue(logManager.directoryId(dirs(3).getAbsolutePath).isPresent)
-    assertEquals(2, logManager.directoryIdsSet.size)
+    assertEquals(2, logManager.directoryIds.size)
   }
 
   /**

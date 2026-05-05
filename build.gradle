@@ -696,6 +696,15 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
+  // Consumed by root aggregatedJavadoc; mirrors compileClasspath.
+  configurations {
+    javadocClasspathElements {
+      canBeConsumed = true
+      canBeResolved = false
+      extendsFrom configurations.compileClasspath
+    }
+  }
+
   check.dependsOn('javadoc')
 
   task systemTestLibs(dependsOn: jar)
@@ -3991,12 +4000,34 @@ project(':connect:test-plugins') {
   }
 }
 
-task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
+// Gradle 9+ forbids resolving a subproject's Configuration from the root.
+// Consume each subproject's javadocClasspathElements via project dependencies instead.
+configurations {
+  aggregatedJavadocClasspath {
+    canBeConsumed = false
+    canBeResolved = true
+  }
+}
+
+task aggregatedJavadoc(type: Javadoc) {
+  destinationDir = file("${layout.buildDirectory.get().asFile.path}/docs/javadoc")
+}
+
+gradle.projectsEvaluated {
   def projectsWithJavadoc = subprojects.findAll { it.javadoc.enabled }
-  source = projectsWithJavadoc.collect { it.sourceSets.main.allJava }
-  classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
-  includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
-  excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+
+  projectsWithJavadoc.each { sp ->
+    dependencies.add('aggregatedJavadocClasspath',
+        dependencies.project(path: sp.path, configuration: 'javadocClasspathElements'))
+  }
+
+  tasks.named('aggregatedJavadoc').configure {
+    dependsOn projectsWithJavadoc.collect { "${it.path}:compileJava" }
+    source    projectsWithJavadoc.collect { it.sourceSets.main.allJava }
+    classpath = configurations.aggregatedJavadocClasspath
+    includes  = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
+    excludes  = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+  }
 }
 
 

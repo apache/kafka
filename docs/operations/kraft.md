@@ -206,6 +206,10 @@ $ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --b
 
 Note that if there are any configs needed to be passed to the Admin Client, like the authentication configuration, please also include in the "controller.properties".
 
+The `--command-config` needs to point to the to-be-added controller's configuration file.
+
+Be sure that the `controller.quorum.bootstrap.servers` property in the specified `--command-config` file contains at least one controller currently in the quorum.
+
 ### Remove Controller
 
 If the dynamic controller cluster already exists, it can be shrunk using the `bin/kafka-metadata-quorum.sh remove-controller` command. Use the remove-controller command before shutting down the controller to have it removed from the quorum first. When using broker endpoints use the --bootstrap-server flag: 

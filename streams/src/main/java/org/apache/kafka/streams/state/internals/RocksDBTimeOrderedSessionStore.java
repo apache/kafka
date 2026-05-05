@@ -124,11 +124,11 @@ public class RocksDBTimeOrderedSessionStore
     @Override
     public byte[] fetchSession(final Bytes key,
                                final long sessionStartTime,
-                               final long sessiontEndTime) {
+                               final long sessionEndTime) {
         return wrapped().fetchSession(
             key,
             sessionStartTime,
-            sessiontEndTime
+            sessionEndTime
         );
     }
 

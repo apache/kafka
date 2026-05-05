@@ -34,7 +34,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
-import static org.apache.kafka.common.utils.ConfigUtils.configMapToRedactedString;
+import static org.apache.kafka.common.utils.internals.ConfigUtils.configMapToRedactedString;
 
 /**
  * This class defines the configuration of topic based {@link org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager} implementation.
