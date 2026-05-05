@@ -130,6 +130,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
             requestInFlight.set(false);
             return;
         }
+
         sendRequest();
     }
 
