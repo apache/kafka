@@ -220,7 +220,7 @@ public class QuorumConfig {
                     + ". Each entry should be in the form `{id}@{host}:{port}`.");
             }
 
-            InetSocketAddress address = new InetSocketAddress(host, port);
+            InetSocketAddress address = InetSocketAddress.createUnresolved(host, port);
             if (address.getHostString().equals(NON_ROUTABLE_HOST) && requireRoutableAddresses) {
                 throw new ConfigException(
                     String.format("Host string (%s) is not routeable", address.getHostString())
