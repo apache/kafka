@@ -499,7 +499,6 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC)
         .define(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, LIST, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, MEDIUM, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC);
 
-
     /**
      * The timeout used to wait for a new member in milliseconds.
      */
@@ -615,8 +614,10 @@ public class GroupCoordinatorConfig {
         this.shareGroupMinAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.shareGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.shareGroupInitializeRetryIntervalMs = Math.max(initializeRetryMs, this.offsetCommitTimeoutMs);
+        // DLQ configurations
         this.errorsDLQAutoCreateTopicsEnable = config.getBoolean(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
         this.errorsDLQTopicNamePrefix = config.getString(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
+        // Streams group configurations
         this.streamsGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsGroupMaxSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
@@ -697,7 +698,6 @@ public class GroupCoordinatorConfig {
         require(shareGroupAssignmentIntervalMs() <= shareGroupMaxAssignmentIntervalMs,
             String.format("%s must be less than or equal to %s",
                 SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
-
 
         // Streams group configs validation.
         require(streamsGroupMaxHeartbeatIntervalMs >= streamsGroupMinHeartbeatIntervalMs,
