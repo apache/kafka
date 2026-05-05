@@ -2596,8 +2596,7 @@ public class SharePartition {
                         persisterBatch.stateBatch.firstOffset(),
                         persisterBatch.stateBatch.lastOffset(),
                         persisterBatch.stateBatch.deliveryCount(),
-                        persisterBatch.dlqCause,
-                        false
+                        persisterBatch.dlqCause
                     );
                 });
             });
@@ -2932,7 +2931,7 @@ public class SharePartition {
     private AcquisitionLockTimeoutHandler releaseAcquisitionLockOnTimeout() {
         return (memberId, firstOffset, lastOffset, timerTask) -> {
             List<PersisterStateBatch> stateBatches;
-            List<DlqTimeoutBatch> dlqBatches;
+            List<DlqBatch> dlqBatches;
 
             lock.writeLock().lock();
             try {
@@ -2991,8 +2990,7 @@ public class SharePartition {
                         dlqBatch.firstOffset(),
                         dlqBatch.lastOffset(),
                         dlqBatch.deliveryCount(),
-                        ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED,
-                        true
+                        ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED
                     ));
                 });
             }
@@ -3006,7 +3004,7 @@ public class SharePartition {
 
     private void releaseAcquisitionLockOnTimeoutForCompleteBatch(InFlightBatch inFlightBatch,
                                                                  List<PersisterStateBatch> stateBatches,
-                                                                 List<DlqTimeoutBatch> dlqBatches,
+                                                                 List<DlqBatch> dlqBatches,
                                                                  String memberId) {
         if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
             InFlightState updateResult = inFlightBatch.tryUpdateBatchState(
@@ -3029,7 +3027,7 @@ public class SharePartition {
             if (updateResult.state() == RecordState.ARCHIVING) {
                 // Don't increment deliveryCompleteCount here — deferred to phase 2
                 // Don't updateFindNextFetchOffset — ARCHIVING is not fetchable
-                dlqBatches.add(new DlqTimeoutBatch(updateResult,
+                dlqBatches.add(new DlqBatch(updateResult,
                     inFlightBatch.firstOffset(), inFlightBatch.lastOffset(),
                     (short) updateResult.deliveryCount()));
                 return;
@@ -3054,7 +3052,7 @@ public class SharePartition {
 
     private void releaseAcquisitionLockOnTimeoutForPerOffsetBatch(InFlightBatch inFlightBatch,
                                                                   List<PersisterStateBatch> stateBatches,
-                                                                  List<DlqTimeoutBatch> dlqBatches,
+                                                                  List<DlqBatch> dlqBatches,
                                                                   String memberId,
                                                                   long firstOffset,
                                                                   long lastOffset) {
@@ -3096,7 +3094,7 @@ public class SharePartition {
             if (updateResult.state() == RecordState.ARCHIVING) {
                 // Don't increment deliveryCompleteCount here — deferred to phase 2
                 // Don't updateFindNextFetchOffset — ARCHIVING is not fetchable
-                dlqBatches.add(new DlqTimeoutBatch(updateResult, offsetState.getKey(),
+                dlqBatches.add(new DlqBatch(updateResult, offsetState.getKey(),
                     offsetState.getKey(), (short) updateResult.deliveryCount()));
                 continue;
             }
@@ -3334,30 +3332,24 @@ public class SharePartition {
      * This method handles the complete phase 2 flow.
      */
     void initiateDLQAndArchive(InFlightState updatedState, long firstOffset,
-                               long lastOffset, short deliveryCount, Throwable dlqCause,
-                               boolean isTimeout) {
+                               long lastOffset, short deliveryCount, Throwable dlqCause) {
         // Step 1: Enqueue to DLQ
         shareGroupDLQ.enqueue(new ShareGroupDLQRecordParameter(
             groupId, topicIdPartition, firstOffset, lastOffset,
             Optional.of(deliveryCount), Optional.ofNullable(dlqCause), false
         )).whenComplete((v1, dlqException) -> {
             if (dlqException != null) {
-                log.error("Failed to write to DLQ ... Proceeding to ARCHIVED regardless.");
+                log.error("Failed to write to DLQ, proceeding to ARCHIVED regardless.", dlqException);
             }
 
             // Step 2: Transition ARCHIVING → ARCHIVED
-            // For timeout path, use tryUpdateState (no rollback) to match non-DLQ behavior
-            // where ARCHIVED is never reverted on persist failure.
-            // For acknowledge/release path, use startStateTransition (with rollback) so the
-            // client can retry on persist failure.
             PersisterStateBatch stateBatch;
             lock.writeLock().lock();
             try {
-                InFlightState updateResult = isTimeout
-                    ? updatedState.tryUpdateState(RecordState.ARCHIVED, DeliveryCountOps.NO_OP, maxDeliveryCount(), EMPTY_MEMBER_ID, shareGroupDlqEnableSupplier.get())
-                    : updatedState.startStateTransition(RecordState.ARCHIVED, DeliveryCountOps.NO_OP, maxDeliveryCount(), EMPTY_MEMBER_ID, shareGroupDlqEnableSupplier.get());
+                InFlightState updateResult = updatedState.tryUpdateState(RecordState.ARCHIVED, DeliveryCountOps.NO_OP, maxDeliveryCount(), EMPTY_MEMBER_ID, shareGroupDlqEnableSupplier.get());
                 if (updateResult == null) {
-                    log.error("Unable to transition ARCHIVING → ARCHIVED ...");
+                    log.error("Unable to transition ARCHIVING → ARCHIVED - group: {}, topicIdPartition: {}, offset: {}-{}",
+                        this.groupId, this.topicIdPartition, firstOffset, lastOffset);
                     return;
                 }
                 stateBatch = new PersisterStateBatch(
@@ -3369,29 +3361,15 @@ public class SharePartition {
                 lock.writeLock().unlock();
             }
 
-            // Step 3: Persist ARCHIVED
+            // Step 3: Persist ARCHIVED. On failure, ARCHIVED stays in memory — the
+            // persister catches up when start offset advances past these offsets.
             writeShareGroupState(List.of(stateBatch))
                 .whenComplete((v2, phase2Exception) -> {
                     boolean cacheUpdated = false;
                     lock.writeLock().lock();
                     try {
                         if (phase2Exception != null) {
-                            if (!isTimeout) {
-                                // For acknowledge/release path, rollback the state transition.
-                                updatedState.completeStateTransition(false);
-                                if (isStateTerminal(RecordState.forId(stateBatch.deliveryState()))
-                                    && !isStateTerminal(updatedState.state())) {
-                                    deliveryCompleteCount.addAndGet(
-                                        -numInFlightRecordsInBatch(firstOffset, lastOffset));
-                                }
-                                return;
-                            }
-                            // For timeout path, no rollback — ARCHIVED stays in memory,
-                            // consistent with non-DLQ timeout behavior. Fall through to
-                            // update cached state so the batch can be evicted.
-                        }
-                        if (!isTimeout) {
-                            updatedState.completeStateTransition(true);
+                            log.error("Could not persist ARCHIVED state for {}", stateBatch, phase2Exception);
                         }
                         cacheUpdated = maybeUpdateCachedStateAndOffsets();
                     } finally {
@@ -3600,7 +3578,7 @@ public class SharePartition {
     /**
      * Record comprising state as well as offset information for processing by DLQ logic.
      */
-    private record DlqTimeoutBatch(
+    private record DlqBatch(
         InFlightState updatedState,
         long firstOffset, long lastOffset,
         short deliveryCount

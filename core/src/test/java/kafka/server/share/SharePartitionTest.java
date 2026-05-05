@@ -13233,21 +13233,19 @@ public class SharePartitionTest {
 
     private static Stream<Arguments> initiateDLQAndArchiveParameters() {
         return Stream.of(
-            //          name,                                     isTimeout, persistSucceeds, expectedState,         dlqCause,                             firstOffset, lastOffset, deliveryCount
-            Arguments.of("timeout, persist succeeds",             true,      true,            RecordState.ARCHIVED,  ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
-            Arguments.of("timeout, persist fails, no rollback",   true,      false,           RecordState.ARCHIVED,  ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
-            Arguments.of("non-timeout, persist succeeds",         false,     true,            RecordState.ARCHIVED,  ShareGroupDLQ.CLIENT_REJECT,           0L,          9L,         (short) 2),
-            Arguments.of("non-timeout, persist fails, rollback",  false,     false,           RecordState.ARCHIVING, ShareGroupDLQ.CLIENT_REJECT,           0L,          9L,         (short) 2),
-            Arguments.of("delivery count exceeded cause",         true,      true,            RecordState.ARCHIVED,  ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 10L,         19L,        (short) 5),
-            Arguments.of("client reject cause",                   false,     true,            RecordState.ARCHIVED,  ShareGroupDLQ.CLIENT_REJECT,           5L,          5L,         (short) 1),
-            Arguments.of("null cause",                            false,     true,            RecordState.ARCHIVED,  null,                                  0L,          4L,         (short) 1),
-            Arguments.of("single offset",                         true,      true,            RecordState.ARCHIVED,  ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 7L,          7L,         (short) 3)
+            //          name,                                     persistSucceeds, expectedState,        dlqCause,                             firstOffset, lastOffset, deliveryCount
+            Arguments.of("persist succeeds",                      true,            RecordState.ARCHIVED, ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
+            Arguments.of("persist fails, no rollback",            false,           RecordState.ARCHIVED, ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
+            Arguments.of("client reject cause",                   true,            RecordState.ARCHIVED, ShareGroupDLQ.CLIENT_REJECT,           5L,          5L,         (short) 1),
+            Arguments.of("null cause",                            true,            RecordState.ARCHIVED, null,                                  0L,          4L,         (short) 1),
+            Arguments.of("single offset",                         true,            RecordState.ARCHIVED, ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 7L,          7L,         (short) 3),
+            Arguments.of("delivery count exceeded cause",         true,            RecordState.ARCHIVED, ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 10L,         19L,        (short) 5)
         );
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("initiateDLQAndArchiveParameters")
-    public void testInitiateDLQAndArchive(String name, boolean isTimeout, boolean persistSucceeds,
+    public void testInitiateDLQAndArchive(String name, boolean persistSucceeds,
                                           RecordState expectedState, Throwable dlqCause,
                                           long firstOffset, long lastOffset, short deliveryCount) {
         Persister persister = Mockito.mock(Persister.class);
@@ -13268,7 +13266,7 @@ public class SharePartitionTest {
 
         InFlightState state = new InFlightState(RecordState.ARCHIVING, deliveryCount, EMPTY_MEMBER_ID);
 
-        sharePartition.initiateDLQAndArchive(state, firstOffset, lastOffset, deliveryCount, dlqCause, isTimeout);
+        sharePartition.initiateDLQAndArchive(state, firstOffset, lastOffset, deliveryCount, dlqCause);
 
         assertEquals(expectedState, state.state());
         assertFalse(state.hasOngoingStateTransition());
