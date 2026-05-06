@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
-
 public class ApplicationServerConfigValidator implements ConfigDef.Validator {
 
     @Override
