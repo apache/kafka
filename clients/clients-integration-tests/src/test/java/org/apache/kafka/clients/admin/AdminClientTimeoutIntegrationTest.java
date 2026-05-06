@@ -25,7 +25,6 @@ import org.apache.kafka.common.test.api.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
@@ -36,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ClusterTestDefaults(types = { Type.KRAFT })
 public class AdminClientTimeoutIntegrationTest {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminClientTimeoutIntegrationTest.class);
 
     private final ClusterInstance clusterInstance;
 
@@ -48,14 +49,15 @@ public class AdminClientTimeoutIntegrationTest {
      */
     @ClusterTest
     public void testCallInFlightTimeouts() throws Exception {
-        Map<String, Object> config = new HashMap<>();
-        config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000");
-        config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000");
-        config.put(AdminClientConfig.RETRIES_CONFIG, "0");
+        var config = Map.of(
+                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000",
+                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000",
+                AdminClientConfig.RETRIES_CONFIG, "0"
+        );
 
-        FailureInjectingTimeoutProcessorFactory factory = new FailureInjectingTimeoutProcessorFactory();
-        try (Admin client = KafkaAdminClient.createInternal(new AdminClientConfig(config), factory)) {
+        var factory = new FailureInjectingTimeoutProcessorFactory();
+        try (var client = KafkaAdminClient.createInternal(new AdminClientConfig(config), factory)) {
 
             var future = client.createTopics(Stream.of("mytopic1", "mytopic2")
                     .map(t -> new NewTopic(t, 1, (short) 1)).toList(),
@@ -74,8 +76,6 @@ public class AdminClientTimeoutIntegrationTest {
 
 
     static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
-
-        private static final Logger log = LoggerFactory.getLogger(FailureInjectingTimeoutProcessorFactory.class);
 
         private int numTries = 0;
 
@@ -104,6 +104,7 @@ public class AdminClientTimeoutIntegrationTest {
                 super(now);
             }
 
+            @Override
             boolean callHasExpired(KafkaAdminClient.Call call) {
                 if ((!call.isInternal()) && shouldInjectFailure()) {
                     log.debug("Injecting timeout for {}.", call);
