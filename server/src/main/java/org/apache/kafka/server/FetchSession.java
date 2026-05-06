@@ -419,7 +419,7 @@ public class FetchSession {
                     ", fetchOffset=" + fetchOffset +
                     ", highWatermark=" + highWatermark +
                     ", fetcherLogStartOffset=" + fetcherLogStartOffset +
-                    ", localLogStartOffset=" + localLogStartOffset  +
+                    ", localLogStartOffset=" + localLogStartOffset +
                     ")";
             }
         }

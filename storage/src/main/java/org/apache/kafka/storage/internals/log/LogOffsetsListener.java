@@ -32,5 +32,5 @@ public interface LogOffsetsListener {
     /**
      * Called when the Log increments its high watermark.
      */
-    default void onHighWatermarkUpdated(long offset) {}
+    default void onHighWatermarkUpdated(long offset) { }
 }

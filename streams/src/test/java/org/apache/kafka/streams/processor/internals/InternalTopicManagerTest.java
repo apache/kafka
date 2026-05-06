@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.processor.internals;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -869,6 +870,7 @@ public class InternalTopicManagerTest {
                     "This can happen if the Kafka cluster is temporarily not available."));
         }
     }
+
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() {
         mockAdminClient.addTopic(

@@ -108,7 +108,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     };
 
     @Override
-    public void put(final Object key, final Object value) {}
+    public void put(final Object key, final Object value) { }
 
     @Override
     public Object putIfAbsent(final Object key, final Object value) {
@@ -121,7 +121,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
-    public void putAll(final List<KeyValue<Object, Object>> entries) {}
+    public void putAll(final List<KeyValue<Object, Object>> entries) { }
 
     @Override
     public Object get(final Object key) {

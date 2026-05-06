@@ -162,7 +162,7 @@ public class ReassignPartitionsUnitTest {
             reassignments.put(new TopicPartition("foo", 0), List.of(0, 1, 3));
             reassignments.put(new TopicPartition("quux", 0), List.of(1, 2, 3));
 
-            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments,  false);
+            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments, false);
 
             assertEquals(1, reassignmentResult.size());
             assertEquals(UnknownTopicOrPartitionException.class, reassignmentResult.get(new TopicPartition("quux", 0)).getClass());

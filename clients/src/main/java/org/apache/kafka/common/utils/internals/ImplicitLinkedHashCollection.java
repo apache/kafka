@@ -57,9 +57,13 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      */
     public interface Element {
         int prev();
+
         void setPrev(int prev);
+
         int next();
+
         void setNext(int next);
+
         default boolean elementKeysAreEqual(Object other) {
             return equals(other);
         }
@@ -443,7 +447,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         Element[] newElements = new Element[newCapacity];
         HeadElement newHead = new HeadElement();
         int oldSize = size;
-        for (Iterator<E> iter = iterator(); iter.hasNext(); ) {
+        for (Iterator<E> iter = iterator(); iter.hasNext();) {
             Element element = iter.next();
             iter.remove();
             int newSlot = addInternal(element, newElements);

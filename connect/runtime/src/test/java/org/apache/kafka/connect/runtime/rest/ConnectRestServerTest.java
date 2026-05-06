@@ -100,7 +100,7 @@ public class ConnectRestServerTest {
 
     @AfterEach
     public void tearDown() throws IOException {
-        for (CloseableHttpResponse response: responses) {
+        for (CloseableHttpResponse response : responses) {
             response.close();
         }
         if (httpClient != null) {
@@ -247,7 +247,7 @@ public class ConnectRestServerTest {
     }
 
     @Test
-    public void testStandaloneConfig() throws IOException  {
+    public void testStandaloneConfig() throws IOException {
         Map<String, String> configMap = baseServerProps();
         configMap.put("offset.storage.file.filename", "/tmp");
 
@@ -373,7 +373,7 @@ public class ConnectRestServerTest {
     }
 
     @Test
-    public void testValidCustomizedHttpResponseHeaders() throws IOException  {
+    public void testValidCustomizedHttpResponseHeaders() throws IOException {
         String headerConfig =
                 "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"";
         Map<String, String> expectedHeaders = new HashMap<>();
@@ -383,7 +383,7 @@ public class ConnectRestServerTest {
     }
 
     @Test
-    public void testDefaultCustomizedHttpResponseHeaders() throws IOException  {
+    public void testDefaultCustomizedHttpResponseHeaders() throws IOException {
         String headerConfig = "";
         Map<String, String> expectedHeaders = new HashMap<>();
         checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
@@ -428,7 +428,7 @@ public class ConnectRestServerTest {
     }
 
     private void checkCustomizedHttpResponseHeaders(String headerConfig, Map<String, String> expectedHeaders)
-            throws IOException  {
+            throws IOException {
         Map<String, String> configMap = baseServerProps();
         configMap.put("offset.storage.file.filename", "/tmp");
         configMap.put(RestServerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);

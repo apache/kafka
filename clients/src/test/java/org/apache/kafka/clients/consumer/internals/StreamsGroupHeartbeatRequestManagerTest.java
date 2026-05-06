@@ -310,7 +310,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     public void testSendingHeartbeatIfMemberIsLeaving(final boolean requestInFlight) {
         final long heartbeatIntervalMs = 1234;
         try (
-            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
                 (mock, context) -> {
                     when(mock.canSendRequest(time.milliseconds())).thenReturn(false);
@@ -337,7 +337,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     public void testSendingHeartbeatIfMemberIsJoiningOrAcknowledging(final MemberState memberState) {
         final long heartbeatIntervalMs = 1234;
         try (
-            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
                 (mock, context) -> {
                     when(mock.canSendRequest(time.milliseconds())).thenReturn(false);
@@ -1565,7 +1565,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @Test
     public void testStreamsRebalanceDataHeartbeatIntervalMsUpdatedOnSuccess() {
         try (
-                final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
                         HeartbeatRequestState.class,
                         (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
         ) {

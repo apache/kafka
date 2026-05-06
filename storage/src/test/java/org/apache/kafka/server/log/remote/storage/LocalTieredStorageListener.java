@@ -61,7 +61,7 @@ public interface LocalTieredStorageListener {
 
         @Override
         public void onStorageEvent(final LocalTieredStorageEvent event) {
-            for (final LocalTieredStorageListener listener: listeners) {
+            for (final LocalTieredStorageListener listener : listeners) {
                 try {
                     listener.onStorageEvent(event);
 

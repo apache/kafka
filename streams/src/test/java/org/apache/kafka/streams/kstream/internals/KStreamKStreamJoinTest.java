@@ -558,7 +558,7 @@ public class KStreamKStreamJoinTest {
 
     private <T> List<T> iteratorToList(final Iterator<T> iterator) {
         return StreamSupport.stream(
-                        Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+            Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
                 .collect(Collectors.toList());
     }
 

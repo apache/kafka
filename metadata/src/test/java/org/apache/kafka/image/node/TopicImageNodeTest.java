@@ -50,6 +50,7 @@ public class TopicImageNodeTest {
         }
         return new TopicImage(name, id, partitionMap);
     }
+
     @Test
     public void testChildNames() {
         assertEquals(List.of("name", "id", "0"), NODE.childNames());

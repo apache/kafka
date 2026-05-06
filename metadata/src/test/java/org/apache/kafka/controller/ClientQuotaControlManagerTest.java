@@ -250,7 +250,7 @@ public class ClientQuotaControlManagerTest {
     }
 
     static void entityQuotaToAlterations(ClientQuotaEntity entity, Map<String, Double> quota,
-                                          Consumer<ClientQuotaAlteration> acceptor) {
+                                         Consumer<ClientQuotaAlteration> acceptor) {
         Collection<ClientQuotaAlteration.Op> ops = quota.entrySet().stream()
                 .map(quotaEntry -> new ClientQuotaAlteration.Op(quotaEntry.getKey(), quotaEntry.getValue()))
                 .collect(Collectors.toList());

@@ -518,8 +518,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private static void throwIfInvalidTopology(
         StreamsGroupHeartbeatRequestData.Topology topology
     ) throws StreamsInvalidTopologyException {
-        for (StreamsGroupHeartbeatRequestData.Subtopology subtopology: topology.subtopologies()) {
-            for (StreamsGroupHeartbeatRequestData.TopicInfo topicInfo: subtopology.stateChangelogTopics()) {
+        for (StreamsGroupHeartbeatRequestData.Subtopology subtopology : topology.subtopologies()) {
+            for (StreamsGroupHeartbeatRequestData.TopicInfo topicInfo : subtopology.stateChangelogTopics()) {
                 if (topicInfo.partitions() != 0) {
                     throw new StreamsInvalidTopologyException(String.format(
                         "Changelog topic %s must have an undefined partition count, but it is set to %d.",

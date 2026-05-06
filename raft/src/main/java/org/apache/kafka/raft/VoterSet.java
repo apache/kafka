@@ -458,6 +458,7 @@ public final class VoterSet {
     }
 
     private static final VoterSet EMPTY = new VoterSet(Map.of());
+
     public static VoterSet empty() {
         return EMPTY;
     }
@@ -470,7 +471,7 @@ public final class VoterSet {
      */
     public static VoterSet fromVotersRecord(VotersRecord voters) {
         HashMap<Integer, VoterNode> voterNodes = new HashMap<>(voters.voters().size());
-        for (VotersRecord.Voter voter: voters.voters()) {
+        for (VotersRecord.Voter voter : voters.voters()) {
             voterNodes.put(
                 voter.voterId(),
                 new VoterNode(

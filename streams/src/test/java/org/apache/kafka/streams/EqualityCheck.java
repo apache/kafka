@@ -17,7 +17,7 @@
 package org.apache.kafka.streams;
 
 public final class EqualityCheck {
-    private EqualityCheck() {}
+    private EqualityCheck() { }
 
     // Inspired by EqualsTester from Guava
     public static <T> void verifyEquality(final T o1, final T o2) {

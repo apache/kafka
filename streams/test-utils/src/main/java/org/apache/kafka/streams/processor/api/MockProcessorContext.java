@@ -395,7 +395,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
                                 final Punctuator callback) {
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(interval, type, callback);
         punctuators.add(capturedPunctuator);
-        return capturedPunctuator::cancel;    }
+        return capturedPunctuator::cancel; }
 
     @Override
     public Cancellable schedule(final Instant startTime,
@@ -514,6 +514,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
                 (StreamsMetricsImpl) MockProcessorContext.this.metrics(),
                 new ThreadCache(new LogContext(), 0, (StreamsMetricsImpl) MockProcessorContext.this.metrics()));
         }
+
         @Override
         public String applicationId() {
             return MockProcessorContext.this.applicationId();
@@ -577,49 +578,65 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
         @SuppressWarnings("rawtypes")
         @Override
         public void forward(final Record record, final String childName) { }
+
         @SuppressWarnings("rawtypes")
         @Override
         public void forward(final Record record) { }
+
         @SuppressWarnings("rawtypes")
         @Override
         public void forward(final FixedKeyRecord record, final String childName) { }
+
         @SuppressWarnings("rawtypes")
         @Override
         public void forward(final FixedKeyRecord record) { }
+
         @Override
         public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
             return null;
         }
+
         @Override
         public Cancellable schedule(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator callback) {
             return null;
         }
+
         @Override
         public void commit() { }
+
         @Override
         public long currentStreamTimeMs() {
             return 0;
         }
+
         @Override
         public void forward(final Object key, final Object value, final To to) { }
+
         @Override
         public void forward(final Object key, final Object value) { }
+
         @Override
         public StateStore getStateStore(final String name) {
             return null;
         }
+
         @Override
         public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) { }
+
         @Override
         public void transitionToStandby(final ThreadCache newCache) { }
+
         @Override
         public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) { }
+
         @Override
         public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Headers headers, final Position position) { }
+
         @Override
         public String changelogFor(final String storeName) {
             return "changelog";
         }
+
         @Override
         protected StateManager stateManager() {
             return null;

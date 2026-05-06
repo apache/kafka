@@ -32,7 +32,7 @@ import java.util.Map;
  */
 public final class ProcessorContextUtils {
 
-    private ProcessorContextUtils() {}
+    private ProcessorContextUtils() { }
 
     /**
      * Should be removed as part of KAFKA-10217

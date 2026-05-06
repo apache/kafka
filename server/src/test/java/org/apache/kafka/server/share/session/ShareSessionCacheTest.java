@@ -300,7 +300,7 @@ public class ShareSessionCacheTest {
     }
 
     private void assertShareCacheContains(ShareSessionCache cache,
-                                         List<ShareSessionKey> sessionKeys) {
+                                          List<ShareSessionKey> sessionKeys) {
         int i = 0;
         assertEquals(sessionKeys.size(), cache.size());
         for (ShareSessionKey sessionKey : sessionKeys) {

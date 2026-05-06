@@ -38,7 +38,7 @@ public final class ScramCredentialUtils {
     private static final String SERVER_KEY = "server_key";
     private static final String ITERATIONS = "iterations";
 
-    private ScramCredentialUtils() {}
+    private ScramCredentialUtils() { }
 
     public static String credentialToString(ScramCredential credential) {
         return String.format("%s=%s,%s=%s,%s=%s,%s=%d",

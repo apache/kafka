@@ -412,6 +412,7 @@ public class JmxToolTest {
 
     public interface MetricsMBean {
         double getFifteenMinuteRate();
+
         double getFiveMinuteRate();
     }
 

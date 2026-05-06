@@ -53,6 +53,7 @@ public class JoinGroupRequestTest {
                 "InvalidConfigurationException expected as instance id is invalid.");
         }
     }
+
     @Test
     public void testRequestVersionCompatibilityFailBuild() {
         assertThrows(UnsupportedVersionException.class, () -> new JoinGroupRequest.Builder(

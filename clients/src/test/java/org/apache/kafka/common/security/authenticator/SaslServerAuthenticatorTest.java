@@ -180,9 +180,9 @@ public class SaslServerAuthenticatorTest {
 
         MockTime time = new MockTime();
         try (
-                MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpirationDuration);
-                MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
-                TransportLayer transportLayer = mockTransportLayer()
+            MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpirationDuration);
+            MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+            TransportLayer transportLayer = mockTransportLayer()
         ) {
 
             SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, 0L);
@@ -213,9 +213,9 @@ public class SaslServerAuthenticatorTest {
         Duration tokenExpiryGreaterThanMaxReauth = Duration.ofMillis(maxReauthMs).multipliedBy(10);
 
         try (
-                MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpiryGreaterThanMaxReauth);
-                MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
-                TransportLayer transportLayer = mockTransportLayer()
+            MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpiryGreaterThanMaxReauth);
+            MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+            TransportLayer transportLayer = mockTransportLayer()
         ) {
 
             SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, maxReauthMs);
@@ -246,9 +246,9 @@ public class SaslServerAuthenticatorTest {
         long maxReauthMs = tokenExpiryShorterThanMaxReauth.multipliedBy(2).toMillis();
 
         try (
-                MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpiryShorterThanMaxReauth);
-                MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
-                TransportLayer transportLayer = mockTransportLayer()
+            MockedStatic<?> ignored = mockSaslServer(saslServer, mechanism, time, tokenExpiryShorterThanMaxReauth);
+            MockedStatic<?> ignored2 = mockKafkaPrincipal("[principal-type]", "[principal-name");
+            TransportLayer transportLayer = mockTransportLayer()
         ) {
 
             SaslServerAuthenticator authenticator = getSaslServerAuthenticatorForOAuth(mechanism, transportLayer, time, maxReauthMs);

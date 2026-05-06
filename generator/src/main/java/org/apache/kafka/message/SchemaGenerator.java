@@ -84,7 +84,7 @@ final class SchemaGenerator {
 
         // First generate schemas for common structures so that they are
         // available when we generate the inline structures
-        for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
+        for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext();) {
             StructSpec struct = iter.next();
             generateSchemas(struct.name(), struct, message.struct().versions());
         }

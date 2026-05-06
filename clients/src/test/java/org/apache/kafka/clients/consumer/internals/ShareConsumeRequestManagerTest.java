@@ -2142,7 +2142,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgementsTp0.add(1L, AcknowledgeType.ACCEPT);
 
         Acknowledgements acknowledgementsTp1 = getAcknowledgements(1,
-                        AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
+            AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         Map<TopicIdPartition, NodeAcknowledgements> commitAcks = new HashMap<>();
         commitAcks.put(tip0, new NodeAcknowledgements(0, acknowledgementsTp0));

@@ -316,6 +316,7 @@ public class JaasTestUtils {
         return securityConfigs(connectionMode, securityProtocol, trustStoreFile, certAlias, certCn, saslProperties,
                 TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS, Optional.empty());
     }
+
     /**
      * Returns security configuration options for broker or clients
      *

@@ -39,6 +39,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
     private static final long INSERT_VALID_FROM_TIMESTAMP = 10L;
     private static final long INSERT_VALID_TO_TIMESTAMP = 13L;
     private static final byte[] INSERT_VALUE = "new".getBytes();
+
     /**
      * Non-exceptional scenarios which are expected to occur during regular store operation.
      */

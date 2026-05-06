@@ -1012,7 +1012,7 @@ public class OffsetsApiIntegrationTest {
                     if (offsets.offsets().size() != expectedPartitions) {
                         return false;
                     }
-                    for (ConnectorOffset offset: offsets.offsets()) {
+                    for (ConnectorOffset offset : offsets.offsets()) {
                         assertEquals(expectedTopic, offset.partition().get(SinkUtils.KAFKA_TOPIC_KEY));
                         if ((Integer) offset.offset().get(SinkUtils.KAFKA_OFFSET_KEY) != expectedOffset) {
                             return false;

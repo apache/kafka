@@ -76,7 +76,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     }
 
     @Override
-    public void close() {}
+    public void close() { }
 
     private static class PlaintextAuthenticator implements Authenticator {
         private final PlaintextTransportLayer transportLayer;
@@ -90,7 +90,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         }
 
         @Override
-        public void authenticate() {}
+        public void authenticate() { }
 
         @Override
         public KafkaPrincipal principal() {

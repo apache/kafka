@@ -1455,6 +1455,7 @@ public class UnifiedLogTest {
             public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new MemoryRecords.RecordFilter.BatchRetentionResult(MemoryRecords.RecordFilter.BatchRetention.DELETE_EMPTY, false);
             }
+
             @Override
             public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return !record.hasKey();
@@ -1508,6 +1509,7 @@ public class UnifiedLogTest {
             public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new MemoryRecords.RecordFilter.BatchRetentionResult(MemoryRecords.RecordFilter.BatchRetention.RETAIN_EMPTY, true);
             }
+
             @Override public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return false;
             }
@@ -1561,6 +1563,7 @@ public class UnifiedLogTest {
             @Override public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new MemoryRecords.RecordFilter.BatchRetentionResult(MemoryRecords.RecordFilter.BatchRetention.DELETE_EMPTY, false);
             }
+
             @Override public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return !record.hasKey();
             }

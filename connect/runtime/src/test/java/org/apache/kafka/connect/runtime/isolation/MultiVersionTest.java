@@ -91,7 +91,7 @@ public class MultiVersionTest {
     ) throws IOException {
         Map<Path, List<VersionedPluginBuilder.BuildInfo>> artifacts = new HashMap<>();
         for (String v : versions) {
-            for (VersionedPluginBuilder.VersionedTestPlugin pluginType: pluginTypes) {
+            for (VersionedPluginBuilder.VersionedTestPlugin pluginType : pluginTypes) {
                 VersionedPluginBuilder builder = new VersionedPluginBuilder();
                 builder.include(pluginType, v);
                 artifacts.put(builder.build(pluginType + "-" + v), builder.buildInfos());
@@ -218,7 +218,7 @@ public class MultiVersionTest {
         requiredVersions.put(PluginUtils.connectorVersionRequirement("[1.1.0,1.1.3)"), "1.1.2");
 
         for (Map.Entry<VersionRange, String> entry : requiredVersions.entrySet()) {
-            for (VersionedPluginBuilder.VersionedTestPlugin pluginType: VersionedPluginBuilder.VersionedTestPlugin.values()) {
+            for (VersionedPluginBuilder.VersionedTestPlugin pluginType : VersionedPluginBuilder.VersionedTestPlugin.values()) {
                 Object p = plugins.newPlugin(pluginType.className(), entry.getKey());
                 Assertions.assertInstanceOf(ConnectPlugin.class, p);
                 Assertions.assertEquals(entry.getValue(), ((ConnectPlugin) p).version(),
@@ -248,7 +248,7 @@ public class MultiVersionTest {
         invalidVersions.add(PluginUtils.connectorVersionRequirement("(1.1.0, 1.1.2),[1.1.3, 2.0.0)"));
 
         for (VersionRange versionRange : invalidVersions) {
-            for (VersionedPluginBuilder.VersionedTestPlugin pluginType: VersionedPluginBuilder.VersionedTestPlugin.values()) {
+            for (VersionedPluginBuilder.VersionedTestPlugin pluginType : VersionedPluginBuilder.VersionedTestPlugin.values()) {
                 VersionedPluginLoadingException e = Assertions.assertThrows(VersionedPluginLoadingException.class, () -> {
                     plugins.newPlugin(pluginType.className(), versionRange);
                 }, String.format("Provided Version Range %s for class %s should throw VersionedPluginLoadingException", versionRange, pluginType.className()));

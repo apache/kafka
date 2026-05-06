@@ -1277,6 +1277,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
                 partition, topic, partitionsCount, maxWaitMs);
     }
+
     /**
      * Validate that the record size isn't too large
      */
@@ -1414,7 +1415,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void registerMetricForSubscription(KafkaMetric metric) {
         if (!metrics().containsKey(metric.metricName())) {
             clientTelemetryReporter.ifPresent(reporter -> reporter.metricChange(metric));
-        }  else {
+        } else {
             log.debug("Skipping registration for metric {}. Existing producer metrics cannot be overwritten.", metric.metricName());
         }
     }
@@ -1637,6 +1638,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static class ClusterAndWaitTime {
         final Cluster cluster;
         final long waitedOnMetadataMs;
+
         ClusterAndWaitTime(Cluster cluster, long waitedOnMetadataMs) {
             this.cluster = cluster;
             this.waitedOnMetadataMs = waitedOnMetadataMs;

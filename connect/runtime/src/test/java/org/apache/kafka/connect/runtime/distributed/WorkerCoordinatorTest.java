@@ -625,6 +625,6 @@ public class WorkerCoordinatorTest {
         }
 
         @Override
-        public void onPollTimeoutExpiry() {}
+        public void onPollTimeoutExpiry() { }
     }
 }

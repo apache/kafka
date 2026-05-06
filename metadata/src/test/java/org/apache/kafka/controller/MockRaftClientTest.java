@@ -100,7 +100,7 @@ public class MockRaftClientTest {
     }
 
     private static void waitForLastCommittedOffset(long targetOffset,
-                MockRaftClient raftClient) throws InterruptedException {
+        MockRaftClient raftClient) throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             MockRaftClientListener listener = (MockRaftClientListener) raftClient.listeners().get(0);
             long highestOffset = -1;

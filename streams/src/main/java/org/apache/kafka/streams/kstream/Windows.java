@@ -50,7 +50,7 @@ public abstract class Windows<W extends Window> {
      */
     protected static final long NO_GRACE_PERIOD = 0L;
 
-    protected Windows() {}
+    protected Windows() { }
 
     /**
      * Create all windows that contain the provided timestamp, indexed by non-negative window start timestamps.

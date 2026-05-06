@@ -162,7 +162,7 @@ class MetadataQuorumCommandTest {
         // specifying a --command-config containing properties that would prevent login must fail
         File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
-                        "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
+            "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
     }
 
     @ClusterTest(types = {Type.CO_KRAFT})

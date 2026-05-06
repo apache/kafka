@@ -36,7 +36,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class RocksDBMetrics {
-    private RocksDBMetrics() {}
+    private RocksDBMetrics() { }
 
     private static final String BYTES_WRITTEN_TO_DB = "bytes-written";
     private static final String BYTES_READ_FROM_DB = "bytes-read";
@@ -173,9 +173,11 @@ public class RocksDBMetrics {
         public String taskName() {
             return taskName;
         }
+
         public String metricsScope() {
             return metricsScope;
         }
+
         public String storeName() {
             return storeName;
         }

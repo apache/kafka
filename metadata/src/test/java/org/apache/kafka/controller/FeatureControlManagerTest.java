@@ -120,7 +120,7 @@ public class FeatureControlManagerTest {
         result = manager.updateFeatures(
                 updateMap(TestFeatureVersion.FEATURE_NAME, 1), Map.of(),
                 false, 0);
-        expectedError =  ApiError.NONE;
+        expectedError = ApiError.NONE;
         assertEquals(expectedError, result.response());
         expectedMessages = new ArrayList<>();
         expectedMessages.add(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -206,7 +206,7 @@ public class FeatureControlManagerTest {
 
         assertEquals(ControllerResult.of(List.of(), new ApiError(Errors.INVALID_UPDATE_VERSION,
             "Invalid update version 3 for feature foo. Broker 5 does not support this feature.")),
-                    manager.updateFeatures(updateMap("foo", 3),
+                     manager.updateFeatures(updateMap("foo", 3),
                         Map.of("foo", FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
                         false, 0));
 

@@ -212,7 +212,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @MethodSource("recordingLevelParameters")
     public void shouldPushMetricsToBroker(final String recordingLevel, final String groupProtocol) throws Exception {
         // End-to-end test validating metrics pushed to broker
-        streamsApplicationProperties  = props(groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(false);
         subscribeForStreamsMetrics();
@@ -578,6 +578,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     public interface TestingMetricsInterceptor {
         List<KafkaMetric> passedMetrics();
+
         Map<MetricName, ? extends Metric> metrics();
     }
 

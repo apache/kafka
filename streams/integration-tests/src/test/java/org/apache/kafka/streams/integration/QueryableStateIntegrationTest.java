@@ -306,7 +306,7 @@ public class QueryableStateIntegrationTest {
             final Map<String, Exception> exceptionalKeys = new TreeMap<>();
             final StringSerializer serializer = new StringSerializer();
 
-            for (final String key: keys) {
+            for (final String key : keys) {
                 try {
                     final KeyQueryMetadata queryMetadata = streams.queryMetadataForKey(storeName, key, serializer);
                     if (queryMetadata == null || queryMetadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
@@ -360,7 +360,7 @@ public class QueryableStateIntegrationTest {
             final Map<String, Exception> exceptionalKeys = new TreeMap<>();
             final StringSerializer serializer = new StringSerializer();
 
-            for (final String key: keys) {
+            for (final String key : keys) {
                 try {
                     final KeyQueryMetadata queryMetadata = streams.queryMetadataForKey(storeName, key, serializer);
                     if (queryMetadata == null || queryMetadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {

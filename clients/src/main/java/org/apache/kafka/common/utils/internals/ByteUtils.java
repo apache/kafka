@@ -38,7 +38,7 @@ public final class ByteUtils {
 
     public static final ByteBuffer EMPTY_BUF = ByteBuffer.wrap(new byte[0]);
 
-    private ByteUtils() {}
+    private ByteUtils() { }
 
     /**
      * Increment the underlying byte array by adding 1.
@@ -205,7 +205,7 @@ public final class ByteUtils {
         buffer[offset] = (byte) value;
         buffer[offset + 1] = (byte) (value >>> 8);
         buffer[offset + 2] = (byte) (value >>> 16);
-        buffer[offset + 3]   = (byte) (value >>> 24);
+        buffer[offset + 3] = (byte) (value >>> 24);
     }
 
     /**
@@ -354,13 +354,13 @@ public final class ByteUtils {
      *
      * @throws IllegalArgumentException if variable-length value does not terminate after 10 bytes have been read
      */
-    public static long readVarlong(ByteBuffer buffer)  {
+    public static long readVarlong(ByteBuffer buffer) {
         long raw =  readUnsignedVarlong(buffer);
         return (raw >>> 1) ^ -(raw & 1);
     }
 
     // visible for testing
-    static long readUnsignedVarlong(ByteBuffer buffer)  {
+    static long readUnsignedVarlong(ByteBuffer buffer) {
         long value = 0L;
         int i = 0;
         long b;

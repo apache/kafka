@@ -48,7 +48,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
               null);
 
         this.thisWindowedStreamProcessorName = thisWindowedStreamProcessorName;
-        this.otherWindowedStreamProcessorName =  otherWindowedStreamProcessorName;
+        this.otherWindowedStreamProcessorName = otherWindowedStreamProcessorName;
         this.selfJoinProcessorParameters = selfJoinProcessorParameters;
     }
 

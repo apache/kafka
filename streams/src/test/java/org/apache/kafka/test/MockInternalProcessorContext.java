@@ -127,10 +127,10 @@ public class MockInternalProcessorContext<KOut, VOut> extends MockProcessorConte
     }
 
     @Override
-    public void initialize() {}
+    public void initialize() { }
 
     @Override
-    public void uninitialize() {}
+    public void uninitialize() { }
 
     @Override
     public RecordCollector recordCollector() {

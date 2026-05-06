@@ -203,14 +203,14 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
 
-        for (final KafkaStreams stream: kafkaStreamsList) {
+        for (final KafkaStreams stream : kafkaStreamsList) {
             stream.setUncaughtExceptionHandler(e -> {
                 assertThat(e.getCause().getMessage(), equalTo("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set"));
                 return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
             });
         }
 
-        for (final KafkaStreams stream: kafkaStreamsList) {
+        for (final KafkaStreams stream : kafkaStreamsList) {
             stream.start();
         }
 
@@ -300,7 +300,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<String, String> table1 = builder.stream(TABLE_1,
-                        Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
+            Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
                 .repartition(repartitionA())
                 .toTable(Named.as("table.a"));
 

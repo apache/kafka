@@ -110,6 +110,7 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
+
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final ProcessId processId,
@@ -151,6 +152,7 @@ public class TaskManager {
     void init() {
         this.stateUpdater.start();
     }
+
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
     }
@@ -1696,6 +1698,7 @@ public class TaskManager {
             standbyTasksInTaskRegistry
         );
     }
+
     // For testing only.
     int commitAll() {
         return commit(tasks.allInitializedTasks());
@@ -1706,7 +1709,7 @@ public class TaskManager {
      * the corresponding record queues have capacity (again).
      */
     public void resumePollingForPartitionsWithAvailableSpace() {
-        for (final StreamTask t: tasks.activeInitializedTasks()) {
+        for (final StreamTask t : tasks.activeInitializedTasks()) {
             t.resumePollingForPartitionsWithAvailableSpace();
         }
     }
@@ -1715,7 +1718,7 @@ public class TaskManager {
      * Fetches up-to-date lag information from the consumer.
      */
     public void updateLags() {
-        for (final StreamTask t: tasks.activeInitializedTasks()) {
+        for (final StreamTask t : tasks.activeInitializedTasks()) {
             t.updateLags();
         }
     }

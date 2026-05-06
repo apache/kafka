@@ -404,11 +404,13 @@ public class SelectorTest {
         AtomicInteger closedChannelsCount = new AtomicInteger(0);
         ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
             private int channelIndex = 0;
+
             @Override
             KafkaChannel buildChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
                                       int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
                 return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool, metadataRegistry) {
                     private final int index = channelIndex++;
+
                     @Override
                     public void close() throws IOException {
                         closedChannelsCount.getAndIncrement();

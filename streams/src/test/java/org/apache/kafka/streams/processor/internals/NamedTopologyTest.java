@@ -354,7 +354,7 @@ public class NamedTopologyTest {
         assertThat(
             streams.getFullTopologyDescription(),
             equalTo(
-                     "Topology: topology-1:\n"
+                "Topology: topology-1:\n"
                     + "   Sub-topology: 0\n"
                     + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-1])\n"
                     + "      --> none\n"

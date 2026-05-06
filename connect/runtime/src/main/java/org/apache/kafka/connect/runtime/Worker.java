@@ -479,7 +479,7 @@ public final class Worker {
     private void stopConnectors(Collection<String> ids) {
         // Herder is responsible for stopping connectors. This is an internal method to sequentially
         // stop connectors that have not explicitly been stopped.
-        for (String connector: ids)
+        for (String connector : ids)
             stopConnector(connector);
     }
 
@@ -1912,7 +1912,7 @@ public final class Worker {
                     keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get());
 
             Map<String, Object> consumerProps = baseConsumerConfigs(
-                    id.connector(),  "connector-consumer-" + id, config, connectorConfig, connectorClass,
+                    id.connector(), "connector-consumer-" + id, config, connectorConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
@@ -2402,7 +2402,7 @@ public final class Worker {
         }
 
         protected synchronized void close() {
-            for (MetricGroup metricGroup: connectorStatusMetrics.values()) {
+            for (MetricGroup metricGroup : connectorStatusMetrics.values()) {
                 metricGroup.close();
             }
         }

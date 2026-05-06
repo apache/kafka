@@ -6307,7 +6307,7 @@ public class GroupMetadataManager {
     ) {
         String groupId = key.group();
 
-        if (value == null)  {
+        if (value == null) {
             // Tombstone. Group should be removed.
             removeGroup(groupId);
         } else {
@@ -8158,7 +8158,7 @@ public class GroupMetadataManager {
 
         List<MemberResponse> memberResponses = new ArrayList<>();
 
-        for (MemberIdentity member: request.members()) {
+        for (MemberIdentity member : request.members()) {
             String reason = member.reason() != null ? member.reason() : "not provided";
             // The LeaveGroup API allows administrative removal of members by GroupInstanceId
             // in which case we expect the MemberId to be undefined.

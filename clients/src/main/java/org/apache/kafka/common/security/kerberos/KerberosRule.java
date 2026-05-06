@@ -188,7 +188,7 @@ class KerberosRule {
                 if (fromPattern == null) {
                     result = base;
                 } else {
-                    result = replaceSubstitution(base, fromPattern, toPattern,  repeat);
+                    result = replaceSubstitution(base, fromPattern, toPattern, repeat);
                 }
             }
         }

@@ -110,6 +110,7 @@ public class KStreamSlidingWindowAggregateTest {
             Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false, true)
         );
     }
+
     public StrategyType type;
     public boolean inOrderIterator;
     public boolean withCache;

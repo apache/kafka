@@ -188,7 +188,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                 case "org.rocksdb.Logger":
                     parameters[i] = new Logger(new Options()) {
                         @Override
-                        protected void log(final InfoLogLevel infoLogLevel, final String logMsg) {}
+                        protected void log(final InfoLogLevel infoLogLevel, final String logMsg) { }
                     };
                     break;
                 case "org.rocksdb.RateLimiter":
@@ -256,7 +256,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
-                matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
+                matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() + "(.*)"));
         } finally {
             optionsFacadeColumnFamilyOptions.close();
         }

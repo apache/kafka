@@ -51,6 +51,7 @@ public class TimestampedKeyAndJoinSide<K> {
     public static <K> TimestampedKeyAndJoinSide<K> makeLeft(final K key, final long timestamp) {
         return new TimestampedKeyAndJoinSide<>(true, key, timestamp);
     }
+
     /**
      * Create a new {@link TimestampedKeyAndJoinSide} instance for the right join side if the provide {@code key} is not {@code null}.
      *
@@ -61,6 +62,7 @@ public class TimestampedKeyAndJoinSide<K> {
     public static <K> TimestampedKeyAndJoinSide<K> makeRight(final K key, final long timestamp) {
         return new TimestampedKeyAndJoinSide<>(false, key, timestamp);
     }
+
     public boolean isLeftSide() {
         return leftSide;
     }

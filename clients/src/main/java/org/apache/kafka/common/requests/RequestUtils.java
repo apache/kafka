@@ -37,7 +37,7 @@ import java.util.function.Predicate;
 
 public final class RequestUtils {
 
-    private RequestUtils() {}
+    private RequestUtils() { }
 
     public static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?

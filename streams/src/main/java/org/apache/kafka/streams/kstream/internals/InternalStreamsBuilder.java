@@ -445,7 +445,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             // Remove JoinOtherWindowed node
             final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
             GraphNode left = null, right = null;
-            for (final GraphNode child: parent.children()) {
+            for (final GraphNode child : parent.children()) {
                 if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
                     if (child.nodeName().equals(joinNode.thisWindowedStreamProcessorName())) {
                         left = child;
@@ -462,7 +462,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 throw new IllegalStateException(String.format("Expected the left node %s to have smaller build priority than the right node %s.", left, right));
             }
         }
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             if (!visited.containsKey(child)) {
                 rewriteSingleStoreSelfJoin(child, visited);
             }

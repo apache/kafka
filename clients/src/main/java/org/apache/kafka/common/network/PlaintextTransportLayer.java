@@ -88,7 +88,7 @@ public class PlaintextTransportLayer implements TransportLayer {
      * implementation
      */
     @Override
-    public void handshake() {}
+    public void handshake() { }
 
     /**
     * Reads a sequence of bytes from this channel into the given buffer.

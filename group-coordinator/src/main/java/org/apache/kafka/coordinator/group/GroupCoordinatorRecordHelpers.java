@@ -70,7 +70,7 @@ public class GroupCoordinatorRecordHelpers {
 
     private static final short GROUP_METADATA_VALUE_VERSION = 3;
 
-    private GroupCoordinatorRecordHelpers() {}
+    private GroupCoordinatorRecordHelpers() { }
 
     /**
      * Creates a ConsumerGroupMemberMetadata record.

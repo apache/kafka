@@ -231,7 +231,7 @@ public final class AssignmentTestUtils {
     public static final String CHANGELOG_TOPIC_PREFIX = "changelog-topic";
     public static final String RACK_PREFIX = "rack";
 
-    private AssignmentTestUtils() {}
+    private AssignmentTestUtils() { }
 
     static Map<ProcessId, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<ProcessId, ClientState> clientStates = new HashMap<>();

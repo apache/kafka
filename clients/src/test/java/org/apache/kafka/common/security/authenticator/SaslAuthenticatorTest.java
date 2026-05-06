@@ -252,7 +252,7 @@ public class SaslAuthenticatorTest {
         sendHandshakeRequestReceiveResponse(node3, ApiKeys.SASL_HANDSHAKE.latestVersion());
 
         // test with sasl authenticate request with large auth_byes string
-        String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" +  new String(bytes, StandardCharsets.UTF_8);
+        String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" + new String(bytes, StandardCharsets.UTF_8);
         ByteBuffer authBuf = ByteBuffer.wrap(Utils.utf8(authString));
         SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(authBuf.array());
         SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build();
@@ -2154,6 +2154,7 @@ public class SaslAuthenticatorTest {
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
                         return buildSaslHandshakeRequest(saslMechanism, (short) 0);
                     }
+
                     @Override
                     protected void setSaslAuthenticateAndHandshakeVersions(ApiVersionsResponse apiVersionsResponse) {
                         // Don't set version so that headers are disabled
@@ -2553,6 +2554,7 @@ public class SaslAuthenticatorTest {
         private String contextName;
         private Configuration configuration;
         private Subject subject;
+
         @Override
         public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
                               AuthenticateCallbackHandler callbackHandler) {
@@ -2591,6 +2593,7 @@ public class SaslAuthenticatorTest {
 
     public static class TestLoginCallbackHandler implements AuthenticateCallbackHandler {
         private volatile boolean configured = false;
+
         @Override
         public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
             if (configured)

@@ -58,7 +58,7 @@ public class Rate implements MeasurableStat {
         if (window > 0) {
             this.timeWindowMs = TimeUnit.MILLISECONDS.convert(window, unit);
             this.stat.withTimeWindow(window, unit);
-        } else  {
+        } else {
             this.timeWindowMs = -1;
         }
     }

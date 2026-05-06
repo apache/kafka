@@ -707,7 +707,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                     return schema.defaultValue(); // any logical type conversions should already have been applied
                 if (schema.isOptional())
                     return null;
-                throw new DataException("Invalid null value for required " + schemaType +  " field");
+                throw new DataException("Invalid null value for required " + schemaType + " field");
             }
         } else {
             switch (jsonValue.getNodeType()) {
@@ -761,6 +761,7 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     private interface LogicalTypeConverter {
         JsonNode toJson(Schema schema, Object value, JsonConverterConfig config);
+
         Object toConnect(Schema schema, JsonNode value);
     }
 }

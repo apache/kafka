@@ -201,7 +201,7 @@ public class ClientState {
         final Map<String, Set<TaskId>> consumerToPreviousStandbyTaskIds = new TreeMap<>();
         final Map<String, Set<TaskId>> consumerToPreviousActiveTaskIds = previousActiveTasks.consumerToTaskIds();
 
-        for (final Map.Entry<String, Set<TaskId>> entry: consumerToPreviousStatefulTaskIds.entrySet()) {
+        for (final Map.Entry<String, Set<TaskId>> entry : consumerToPreviousStatefulTaskIds.entrySet()) {
             final Set<TaskId> standbyTaskIds = new HashSet<>(entry.getValue());
             if (consumerToPreviousActiveTaskIds.containsKey(entry.getKey()))
                 standbyTaskIds.removeAll(consumerToPreviousActiveTaskIds.get(entry.getKey()));

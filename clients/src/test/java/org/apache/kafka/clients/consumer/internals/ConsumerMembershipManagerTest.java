@@ -641,7 +641,7 @@ public class ConsumerMembershipManagerTest {
         CompletableFuture<Void> commitResult =
                 mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1, topic1,
                         Arrays.asList(1, 2), true);
-        Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1,  1, 2);
+        Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1, 1, 2);
         assertEquals(assignment1, membershipManager.topicPartitionsAwaitingReconciliation());
 
         // Get fenced and rejoin while still reconciling. Get new assignment to reconcile after
@@ -677,8 +677,8 @@ public class ConsumerMembershipManagerTest {
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
         ConsumerRebalanceListenerCallbackCompletedEvent callbackCompletedEvent =
             mockNewAssignmentStuckOnPartitionsRevokedCallback(membershipManager, topicId1, topic1,
-            Arrays.asList(1, 2), owned.get(0).topicPartition(), invoker);
-        Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1,  1, 2);
+                Arrays.asList(1, 2), owned.get(0).topicPartition(), invoker);
+        Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1, 1, 2);
         assertEquals(assignment1, membershipManager.topicPartitionsAwaitingReconciliation());
 
         // Get fenced and rejoin while still reconciling. Get new assignment to reconcile after rejoining.
@@ -712,7 +712,7 @@ public class ConsumerMembershipManagerTest {
         ConsumerRebalanceListenerCallbackCompletedEvent callbackCompletedEvent =
             mockNewAssignmentStuckOnPartitionsAssignedCallback(membershipManager, topicId1,
                 topic1, newPartition, invoker);
-        Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1,  newPartition);
+        Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1, newPartition);
         assertEquals(assignment1, membershipManager.topicPartitionsAwaitingReconciliation());
 
         // Get fenced and rejoin while still reconciling. Get new assignment to reconcile after rejoining.
@@ -886,7 +886,7 @@ public class ConsumerMembershipManagerTest {
 
         // Pending assignment that was discovered in metadata should be ready to reconcile in the
         // next reconciliation loop.
-        Map<Uuid, SortedSet<Integer>> topic2Assignment = topicIdPartitionsMap(topicId2,  1, 2);
+        Map<Uuid, SortedSet<Integer>> topic2Assignment = topicIdPartitionsMap(topicId2, 1, 2);
         assertEquals(topic2Assignment, membershipManager.topicPartitionsAwaitingReconciliation());
 
         // After acknowledging the assignment, we should be back to RECONCILING, because we have not
@@ -3212,6 +3212,7 @@ public class ConsumerMembershipManagerTest {
         private long sleepMs;
         private final long sleepDurationMs;
         private final Time time;
+
         SleepyRebalanceListener(long sleepDurationMs, Time time) {
             this.sleepDurationMs = sleepDurationMs;
             this.time = time;

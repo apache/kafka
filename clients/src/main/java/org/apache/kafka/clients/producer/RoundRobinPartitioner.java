@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RoundRobinPartitioner implements Partitioner {
     private final ConcurrentMap<String, AtomicInteger> topicCounterMap = new ConcurrentHashMap<>();
 
-    public void configure(Map<String, ?> configs) {}
+    public void configure(Map<String, ?> configs) { }
 
     /**
      * Compute the partition for the given record.
@@ -68,5 +68,5 @@ public class RoundRobinPartitioner implements Partitioner {
         return counter.getAndIncrement();
     }
 
-    public void close() {}
+    public void close() { }
 }

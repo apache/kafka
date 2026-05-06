@@ -60,7 +60,7 @@ public class MirrorSourceTask extends SourceTask {
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
 
-    public MirrorSourceTask() {}
+    public MirrorSourceTask() { }
 
     // for testing
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceLegacyMetrics metrics, String sourceClusterAlias,
@@ -167,7 +167,7 @@ public class MirrorSourceTask extends SourceTask {
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
-        } catch (Throwable e)  {
+        } catch (Throwable e) {
             log.error("Failure during poll.", e);
             // allow Connect to deal with the exception
             throw e;

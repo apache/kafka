@@ -39,7 +39,7 @@ public class BasicTopology implements Topology {
                 "a JSON object.");
         }
         nodes = new TreeMap<>();
-        for (Iterator<String> iter = configRoot.fieldNames(); iter.hasNext(); ) {
+        for (Iterator<String> iter = configRoot.fieldNames(); iter.hasNext();) {
             String nodeName = iter.next();
             JsonNode nodeConfig = configRoot.get(nodeName);
             BasicNode node = new BasicNode(nodeName, nodeConfig);

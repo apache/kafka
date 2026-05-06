@@ -207,7 +207,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         } else {
             return KStreamImpl.OUTERSHARED_NAME
                     + joinThisGeneratedName.substring(
-                    type == Type.RIGHT
+                        type == Type.RIGHT
                             ? KStreamImpl.OUTERTHIS_NAME.length()
                             : KStreamImpl.JOINTHIS_NAME.length());
         }

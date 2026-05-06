@@ -56,7 +56,7 @@ public final class ByteBufferUnmapper {
         }
     }
 
-    private ByteBufferUnmapper() {}
+    private ByteBufferUnmapper() { }
 
     /**
      * Unmap the provided mapped or direct byte buffer.

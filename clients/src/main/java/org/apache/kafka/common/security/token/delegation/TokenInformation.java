@@ -47,9 +47,9 @@ public class TokenInformation {
         this.owner = owner;
         this.tokenRequester = tokenRequester;
         this.renewers = renewers;
-        this.issueTimestamp =  issueTimestamp;
-        this.maxTimestamp =  maxTimestamp;
-        this.expiryTimestamp =  expiryTimestamp;
+        this.issueTimestamp = issueTimestamp;
+        this.maxTimestamp = maxTimestamp;
+        this.expiryTimestamp = expiryTimestamp;
     }
 
     // Convert record elements into a TokenInformation

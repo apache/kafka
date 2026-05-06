@@ -330,7 +330,7 @@ public class ConfigDefTest {
         props.put("a", "1");
 
         List<ConfigValue> configs = def.validate(props);
-        for (ConfigValue config: configs) {
+        for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
@@ -349,7 +349,7 @@ public class ConfigDefTest {
         props.put("a", "non_integer");
 
         List<ConfigValue> configs = def.validate(props);
-        for (ConfigValue config: configs) {
+        for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
@@ -618,8 +618,8 @@ public class ConfigDefTest {
     public void testConvertValueToStringDouble() {
         assertEquals("3.125", ConfigDef.convertToString(3.125d, Type.DOUBLE));
         assertEquals("1.7976931348623157E308", ConfigDef.convertToString(Double.MAX_VALUE, Type.DOUBLE));
-        assertEquals("1.024E8",  ConfigDef.convertToString(102400000d, Type.DOUBLE));
-        assertEquals("-1.024E8",  ConfigDef.convertToString(-102400000d, Type.DOUBLE));
+        assertEquals("1.024E8", ConfigDef.convertToString(102400000d, Type.DOUBLE));
+        assertEquals("-1.024E8", ConfigDef.convertToString(-102400000d, Type.DOUBLE));
         assertNull(ConfigDef.convertToString(null, Type.DOUBLE));
     }
 

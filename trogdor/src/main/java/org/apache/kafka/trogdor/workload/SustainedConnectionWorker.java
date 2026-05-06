@@ -139,7 +139,9 @@ public class SustainedConnectionWorker implements TaskWorker {
 
     private interface SustainedConnection extends AutoCloseable {
         boolean needsRefresh(long milliseconds);
+
         void refresh();
+
         void claim();
     }
 

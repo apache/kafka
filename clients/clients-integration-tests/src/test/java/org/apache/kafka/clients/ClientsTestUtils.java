@@ -62,7 +62,7 @@ public class ClientsTestUtils {
     private static final String KEY_PREFIX = "key ";
     private static final String VALUE_PREFIX = "value ";
 
-    private ClientsTestUtils() {}
+    private ClientsTestUtils() { }
 
     public static <K, V> List<ConsumerRecord<K, V>> consumeRecords(
         Consumer<K, V> consumer,

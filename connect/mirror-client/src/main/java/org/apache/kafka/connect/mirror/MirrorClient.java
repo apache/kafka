@@ -161,7 +161,7 @@ public class MirrorClient implements AutoCloseable {
      * @throws IllegalArgumentException If any of the arguments are null
      */
     public Map<String, Map<TopicPartition, OffsetAndMetadata>> remoteConsumerOffsets(Pattern consumerGroupPattern,
-             String remoteClusterAlias, Duration timeout) {
+        String remoteClusterAlias, Duration timeout) {
         if (consumerGroupPattern == null) {
             throw new IllegalArgumentException("`consumerGroupPattern` must not be null");
         }

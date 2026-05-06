@@ -1838,7 +1838,7 @@ public class StreamTaskTest {
         time.sleep(10);
         assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
-        anchoredProcessorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME,  testStartTime + 10, testStartTime + 20);
+        anchoredProcessorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, testStartTime + 10, testStartTime + 20);
     }
 
     @Test
@@ -2045,7 +2045,7 @@ public class StreamTaskTest {
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
         task = createStatelessTask(createConfig("100"));
         task.processorContext().setCurrentNode(processorStreamTime);
-        task.schedule(Instant.ofEpochMilli(1000), 1,  PunctuationType.STREAM_TIME, timestamp -> { });
+        task.schedule(Instant.ofEpochMilli(1000), 1, PunctuationType.STREAM_TIME, timestamp -> { });
     }
 
     @Test

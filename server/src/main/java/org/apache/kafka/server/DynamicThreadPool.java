@@ -33,7 +33,7 @@ public class DynamicThreadPool {
         ServerConfigs.BACKGROUND_THREADS_CONFIG
     );
 
-    private DynamicThreadPool() {}
+    private DynamicThreadPool() { }
 
     public static void validateReconfiguration(AbstractKafkaConfig currentConfig, AbstractKafkaConfig newConfig) {
         for (Map.Entry<String, ?> entry : newConfig.values().entrySet()) {

@@ -28,7 +28,7 @@ import java.nio.ByteBuffer;
 import static java.util.Objects.requireNonNull;
 
 final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
-    private TimeOrderedKeyValueBufferChangelogDeserializationHelper() {}
+    private TimeOrderedKeyValueBufferChangelogDeserializationHelper() { }
 
     static final class DeserializationResult {
         private final long time;

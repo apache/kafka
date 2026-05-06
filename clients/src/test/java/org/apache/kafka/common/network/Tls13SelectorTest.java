@@ -79,7 +79,7 @@ public class Tls13SelectorTest extends SslSelectorTest {
         selector.send(createSend(node, node + "-" + 0));
         selector.poll(0L);
         server.renegotiate();
-        selector.send(createSend(node,  node + "-" + 1));
+        selector.send(createSend(node, node + "-" + 1));
         List<NetworkReceive> received = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
             try {

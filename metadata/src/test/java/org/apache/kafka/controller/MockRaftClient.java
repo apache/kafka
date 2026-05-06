@@ -73,6 +73,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, AutoCloseable {
     interface LocalBatch {
         int epoch();
+
         int size();
     }
 

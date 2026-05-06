@@ -72,7 +72,7 @@ public class FileLogInputStreamTest {
         public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
             List<Arguments> arguments = new ArrayList<>();
             for (byte magic : asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1, MAGIC_VALUE_V2))
-                for (CompressionType type: CompressionType.values())
+                for (CompressionType type : CompressionType.values())
                     arguments.add(Arguments.of(new Args(magic, Compression.of(type).build())));
             return arguments.stream();
         }

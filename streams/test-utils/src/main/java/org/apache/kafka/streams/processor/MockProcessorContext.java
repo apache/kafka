@@ -477,7 +477,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         }
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
         punctuators.add(capturedPunctuator);
-        return capturedPunctuator::cancel;    }
+        return capturedPunctuator::cancel; }
 
     @Override
     public Cancellable schedule(final Instant startTime,

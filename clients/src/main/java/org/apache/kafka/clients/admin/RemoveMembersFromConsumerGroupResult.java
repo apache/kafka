@@ -53,7 +53,7 @@ public class RemoveMembersFromConsumerGroupResult {
                 result.completeExceptionally(throwable);
             } else {
                 if (removeAll()) {
-                    for (Map.Entry<MemberIdentity, Errors> entry: memberErrors.entrySet()) {
+                    for (Map.Entry<MemberIdentity, Errors> entry : memberErrors.entrySet()) {
                         Exception exception = entry.getValue().exception();
                         if (exception != null) {
                             Throwable ex = new KafkaException("Encounter exception when trying to remove: "

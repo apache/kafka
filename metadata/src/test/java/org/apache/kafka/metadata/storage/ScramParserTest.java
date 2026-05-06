@@ -121,6 +121,7 @@ public class ScramParserTest {
             Optional.of("my pass"),
             Optional.empty()).iterations());
     }
+
     @Test
     public void testParsePerMechanismArgument() {
         assertEquals(new AbstractMap.SimpleImmutableEntry<>(

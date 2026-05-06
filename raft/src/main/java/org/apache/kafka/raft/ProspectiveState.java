@@ -170,5 +170,5 @@ public class ProspectiveState implements NomineeState {
     }
 
     @Override
-    public void close() {}
+    public void close() { }
 }

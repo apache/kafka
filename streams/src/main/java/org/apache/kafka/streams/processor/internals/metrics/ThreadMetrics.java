@@ -40,7 +40,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class ThreadMetrics {
-    private ThreadMetrics() {}
+    private ThreadMetrics() { }
 
     private static final String COMMIT = "commit";
     private static final String POLL = "poll";

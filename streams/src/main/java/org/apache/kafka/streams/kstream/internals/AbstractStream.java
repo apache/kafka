@@ -83,7 +83,7 @@ public abstract class AbstractStream<K, V> {
 
     Set<String> ensureCopartitionWith(final Collection<? extends AbstractStream<K, ?>> otherStreams) {
         final Set<String> allSourceNodes = new HashSet<>(subTopologySourceNodes);
-        for (final AbstractStream<K, ?> other: otherStreams) {
+        for (final AbstractStream<K, ?> other : otherStreams) {
             allSourceNodes.addAll(other.subTopologySourceNodes);
         }
         builder.internalTopologyBuilder.copartitionSources(allSourceNodes);

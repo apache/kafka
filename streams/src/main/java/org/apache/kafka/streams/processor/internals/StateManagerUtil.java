@@ -56,7 +56,7 @@ final class StateManagerUtil {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     static final long OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT = 10_000L;
 
-    private StateManagerUtil() {}
+    private StateManagerUtil() { }
 
     static RecordConverter converterForStore(final StateStore store) {
         // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore

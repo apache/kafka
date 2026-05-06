@@ -334,7 +334,7 @@ public class BatchBuilder<T> {
             }
 
             int recordSizeInBytes = DefaultRecord.sizeOfBodyInBytes(
-                (int) (expectedNextOffset  - baseOffset),
+                (int) (expectedNextOffset - baseOffset),
                 0,
                 -1,
                 serde.recordSize(record, serializationCache),

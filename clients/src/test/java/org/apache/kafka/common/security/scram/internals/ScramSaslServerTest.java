@@ -51,7 +51,7 @@ public class ScramSaslServerTest {
     @BeforeEach
     public void setUp() throws Exception {
         ScramMechanism mechanism = ScramMechanism.SCRAM_SHA_256;
-        formatter  = new ScramFormatter(mechanism);
+        formatter = new ScramFormatter(mechanism);
         CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));

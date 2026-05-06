@@ -576,7 +576,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
                                                                            final StreamsBuilder streamsBuilderForNewStore,
                                                                            final boolean persistentStore) throws Exception {
         final Properties props = props();
-        kafkaStreams =  new KafkaStreams(streamsBuilderForOldStore.build(), props);
+        kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(

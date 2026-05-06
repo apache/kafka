@@ -148,5 +148,5 @@ public class UnattachedState implements EpochState {
     }
 
     @Override
-    public void close() {}
+    public void close() { }
 }

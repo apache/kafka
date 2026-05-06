@@ -98,6 +98,7 @@ public class SnapshottableHashTableTest {
             new SnapshottableHashTable<>(registry, 1);
         assertEquals(0, table.snapshottableSize(Long.MAX_VALUE));
     }
+
     @Test
     public void testDeleteOnEmptyDeltaTable() {
         // A simple test case to validate the behavior of the TimelineHashSet

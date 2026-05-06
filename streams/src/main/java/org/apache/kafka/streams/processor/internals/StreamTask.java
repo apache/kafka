@@ -222,7 +222,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         committedOffsets = new HashMap<>();
         highWatermark = new HashMap<>();
-        for (final TopicPartition topicPartition: inputPartitions) {
+        for (final TopicPartition topicPartition : inputPartitions) {
             committedOffsets.put(topicPartition, -1L);
             highWatermark.put(topicPartition, -1L);
         }
@@ -636,7 +636,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // closeClean in handleAssignment. We should throw if we detect this to force the TaskManager to closeDirty
         if (commitNeeded) {
             log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
-                          + " commit and should close as dirty instead");
+                + " commit and should close as dirty instead");
             throw new TaskMigratedException("Tried to close dirty task as clean");
         }
     }

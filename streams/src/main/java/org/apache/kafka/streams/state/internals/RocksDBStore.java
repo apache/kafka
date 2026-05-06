@@ -263,7 +263,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             } catch (final ProcessorStateException e) {
                 final String message = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
                 throw new TaskCorruptedException(Set.of(taskId), new ProcessorStateException(message, e));
-            }  catch (final StreamsException fatal) {
+            } catch (final StreamsException fatal) {
                 final String fatalMessage = "Fatal error while opening store " + name;
                 throw new ProcessorStateException(fatalMessage, fatal);
             } catch (final RocksDBException fatal) {
@@ -903,14 +903,23 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     interface DBAccessor {
         byte[] get(final ColumnFamilyHandle columnFamily, final byte[] key) throws RocksDBException;
+
         byte[] get(final ColumnFamilyHandle columnFamily, final ReadOptions readOptions, final byte[] key) throws RocksDBException;
+
         RocksIterator newIterator(final ColumnFamilyHandle columnFamily);
+
         void put(final ColumnFamilyHandle columnFamily, final byte[] key, final byte[] value) throws RocksDBException;
+
         void delete(final ColumnFamilyHandle columnFamily, final byte[] key) throws RocksDBException;
+
         void deleteRange(final ColumnFamilyHandle columnFamily, final byte[] from, final byte[] to) throws RocksDBException;
+
         long approximateNumEntries(final ColumnFamilyHandle columnFamily) throws RocksDBException;
+
         void flush(final ColumnFamilyHandle... columnFamilies) throws RocksDBException;
+
         void reset();
+
         void close();
     }
 

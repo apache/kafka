@@ -18,5 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 interface TaskAction<T extends Task> {
     String name();
+
     void apply(final T task);
 }

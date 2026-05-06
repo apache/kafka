@@ -2194,6 +2194,7 @@ public interface KTable<K, V> {
                                     final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                     final TableJoined<K, KO> tableJoined);
+
     /**
      * Join records of this {@code KTable} with another {@code KTable} using non-windowed inner join.
      * <p>

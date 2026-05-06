@@ -53,7 +53,7 @@ public enum MemberState {
     private static final Map<Byte, MemberState> VALUES_TO_ENUMS = new HashMap<>();
 
     static {
-        for (MemberState state: MemberState.values()) {
+        for (MemberState state : MemberState.values()) {
             VALUES_TO_ENUMS.put(state.value(), state);
         }
     }

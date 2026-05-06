@@ -85,7 +85,7 @@ public class PageViewTypedDemo {
         private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
         @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {}
+        public void configure(final Map<String, ?> configs, final boolean isKey) { }
 
         @SuppressWarnings("unchecked")
         @Override
@@ -115,7 +115,7 @@ public class PageViewTypedDemo {
         }
 
         @Override
-        public void close() {}
+        public void close() { }
 
         @Override
         public Serializer<T> serializer() {

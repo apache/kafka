@@ -54,7 +54,7 @@ public class StaticMemberTestClient {
         final String inputTopic = (String) (Objects.requireNonNull(streamsProperties.remove("input.topic")));
 
         final KStream<String, String> dataStream = builder.stream(inputTopic);
-        dataStream.peek((k, v) ->  System.out.printf("PROCESSED key=%s value=%s%n", k, v));
+        dataStream.peek((k, v) -> System.out.printf("PROCESSED key=%s value=%s%n", k, v));
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, TEST_NAME);

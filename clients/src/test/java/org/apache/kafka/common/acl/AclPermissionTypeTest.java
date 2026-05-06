@@ -56,7 +56,7 @@ public class AclPermissionTypeTest {
         for (AclPermissionTypeTestInfo info : INFOS) {
             assertEquals(info.code, info.ty.code(), info.ty + " was supposed to have code == " + info.code);
             assertEquals(info.ty, AclPermissionType.fromCode((byte) info.code),
-                "AclPermissionType.fromCode(" + info.code + ") was supposed to be " +  info.ty);
+                "AclPermissionType.fromCode(" + info.code + ") was supposed to be " + info.ty);
         }
         assertEquals(AclPermissionType.UNKNOWN, AclPermissionType.fromCode((byte) 120));
     }
@@ -65,7 +65,7 @@ public class AclPermissionTypeTest {
     public void testName() throws Exception {
         for (AclPermissionTypeTestInfo info : INFOS) {
             assertEquals(info.ty, AclPermissionType.fromString(info.name),
-                "AclPermissionType.fromString(" + info.name + ") was supposed to be " +  info.ty);
+                "AclPermissionType.fromString(" + info.name + ") was supposed to be " + info.ty);
         }
         assertEquals(AclPermissionType.UNKNOWN, AclPermissionType.fromString("something"));
     }

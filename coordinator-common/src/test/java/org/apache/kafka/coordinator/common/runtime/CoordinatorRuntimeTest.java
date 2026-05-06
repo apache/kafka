@@ -4613,7 +4613,7 @@ public class CoordinatorRuntimeTest {
             }
 
             @Override
-            public void close() {}
+            public void close() { }
         };
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =

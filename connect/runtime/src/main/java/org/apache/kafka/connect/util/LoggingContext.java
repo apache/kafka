@@ -76,6 +76,7 @@ public final class LoggingContext implements AutoCloseable {
         VALIDATE("validate");
 
         private final String text;
+
         Scope(String value) {
             this.text = value;
         }

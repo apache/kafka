@@ -175,7 +175,7 @@ public class BootstrapControllersIntegrationTest {
     private void testUpdateFeatures(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             UpdateFeaturesResult result = admin.updateFeatures(Map.of("foo.bar.feature",
-                            new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)));
+                new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)));
             ExecutionException exception =
                     assertThrows(ExecutionException.class,
                             () -> result.all().get(1, TimeUnit.MINUTES));

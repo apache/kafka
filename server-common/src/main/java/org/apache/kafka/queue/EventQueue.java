@@ -39,7 +39,7 @@ public interface EventQueue extends AutoCloseable {
          *              scheduled because the event queue has already been closed.
          *              Otherwise, it will be whatever exception was thrown by run().
          */
-        default void handleException(Throwable e) {}
+        default void handleException(Throwable e) { }
     }
 
     class NoDeadlineFunction implements UnaryOperator<OptionalLong> {

@@ -523,7 +523,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     public void stopPartitions(Set<StopPartition> stopPartitions,
                                BiConsumer<TopicPartition, Throwable> errorHandler) {
         LOGGER.debug("Stop partitions: {}", stopPartitions);
-        for (StopPartition stopPartition: stopPartitions) {
+        for (StopPartition stopPartition : stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition;
             try {
                 if (topicIdByPartitionMap.containsKey(tp)) {
@@ -586,7 +586,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         // KAFKA-15313: Delete remote log segments partition asynchronously when a partition is deleted.
         Collection<Uuid> deletedSegmentIds = new ArrayList<>();
-        for (RemoteLogSegmentMetadata metadata: metadataList) {
+        for (RemoteLogSegmentMetadata metadata : metadataList) {
             deletedSegmentIds.add(metadata.remoteLogSegmentId().id());
             remoteStorageManagerPlugin.get().deleteLogSegmentData(metadata);
         }
@@ -907,7 +907,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 // epoch cache then it starts copying the segments from the earliest epoch entry's offset.
                 copiedOffsetOption = Optional.of(findHighestRemoteOffset(topicIdPartition, log));
                 logger.info("Found the highest copiedRemoteOffset: {} for partition: {} after becoming leader", copiedOffsetOption, topicIdPartition);
-                copiedOffsetOption.ifPresent(offsetAndEpoch ->  log.updateHighestOffsetInRemoteStorage(offsetAndEpoch.offset()));
+                copiedOffsetOption.ifPresent(offsetAndEpoch -> log.updateHighestOffsetInRemoteStorage(offsetAndEpoch.offset()));
             }
         }
 
@@ -1868,6 +1868,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             }
         }
     }
+
     // for testing
     RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
         return new RemoteLogInputStream(in);
@@ -2237,9 +2238,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     RLMTaskWithFuture leaderCopyTask(TopicIdPartition partition) {
         return leaderCopyRLMTasks.get(partition);
     }
+
     RLMTaskWithFuture leaderExpirationTask(TopicIdPartition partition) {
         return leaderExpirationRLMTasks.get(partition);
     }
+
     RLMTaskWithFuture followerTask(TopicIdPartition partition) {
         return followerRLMTasks.get(partition);
     }

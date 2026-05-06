@@ -40,7 +40,7 @@ class TransactionStateManagerConfigTest {
                 .peek(field -> field.setAccessible(true))
                 .map(field -> assertDoesNotThrow(() -> (String) field.get(null)))
                 .collect(Collectors.toSet());
-        assertEquals(declaredConfigs,  TransactionStateManagerConfig.CONFIG_DEF.names());
+        assertEquals(declaredConfigs, TransactionStateManagerConfig.CONFIG_DEF.names());
     }
 
     @Test

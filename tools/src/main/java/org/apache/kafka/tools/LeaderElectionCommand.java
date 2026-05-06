@@ -255,6 +255,7 @@ public class LeaderElectionCommand {
         private final ArgumentAcceptingOptionSpec<Integer> partition;
         private final OptionSpecBuilder allTopicPartitions;
         private final ArgumentAcceptingOptionSpec<ElectionType> electionType;
+
         public LeaderElectionCommandOptions(String[] args) {
             super(args);
             bootstrapServer = parser

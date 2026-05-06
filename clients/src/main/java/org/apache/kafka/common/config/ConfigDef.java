@@ -565,12 +565,12 @@ public class ConfigDef {
 
     public Map<String, ConfigValue> validateAll(Map<String, String> props) {
         Map<String, ConfigValue> configValues = new HashMap<>();
-        for (String name: configKeys.keySet()) {
+        for (String name : configKeys.keySet()) {
             configValues.put(name, new ConfigValue(name));
         }
 
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
-        for (String undefinedConfigKey: undefinedConfigKeys) {
+        for (String undefinedConfigKey : undefinedConfigKeys) {
             ConfigValue undefinedConfigValue = new ConfigValue(undefinedConfigKey);
             undefinedConfigValue.addErrorMessage(undefinedConfigKey + " is referred in the dependents, but not defined.");
             undefinedConfigValue.visible(false);
@@ -585,7 +585,7 @@ public class ConfigDef {
     Map<String, Object> parseForValidate(Map<String, String> props, Map<String, ConfigValue> configValues) {
         Map<String, Object> parsed = new HashMap<>();
         Set<String> configsWithNoParent = getConfigsWithNoParent();
-        for (String name: configsWithNoParent) {
+        for (String name : configsWithNoParent) {
             parseForValidate(name, props, parsed, configValues);
         }
         return parsed;
@@ -594,7 +594,7 @@ public class ConfigDef {
 
     private Map<String, ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
         Set<String> configsWithNoParent = getConfigsWithNoParent();
-        for (String name: configsWithNoParent) {
+        for (String name : configsWithNoParent) {
             validate(name, parsed, configValues);
         }
         return configValues;
@@ -603,7 +603,7 @@ public class ConfigDef {
     private List<String> undefinedDependentConfigs() {
         Set<String> undefinedConfigKeys = new HashSet<>();
         for (ConfigKey configKey : configKeys.values()) {
-            for (String dependent: configKey.dependents) {
+            for (String dependent : configKey.dependents) {
                 if (!configKeys.containsKey(dependent)) {
                     undefinedConfigKeys.add(dependent);
                 }
@@ -619,7 +619,7 @@ public class ConfigDef {
         }
         Set<String> configsWithParent = new HashSet<>();
 
-        for (ConfigKey configKey: configKeys.values()) {
+        for (ConfigKey configKey : configKeys.values()) {
             List<String> dependents = configKey.dependents;
             configsWithParent.addAll(dependents);
         }
@@ -659,7 +659,7 @@ public class ConfigDef {
         }
         config.value(value);
         parsed.put(name, value);
-        for (String dependent: key.dependents) {
+        for (String dependent : key.dependents) {
             parseForValidate(dependent, props, parsed, configs);
         }
     }
@@ -686,7 +686,7 @@ public class ConfigDef {
         }
 
         configs.put(name, value);
-        for (String dependent: key.dependents) {
+        for (String dependent : key.dependents) {
             validate(dependent, parsed, configs);
         }
     }
@@ -1201,7 +1201,7 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(String name, Object value) {
-            for (Validator validator: validators) {
+            for (Validator validator : validators) {
                 validator.ensureValid(name, value);
             }
         }
@@ -1210,7 +1210,7 @@ public class ConfigDef {
         public String toString() {
             if (validators == null) return "";
             StringBuilder desc = new StringBuilder();
-            for (Validator v: validators) {
+            for (Validator v : validators) {
                 if (desc.length() > 0) {
                     desc.append(',').append(' ');
                 }
@@ -1594,7 +1594,7 @@ public class ConfigDef {
     private List<ConfigKey> sortedConfigs() {
         final Map<String, Integer> groupOrd = new HashMap<>(groups.size());
         int ord = 0;
-        for (String group: groups) {
+        for (String group : groups) {
             groupOrd.put(group, ord++);
         }
 

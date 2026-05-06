@@ -219,7 +219,7 @@ public final class LocalTieredStorageTest {
         }
         tieredStorage.deletePartition(topicIdPartition);
         remoteStorageVerifier.assertFileDoesNotExist(remoteStorageVerifier.expectedPartitionPath());
-        for (RemoteLogSegmentMetadata segmentMetadata: segmentMetadatas) {
+        for (RemoteLogSegmentMetadata segmentMetadata : segmentMetadatas) {
             remoteStorageVerifier.verifyLogSegmentFilesAbsent(segmentMetadata);
         }
     }
@@ -368,7 +368,7 @@ public final class LocalTieredStorageTest {
         final FileRecords records = FileRecords.open(snapshot.getFile(id, SEGMENT));
         final List<ByteBuffer> buffers = new ArrayList<>();
 
-        for (Record record: records.records()) {
+        for (Record record : records.records()) {
             buffers.add(record.value());
         }
 

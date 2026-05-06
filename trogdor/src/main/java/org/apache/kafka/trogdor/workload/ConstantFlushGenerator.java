@@ -16,6 +16,7 @@
  */
 
 package org.apache.kafka.trogdor.workload;
+
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.errors.InterruptException;
 

@@ -249,6 +249,7 @@ public class MemoryRecords extends AbstractRecords {
         private final boolean writeOriginalBatch;
         private final boolean containsTombstones;
         private final long maxOffset;
+
         private BatchFilterResult(List<Record> retainedRecords,
                                   final boolean writeOriginalBatch,
                                   final boolean containsTombstones,
@@ -367,6 +368,7 @@ public class MemoryRecords extends AbstractRecords {
         public static class BatchRetentionResult {
             public final BatchRetention batchRetention;
             public final boolean containsMarkerForEmptyTxn;
+
             public BatchRetentionResult(final BatchRetention batchRetention,
                                         final boolean containsMarkerForEmptyTxn) {
                 this.batchRetention = batchRetention;

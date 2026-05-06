@@ -473,6 +473,7 @@ public class DefaultRecordBatchTest {
             verify(bufferSupplier, times(expectedNumBufferAllocations)).release(any(ByteBuffer.class));
         }
     }
+
     private static Stream<Arguments> testBufferReuseInSkipKeyValueIterator() {
         byte[] smallRecordValue = "1".getBytes();
         byte[] largeRecordValue = new byte[512 * 1024]; // 512KB

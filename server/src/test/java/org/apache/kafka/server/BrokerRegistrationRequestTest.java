@@ -55,6 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class BrokerRegistrationRequestTest {
     private final ClusterInstance clusterInstance;
+
     public BrokerRegistrationRequestTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
     }

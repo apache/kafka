@@ -218,6 +218,7 @@ public class InternalTopologyBuilder {
             this.valueDeserializer = value;
             this.processorName = processorName;
         }
+
         public ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier() {
             return processorSupplier;
         }
@@ -2255,7 +2256,7 @@ public class InternalTopologyBuilder {
 
             final Collection<String> existingTopics = subscriptionUpdates();
 
-            if  (!existingTopics.equals(assignedTopics)) {
+            if (!existingTopics.equals(assignedTopics)) {
                 assignedTopics.addAll(existingTopics);
                 updateSubscribedTopics(assignedTopics, logPrefix);
             }
@@ -2295,7 +2296,7 @@ public class InternalTopologyBuilder {
 
     public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(
         final String name,
-        final FixedKeyProcessorSupplier<KIn, VIn,  VOut> processorSupplier
+        final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier
     ) {
         return ProcessorWrapper.asWrappedFixedKey(
             processorWrapper.wrapFixedKeyProcessorSupplier(name, processorSupplier)

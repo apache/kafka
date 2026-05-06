@@ -37,7 +37,7 @@ public interface MessageFormatter extends Configurable, Closeable {
      * Configures the MessageFormatter
      * @param configs Map to configure the formatter
      */
-    default void configure(Map<String, ?> configs) {}
+    default void configure(Map<String, ?> configs) { }
 
     /**
      * Parses and formats a record for display
@@ -49,5 +49,5 @@ public interface MessageFormatter extends Configurable, Closeable {
     /**
      * Closes the formatter
      */
-    default void close() {}
+    default void close() { }
 }

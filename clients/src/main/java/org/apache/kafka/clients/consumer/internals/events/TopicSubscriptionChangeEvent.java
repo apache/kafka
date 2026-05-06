@@ -28,6 +28,7 @@ import java.util.Set;
  */
 public class TopicSubscriptionChangeEvent extends SubscriptionChangeEvent {
     private final Set<String> topics;
+
     public TopicSubscriptionChangeEvent(final Set<String> topics, final Optional<ConsumerRebalanceListener> listener, final long deadlineMs) {
         super(Type.TOPIC_SUBSCRIPTION_CHANGE, listener, deadlineMs);
         this.topics = topics;

@@ -1780,7 +1780,7 @@ public class SharePartition {
             // Create batches of acquired records.
             List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, isRecordLimitMode, maxFetchRecords, firstAcquiredOffset, lastAcquiredOffset, batchSize);
             // if the cachedState was empty before acquiring the new batches then startOffset needs to be updated
-            if (cachedState.firstKey() == firstAcquiredOffset)  {
+            if (cachedState.firstKey() == firstAcquiredOffset) {
                 startOffset = firstAcquiredOffset;
             }
 
@@ -2865,7 +2865,7 @@ public class SharePartition {
         RecordBatch previousBatch = null;
         for (RecordBatch batch : batches) {
             if (offset >= batch.baseOffset()) {
-                previousBatch =  batch;
+                previousBatch = batch;
                 continue;
             }
             break;

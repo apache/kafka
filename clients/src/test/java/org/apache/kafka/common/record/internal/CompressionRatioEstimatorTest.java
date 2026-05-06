@@ -30,6 +30,7 @@ public class CompressionRatioEstimatorTest {
         class EstimationsObservedRatios {
             final float currentEstimation;
             final float observedRatio;
+
             EstimationsObservedRatios(float currentEstimation, float observedRatio) {
                 this.currentEstimation = currentEstimation;
                 this.observedRatio = observedRatio;

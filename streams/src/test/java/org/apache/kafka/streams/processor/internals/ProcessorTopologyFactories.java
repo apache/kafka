@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class ProcessorTopologyFactories {
-    private ProcessorTopologyFactories() {}
+    private ProcessorTopologyFactories() { }
 
     public static ProcessorTopology with(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
                                          final Map<String, SourceNode<?, ?>> sourcesByTopic,

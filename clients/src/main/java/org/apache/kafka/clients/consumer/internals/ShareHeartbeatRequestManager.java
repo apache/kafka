@@ -248,7 +248,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             private String rackId = null;
             private TreeSet<String> subscribedTopicNames = null;
 
-            SentFields() {}
+            SentFields() { }
 
             void reset() {
                 rackId = null;

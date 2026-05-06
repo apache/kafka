@@ -20,6 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 
 public interface ReplicaQuota {
     void record(long value);
+
     boolean isThrottled(TopicPartition topicPartition);
+
     boolean isQuotaExceeded();
 }

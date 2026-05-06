@@ -75,6 +75,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
     private static final long NOW = Instant.now().toEpochMilli();
+
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();

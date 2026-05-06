@@ -23,7 +23,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMinAndMaxToSensor;
 
 public class NamedCacheMetrics {
-    private NamedCacheMetrics() {}
+    private NamedCacheMetrics() { }
 
     private static final String HIT_RATIO = "hit-ratio";
     private static final String HIT_RATIO_AVG_DESCRIPTION = "The average cache hit ratio";

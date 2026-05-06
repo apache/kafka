@@ -82,6 +82,7 @@ public class DelayedProduce extends DelayedOperation {
     @FunctionalInterface
     public interface PartitionStatusValidator {
         record Result(boolean hasEnough, Errors error) { }
+
         /**
          * Validates the status of a partition and its replicas to determine
          * if a delayed produce operation can be completed.

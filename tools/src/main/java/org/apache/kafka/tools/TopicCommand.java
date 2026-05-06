@@ -285,7 +285,7 @@ public abstract class TopicCommand {
                 .filter(config -> !config.isDefault())
                 .map(ce -> ce.name() + "=" + ce.value())
                 .collect(Collectors.joining(","));
-            System.out.print("Topic: " +  topic);
+            System.out.print("Topic: " + topic);
             if (!topicId.equals(Uuid.ZERO_UUID))
                 System.out.print("\tTopicId: " + topicId);
             System.out.print("\tPartitionCount: " + numPartitions);
@@ -744,7 +744,7 @@ public abstract class TopicCommand {
             String nl = System.lineSeparator();
 
             String logConfigNames = LogConfig.nonInternalConfigNames().stream().map(config -> "\t" + config).collect(Collectors.joining(nl));
-            configOpt = parser.accepts("config",  "A topic configuration override for the topic being created." +
+            configOpt = parser.accepts("config", "A topic configuration override for the topic being created." +
                             " The following is a list of valid configurations: " + nl + logConfigNames + nl +
                             "See the Kafka documentation for full details on the topic configs." +
                             " It is supported only in combination with --create." +

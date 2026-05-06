@@ -113,7 +113,7 @@ public class Plugins {
                 "One or more plugins are missing ServiceLoader manifests may not be usable with %s=%s: %s%n" +
                         "Read the documentation at %s for instructions on migrating your plugins " +
                         "to take advantage of the performance improvements of %s mode.",
-                            WorkerConfig.PLUGIN_DISCOVERY_CONFIG,
+                WorkerConfig.PLUGIN_DISCOVERY_CONFIG,
                     PluginDiscoveryMode.SERVICE_LOAD,
                     missingPlugins.stream()
                             .map(pluginDesc -> pluginDesc.location() + "\t" + pluginDesc.className() + "\t" + pluginDesc.type() + "\t" + pluginDesc.version())

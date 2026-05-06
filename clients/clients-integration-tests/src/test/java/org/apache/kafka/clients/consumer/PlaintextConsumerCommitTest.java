@@ -340,6 +340,7 @@ public class PlaintextConsumerCommitTest {
                     // keep partitions paused in this test so that we can verify the commits based on specific seeks
                     consumer.pause(partitions);
                 }
+
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                     // No-op

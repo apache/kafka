@@ -58,6 +58,7 @@ public class ByteUtilsBenchmark {
     public static class BaseBenchmarkState {
         private ByteBuffer testBuffer;
         private SecureRandom random;
+
         @Setup(Level.Trial)
         public void setUpBenchmarkLevel() {
             // Initialize the random number generator with a seed so that for each benchmark it produces the same sequence
@@ -315,7 +316,7 @@ public class ByteUtilsBenchmark {
     /*
      * Implementation in Trunk as of Apr 2023 / v3.4
      */
-    private static long readUnsignedVarlongLegacy(ByteBuffer buffer)  {
+    private static long readUnsignedVarlongLegacy(ByteBuffer buffer) {
         long value = 0L;
         int i = 0;
         long b;

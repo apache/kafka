@@ -548,6 +548,7 @@ public class ConnectorValidationIntegrationTest {
 
     public static class TestConverterWithSinglePropertyConfigDef extends TestConverter {
         public static final String BOOLEAN_PROPERTY_NAME = "prop";
+
         @Override
         public ConfigDef config() {
             return new ConfigDef().define(BOOLEAN_PROPERTY_NAME, ConfigDef.Type.BOOLEAN, ConfigDef.Importance.HIGH, "");

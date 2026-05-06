@@ -212,6 +212,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
             }
         };
     }
+
     private void testWithConsumerGroup(String inputTopic,
                                        String inputGroup,
                                        GroupProtocol groupProtocol,

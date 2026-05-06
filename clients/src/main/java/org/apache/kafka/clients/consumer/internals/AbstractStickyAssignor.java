@@ -65,6 +65,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     static final class ConsumerGenerationPair {
         final String consumer;
         final int generation;
+
         ConsumerGenerationPair(String consumer, int generation) {
             this.consumer = consumer;
             this.generation = generation;
@@ -338,7 +339,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 return true;
             }
 
-            for (ConsumerPair pair: pairs)
+            for (ConsumerPair pair : pairs)
                 if (pair.srcMemberId.equals(src)) {
                     Set<ConsumerPair> reducedSet = new HashSet<>(pairs);
                     reducedSet.remove(pair);
@@ -353,7 +354,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             List<String> superCycle = new ArrayList<>(cycle);
             superCycle.remove(superCycle.size() - 1);
             superCycle.addAll(cycle);
-            for (List<String> foundCycle: cycles) {
+            for (List<String> foundCycle : cycles) {
                 if (foundCycle.size() == cycle.size() && Collections.indexOfSubList(superCycle, foundCycle) != -1)
                     return true;
             }
@@ -362,7 +363,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         private boolean hasCycles(Set<ConsumerPair> pairs) {
             Set<List<String>> cycles = new HashSet<>();
-            for (ConsumerPair pair: pairs) {
+            for (ConsumerPair pair : pairs) {
                 Set<ConsumerPair> reducedPairs = new HashSet<>(pairs);
                 reducedPairs.remove(pair);
                 List<String> path = new ArrayList<>(Collections.singleton(pair.srcMemberId));
@@ -375,14 +376,14 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             // for now we want to make sure there is no partition movements of the same topic between a pair of consumers.
             // the odds of finding a cycle among more than two consumers seem to be very low (according to various randomized
             // tests with the given sticky algorithm) that it should not worth the added complexity of handling those cases.
-            for (List<String> cycle: cycles)
+            for (List<String> cycle : cycles)
                 if (cycle.size() == 3) // indicates a cycle of length 2
                     return true;
             return false;
         }
 
         private boolean isSticky() {
-            for (Map.Entry<String, Map<ConsumerPair, Set<TopicPartition>>> topicMovements: this.partitionMovementsByTopic.entrySet()) {
+            for (Map.Entry<String, Map<ConsumerPair, Set<TopicPartition>>> topicMovements : this.partitionMovementsByTopic.entrySet()) {
                 Set<ConsumerPair> topicMovementPairs = topicMovements.getValue().keySet();
                 if (hasCycles(topicMovementPairs)) {
                     log.error("Stickiness is violated for topic {}"
@@ -439,7 +440,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
 
         private boolean in(Set<ConsumerPair> pairs) {
-            for (ConsumerPair pair: pairs)
+            for (ConsumerPair pair : pairs)
                 if (this.equals(pair))
                     return true;
             return false;
@@ -986,8 +987,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             });
 
             currentPartitionConsumer = new HashMap<>();
-            for (Map.Entry<String, List<TopicPartition>> entry: currentAssignment.entrySet())
-                for (TopicPartition topicPartition: entry.getValue())
+            for (Map.Entry<String, List<TopicPartition>> entry : currentAssignment.entrySet())
+                for (TopicPartition topicPartition : entry.getValue())
                     currentPartitionConsumer.put(topicPartition, entry.getKey());
 
             List<String> sortedAllTopics = new ArrayList<>(topic2AllPotentialConsumers.keySet());
@@ -1038,7 +1039,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 Subscription consumerSubscription = subscriptions.get(consumer);
                 if (consumerSubscription == null) {
                     // if a consumer that existed before (and had some partition assignments) is now removed, remove it from currentAssignment
-                    for (TopicPartition topicPartition: entry.getValue())
+                    for (TopicPartition topicPartition : entry.getValue())
                         currentPartitionConsumer.remove(topicPartition);
                     it.remove();
                 } else {
@@ -1118,7 +1119,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                           List<TopicPartition> partitions,
                                           String consumer,
                                           int generation) {
-            for (TopicPartition partition: partitions) {
+            for (TopicPartition partition : partitions) {
                 if (prevAssignment.containsKey(partition)) {
                     // only keep the latest previous assignment
                     if (generation > prevAssignment.get(partition).generation) {
@@ -1140,7 +1141,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             // higher generations overwrite lower generations in case of a conflict
             // note that a conflict could exist only if user data is for different generations
 
-            for (Map.Entry<String, Subscription> subscriptionEntry: subscriptions.entrySet()) {
+            for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
                 String consumer = subscriptionEntry.getKey();
                 Subscription subscription = subscriptionEntry.getValue();
                 if (subscription.userData() != null) {
@@ -1177,9 +1178,9 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             // create a mapping from partitions to the consumer assigned to them
             final Map<TopicPartition, String> allPartitions = new HashMap<>();
             Set<Entry<String, List<TopicPartition>>> assignments = currentAssignment.entrySet();
-            for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
+            for (Map.Entry<String, List<TopicPartition>> entry : assignments) {
                 List<TopicPartition> topicPartitions = entry.getValue();
-                for (TopicPartition topicPartition: topicPartitions) {
+                for (TopicPartition topicPartition : topicPartitions) {
                     if (allPartitions.containsKey(topicPartition))
                         log.error("{} is assigned to more than one consumer.", topicPartition);
                     allPartitions.put(topicPartition, entry.getKey());
@@ -1188,7 +1189,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             // for each consumer that does not have all the topic partitions it can get make sure none of the topic partitions it
             // could but did not get cannot be moved to it (because that would break the balance)
-            for (String consumer: sortedCurrentSubscriptions) {
+            for (String consumer : sortedCurrentSubscriptions) {
                 List<TopicPartition> consumerPartitions = currentAssignment.get(consumer);
                 int consumerPartitionCount = consumerPartitions.size();
 
@@ -1200,7 +1201,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     continue;
 
                 // otherwise make sure it cannot get any more
-                for (String topic: allSubscribedTopics) {
+                for (String topic : allSubscribedTopics) {
                     int partitionCount = partitionsPerTopic.get(topic).size();
                     for (int i = 0; i < partitionCount; i++) {
                         TopicPartition topicPartition = new TopicPartition(topic, i);
@@ -1244,7 +1245,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             int score = 0;
 
             Map<String, Integer> consumer2AssignmentSize = new HashMap<>();
-            for (Entry<String, List<TopicPartition>> entry: assignment.entrySet())
+            for (Entry<String, List<TopicPartition>> entry : assignment.entrySet())
                 consumer2AssignmentSize.put(entry.getKey(), entry.getValue().size());
 
             Iterator<Entry<String, Integer>> it = consumer2AssignmentSize.entrySet().iterator();
@@ -1252,7 +1253,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 Entry<String, Integer> entry = it.next();
                 int consumerAssignmentSize = entry.getValue();
                 it.remove();
-                for (Entry<String, Integer> otherEntry: consumer2AssignmentSize.entrySet())
+                for (Entry<String, Integer> otherEntry : consumer2AssignmentSize.entrySet())
                     score += Math.abs(consumerAssignmentSize - otherEntry.getValue());
             }
 
@@ -1263,7 +1264,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
          * The assignment should improve the overall balance of the partition assignments to consumers.
          */
         private boolean maybeAssignPartition(TopicPartition partition, RackInfo rackInfo) {
-            for (String consumer: sortedCurrentSubscriptions) {
+            for (String consumer : sortedCurrentSubscriptions) {
                 if (consumer2AllPotentialTopics.get(consumer).contains(partition.topic()) && (rackInfo == null || !rackInfo.racksMismatch(consumer, partition))) {
                     sortedCurrentSubscriptions.remove(consumer);
                     currentAssignment.get(consumer).add(partition);
@@ -1313,7 +1314,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 // if a consumer is not assigned all its potential partitions it is subject to reassignment
                 return true;
 
-            for (TopicPartition partition: currentPartitions)
+            for (TopicPartition partition : currentPartitions)
                 // if any of the partitions assigned to a consumer is subject to reassignment the consumer itself
                 // is subject to reassignment
                 if (canTopicParticipateInReassignment(partition.topic()))
@@ -1339,7 +1340,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             // narrow down the reassignment scope to only those partitions that can actually be reassigned
             Set<TopicPartition> fixedPartitions = new HashSet<>();
-            for (String topic: topic2AllPotentialConsumers.keySet())
+            for (String topic : topic2AllPotentialConsumers.keySet())
                 if (!canTopicParticipateInReassignment(topic)) {
                     for (int i = 0; i < partitionsPerTopic.get(topic).size(); i++) {
                         fixedPartitions.add(new TopicPartition(topic, i));
@@ -1350,7 +1351,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             // narrow down the reassignment scope to only those consumers that are subject to reassignment
             Map<String, List<TopicPartition>> fixedAssignments = new HashMap<>();
-            for (String consumer: consumer2AllPotentialTopics.keySet())
+            for (String consumer : consumer2AllPotentialTopics.keySet())
                 if (!canConsumerParticipateInReassignment(consumer)) {
                     sortedCurrentSubscriptions.remove(consumer);
                     fixedAssignments.put(consumer, currentAssignment.remove(consumer));
@@ -1376,7 +1377,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
 
             // add the fixed assignments (those that could not change) back
-            for (Entry<String, List<TopicPartition>> entry: fixedAssignments.entrySet()) {
+            for (Entry<String, List<TopicPartition>> entry : fixedAssignments.entrySet()) {
                 String consumer = entry.getKey();
                 currentAssignment.put(consumer, entry.getValue());
                 sortedCurrentSubscriptions.add(consumer);
@@ -1454,7 +1455,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         private void reassignPartition(TopicPartition partition) {
             // find the new consumer
             String newConsumer = null;
-            for (String anotherConsumer: sortedCurrentSubscriptions) {
+            for (String anotherConsumer : sortedCurrentSubscriptions) {
                 if (consumer2AllPotentialTopics.get(anotherConsumer).contains(partition.topic())) {
                     newConsumer = anotherConsumer;
                     break;
@@ -1490,7 +1491,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
         private void deepCopy(Map<String, List<TopicPartition>> source, Map<String, List<TopicPartition>> dest) {
             dest.clear();
-            for (Entry<String, List<TopicPartition>> entry: source.entrySet())
+            for (Entry<String, List<TopicPartition>> entry : source.entrySet())
                 dest.put(entry.getKey(), new ArrayList<>(entry.getValue()));
         }
 

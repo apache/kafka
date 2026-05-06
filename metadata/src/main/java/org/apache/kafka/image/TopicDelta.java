@@ -73,6 +73,7 @@ public final class TopicDelta {
     public Map<Integer, Integer> partitionToElrElectionCount() {
         return partitionToElrElectionCount;
     }
+
     public Map<Integer, Integer> partitionToUncleanLeaderElectionCount() {
         return partitionToUncleanLeaderElectionCount;
     }

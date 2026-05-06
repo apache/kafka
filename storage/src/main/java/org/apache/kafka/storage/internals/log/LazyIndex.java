@@ -45,15 +45,20 @@ import java.util.concurrent.locks.ReentrantLock;
 public class LazyIndex<T extends AbstractIndex> implements Closeable {
 
     private enum IndexType {
-      OFFSET, TIME
+        OFFSET, TIME
     }
 
     private interface IndexWrapper extends Closeable {
         File file();
+
         void updateParentDir(File file);
+
         void renameTo(File file) throws IOException;
+
         boolean deleteIfExists() throws IOException;
+
         void close() throws IOException;
+
         void closeHandler();
     }
 

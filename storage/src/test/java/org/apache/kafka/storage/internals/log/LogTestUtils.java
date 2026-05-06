@@ -130,7 +130,7 @@ public class LogTestUtils {
      * Create a single record batch with the specified compression, timestamp, and magic value.
      */
     public static MemoryRecords singletonRecords(byte[] value, Compression codec, byte[] key,
-                                                  long timestamp, byte magicValue) {
+                                                 long timestamp, byte magicValue) {
         return records(
             List.of(new SimpleRecord(timestamp, key, value)),
             magicValue,

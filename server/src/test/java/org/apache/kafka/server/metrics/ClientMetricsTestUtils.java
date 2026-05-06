@@ -75,7 +75,7 @@ public class ClientMetricsTestUtils {
     public static RequestContext requestContextWithNullClientInfo() throws UnknownHostException {
         return new RequestContext(
             new RequestHeader(ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS, (short) 0, "producer-1", 0),
-             "1",
+            "1",
             InetAddress.getLocalHost(),
             Optional.of(CLIENT_PORT),
             KafkaPrincipal.ANONYMOUS,

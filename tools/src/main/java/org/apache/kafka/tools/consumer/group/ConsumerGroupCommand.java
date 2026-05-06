@@ -410,7 +410,7 @@ public class ConsumerGroupCommand {
                         for (MemberAssignmentState memberAssignment : assignments.get()) {
                             maxGroupLen = Math.max(maxGroupLen, memberAssignment.group().length());
                             maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId().length());
-                            maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId().length());
+                            maxGroupInstanceIdLen = Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId().length());
                             maxHostLen = Math.max(maxHostLen, memberAssignment.host().length());
                             maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId().length());
                             includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId().isEmpty();

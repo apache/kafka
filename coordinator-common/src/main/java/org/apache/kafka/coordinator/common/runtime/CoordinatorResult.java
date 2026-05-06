@@ -205,6 +205,7 @@ public class CoordinatorResult<T, U> {
         result = 31 * result + (isAtomic ? 1 : 0);
         return result;
     }
+
     @Override
     public String toString() {
         return "CoordinatorResult(records=" + records +

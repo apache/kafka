@@ -277,7 +277,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
             // improve shutdown time by waking up any ShutdownableThread blocked on poll by sending a no-op
             timeoutTimer.add(new TimerTask(0) {
                 @Override
-                public void run() {}
+                public void run() { }
             });
             expirationReaper.awaitShutdown();
         }
@@ -311,6 +311,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
         private final ConcurrentLinkedQueue<T> operations = new ConcurrentLinkedQueue<>();
 
         private final DelayedOperationKey key;
+
         Watchers(DelayedOperationKey key) {
             this.key = key;
         }

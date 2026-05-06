@@ -264,6 +264,7 @@ public class MetadataLoaderMetricsTest {
             registry.shutdown();
         }
     }
+
     @Test
     public void testAvgIdleRatio() {
         final double delta = 0.001;

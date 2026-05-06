@@ -51,7 +51,7 @@ public class GroupSpecImplTest {
         invertedTargetAssignment = new HashMap<>();
         topicId = Uuid.randomUuid();
 
-        members.put(TEST_MEMBER,  new MemberSubscriptionAndAssignmentImpl(
+        members.put(TEST_MEMBER, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             Set.of(topicId),

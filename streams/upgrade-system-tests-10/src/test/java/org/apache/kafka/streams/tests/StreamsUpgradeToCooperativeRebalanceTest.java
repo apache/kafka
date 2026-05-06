@@ -59,7 +59,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
         final String sinkTopic = streamsProperties.getProperty("sink.topic", "sink");
         final String taskDelimiter = streamsProperties.getProperty("task.delimiter", "#");
         final int reportInterval = Integer.parseInt(streamsProperties.getProperty("report.interval", "100"));
-        final String upgradePhase = streamsProperties.getProperty("upgrade.phase",  "");
+        final String upgradePhase = streamsProperties.getProperty("upgrade.phase", "");
 
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -123,6 +123,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
             builder.setLength(builder.length() - 1);
         }
     }
+
     private static void getTasks(final Set<TaskMetadata> taskMetadata,
                                  final List<String> taskList) {
         for (final TaskMetadata task : taskMetadata) {

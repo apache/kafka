@@ -138,6 +138,7 @@ public class CachingPersistentSessionStoreTest {
             assertFalse(b.hasNext());
         }
     }
+
     @Test
     public void shouldMatchPositionAfterPutWithFlushListener() {
         cachingStore.setFlushListener(record -> { }, false);

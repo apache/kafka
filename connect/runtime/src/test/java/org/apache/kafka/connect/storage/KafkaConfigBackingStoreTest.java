@@ -762,7 +762,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testRestoreZeroTasks()  {
+    public void testRestoreZeroTasks() {
         // Restoring data should notify only of the latest values after loading is complete. This also validates
         // that inconsistent state is ignored.
 

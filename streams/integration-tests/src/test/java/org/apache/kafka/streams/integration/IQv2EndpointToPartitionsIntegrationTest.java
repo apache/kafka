@@ -155,7 +155,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                             IntegrationTestUtils.DEFAULT_TIMEOUT,
                             () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
 
-                    waitForCondition(() ->  {
+                    waitForCondition(() -> {
                         final ThreadMetadata threadMetadata = streamsOne.metadataForLocalThreads().iterator().next();
                         return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyCount;
                     }, TestUtils.DEFAULT_MAX_WAIT_MS,

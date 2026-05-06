@@ -299,7 +299,7 @@ public class TestSslUtils {
 
     private static void writeToFile(String path, Password... entries) throws IOException {
         try (FileOutputStream out = new FileOutputStream(path)) {
-            for (Password entry: entries) {
+            for (Password entry : entries) {
                 out.write(entry.value().getBytes(StandardCharsets.UTF_8));
             }
         }
@@ -808,7 +808,7 @@ public class TestSslUtils {
 
         //Generate Intermediate certificates
         for (int intermediateCertIndex = caIndex - 1; intermediateCertIndex > 0; intermediateCertIndex--) {
-            certs[intermediateCertIndex] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA" +  intermediateCertIndex,
+            certs[intermediateCertIndex] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA" + intermediateCertIndex,
                     keyPairs[intermediateCertIndex], 365, 365, certs[intermediateCertIndex + 1].getSubjectX500Principal().getName(),
                     keyPairs[intermediateCertIndex + 1], "SHA512withRSA", true, false, false, hostNames);
         }

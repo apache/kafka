@@ -111,7 +111,7 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
         List<TopicPartition> unmapped = new ArrayList<>();
         Set<TopicPartition> retriable = new HashSet<>();
 
-        for (DeleteRecordsResponseData.DeleteRecordsTopicResult topicResult: response.data().topics()) {
+        for (DeleteRecordsResponseData.DeleteRecordsTopicResult topicResult : response.data().topics()) {
             for (DeleteRecordsResponseData.DeleteRecordsPartitionResult partitionResult : topicResult.partitions()) {
                 Errors error = Errors.forCode(partitionResult.errorCode());
                 TopicPartition topicPartition = new TopicPartition(topicResult.name(), partitionResult.partitionIndex());

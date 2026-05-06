@@ -136,7 +136,7 @@ public class LogValidatorTest {
         "2,zstd,gzip",
     })
     public void checkOnlyOneBatch(Byte magic, String sourceCompression,
-                                   String targetCompression) {
+                                  String targetCompression) {
         assertThrows(InvalidRecordException.class,
                 () -> validateMessages(createTwoBatchedRecords(magic, Compression.of(sourceCompression).build()),
                         magic, CompressionType.forName(sourceCompression), Compression.of(targetCompression).build())
@@ -198,6 +198,7 @@ public class LogValidatorTest {
 
         assertTrue(metricsRecorder.recordInvalidMagicCount > 0);
     }
+
     @Test
     public void testCreateTimeUpConversionV1ToV2() {
         long timestamp = System.currentTimeMillis();
@@ -429,7 +430,7 @@ public class LogValidatorTest {
     @ParameterizedTest
     @CsvSource({"0,none,none", "1,none,none", "0,none,gzip", "1,none,gzip"})
     public void checkAllowMultiBatch(Byte magic, String sourceCompression, String targetCompression) {
-        validateMessages(createTwoBatchedRecords(magic,  Compression.of(sourceCompression).build()), magic,
+        validateMessages(createTwoBatchedRecords(magic, Compression.of(sourceCompression).build()), magic,
                 CompressionType.forName(sourceCompression), Compression.of(targetCompression).build());
     }
 
@@ -756,7 +757,7 @@ public class LogValidatorTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, compression,
-                 0L, producerId, producerEpoch, baseSequence, false);
+            0L, producerId, producerEpoch, baseSequence, false);
         builder.append(new SimpleRecord("hello".getBytes()));
 
         MemoryRecords memoryRecords = builder.build();

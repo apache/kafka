@@ -388,7 +388,7 @@ public class Metadata implements Closeable {
         // 2. for which corresponding leader's node is missing in the new-nodes.
         // 3. for which the existing metadata doesn't know about the partition.
         List<PartitionMetadata> updatePartitionMetadata = new ArrayList<>();
-        for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader: partitionLeaders.entrySet()) {
+        for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader : partitionLeaders.entrySet()) {
             TopicPartition partition = partitionLeader.getKey();
             Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
             Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();

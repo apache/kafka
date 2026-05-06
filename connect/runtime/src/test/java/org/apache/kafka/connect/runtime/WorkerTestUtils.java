@@ -174,7 +174,7 @@ public class WorkerTestUtils {
             List<Object> results) {
         Transformation<R> transformation = mock(Transformation.class);
         OngoingStubbing<R> stub = when(transformation.apply(any()));
-        for (Object result: results) {
+        for (Object result : results) {
             if (result instanceof Exception) {
                 stub = stub.thenThrow((Exception) result);
             } else {

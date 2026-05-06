@@ -196,6 +196,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
         valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) getter.valueSerde()) : valueSerde;
     }
+
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);

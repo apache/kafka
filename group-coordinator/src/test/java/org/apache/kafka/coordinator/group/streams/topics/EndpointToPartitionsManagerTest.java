@@ -67,7 +67,7 @@ class EndpointToPartitionsManagerTest {
         streamsGroupMember = mock(StreamsGroupMember.class);
         configuredTopology = mock(ConfiguredTopology.class);
         configuredSubtopologyOne = new ConfiguredSubtopology(1, Set.of("Topic-A"), new HashMap<>(), new HashSet<>(), new HashMap<>());
-        Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("Topic-B",  new ConfiguredInternalTopic("Topic-B", 1, Optional.of((short) 1), Collections.emptyMap()));
+        Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("Topic-B", new ConfiguredInternalTopic("Topic-B", 1, Optional.of((short) 1), Collections.emptyMap()));
         configuredSubtopologyTwo = new ConfiguredSubtopology(1, new HashSet<>(), repartitionSourceTopics, new HashSet<>(), new HashMap<>());
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyOneMap = new TreeMap<>();
         configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);

@@ -681,8 +681,8 @@ public class CustomStickyTaskAssignorTest {
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1, rackAwareStrategy);
 
-        for (final KafkaStreamsState client1: streamStates.values()) {
-            for (final KafkaStreamsState client2: streamStates.values()) {
+        for (final KafkaStreamsState client1 : streamStates.values()) {
+            for (final KafkaStreamsState client2 : streamStates.values()) {
                 if (!client1.processId().equals(client2.processId())) {
                     final Set<TaskId> assignedTasks1 = assignments.get(client1.processId()).tasks().keySet();
                     final Set<TaskId> assignedTasks2 = assignments.get(client2.processId()).tasks().keySet();
@@ -717,8 +717,8 @@ public class CustomStickyTaskAssignorTest {
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1, rackAwareStrategy);
 
-        for (final KafkaStreamsState client1: streamStates.values()) {
-            for (final KafkaStreamsState client2: streamStates.values()) {
+        for (final KafkaStreamsState client1 : streamStates.values()) {
+            for (final KafkaStreamsState client2 : streamStates.values()) {
                 if (!client1.processId().equals(client2.processId())) {
                     final Set<TaskId> assignedTasks1 = assignments.get(client1.processId()).tasks().keySet();
                     final Set<TaskId> assignedTasks2 = assignments.get(client2.processId()).tasks().keySet();

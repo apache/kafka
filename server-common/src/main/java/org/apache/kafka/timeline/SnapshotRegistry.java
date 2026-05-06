@@ -181,7 +181,7 @@ public class SnapshotRegistry {
      */
     public List<Long> epochsList() {
         List<Long> result = new ArrayList<>();
-        for (Iterator<Snapshot> iterator = iterator(); iterator.hasNext(); ) {
+        for (Iterator<Snapshot> iterator = iterator(); iterator.hasNext();) {
             result.add(iterator.next().epoch());
         }
         return result;
@@ -197,6 +197,7 @@ public class SnapshotRegistry {
             .map(Object::toString)
             .collect(Collectors.joining(", "));
     }
+
     /**
      * Gets the snapshot for a specific epoch.
      */
@@ -295,7 +296,7 @@ public class SnapshotRegistry {
      * @param targetEpoch       The epoch to delete up to.
      */
     public void deleteSnapshotsUpTo(long targetEpoch) {
-        for (Iterator<Snapshot> iterator = iterator(); iterator.hasNext(); ) {
+        for (Iterator<Snapshot> iterator = iterator(); iterator.hasNext();) {
             Snapshot snapshot = iterator.next();
             if (snapshot.epoch() >= targetEpoch) {
                 return;

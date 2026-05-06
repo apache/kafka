@@ -208,7 +208,7 @@ public class ProducerPerformance {
         if (payloadFilePath != null) {
             Path path = Paths.get(payloadFilePath);
             System.out.println("Reading payloads from: " + path.toAbsolutePath());
-            if (Files.notExists(path) || Files.size(path) == 0)  {
+            if (Files.notExists(path) || Files.size(path) == 0) {
                 throw new IllegalArgumentException("File does not exist or empty file provided.");
             }
 

@@ -122,6 +122,6 @@ public class GraphNodeTest {
         }
 
         @Override
-        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {}
+        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) { }
     }
 }

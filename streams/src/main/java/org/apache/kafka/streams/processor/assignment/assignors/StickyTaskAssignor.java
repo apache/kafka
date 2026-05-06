@@ -163,10 +163,10 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         // try and assign any remaining unassigned tasks to clients that previously
         // have seen the task.
-        for (final Iterator<TaskId> iterator = unassigned.iterator(); iterator.hasNext(); ) {
+        for (final Iterator<TaskId> iterator = unassigned.iterator(); iterator.hasNext();) {
             final TaskId taskId = iterator.next();
             final Set<ProcessId> previousClientsForStandbyTask = assignmentState.previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
-            for (final ProcessId client: previousClientsForStandbyTask) {
+            for (final ProcessId client : previousClientsForStandbyTask) {
                 if (assignmentState.hasRoomForActiveTask(client, activeTasksPerThread)) {
                     assignmentState.finalizeAssignment(taskId, client, AssignedTask.Type.ACTIVE);
                     iterator.remove();

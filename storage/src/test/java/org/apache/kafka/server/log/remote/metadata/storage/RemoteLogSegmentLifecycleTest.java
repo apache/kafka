@@ -350,7 +350,7 @@ public class RemoteLogSegmentLifecycleTest {
             // listRemoteLogSegments(1) should contain only segment2.
             List<RemoteLogSegmentMetadata> expectedSegmentsForEpoch1 = List.of(segment2);
             assertTrue(TestUtils.sameElementsWithOrder(
-                    expectedSegmentsForEpoch1.iterator(),  metadataManager.listRemoteLogSegments(topicIdPartition, 1)));
+                    expectedSegmentsForEpoch1.iterator(), metadataManager.listRemoteLogSegments(topicIdPartition, 1)));
         }
     }
 }

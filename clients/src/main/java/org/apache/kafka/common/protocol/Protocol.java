@@ -43,7 +43,7 @@ public class Protocol {
         b.append(schema.leftBracket());
         b.append(" ");
         // Top level fields
-        for (BoundField field: schema.fields()) {
+        for (BoundField field : schema.fields()) {
             Type type = field.def.type;
             if (type.isArray()) {
                 b.append(type.leftBracket());
@@ -82,7 +82,7 @@ public class Protocol {
         b.append("\n");
 
         // Sub Types/Schemas
-        for (Map.Entry<String, Type> entry: subTypes.entrySet()) {
+        for (Map.Entry<String, Type> entry : subTypes.entrySet()) {
             if (entry.getValue() instanceof Schema) {
                 // Complex Schema Type
                 b.append(indentStr);
@@ -101,7 +101,7 @@ public class Protocol {
     }
 
     private static void populateSchemaFields(Schema schema, Set<BoundField> fields) {
-        for (BoundField field: schema.fields()) {
+        for (BoundField field : schema.fields()) {
             fields.add(field);
             if (field.def.type.isArray()) {
                 Type innerType = field.def.type.arrayElementType().get();

@@ -37,14 +37,14 @@ public interface PartitionListener {
      * @param partition The topic partition for which the high watermark was updated.
      * @param offset    The new high watermark offset.
      */
-    default void onHighWatermarkUpdated(TopicPartition partition, long offset) {}
+    default void onHighWatermarkUpdated(TopicPartition partition, long offset) { }
 
     /**
      * Called when the Partition (or replica) on this broker has a failure (e.g., goes offline).
      *
      * @param partition The topic partition that failed.
      */
-    default void onFailed(TopicPartition partition) {}
+    default void onFailed(TopicPartition partition) { }
 
     /**
      * Called when the Partition (or replica) on this broker is deleted. Note that it does not mean
@@ -52,12 +52,12 @@ public interface PartitionListener {
      *
      * @param partition The topic partition that was deleted from this broker.
      */
-    default void onDeleted(TopicPartition partition) {}
+    default void onDeleted(TopicPartition partition) { }
 
     /**
      * Called when the Partition on this broker is transitioned to follower.
      *
      * @param partition The topic partition that transitioned to a follower role.
      */
-    default void onBecomingFollower(TopicPartition partition) {}
+    default void onBecomingFollower(TopicPartition partition) { }
 }

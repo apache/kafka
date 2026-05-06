@@ -28,6 +28,7 @@ public abstract class TopicFilter {
 
     protected final String regex;
     private final Pattern pattern;
+
     public TopicFilter(String rawRegex) {
         this.regex = rawRegex
                 .trim()
@@ -55,6 +56,7 @@ public abstract class TopicFilter {
 
     public static class IncludeList extends TopicFilter {
         private static final Logger log = LoggerFactory.getLogger(IncludeList.class);
+
         public IncludeList(String rawRegex) {
             super(rawRegex);
         }

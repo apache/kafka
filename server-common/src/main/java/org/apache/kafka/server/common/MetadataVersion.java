@@ -363,7 +363,7 @@ public enum MetadataVersion {
         if (metadataVersion == null || (!unstableFeatureVersionsEnabled && !metadataVersion.isProduction())) {
             String errorMsg = "Unknown metadata.version '" + versionString + "'. Supported metadata.version are: "
                 + metadataVersionsToString(MetadataVersion.MINIMUM_VERSION,
-                unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting() : MetadataVersion.latestProduction());
+                    unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting() : MetadataVersion.latestProduction());
             throw new IllegalArgumentException(errorMsg);
         }
         return metadataVersion;
@@ -377,7 +377,7 @@ public enum MetadataVersion {
     }
 
     public static MetadataVersion fromFeatureLevel(short version) {
-        for (MetadataVersion metadataVersion: MetadataVersion.values()) {
+        for (MetadataVersion metadataVersion : MetadataVersion.values()) {
             if (metadataVersion.featureLevel() == version) {
                 return metadataVersion;
             }

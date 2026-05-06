@@ -99,7 +99,7 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
-    public void initialize() {}
+    public void initialize() { }
 
     @Override
     public void flush() {
@@ -107,10 +107,10 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
-    public void closeClean() {}
+    public void closeClean() { }
 
     @Override
-    public void closeDirty() {}
+    public void closeDirty() { }
 
     @Override
     public Map<TopicPartition, Long> offsets() {

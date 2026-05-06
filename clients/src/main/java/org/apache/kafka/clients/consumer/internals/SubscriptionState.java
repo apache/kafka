@@ -903,7 +903,7 @@ public class SubscriptionState {
     }
 
     public synchronized boolean hasPartitionsNeedingValidation(long nowMs) {
-        for (TopicPartitionState tps  : assignment.partitionStateValues()) {
+        for (TopicPartitionState tps : assignment.partitionStateValues()) {
             if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
                 return true;
             }

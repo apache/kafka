@@ -73,6 +73,7 @@ public class ShareConsumeBenchWorker implements TaskWorker {
     private StatusUpdater statusUpdater;
     private Future<?> statusUpdaterFuture;
     private KafkaFutureImpl<String> doneFuture;
+
     public ShareConsumeBenchWorker(String id, ShareConsumeBenchSpec spec) {
         this.id = id;
         this.spec = spec;
@@ -354,6 +355,7 @@ public class ShareConsumeBenchWorker implements TaskWorker {
          * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
          */
         static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
+
         @JsonCreator
         StatusData(@JsonProperty("subscription") Set<String> subscription,
                    @JsonProperty("totalMessagesReceived") long totalMessagesReceived,

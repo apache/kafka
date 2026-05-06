@@ -221,7 +221,7 @@ public class ClusterConfig {
         private Map<Feature, Short> features = Map.of();
         private boolean standalone = false;
 
-        private Builder() {}
+        private Builder() { }
 
         public Builder setTypes(Set<Type> types) {
             this.types = Set.copyOf(types);

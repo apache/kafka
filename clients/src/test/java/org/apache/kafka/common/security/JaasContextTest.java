@@ -215,7 +215,7 @@ public class JaasContextTest {
         System.setProperty(DISALLOWED_LOGIN_MODULES_CONFIG, " com.ibm.security.auth.module.LdapLoginModule , com.ibm.security.auth.module.Krb5LoginModule ");
 
         String jaasConfigProp3 = "com.ibm.security.auth.module.LdapLoginModule required;";
-        assertThrows(IllegalArgumentException.class, () ->  configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp3));
+        assertThrows(IllegalArgumentException.class, () -> configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp3));
 
         //test ListenerName Override
         writeConfiguration(Arrays.asList(
@@ -273,16 +273,16 @@ public class JaasContextTest {
         //  set allowed list, but not set disallowed list
         System.setProperty(JaasUtils.ALLOWED_LOGIN_MODULES_CONFIG, "com.ibm.security.auth.module.LdapLoginModule");
         throwIfLoginModuleIsNotAllowed(ldap);
-        assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(jndi));
+        assertThrows(IllegalArgumentException.class, () -> throwIfLoginModuleIsNotAllowed(jndi));
         
         //  set both allowed list and disallowed list
         System.setProperty(JaasUtils.DISALLOWED_LOGIN_MODULES_CONFIG, "com.ibm.security.auth.module.LdapLoginModule");
         throwIfLoginModuleIsNotAllowed(ldap);
-        assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(jndi));
+        assertThrows(IllegalArgumentException.class, () -> throwIfLoginModuleIsNotAllowed(jndi));
         
         //  set disallowed list, but not set allowed list
         System.clearProperty(JaasUtils.ALLOWED_LOGIN_MODULES_CONFIG);
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(ldap));
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> throwIfLoginModuleIsNotAllowed(ldap));
         //  Ensure the exception message includes the deprecation warning for the disallowed login modules config
         assertTrue(error.getMessage().contains("The system property '" + DISALLOWED_LOGIN_MODULES_CONFIG + "' is deprecated."));
         throwIfLoginModuleIsNotAllowed(jndi);

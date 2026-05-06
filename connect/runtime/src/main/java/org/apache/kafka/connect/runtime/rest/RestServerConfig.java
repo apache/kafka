@@ -389,6 +389,7 @@ public abstract class RestServerConfig extends AbstractConfig {
     private static class PublicConfig extends RestServerConfig {
 
         private final Integer rebalanceTimeoutMs;
+
         private static ConfigDef config() {
             ConfigDef result = new ConfigDef().withClientSslSupport();
             addPublicConfig(result);

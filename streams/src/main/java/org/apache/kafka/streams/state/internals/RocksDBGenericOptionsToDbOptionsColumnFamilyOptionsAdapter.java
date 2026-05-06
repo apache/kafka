@@ -188,7 +188,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public long writeBufferSize()  {
+    public long writeBufferSize() {
         return columnFamilyOptions.writeBufferSize();
     }
 

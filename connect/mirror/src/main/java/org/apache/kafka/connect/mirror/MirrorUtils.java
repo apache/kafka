@@ -58,7 +58,7 @@ public final class MirrorUtils {
     private static final Logger log = LoggerFactory.getLogger(MirrorUtils.class);
 
     // utility class
-    private MirrorUtils() {}
+    private MirrorUtils() { }
 
     static KafkaProducer<byte[], byte[]> newProducer(Map<String, Object> props) {
         return new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());

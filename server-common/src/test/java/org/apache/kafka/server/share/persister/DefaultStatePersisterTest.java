@@ -200,7 +200,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(groupId)
                 .setTopicsData(List.of(new TopicData<>(topicId,
                     List.of(PartitionFactory.newPartitionStateBatchData(
-                        incorrectPartition, 1, 0, 0,  0, null))))).build()).build());
+                        incorrectPartition, 1, 0, 0, 0, null))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(IllegalArgumentException.class, result);

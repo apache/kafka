@@ -179,7 +179,7 @@ public class StreamsGroupCommandTest {
             null);
         resultMap.put(firstGroup, exp);
         when(result.all()).thenReturn(KafkaFuture.completedFuture(resultMap));
-        when(ADMIN_CLIENT.describeStreamsGroups(anyCollection(),  any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
+        when(ADMIN_CLIENT.describeStreamsGroups(anyCollection(), any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
 
         StreamsGroupCommandOptions streamsGroupCommandOptions = new StreamsGroupCommandOptions(
             new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", firstGroup, "--describe"});

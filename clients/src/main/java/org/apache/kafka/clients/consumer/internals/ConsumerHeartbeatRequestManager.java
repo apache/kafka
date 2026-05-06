@@ -336,7 +336,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             private String serverAssignor = null;
             private AbstractMembershipManager.LocalAssignment localAssignment = null;
 
-            SentFields() {}
+            SentFields() { }
 
             void reset() {
                 subscribedTopicNames = null;

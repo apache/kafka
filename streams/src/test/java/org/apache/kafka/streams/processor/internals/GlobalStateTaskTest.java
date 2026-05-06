@@ -76,6 +76,7 @@ public class GlobalStateTaskTest {
     private final MockSourceNode<String, String> sourceForward = new MockSourceNode<>(new StringDeserializer(), new StringDeserializer()) {
 
         private InternalProcessorContext<String, String> ctx;
+
         @Override
         public void init(final InternalProcessorContext<String, String> context) {
             this.ctx = context;
@@ -384,7 +385,7 @@ public class GlobalStateTaskTest {
     private Processor<String, String, Void, Void> createThrowingProcessor() {
         return new Processor<>() {
             @Override
-            public void init(final ProcessorContext<Void, Void> context) {}
+            public void init(final ProcessorContext<Void, Void> context) { }
 
             @Override
             public void process(final Record<String, String> record) {
@@ -426,6 +427,7 @@ public class GlobalStateTaskTest {
             public void configure(final Map<String, ?> configs) {
 
             }
+
             @Override
             public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
                 handlerInvoked.set(true);

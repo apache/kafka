@@ -303,7 +303,7 @@ public class NetworkClientTest {
         long rebootstrapTriggerMs = 1000;
         int defaultRequestTimeoutMs = 5000;
         AtomicInteger rebootstrapCount = new AtomicInteger();
-        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners())  {
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners()) {
             @Override
             public synchronized void rebootstrap() {
                 super.rebootstrap();

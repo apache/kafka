@@ -283,7 +283,7 @@ public enum ApiKeys {
     }
 
     private Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
-                                                                     Optional<ApiMessageType.ListenerType> listenerType) {
+                                                                      Optional<ApiMessageType.ListenerType> listenerType) {
         // see `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details on why we do this
         short oldestVersion = (this == PRODUCE && listenerType.map(l -> l == ApiMessageType.ListenerType.BROKER).orElse(false)) ?
             PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION : oldestVersion();

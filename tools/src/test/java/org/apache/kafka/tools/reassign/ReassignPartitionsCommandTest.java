@@ -312,7 +312,7 @@ public class ReassignPartitionsCommandTest {
         removeReplicationThrottleForPartitions(part);
         Map<TopicPartition, PartitionReassignmentState> finalAssignment = Map.of(part,
                 new PartitionReassignmentState(List.of(3, 2, 1), List.of(3, 2, 1), true));
-        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers())))  {
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             waitForVerifyAssignment(admin, assignment, false,
                     new VerifyAssignmentResult(finalAssignment));
         }

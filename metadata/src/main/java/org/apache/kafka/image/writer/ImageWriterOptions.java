@@ -88,6 +88,7 @@ public final class ImageWriterOptions {
     public MetadataVersion metadataVersion() {
         return metadataVersion;
     }
+
     public boolean isEligibleLeaderReplicasEnabled() {
         return isEligibleLeaderReplicasEnabled;
     }

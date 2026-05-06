@@ -307,7 +307,7 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     // state mgr will be overridden by the state dir and store maps
     @Override
-    public void initialize() {}
+    public void initialize() { }
 
     @Override
     public File stateDir() {
@@ -348,7 +348,7 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     @Override
-    public void commit() {}
+    public void commit() { }
 
     @Override
     public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {

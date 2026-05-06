@@ -51,7 +51,7 @@ public class StreamSourceNode<K, V> extends SourceGraphNode<K, V> {
         if (resetPolicy != null && !resetPolicy.equals(otherResetPolicy)
             || otherResetPolicy != null && !otherResetPolicy.equals(resetPolicy)) {
             log.error("Tried to merge source nodes {} and {} which are subscribed to the same topic/pattern, but "
-                          + "the offset reset policies do not match", this, other);
+                + "the offset reset policies do not match", this, other);
             throw new TopologyException("Can't configure different offset reset policies on the same input topic(s)");
         }
         for (final GraphNode otherChild : other.children()) {

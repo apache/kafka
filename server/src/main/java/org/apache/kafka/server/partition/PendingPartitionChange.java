@@ -26,6 +26,7 @@ public interface PendingPartitionChange extends PartitionState {
      * Returns the last committed partition state before this pending change.
      */
     CommittedPartitionState lastCommittedState();
+
     /**
      * Returns the LeaderAndIsr object sent to the controller for this pending change.
      */

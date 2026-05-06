@@ -126,6 +126,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     static class RawAndDeserializedValue<ValueType> {
         final byte[] rawValue;
         final ValueAndTimestamp<ValueType> value;
+
         RawAndDeserializedValue(final byte[] rawValue, final ValueAndTimestamp<ValueType> value) {
             this.rawValue = rawValue;
             this.value = value;
@@ -343,6 +344,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
                 valueAndTimestampDeserializer.apply(keyValue.value)
             );
         }
+
         @Override
         public void close() {
             try {

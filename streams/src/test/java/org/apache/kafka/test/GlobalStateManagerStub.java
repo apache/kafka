@@ -46,7 +46,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {}
+    public void setGlobalProcessorContext(final InternalProcessorContext processorContext) { }
 
     @Override
     public Set<String> initialize() {
@@ -62,7 +62,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     @Override
     public void registerStore(final StateStore store,
                               final StateRestoreCallback stateRestoreCallback,
-                              final CommitCallback checkpoint) {}
+                              final CommitCallback checkpoint) { }
 
     @Override
     public void commit() {

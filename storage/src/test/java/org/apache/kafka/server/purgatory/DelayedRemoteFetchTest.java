@@ -461,7 +461,7 @@ public class DelayedRemoteFetchTest {
     private LogReadResult buildReadResult(Errors error, long highWatermark, long leaderLogStartOffset) {
         return new LogReadResult(
             new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY, false, Optional.empty(),
-            Optional.of(mock(RemoteStorageFetchInfo.class))),
+                Optional.of(mock(RemoteStorageFetchInfo.class))),
             Optional.empty(),
             highWatermark,
             leaderLogStartOffset,

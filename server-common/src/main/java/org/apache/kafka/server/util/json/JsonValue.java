@@ -106,6 +106,7 @@ public interface JsonValue {
 
     class BasicJsonValue implements JsonValue {
         protected JsonNode node;
+
         BasicJsonValue(JsonNode node) {
             this.node = node;
         }
@@ -114,10 +115,12 @@ public interface JsonValue {
         public JsonNode node() {
             return node;
         }
+
         @Override
         public int hashCode() {
             return node().hashCode();
         }
+
         @Override
         public boolean equals(Object a) {
             if (a instanceof BasicJsonValue) {
@@ -125,6 +128,7 @@ public interface JsonValue {
             }
             return false;
         }
+
         @Override
         public String toString() {
             return node().toString();

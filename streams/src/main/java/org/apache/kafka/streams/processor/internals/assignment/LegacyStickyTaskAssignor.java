@@ -166,7 +166,7 @@ public class LegacyStickyTaskAssignor implements LegacyTaskAssignor {
 
         // try and assign any remaining unassigned tasks to clients that previously
         // have seen the task.
-        for (final Iterator<TaskId> iterator = unassigned.iterator(); iterator.hasNext(); ) {
+        for (final Iterator<TaskId> iterator = unassigned.iterator(); iterator.hasNext();) {
             final TaskId taskId = iterator.next();
             final Set<ProcessId> clientIds = previousStandbyTaskAssignment.get(taskId);
             if (clientIds != null) {

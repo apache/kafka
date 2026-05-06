@@ -37,7 +37,7 @@ public final class InternalResourcesNaming {
         private String changelogTopic;
         private String stateStore;
 
-        private Builder() {}
+        private Builder() { }
 
         public Builder withRepartitionTopic(final String repartitionTopic) {
             this.repartitionTopic = repartitionTopic;

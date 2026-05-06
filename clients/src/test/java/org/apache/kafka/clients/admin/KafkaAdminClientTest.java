@@ -944,7 +944,7 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM,
                 mockCluster(3, 0),
                 newStrMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8121",
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10"))) {
+                    AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().createPendingAuthenticationError(env.cluster().nodeById(0),
                     TimeUnit.DAYS.toMillis(1));
@@ -4391,8 +4391,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
@@ -5548,7 +5548,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(asList(findCoordinatorV3, describeGroups)));
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -5644,7 +5644,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(asList(findCoordinatorV3, describeGroups)));
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
 
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
@@ -6261,7 +6261,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
+                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode()));
 
             final DeleteConsumerGroupOffsetsResult errorResult = env.adminClient()
                 .deleteConsumerGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
@@ -6281,7 +6281,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
+                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode()));
 
             final DeleteStreamsGroupOffsetsResult errorResult = env.adminClient()
                 .deleteStreamsGroupOffsets(GROUP_ID, Stream.of(tp1).collect(Collectors.toSet()));
@@ -6297,8 +6297,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData();
@@ -6707,8 +6707,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             ShareGroupDescribeResponseData data = new ShareGroupDescribeResponseData();
@@ -7117,8 +7117,8 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Retriable FindCoordinatorResponse errors should be retried
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
@@ -7349,7 +7349,7 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureThrows(InvalidConfigurationException.class, result.values().get(groupResource));
 
             // Test a call where there are no errors.
-            responseData =  new IncrementalAlterConfigsResponseData();
+            responseData = new IncrementalAlterConfigsResponseData();
             responseData.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName("")
                     .setResourceType(ConfigResource.Type.BROKER.id())
@@ -8156,7 +8156,7 @@ public class KafkaAdminClientTest {
                 env.kafkaClient().prepareResponse(prepareOffsetCommitResponse(tp1, error));
 
                 Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-                offsets.put(tp1,  new OffsetAndMetadata(123L));
+                offsets.put(tp1, new OffsetAndMetadata(123L));
                 AlterConsumerGroupOffsetsResult errorResult = env.adminClient()
                     .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
@@ -8184,7 +8184,7 @@ public class KafkaAdminClientTest {
                 env.kafkaClient().prepareResponse(prepareOffsetCommitResponse(tp1, error));
 
                 Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-                offsets.put(tp1,  new OffsetAndMetadata(123L));
+                offsets.put(tp1, new OffsetAndMetadata(123L));
                 AlterStreamsGroupOffsetsResult errorResult = env.adminClient()
                     .alterStreamsGroupOffsets(GROUP_ID, offsets);
 
@@ -8215,7 +8215,7 @@ public class KafkaAdminClientTest {
                 prepareOffsetCommitResponse(tp1, Errors.NONE));
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-            offsets.put(tp1,  new OffsetAndMetadata(123L));
+            offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult result = env.adminClient()
                 .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
@@ -8245,7 +8245,7 @@ public class KafkaAdminClientTest {
                 prepareOffsetCommitResponse(tp1, Errors.NONE));
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-            offsets.put(tp1,  new OffsetAndMetadata(123L));
+            offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterStreamsGroupOffsetsResult result = env.adminClient()
                 .alterStreamsGroupOffsets(GROUP_ID, offsets);
 
@@ -8264,10 +8264,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
+                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode()));
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-            offsets.put(tp1,  new OffsetAndMetadata(123L));
+            offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterConsumerGroupOffsetsResult errorResult = env.adminClient()
                 .alterConsumerGroupOffsets(GROUP_ID, offsets);
 
@@ -8286,10 +8286,10 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             env.kafkaClient().prepareResponse(
-                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED,  Node.noNode()));
+                prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode()));
 
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-            offsets.put(tp1,  new OffsetAndMetadata(123L));
+            offsets.put(tp1, new OffsetAndMetadata(123L));
             final AlterStreamsGroupOffsetsResult errorResult = env.adminClient()
                 .alterStreamsGroupOffsets(GROUP_ID, offsets);
 

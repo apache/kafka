@@ -1107,6 +1107,7 @@ public class StandaloneHerderTest {
     private void expectAdd(SourceSink sourceSink) {
         expectAdd(sourceSink, true);
     }
+
     private void expectAdd(SourceSink sourceSink, boolean mockStartConnector) {
         expectAdd(sourceSink, mockStartConnector, true, true);
     }

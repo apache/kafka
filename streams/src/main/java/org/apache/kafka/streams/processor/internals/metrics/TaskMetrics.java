@@ -33,7 +33,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class TaskMetrics {
-    private TaskMetrics() {}
+    private TaskMetrics() { }
 
     private static final String AVG_LATENCY_DESCRIPTION = "The average latency of ";
     private static final String MAX_LATENCY_DESCRIPTION = "The maximum latency of ";

@@ -1358,7 +1358,7 @@ public class InternalStreamsBuilderTest {
         if (clazz.isAssignableFrom(currentNode.getClass())) {
             return currentNode;
         }
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             visited.add(child);
             final GraphNode result = getNodeByType(child, clazz, visited);
             if (result != null) {
@@ -1377,7 +1377,7 @@ public class InternalStreamsBuilderTest {
         if (clazz.isAssignableFrom(currentNode.getClass())) {
             result.add(currentNode);
         }
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             if (!visited.contains(child)) {
                 visited.add(child);
                 getNodesByType(child, clazz, visited, result);
@@ -1394,7 +1394,7 @@ public class InternalStreamsBuilderTest {
             count.incrementAndGet();
         }
 
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             if (!visited.contains(child)) {
                 visited.add(child);
                 countJoinWindowNodes(count, child, visited);

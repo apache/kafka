@@ -397,6 +397,7 @@ public class DedicatedMirrorIntegrationTest {
             cluster.produce(topic, Integer.toString(i));
         }
     }
+
     private void awaitMirrorMakerStart(final MirrorMaker mm, final SourceAndTarget sourceAndTarget) throws InterruptedException {
         awaitMirrorMakerStart(mm, sourceAndTarget, CONNECTOR_CLASSES);
     }

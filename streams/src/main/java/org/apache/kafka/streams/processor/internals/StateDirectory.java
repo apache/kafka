@@ -831,7 +831,7 @@ public class StateDirectory implements AutoCloseable {
     }
 
     private List<File> listNamedTopologyDirs() {
-        final File[] namedTopologyDirectories = stateDir.listFiles(f -> f.getName().startsWith("__") &&  f.getName().endsWith("__"));
+        final File[] namedTopologyDirectories = stateDir.listFiles(f -> f.getName().startsWith("__") && f.getName().endsWith("__"));
         return namedTopologyDirectories != null ? Arrays.asList(namedTopologyDirectories) : Collections.emptyList();
     }
 

@@ -138,6 +138,7 @@ public class StreamsRebalanceData {
         public List<TopicPartition> standbyPartitions() {
             return new ArrayList<>(standbyPartitions);
         }
+
         @Override
         public String toString() {
             return "EndpointPartitions {"

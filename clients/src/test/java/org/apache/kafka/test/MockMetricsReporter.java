@@ -38,10 +38,10 @@ public class MockMetricsReporter implements MetricsReporter {
     }
 
     @Override
-    public void metricChange(KafkaMetric metric) {}
+    public void metricChange(KafkaMetric metric) { }
 
     @Override
-    public void metricRemoval(KafkaMetric metric) {}
+    public void metricRemoval(KafkaMetric metric) { }
 
     @Override
     public void close() {

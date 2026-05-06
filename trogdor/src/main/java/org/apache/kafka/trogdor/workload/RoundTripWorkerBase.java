@@ -314,7 +314,7 @@ public abstract class RoundTripWorkerBase implements TaskWorker {
             synchronized (this) {
                 numToReceive = pending.size();
                 for (Iterator<Long> iter = pending.iterator();
-                        iter.hasNext() && (list.size() < LOG_NUM_MESSAGES); ) {
+                        iter.hasNext() && (list.size() < LOG_NUM_MESSAGES);) {
                     Long i = iter.next();
                     list.add(i);
                 }

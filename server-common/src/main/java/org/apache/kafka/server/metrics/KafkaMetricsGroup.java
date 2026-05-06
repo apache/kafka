@@ -57,7 +57,7 @@ public class KafkaMetricsGroup {
     }
 
     private static MetricName explicitMetricName(String group, String typeName,
-                                                String name, Map<String, String> tags) {
+                                                 String name, Map<String, String> tags) {
         StringBuilder nameBuilder = new StringBuilder(100);
         nameBuilder.append(group);
         nameBuilder.append(":type=");

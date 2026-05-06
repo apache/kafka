@@ -267,7 +267,7 @@ public class ProducerPerformanceTest {
             "--payload-monotonic",
             "--bootstrap-server", "localhost:9000"};
         ArgumentParser parser1 = ProducerPerformance.argParser();
-        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () ->  parser1.parseArgs(args1));
+        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser1.parseArgs(args1));
         assertEquals("argument --payload-monotonic: not allowed with argument --record-size", thrown.getMessage());
 
         String[] args2 = new String[] {

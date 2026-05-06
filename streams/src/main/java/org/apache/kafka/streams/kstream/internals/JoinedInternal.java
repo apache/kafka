@@ -21,7 +21,7 @@ import org.apache.kafka.streams.kstream.Joined;
 
 import java.time.Duration;
 
-public class JoinedInternal<K, VLeft, VRight> extends Joined<K, VLeft, VRight>  {
+public class JoinedInternal<K, VLeft, VRight> extends Joined<K, VLeft, VRight> {
 
     JoinedInternal(final Joined<K, VLeft, VRight> joined) {
         super(joined);

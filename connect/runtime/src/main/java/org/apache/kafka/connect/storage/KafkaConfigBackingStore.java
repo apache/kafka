@@ -271,9 +271,11 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
             .build();
 
     public static final String LOGGER_CLUSTER_PREFIX = "logger-cluster-";
+
     public static String LOGGER_CLUSTER_KEY(String namespace) {
         return LOGGER_CLUSTER_PREFIX + namespace;
     }
+
     public static final Schema LOGGER_LEVEL_V0 = SchemaBuilder.struct()
             .field("level", Schema.STRING_SCHEMA)
             .build();
@@ -595,7 +597,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         // Send all the individual updates
         int index = 0;
         List<ProducerKeyValue> keyValues = new ArrayList<>();
-        for (Map<String, String> taskConfig: configs) {
+        for (Map<String, String> taskConfig : configs) {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfig);
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
@@ -1173,7 +1175,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
 
     private void processTaskCountRecord(String connectorName, SchemaAndValue value) {
         if (!(value.value() instanceof Map)) {
-            log.error("Ignoring task count record for connector '{}' because it is in the wrong format: {}",  connectorName, className(value.value()));
+            log.error("Ignoring task count record for connector '{}' because it is in the wrong format: {}", connectorName, className(value.value()));
             return;
         }
         @SuppressWarnings("unchecked")

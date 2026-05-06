@@ -130,7 +130,7 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
-    public void testAssignmentsWhenWorkersJoinAfterRevocations()  {
+    public void testAssignmentsWhenWorkersJoinAfterRevocations() {
         // Customize assignor for this test case
         time = new MockTime();
         initAssignor();
@@ -199,7 +199,7 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
-    public void testImmediateRevocationsWhenMaxDelayIs0()  {
+    public void testImmediateRevocationsWhenMaxDelayIs0() {
         // Customize assignor for this test case
         rebalanceDelay = 0;
         time = new MockTime();

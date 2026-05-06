@@ -309,7 +309,7 @@ public class ErrorReporterTest {
 
         deadLetterQueueReporter.populateContextHeaders(producerRecord, context);
         int appearances = 0;
-        for (Header header: producerRecord.headers()) {
+        for (Header header : producerRecord.headers()) {
             if (ERROR_HEADER_ORIG_TOPIC.equalsIgnoreCase(header.key())) {
                 appearances++;
             }

@@ -167,7 +167,7 @@ public enum Feature {
             throw new IllegalArgumentException(feature.featureName() + " could not be set to " + feature.featureLevel() +
                     " because it depends on metadata.version=" + MetadataVersion.MINIMUM_VERSION.featureLevel() + " (" + MetadataVersion.MINIMUM_VERSION + ")");
 
-        for (Map.Entry<String, Short> dependency: feature.dependencies().entrySet()) {
+        for (Map.Entry<String, Short> dependency : feature.dependencies().entrySet()) {
             Short featureLevel = features.get(dependency.getKey());
 
             if (featureLevel == null || featureLevel < dependency.getValue()) {
@@ -189,7 +189,7 @@ public enum Feature {
      */
     public FeatureVersion defaultVersion(MetadataVersion metadataVersion) {
         FeatureVersion version = featureVersions[0];
-        for (Iterator<FeatureVersion> it = Arrays.stream(featureVersions).iterator(); it.hasNext(); ) {
+        for (Iterator<FeatureVersion> it = Arrays.stream(featureVersions).iterator(); it.hasNext();) {
             FeatureVersion feature = it.next();
             if (feature.bootstrapMetadataVersion().isLessThan(metadataVersion) || feature.bootstrapMetadataVersion().equals(metadataVersion))
                 version = feature;
@@ -275,7 +275,7 @@ public enum Feature {
                 feature.name(), latestProduction, defaultVersion));
         }
 
-        for (Map.Entry<String, Short> dependency: latestProduction.dependencies().entrySet()) {
+        for (Map.Entry<String, Short> dependency : latestProduction.dependencies().entrySet()) {
             String dependencyFeatureName = dependency.getKey();
             if (!dependencyFeatureName.equals(MetadataVersion.FEATURE_NAME)) {
                 Feature dependencyFeature = featureFromName(dependencyFeatureName);
@@ -295,9 +295,9 @@ public enum Feature {
             }
         }
 
-        for (MetadataVersion metadataVersion: MetadataVersion.values()) {
+        for (MetadataVersion metadataVersion : MetadataVersion.values()) {
             defaultVersion = feature.defaultVersion(metadataVersion);
-            for (Map.Entry<String, Short> dependency: defaultVersion.dependencies().entrySet()) {
+            for (Map.Entry<String, Short> dependency : defaultVersion.dependencies().entrySet()) {
                 String dependencyFeatureName = dependency.getKey();
                 if (!dependencyFeatureName.equals(MetadataVersion.FEATURE_NAME)) {
                     Feature dependencyFeature = featureFromName(dependencyFeatureName);

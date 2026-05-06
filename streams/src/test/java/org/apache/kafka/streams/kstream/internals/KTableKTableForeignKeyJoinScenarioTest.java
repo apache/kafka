@@ -197,7 +197,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         final KTable<Integer, String> left = builder.table(
             LEFT_TABLE,
             Consumed.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
-                        serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                          serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
         );
         final KTable<Integer, String> right = builder.table(
                 RIGHT_TABLE,

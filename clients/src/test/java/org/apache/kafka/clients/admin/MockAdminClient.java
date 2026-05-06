@@ -698,7 +698,7 @@ public class MockAdminClient extends AdminClient {
         if (tokenFound) {
             allTokens.removeAll(tokensToRemove);
             future.complete(expiryTimestamp);
-        }   else {
+        } else {
             future.completeExceptionally(new DelegationTokenNotFoundException(""));
         }
 
@@ -1481,7 +1481,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public synchronized void close(Duration timeout) {}
+    public synchronized void close(Duration timeout) { }
 
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
         beginningOffsets.putAll(newOffsets);

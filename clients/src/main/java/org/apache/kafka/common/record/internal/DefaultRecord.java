@@ -125,7 +125,7 @@ public class DefaultRecord implements Record {
     }
 
     @Override
-    public void ensureValid() {}
+    public void ensureValid() { }
 
     @Override
     public int keySize() {

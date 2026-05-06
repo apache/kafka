@@ -87,7 +87,7 @@ public final class Snapshots {
         } catch (IOException e) {
             throw new UncheckedIOException(
                 String.format("Error creating temporary file, logDir = %s, snapshotId = %s.",
-                     dir.toAbsolutePath(), snapshotId), e);
+                    dir.toAbsolutePath(), snapshotId), e);
         }
     }
 

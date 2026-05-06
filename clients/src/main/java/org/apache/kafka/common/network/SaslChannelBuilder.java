@@ -250,7 +250,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     }
 
     @Override
-    public void close()  {
+    public void close() {
         for (LoginManager loginManager : loginManagers.values())
             loginManager.release();
         loginManagers.clear();

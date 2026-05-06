@@ -244,7 +244,7 @@ public class SlidingWindowedKStreamImplTest {
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), ValueAndTimestamp.make(1L, 500L)),
                     KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), ValueAndTimestamp.make(1L, 150L)),
                     KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), ValueAndTimestamp.make(2L, 200L)),
-                    KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), ValueAndTimestamp.make(1L, 200L)))));            }
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), ValueAndTimestamp.make(1L, 200L))))); }
         }
     }
 

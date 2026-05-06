@@ -22,18 +22,18 @@ import java.util.Map;
 public class FakeMetricsReporter implements MetricsReporter {
 
     @Override
-    public void configure(Map<String, ?> configs) {}
+    public void configure(Map<String, ?> configs) { }
 
     @Override
-    public void init(List<KafkaMetric> metrics) {}
+    public void init(List<KafkaMetric> metrics) { }
 
     @Override
-    public void metricChange(KafkaMetric metric) {}
+    public void metricChange(KafkaMetric metric) { }
 
     @Override
-    public void metricRemoval(KafkaMetric metric) {}
+    public void metricRemoval(KafkaMetric metric) { }
 
     @Override
-    public void close() {}
+    public void close() { }
 
 }

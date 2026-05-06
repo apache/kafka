@@ -90,7 +90,7 @@ public class BuiltInPartitionerTest {
 
         // Check that switching works even when there is one partition.
         BuiltInPartitioner builtInPartitionerB = new SequentialPartitioner(logContext, TOPIC_B, 1, rackAware, clientRackId);
-        for (int c = 10; c-- > 0; ) {
+        for (int c = 10; c-- > 0;) {
             partitionInfo = builtInPartitionerB.peekCurrentPartitionInfo(testCluster);
             assertEquals(0, partitionInfo.partition());
             builtInPartitionerB.updatePartitionInfo(partitionInfo, 1, testCluster);

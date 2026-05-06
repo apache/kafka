@@ -204,6 +204,7 @@ public class IntegrationTestUtils {
      */
     public static class StateListenerStub implements StreamThread.StateListener {
         boolean toPendingShutdownSeen = false;
+
         @Override
         public void onChange(final Thread thread,
                              final ThreadStateTransitionValidator newState,

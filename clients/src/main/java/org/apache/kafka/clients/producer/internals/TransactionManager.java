@@ -868,7 +868,7 @@ public class TransactionManager {
     // Attempts to resolve unresolved sequences. If all in-flight requests are complete and some partitions are still
     // unresolved, either bump the epoch if possible, or transition to a fatal error
     synchronized void maybeResolveSequences() {
-        for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.keySet().iterator(); iter.hasNext(); ) {
+        for (Iterator<TopicPartition> iter = partitionsWithUnresolvedSequences.keySet().iterator(); iter.hasNext();) {
             TopicPartition topicPartition = iter.next();
             if (!hasInflightBatches(topicPartition)) {
                 // The partition has been fully drained. At this point, the last ack'd sequence should be one less than

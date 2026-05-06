@@ -701,7 +701,7 @@ public class AbstractCoordinatorTest {
 
             SyncGroupRequest syncGroupRequest = (SyncGroupRequest) body;
             return syncGroupRequest.data().protocolType().equals(PROTOCOL_TYPE)
-                       && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
+                && syncGroupRequest.data().protocolName().equals(PROTOCOL_NAME);
         }, syncGroupResponse(Errors.NONE, PROTOCOL_TYPE, wrongProtocolName));
 
         // let the retry to complete successfully to break out of the while loop
@@ -1127,7 +1127,7 @@ public class AbstractCoordinatorTest {
         );
     }
 
-    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId)  {
+    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId) {
         checkLeaveGroupRequestSent(groupInstanceId, CloseOptions.GroupMembershipOperation.DEFAULT, Optional.empty());
     }
 
@@ -1339,6 +1339,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             private int invocations = 0;
+
             @Override
             public boolean matches(AbstractRequest body) {
                 invocations++;
@@ -1377,6 +1378,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             private int invocations = 0;
+
             @Override
             public boolean matches(AbstractRequest body) {
                 invocations++;
@@ -1483,6 +1485,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             private int invocations = 0;
+
             @Override
             public boolean matches(AbstractRequest body) {
                 invocations++;

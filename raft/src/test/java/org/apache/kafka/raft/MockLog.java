@@ -577,7 +577,7 @@ public class MockLog implements RaftLog {
     }
 
     @Override
-    public void onSnapshotFrozen(OffsetAndEpoch snapshotId) {}
+    public void onSnapshotFrozen(OffsetAndEpoch snapshotId) { }
 
     @Override
     public boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {

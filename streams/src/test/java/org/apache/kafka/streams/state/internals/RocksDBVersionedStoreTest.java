@@ -950,10 +950,10 @@ public class RocksDBVersionedStoreTest {
         return versionedRecord == null
             ? null
             : versionedRecord.validTo().isPresent()
-            ? new VersionedRecord<>(STRING_DESERIALIZER.deserialize(null, versionedRecord.value()),
+                ? new VersionedRecord<>(STRING_DESERIALIZER.deserialize(null, versionedRecord.value()),
                                     versionedRecord.timestamp(),
                                     versionedRecord.validTo().get())
-            : new VersionedRecord<>(STRING_DESERIALIZER.deserialize(null, versionedRecord.value()),
+                : new VersionedRecord<>(STRING_DESERIALIZER.deserialize(null, versionedRecord.value()),
                                     versionedRecord.timestamp());
     }
 

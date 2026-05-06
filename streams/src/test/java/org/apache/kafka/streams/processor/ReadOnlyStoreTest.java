@@ -64,6 +64,7 @@ public class ReadOnlyStoreTest {
                 public void init(final ProcessorContext<Void, Void> context) {
                     store = context.getStateStore("readOnlyStore");
                 }
+
                 @Override
                 public void process(final Record<Integer, String> record) {
                     store.put(record.key(), record.value());

@@ -443,7 +443,7 @@ public class TimeWindowedKStreamIntegrationTest {
         final TimeWindowedKStream<String, String> windowedStream = builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(
-            UnlimitedWindows.of().startOn(ofEpochMilli(0))
+                UnlimitedWindows.of().startOn(ofEpochMilli(0))
         );
 
         final boolean emitFinal = type == StrategyType.ON_WINDOW_CLOSE;

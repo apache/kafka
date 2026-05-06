@@ -37,10 +37,12 @@ import java.util.Map;
 public class ByteArrayConverter implements Converter, HeaderConverter {
 
     private static final ConfigDef CONFIG_DEF = ConverterConfig.newConfigDef();
+
     @Override
     public String version() {
         return AppInfoParser.getVersion();
     }
+
     @Override
     public ConfigDef config() {
         return CONFIG_DEF;

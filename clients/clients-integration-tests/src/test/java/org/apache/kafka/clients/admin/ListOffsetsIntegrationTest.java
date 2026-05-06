@@ -282,7 +282,7 @@ public class ListOffsetsIntegrationTest {
     }
 
     private ListOffsetsResultInfo runFetchOffsets(OffsetSpec offsetSpec,
-                                                String topic) throws InterruptedException, ExecutionException {
+                                                  String topic) throws InterruptedException, ExecutionException {
         TopicPartition tp = new TopicPartition(topic, 0);
         return adminClient.listOffsets(Map.of(tp, offsetSpec), new ListOffsetsOptions()).all().get().get(tp);
     }

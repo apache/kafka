@@ -110,7 +110,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
     }
 
     @Override
-    public void commit() {}
+    public void commit() { }
 
     @Override
     public long currentSystemTimeMs() {

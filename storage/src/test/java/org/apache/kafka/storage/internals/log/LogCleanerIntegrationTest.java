@@ -827,7 +827,7 @@ public class LogCleanerIntegrationTest {
     }
 
     private Map<Integer, Integer> writeDupsWithTimestamp(int numKeys, int numDups, UnifiedLog log,
-                                                          Compression codec, long timestamp) throws IOException {
+                                                         Compression codec, long timestamp) throws IOException {
         Map<Integer, Integer> result = new HashMap<>();
         for (int i = 0; i < numDups; i++) {
             for (int key = 0; key < numKeys; key++) {

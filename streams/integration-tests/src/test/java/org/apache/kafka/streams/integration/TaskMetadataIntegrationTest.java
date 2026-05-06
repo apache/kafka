@@ -90,7 +90,7 @@ public class TaskMetadataIntegrationTest {
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
-        builder  = new StreamsBuilder();
+        builder = new StreamsBuilder();
 
         process = new AtomicBoolean(true);
         commit = new AtomicBoolean(true);
@@ -98,7 +98,7 @@ public class TaskMetadataIntegrationTest {
         final KStream<String, String> stream = builder.stream(inputTopic);
         stream.process(PauseProcessor::new);
 
-        properties  = mkObjectProperties(
+        properties = mkObjectProperties(
                 mkMap(
                         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),

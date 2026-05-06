@@ -166,7 +166,7 @@ public class ClientTelemetryUtilsTest {
                         new MetricKey("metricName"), 1.0, true, Instant.now(), null, Set.of())
                 .builder().build());
         metricsList.add(SinglePointMetric.sum(
-                        new MetricKey("metricName1"), 100.0, false, Instant.now(),  Instant.now(), Set.of())
+                        new MetricKey("metricName1"), 100.0, false, Instant.now(), Instant.now(), Set.of())
                 .builder().build());
         metricsList.add(SinglePointMetric.deltaSum(
                         new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Set.of())

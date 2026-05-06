@@ -23,7 +23,7 @@ import org.apache.kafka.common.record.TimestampType;
 import java.util.Optional;
 
 public final class ConsumerRecordUtil {
-    private ConsumerRecordUtil() {}
+    private ConsumerRecordUtil() { }
 
     public static <K, V> ConsumerRecord<K, V> record(final String topic,
                                                      final int partition,

@@ -173,8 +173,8 @@ public class WorkerSinkTaskThreadedTest {
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverterPlugin,

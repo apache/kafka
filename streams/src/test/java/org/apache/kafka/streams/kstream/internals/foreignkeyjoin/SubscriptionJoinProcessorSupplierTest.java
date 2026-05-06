@@ -184,7 +184,7 @@ public class SubscriptionJoinProcessorSupplierTest {
                 new SubscriptionResponseWrapper<>(
                     newValue.hash(),
                     "foo",
-                     12
+                    12
                 ),
                 1L
             ),
@@ -337,7 +337,7 @@ public class SubscriptionJoinProcessorSupplierTest {
         final Record<CombinedKey<String, String>, Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> record =
             new Record<>(new CombinedKey<>("fk1", "pk1"),
                          new Change<>(ValueTimestampHeaders.make(newValue, 1L, null), null),
-                        1L
+                         1L
             );
         processor.process(record);
         final List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();

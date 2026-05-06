@@ -18,5 +18,6 @@ package org.apache.kafka.storage.internals.log;
 
 public interface IndexEntry {
     long indexKey();
+
     long indexValue();
 }

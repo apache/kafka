@@ -559,13 +559,13 @@ public class AbstractWorkerSourceTaskTest {
         workerTask.toSend = List.of(record1, record2, record3);
         workerTask.sendRecords();
         assertEquals(List.of(record3), workerTask.toSend);
-        verifyTopicCreation(2,  TOPIC, OTHER_TOPIC); // Second call to createOrFindTopics will throw
+        verifyTopicCreation(2, TOPIC, OTHER_TOPIC); // Second call to createOrFindTopics will throw
 
         // Next they all succeed
         workerTask.sendRecords();
         assertNull(workerTask.toSend);
 
-        verifyTopicCreation(3,  TOPIC, OTHER_TOPIC, OTHER_TOPIC);
+        verifyTopicCreation(3, TOPIC, OTHER_TOPIC, OTHER_TOPIC);
     }
 
     @Test
@@ -853,6 +853,7 @@ public class AbstractWorkerSourceTaskTest {
     private void verifyTaskGetTopic() {
         verifyTaskGetTopic(1);
     }
+
     private void verifyTaskGetTopic(int times) {
         ArgumentCaptor<String> connectorCapture = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> topicCapture = ArgumentCaptor.forClass(String.class);
@@ -870,6 +871,7 @@ public class AbstractWorkerSourceTaskTest {
     private void verifyTopicCreation() {
         verifyTopicCreation(1, TOPIC);
     }
+
     private void verifyTopicCreation(int times, String... topics) {
         ArgumentCaptor<NewTopic> newTopicCapture = ArgumentCaptor.forClass(NewTopic.class);
 
@@ -956,8 +958,8 @@ public class AbstractWorkerSourceTaskTest {
     private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
                                   RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
                                   TransformationChain<SourceRecord, SourceRecord> transformationChain) {
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new AbstractWorkerSourceTask(
                 taskId, sourceTask, statusListener, TargetState.STARTED, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,

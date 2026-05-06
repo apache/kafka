@@ -43,5 +43,5 @@ public interface NetworkChannel extends AutoCloseable {
      */
     ListenerName listenerName();
 
-    default void close() throws InterruptedException {}
+    default void close() throws InterruptedException { }
 }

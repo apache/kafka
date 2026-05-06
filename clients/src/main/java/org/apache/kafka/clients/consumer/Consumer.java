@@ -112,6 +112,7 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#commitSync(Map, Duration)
      */
     void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout);
+
     /**
      * @see KafkaConsumer#commitAsync()
      */
@@ -136,6 +137,7 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#unregisterMetricFromSubscription(KafkaMetric)
      */
     void unregisterMetricFromSubscription(KafkaMetric metric);
+
     /**
      * @see KafkaConsumer#seek(TopicPartition, long)
      */

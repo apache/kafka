@@ -276,6 +276,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             this.format = format;
             this.unixPrecision = unixPrecision;
         }
+
         String field;
         String type;
         SimpleDateFormat format;

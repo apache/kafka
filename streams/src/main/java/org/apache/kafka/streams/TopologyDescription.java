@@ -101,6 +101,7 @@ public interface TopologyDescription {
          */
         @SuppressWarnings("unused")
         String name();
+
         /**
          * The predecessors of this node within a sub-topology.
          * Note, sources do not have any predecessors.
@@ -109,6 +110,7 @@ public interface TopologyDescription {
          */
         @SuppressWarnings("unused")
         Set<Node> predecessors();
+
         /**
          * The successor of this node within a sub-topology.
          * Note, sinks do not have any successors.

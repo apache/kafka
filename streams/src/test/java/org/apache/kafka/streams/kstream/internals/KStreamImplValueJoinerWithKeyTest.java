@@ -191,7 +191,7 @@ public class KStreamImplValueJoinerWithKeyTest {
         leftStream.leftJoin(
             globalKTable,
             keyValueMapper,
-           valueJoinerWithKey
+            valueJoinerWithKey
         ).to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
         // Left KV A, 3, GlobalTable KV A, 5
         runJoinTopology(

@@ -67,7 +67,7 @@ public class Topic {
     public static void validate(String name, String logPrefix, Consumer<String> throwableConsumer) {
         String reasonInvalid = detectInvalidTopic(name);
         if (reasonInvalid != null) {
-            throwableConsumer.accept(logPrefix + " is invalid: " +  reasonInvalid);
+            throwableConsumer.accept(logPrefix + " is invalid: " + reasonInvalid);
         }
     }
 

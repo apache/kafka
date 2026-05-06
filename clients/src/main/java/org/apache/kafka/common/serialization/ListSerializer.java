@@ -52,7 +52,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     private Serializer<Inner> inner;
     private SerializationStrategy serStrategy;
 
-    public ListSerializer() {}
+    public ListSerializer() { }
 
     public ListSerializer(Serializer<Inner> inner) {
         if (inner == null) {

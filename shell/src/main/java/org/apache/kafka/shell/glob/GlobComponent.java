@@ -58,7 +58,7 @@ public final class GlobComponent {
         boolean literal = true;
         boolean processingGroup = false;
 
-        for (int i = 0; i < glob.length(); ) {
+        for (int i = 0; i < glob.length();) {
             char c = glob.charAt(i++);
             switch (c) {
                 case '?':

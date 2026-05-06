@@ -1210,6 +1210,7 @@ public class KafkaRaftLogTest {
         public int recordSize(byte[] data, ObjectSerializationCache serializationCache) {
             return data.length;
         }
+
         @Override
         public void write(byte[] data, ObjectSerializationCache serializationCache, Writable out) {
             out.writeByteArray(data);

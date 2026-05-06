@@ -46,7 +46,7 @@ public class PlainServerCallbackHandler implements AuthenticateCallbackHandler {
     @Override
     public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
         String username = null;
-        for (Callback callback: callbacks) {
+        for (Callback callback : callbacks) {
             if (callback instanceof NameCallback)
                 username = ((NameCallback) callback).getDefaultName();
             else if (callback instanceof PlainAuthenticateCallback) {

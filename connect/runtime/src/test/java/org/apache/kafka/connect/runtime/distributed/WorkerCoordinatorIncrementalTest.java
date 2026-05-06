@@ -564,11 +564,11 @@ public class WorkerCoordinatorIncrementalTest {
         }
 
         @Override
-        public void onPollTimeoutExpiry() {}
+        public void onPollTimeoutExpiry() { }
     }
 
     private static ExtendedAssignment deserializeAssignment(Map<String, ByteBuffer> assignment,
-                                                           String member) {
+                                                            String member) {
         return IncrementalCooperativeConnectProtocol.deserializeAssignment(assignment.get(member));
     }
 

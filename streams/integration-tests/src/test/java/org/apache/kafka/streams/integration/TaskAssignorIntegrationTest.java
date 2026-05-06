@@ -133,7 +133,7 @@ public class TaskAssignorIntegrationTest {
 
             final Field delegate = KafkaConsumer.class.getDeclaredField("delegate");
             delegate.setAccessible(true);
-            final Consumer<?, ?> consumer = (Consumer<?, ?>)  delegate.get(parentConsumer);
+            final Consumer<?, ?> consumer = (Consumer<?, ?>) delegate.get(parentConsumer);
             assertThat(consumer, instanceOf(ClassicKafkaConsumer.class));
 
             final Field assignors = ClassicKafkaConsumer.class.getDeclaredField("assignors");

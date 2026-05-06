@@ -65,7 +65,7 @@ public class AlterConsumerGroupOffsetsResult {
      * Return a future which succeeds if all the alter offsets succeed.
      */
     public KafkaFuture<Void> all() {
-        return this.future.thenApply(topicPartitionErrorsMap ->  {
+        return this.future.thenApply(topicPartitionErrorsMap -> {
             List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
                 .stream()
                 .filter(e -> e.getValue() != Errors.NONE)

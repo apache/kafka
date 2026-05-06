@@ -539,6 +539,7 @@ public class KafkaBasedLog<K, V> {
         public WorkThread() {
             super("KafkaBasedLog Work Thread - " + topic);
         }
+
         @Override
         public void run() {
             log.trace("{} started execution", this);

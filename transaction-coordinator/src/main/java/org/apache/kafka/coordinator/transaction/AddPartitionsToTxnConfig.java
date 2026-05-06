@@ -47,9 +47,11 @@ public final class AddPartitionsToTxnConfig {
         addPartitionsToTxnRetryBackoffMaxMs = config.getInt(AddPartitionsToTxnConfig.ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MAX_MS_CONFIG);
         addPartitionsToTxnRetryBackoffMs = config.getInt(AddPartitionsToTxnConfig.ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_CONFIG);
     }
+
     public int addPartitionsToTxnRetryBackoffMaxMs() {
         return addPartitionsToTxnRetryBackoffMaxMs;
     }
+
     public int addPartitionsToTxnRetryBackoffMs() {
         return addPartitionsToTxnRetryBackoffMs;
     }

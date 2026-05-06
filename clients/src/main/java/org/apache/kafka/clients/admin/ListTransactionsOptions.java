@@ -32,6 +32,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
 
     private long filteredDuration = -1L;
     private String filteredTransactionalIdPattern;
+
     /**
      * Filter only the transactions that are in a specific set of states. If no filter
      * is specified or if the passed set of states is empty, then transactions in all
