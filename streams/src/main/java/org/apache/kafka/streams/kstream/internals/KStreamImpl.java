@@ -551,7 +551,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public KStream<K, V> markAsPartitioned() {
         if (!repartitionRequired) { 
-            throw new IllegalArgumentException("This stream is not required to repartition");
+            return this;
         }
         return new KStreamImpl<>(
             name,

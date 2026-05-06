@@ -31,7 +31,6 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -57,6 +56,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -176,14 +176,18 @@ public class KStreamRepartitionTest {
     }
 
     @Test
-    public void shouldErrorWhenMarkAsPartitionedWhenKeyNotChanging() {
-        assertThrows(IllegalArgumentException.class, () -> builder.<Integer, String>stream(inputTopic).markAsPartitioned());
+    public void canMarkAsPartitionedWhenKeyNotChanging() {
+        final KStream<Integer, String> notMarked = builder.<Integer, String>stream(inputTopic).mapValues(v -> v.toLowerCase());
+        final String topologyNotMarked = builder.build().describe().toString();
+        notMarked.markAsPartitioned();
+        final String topologyMarked = builder.build().describe().toString();
+        assertEquals(topologyNotMarked, topologyMarked);
     }
 
     @Test
     public void canMarkAsPartitionedWhenKeyChanging() {
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-            .selectKey((k, v) -> v)
+            .selectKey((k, v) -> k + ":" +  v)
             .markAsPartitioned()
             .groupByKey()
             .count(Materialized.as("test-count-store"));
