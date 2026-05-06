@@ -41,6 +41,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Timeout;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -65,13 +66,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = ServerLogConfigs.NUM_PARTITIONS_CONFIG, value = "4")
     }
 )
-public class PlainTextProducerSendTest {
+public class PlaintextProducerSendTest {
 
     private final String topic = "topic";
     private final int numRecords = 100;
     private final ClusterInstance clusterInstance;
 
-    PlainTextProducerSendTest(ClusterInstance clusterInstance) {
+    PlaintextProducerSendTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 
@@ -562,16 +563,11 @@ public class PlainTextProducerSendTest {
             TestUtils.assertFutureThrows(TimeoutException.class, future0);
 
             TestUtils.waitForCondition(() -> {
-                Future<RecordMetadata> future1 = producer.send(new ProducerRecord<>(topic, 0, "key".getBytes(), "value".getBytes()));
-                if (future1.isDone()) {
-                    try {
-                        future1.get();
-                        return true;
-                    } catch (ExecutionException e) {
-                        return false;
-                    }
-                } else {
+                try {
+                    producer.partitionsFor(topic);
                     return true;
+                } catch (TimeoutException e) {
+                    return false;
                 }
             }, "Can't get metadata");
 
