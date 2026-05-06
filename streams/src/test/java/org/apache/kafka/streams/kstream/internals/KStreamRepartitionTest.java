@@ -187,6 +187,7 @@ public class KStreamRepartitionTest {
             .markAsPartitioned()
             .groupByKey()
             .count(Materialized.as("test-count-store"));
-        assertThat(builder.build().describe().toString(), not(containsString("Repartition")));
+        final String topology = builder.build().describe().toString();
+        assertThat(topology.toLowerCase(), not(containsString("repartition")));
     }
 }
