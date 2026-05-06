@@ -102,7 +102,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
                     throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block");
                 } else {
                     currentProducerIdBlock.set(block);
-                    clearRequestInFlight(NO_RETRY);
+                    requestInFlight.set(false);
                     iteration++;
                 }
             }
