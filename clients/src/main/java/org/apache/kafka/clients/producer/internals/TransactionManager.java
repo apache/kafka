@@ -1940,7 +1940,13 @@ public class TransactionManager {
                     abortableError(error.exception());
                     break;
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
-                        || error == Errors.ILLEGAL_GENERATION) {
+                        || error == Errors.ILLEGAL_GENERATION
+                        || error == Errors.GROUP_ID_NOT_FOUND
+                        || error == Errors.STALE_MEMBER_EPOCH) {
+                    // GROUP_ID_NOT_FOUND and STALE_MEMBER_EPOCH are returned by
+                    // TxnOffsetCommit v6+. Older versions map them to
+                    // ILLEGAL_GENERATION. All four indicate a consumer group
+                    // metadata mismatch and must abort the transaction.
                     abortableError(new CommitFailedException("Transaction offset Commit failed " +
                         "due to consumer group metadata mismatch: " + error.exception().getMessage()));
                     break;
