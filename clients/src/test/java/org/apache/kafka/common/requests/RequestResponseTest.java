@@ -273,7 +273,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
-import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
@@ -2851,7 +2851,7 @@ public class RequestResponseTest {
 
         if (version >= 3) {
             data.setMemberId("member")
-                .setGenerationId(2)
+                .setGenerationIdOrMemberEpoch(2)
                 .setGroupInstanceId("instance");
         }
 
@@ -2871,7 +2871,7 @@ public class RequestResponseTest {
             .setProducerId(21L)
             .setProducerEpoch((short) 42)
             .setMemberId("member")
-            .setGenerationId(2)
+            .setGenerationIdOrMemberEpoch(2)
             .setGroupInstanceId("instance")
             .setTopics(TxnOffsetCommitRequest.getTopics(offsets));
         return TxnOffsetCommitRequest.Builder.forTopicNames(data, false).build();

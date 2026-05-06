@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.AfterAll;

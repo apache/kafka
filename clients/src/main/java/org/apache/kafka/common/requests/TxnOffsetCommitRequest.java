@@ -40,6 +40,24 @@ import java.util.stream.Collectors;
 public class TxnOffsetCommitRequest extends AbstractRequest {
     public static final short LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 = 4;
 
+    /**
+     * @return true if the given version returns {@code GROUP_ID_NOT_FOUND} directly when the
+     *         group is not found; false if the legacy mapping to {@code ILLEGAL_GENERATION}
+     *         is used (KIP-1319).
+     */
+    public static boolean supportsGroupIdNotFoundError(short version) {
+        return version >= 6;
+    }
+
+    /**
+     * @return true if the given version returns {@code STALE_MEMBER_EPOCH} directly when the
+     *         member epoch is stale; false if the legacy mapping to {@code ILLEGAL_GENERATION}
+     *         is used (KIP-1319).
+     */
+    public static boolean supportsStaleMemberEpochError(short version) {
+        return version >= 6;
+    }
+
     private final TxnOffsetCommitRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
@@ -49,9 +67,11 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         private Builder(
             final TxnOffsetCommitRequestData data,
-            final boolean isTransactionV2Enabled
+            final boolean isTransactionV2Enabled,
+            final short oldestAllowedVersion,
+            final short latestAllowedVersion
         ) {
-            super(ApiKeys.TXN_OFFSET_COMMIT);
+            super(ApiKeys.TXN_OFFSET_COMMIT, oldestAllowedVersion, latestAllowedVersion);
             this.data = data;
             this.isTransactionV2Enabled = isTransactionV2Enabled;
         }
@@ -60,7 +80,12 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             final TxnOffsetCommitRequestData data,
             final boolean isTransactionV2Enabled
         ) {
-            return new Builder(data, isTransactionV2Enabled);
+            return new Builder(
+                data,
+                isTransactionV2Enabled,
+                ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(),
+                (short) 5
+            );
         }
 
         @Override
@@ -77,7 +102,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         private boolean groupMetadataSet() {
             return !data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) ||
-                       data.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID ||
+                       data.generationIdOrMemberEpoch() != JoinGroupRequest.UNKNOWN_GENERATION_ID ||
                        data.groupInstanceId() != null;
         }
 

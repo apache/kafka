@@ -79,7 +79,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             .setProducerId(producerId)
             .setProducerEpoch(producerEpoch)
             .setMemberId(memberId)
-            .setGenerationId(generationId)
+            .setGenerationIdOrMemberEpoch(generationId)
             .setGroupInstanceId(groupInstanceId)
             .setTopics(TxnOffsetCommitRequest.getTopics(OFFSETS));
         builderWithGroupMetadata = TxnOffsetCommitRequest.Builder.forTopicNames(dataWithGroupMetadata, true);

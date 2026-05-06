@@ -48,10 +48,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
@@ -1615,7 +1615,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
             // TODO
             // This may be null if the task we are currently processing was part of a named topology that was just removed.
-            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrateg()` so it
+            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrategy()` so it
             // will not return null any longer, and we can remove this check
             if (offsetResetStrategy != null) {
                 if (offsetResetStrategy.isPresent()) {
@@ -2083,6 +2083,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         return taskManager;
     }
 
+    // VisibleForTesting
+    public boolean hasAnyTaskForTopology(final String topologyName) {
+        return taskManager.hasAnyTaskForTopology(topologyName);
+    }
+
+
+    // VisibleForTesting
+    public boolean areAllTasksRunningForTopology(final String topologyName) {
+        return taskManager.areAllTasksRunningForTopology(topologyName);
+    }
+    
     int currentNumIterations() {
         return numIterations;
     }
