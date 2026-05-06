@@ -1262,6 +1262,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   private def alterConfigs(servers: Seq[KafkaBroker], adminClient: Admin, props: Properties,
+                   perBrokerConfig: Boolean): Unit = {
+    alterConfigsAsync(servers, adminClient, props, perBrokerConfig).all.get()
+  }
+
+  private def alterConfigsAsync(servers: Seq[KafkaBroker], adminClient: Admin, props: Properties,
                    perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
     val configs = if (perBrokerConfig) {
@@ -1277,7 +1282,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String), expectFailure: Boolean = false): Unit = {
-    val alterResult = alterConfigs(servers, adminClients.head, newProps, perBrokerConfig)
+    val alterResult = alterConfigsAsync(servers, adminClients.head, newProps, perBrokerConfig)
     if (expectFailure) {
       val oldProps = servers.head.config.values.asScala.filter { case (k, _) => newProps.containsKey(k) }
       val brokerResources = if (perBrokerConfig)
