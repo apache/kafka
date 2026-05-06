@@ -1209,7 +1209,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
     }
@@ -17764,7 +17765,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -17857,7 +17859,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -17951,7 +17954,8 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
                     .setStatusDetail("Source topics bar are missing.")))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -18042,7 +18046,8 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.MISSING_INTERNAL_TOPICS.code())
                     .setStatusDetail("Internal topics are missing: bar")))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -18130,7 +18135,8 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.INCORRECTLY_PARTITIONED_TOPICS.code())
                     .setStatusDetail("Following topics do not have the same number of partitions: [{bar=3, foo=6}]")))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -18235,7 +18241,8 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.STALE_TOPOLOGY.code())
                     .setStatusDetail("The member's topology epoch 0 is behind the group's topology epoch 1.")))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -18336,7 +18343,8 @@ public class GroupMetadataManagerTest {
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
                 ))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result1.response().data()
         );
         assertRecordsEquals(List.of(), result1.records());
@@ -18358,7 +18366,8 @@ public class GroupMetadataManagerTest {
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
                 ))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result2.response().data()
         );
 
@@ -18452,7 +18461,8 @@ public class GroupMetadataManagerTest {
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
                         .setStatusDetail(statusDetail)
                 ))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result2.response().data()
         );
     }
@@ -18533,7 +18543,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -18661,7 +18672,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -18808,7 +18820,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
 
             result.response().data()
         );
@@ -18937,7 +18950,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -18954,7 +18968,8 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
     }
@@ -19008,7 +19023,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19025,7 +19041,8 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(2)
                 .setHeartbeatIntervalMs(5000)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
     }
@@ -19078,7 +19095,8 @@ public class GroupMetadataManagerTest {
                         .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
                         .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
                 ))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19108,7 +19126,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
     }
@@ -19276,7 +19295,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19319,7 +19339,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19366,7 +19387,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19401,7 +19423,8 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19442,7 +19465,8 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19473,7 +19497,8 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19501,7 +19526,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19533,7 +19559,8 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19577,7 +19604,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19625,7 +19653,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19837,7 +19866,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -19972,7 +20002,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -20212,7 +20243,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -20252,7 +20284,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -20282,7 +20315,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -20315,7 +20349,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setEndpointInformationEpoch(0)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -20381,7 +20416,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -20421,7 +20457,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -20450,7 +20487,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -20644,7 +20682,8 @@ public class GroupMetadataManagerTest {
                         .setWarmupTasks(List.of())
                         .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions))
                         .setStatus(List.of())
-                        .setTaskOffsetIntervalMs(60_000),
+                        .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
                 result.response().data()
         );
 
@@ -20823,7 +20862,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result.response().data()
         );
 
@@ -27595,7 +27635,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result1.response().data()
         );
 
@@ -27660,7 +27701,8 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")))
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result2.response().data()
         );
 
@@ -27698,7 +27740,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setEndpointInformationEpoch(0)
                 .setStatus(List.of())
-                .setTaskOffsetIntervalMs(60_000),
+                .setTaskOffsetIntervalMs(60_000)
+                .setRackAwareAssignmentTags(Collections.emptyList()),
             result3.response().data()
         );
 
