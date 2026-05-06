@@ -4584,6 +4584,13 @@ org.apache.kafka.common.requests.SyncGroupRequestTest:
 - testRequestVersionCompatibilityFailBuild
 org.apache.kafka.common.requests.TxnOffsetCommitRequestTest:
 - testConstructor
+- testForTopicIdsOrNamesCapsAtTransactionV1WhenTransactionV2IsDisabled
+- testForTopicIdsOrNamesUsesLatestStableVersionWhenUnstableIsDisabled
+- testForTopicIdsOrNamesUsesLatestUnstableVersionWhenUnstableIsEnabled
+- testForTopicIdsOrNamesWithTopicIdOnly
+- testForTopicIdsOrNamesWithTopicNameOnly
+- testForTopicNamesCapsAtTransactionV1WhenTransactionV2IsDisabled
+- testForTopicNamesCapsAtV5WhenTransactionV2IsEnabled
 - testGetErrorResponse
 - testVersionSupportForGroupInstanceId
 - testVersionSupportForGroupMetadata

@@ -2703,6 +2703,11 @@ kafka.server.share.SharePartitionManagerTest:
 - testToForgetPartitions
 - testZeroSizeShareSession
 kafka.server.share.SharePartitionTest:
+- client
+- delivery
+- 'null'
+- persist
+- single
 - testAckTypeToRecordStateMapping
 - testAcknowledgeAfterAcquisitionLockTimeout
 - testAcknowledgeBatchAndOffsetPostLsoMovement
@@ -2804,6 +2809,14 @@ kafka.server.share.SharePartitionTest:
 - testAcquisitionLockTimeoutForBatchesPostStartOffsetMovementToStartOfBatch
 - testAcquisitionLockTimeoutMultipleRecordBatchInRecordLimitMode
 - testAcquisitionLockTimeoutWithConcurrentAcknowledgement
+- testAcquisitionLockTimeoutWithDlqDisabledCompleteBatch
+- testAcquisitionLockTimeoutWithDlqEnabledCompleteBatch
+- testAcquisitionLockTimeoutWithDlqEnabledMixedOffsets
+- testAcquisitionLockTimeoutWithDlqEnabledPerOffsetBatch
+- testAcquisitionLockTimeoutWithDlqEnabledWriteFailureCompleteBatch
+- testAcquisitionLockTimeoutWithDlqEnabledWriteFailurePerOffsetBatch
+- testAcquisitionLockTimeoutWithDlqPhase1FailsPhase2SucceedsCompleteBatch
+- testAcquisitionLockTimeoutWithDlqPhase1FailsPhase2SucceedsPerOffsetBatch
 - testAcquisitionLockTimeoutWithWriteStateRPCFailure
 - testAcquisitionNotThrottledIfHighDeliveryCountRecordNotAcquired
 - testAcquisitionThrottlingWithOngoingStateTransition
