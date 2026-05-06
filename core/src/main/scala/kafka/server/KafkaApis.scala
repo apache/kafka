@@ -1539,7 +1539,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def clusterIdOrNodeIdIsInvalid(apiVersionRequest: ApiVersionsRequest): Boolean = {
       apiVersionRequest.version >= 5 &&
         apiVersionRequest.data.clusterId != null &&
-        (!apiVersionRequest.data.clusterId.equals(clusterId) || apiVersionRequest.data.nodeId != brokerId)
+        (apiVersionRequest.data.clusterId != clusterId || apiVersionRequest.data.nodeId != brokerId)
     }
 
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)

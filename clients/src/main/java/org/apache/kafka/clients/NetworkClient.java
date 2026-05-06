@@ -1039,7 +1039,15 @@ public class NetworkClient implements KafkaClient {
         final String node = req.destination;
         if (apiVersionsResponse.data().errorCode() != Errors.NONE.code()) {
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP && apiVersionsResponse.data().errorCode() == Errors.REBOOTSTRAP_REQUIRED.code()) {
-                log.info("Rebootstrap requested by server due to cluster metadata mismatch.");
+                log.info("Rebootstrap requested by server due to cluster metadata mismatch for cluster {} and node {}.", this.metadataUpdater.clusterId(), node);
+                this.metadataUpdater.fetchNodes().forEach(nodeToClose -> {
+                    String nodeToCloseId = nodeToClose.idString();
+                    this.selector.close(nodeToCloseId);
+                    if (connectionStates.isConnecting(nodeToCloseId) || connectionStates.isConnected(nodeToCloseId)) {
+                        log.info("Disconnecting from node {} due to client rebootstrap.", nodeToCloseId);
+                        processDisconnection(responses, nodeToCloseId, now, ChannelState.LOCAL_CLOSE);
+                    }
+                });
                 metadataUpdater.rebootstrap(now);
             } else if (req.request.version() == 0 || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
                 log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
@@ -1130,9 +1138,10 @@ public class NetworkClient implements KafkaClient {
                 if (metadataRecoveryStrategy != MetadataRecoveryStrategy.NONE && metadataClusterCheckEnable) {
                     String clusterId = this.metadataUpdater.clusterId();
                     int nodeId = Integer.parseInt(node);
-                    // When connecting to coordinators, the client uses large positive node ID
-                    // values which do not match the target broker's node ID. Exclude those.
-                    if (clusterId != null && nodeId > 0 && nodeId < Integer.MAX_VALUE / 2) {
+                    // In order to allow separate connections to coordinators, the client uses large positive node ID values
+                    // (Integer.MAX_VALUE - nodeId) for these connections which do not match the target broker's actual node ID.
+                    // To avoid those, only check if the node ID is less than half of Integer.MAX_VALUE.
+                    if (clusterId != null && nodeId >= 0 && nodeId < Integer.MAX_VALUE / 2) {
                         apiVersionRequestBuilder.setClusterId(clusterId);
                         apiVersionRequestBuilder.setNodeId(nodeId);
                     }
