@@ -56,7 +56,7 @@ import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
-import org.apache.kafka.server.share.dlq.ShareGroupDLQ;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.InFlightBatch;
@@ -13234,12 +13234,12 @@ public class SharePartitionTest {
     private static Stream<Arguments> initiateDLQAndArchiveParameters() {
         return Stream.of(
             //          name,                                     persistSucceeds, expectedState,        dlqCause,                             firstOffset, lastOffset, deliveryCount
-            Arguments.of("persist succeeds",                      true,            RecordState.ARCHIVED, ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
-            Arguments.of("persist fails, no rollback",            false,           RecordState.ARCHIVED, ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
-            Arguments.of("client reject cause",                   true,            RecordState.ARCHIVED, ShareGroupDLQ.CLIENT_REJECT,           5L,          5L,         (short) 1),
+            Arguments.of("persist succeeds",                      true,            RecordState.ARCHIVED, ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
+            Arguments.of("persist fails, no rollback",            false,           RecordState.ARCHIVED, ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
+            Arguments.of("client reject cause",                   true,            RecordState.ARCHIVED, ShareGroupDLQManager.CLIENT_REJECT,           5L,          5L,         (short) 1),
             Arguments.of("null cause",                            true,            RecordState.ARCHIVED, null,                                  0L,          4L,         (short) 1),
-            Arguments.of("single offset",                         true,            RecordState.ARCHIVED, ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 7L,          7L,         (short) 3),
-            Arguments.of("delivery count exceeded cause",         true,            RecordState.ARCHIVED, ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED, 10L,         19L,        (short) 5)
+            Arguments.of("single offset",                         true,            RecordState.ARCHIVED, ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED, 7L,          7L,         (short) 3),
+            Arguments.of("delivery count exceeded cause",         true,            RecordState.ARCHIVED, ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED, 10L,         19L,        (short) 5)
         );
     }
 
