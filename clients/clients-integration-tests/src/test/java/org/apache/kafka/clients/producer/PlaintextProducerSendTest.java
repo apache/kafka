@@ -41,7 +41,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Timeout;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
