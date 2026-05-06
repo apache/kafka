@@ -152,15 +152,6 @@ org.apache.kafka.clients.NodeApiVersionsTest:
 org.apache.kafka.clients.admin.AdminClientConfigTest:
 - testDefaultMetadataRecoveryStrategy
 - testInvalidMetadataRecoveryStrategy
-org.apache.kafka.clients.admin.ConfigTest:
-- shouldGetAllEntries
-- shouldGetEntry
-- shouldImplementEqualsProperly
-- shouldImplementHashCodeProperly
-- shouldImplementToStringProperly
-- shouldReturnNullOnGetUnknownEntry
-- testEquals
-- testHashCodeAndEqualsWithNull
 org.apache.kafka.clients.admin.ConsumerGroupDescriptionTest:
 - testGroupState
 org.apache.kafka.clients.admin.ConsumerGroupListingTest:
