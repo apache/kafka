@@ -645,7 +645,7 @@ public class ConfigCommand {
                 validateBrokerId(entityName, entityType);
             }
             configResourceType = ConfigResource.Type.BROKER_LOGGER;
-            dynamicConfigSource = Optional.empty();
+            dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG);
         } else if (CLIENT_METRICS_TYPE.equals(entityType)) {
             configResourceType = ConfigResource.Type.CLIENT_METRICS;
             dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG);

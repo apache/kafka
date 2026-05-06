@@ -845,6 +845,10 @@ public class ConfigCommandTest {
         return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of());
     }
 
+    private ConfigEntry newBrokerLoggerConfigEntry(String name, String value) {
+        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, false, false, List.of());
+    }
+
     @Test
     public void shouldDescribeConfigSynonyms() throws Exception {
         String resourceName = "my-topic";
@@ -877,9 +881,9 @@ public class ConfigCommandTest {
     public void shouldAddBrokerLoggerConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
-            new ConfigEntry("kafka.log.LogCleaner", "INFO"),
-            new ConfigEntry("kafka.server.ReplicaManager", "INFO"),
-            new ConfigEntry("kafka.server.KafkaApi", "INFO")
+            newBrokerLoggerConfigEntry("kafka.log.LogCleaner", "INFO"),
+            newBrokerLoggerConfigEntry("kafka.server.ReplicaManager", "INFO"),
+            newBrokerLoggerConfigEntry("kafka.server.KafkaApi", "INFO")
         ));
     }
 
@@ -943,9 +947,17 @@ public class ConfigCommandTest {
         Node node = new Node(1, "localhost", 9092);
         // verifyAlterBrokerLoggerConfig tries to alter kafka.log.LogCleaner, kafka.server.ReplicaManager and kafka.server.KafkaApi
         // yet, we make it so DescribeConfigs returns only one logger, implying that kafka.server.ReplicaManager and kafka.log.LogCleaner are invalid
-        assertThrows(InvalidConfigurationException.class, () -> verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
-            new ConfigEntry("kafka.server.KafkaApi", "INFO")
-        )));
+        InvalidConfigurationException exception = assertThrows(
+                InvalidConfigurationException.class,
+                () -> verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
+                        newBrokerLoggerConfigEntry("kafka.server.KafkaApi", "INFO")
+                ))
+        );
+        assertEquals(
+                "Invalid broker logger(s): kafka.server.ReplicaManager,kafka.log.LogCleaner",
+                exception.getMessage()
+        );
+
     }
 
     @Test
