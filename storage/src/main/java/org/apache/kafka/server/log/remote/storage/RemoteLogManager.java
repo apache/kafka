@@ -958,10 +958,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                         previousSeg, copyLagMs, copyLagBytes, currentTimeMs, totalLogSize, cumulativeSize, totalLogSize - cumulativeSize);
             }
 
+            // When time lag is the default 0, upload immediately if time-based retention is used, to avoid breaking delete policy.
             if (logConfig.localRetentionMs() != -1 && copyLagMs == 0) {
                 return false;
             }
 
+            // When size lag is the default 0, immediate upload when size-based retention is used to avoid breaking delete policy
             if (logConfig.localRetentionBytes() != -1 && copyLagBytes == 0) {
                 return false;
             }
@@ -969,14 +971,17 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             boolean needCheckCopyLagMs =  copyLagMs > 0;
             boolean needCheckCopyLagBytes = copyLagBytes > 0;
 
+            // When no lag delay is enabled, upload immediately.
             if (!needCheckCopyLagMs && !needCheckCopyLagBytes) {
                 return false;
             }
 
+            // When both lag delays are enabled, delay upload only if both delay checks require delaying.
             if (needCheckCopyLagMs && needCheckCopyLagBytes) {
                 return notExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs) && notExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
             }
 
+            // If only one lag delay is enabled, use that check as the final result.
             if (needCheckCopyLagMs) {
                 return notExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs);
             }

@@ -2351,7 +2351,7 @@ public class RemoteLogManagerTest {
 
         Map<String, Long> logProps = new HashMap<>();
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
-        //LOCAL_LOG_RETENTION_MS_CONFIG use RETENTION_MS_CONFIG by default
+        // LOCAL_LOG_RETENTION_MS_CONFIG uses RETENTION_MS_CONFIG by default.
         logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 0L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 60L);
@@ -2387,7 +2387,7 @@ public class RemoteLogManagerTest {
 
         Map<String, Long> logProps = new HashMap<>();
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
-        // LOCAL_LOG_RETENTION_BYTES_CONFIG use RETENTION_BYTES_CONFIG by default
+        // LOCAL_LOG_RETENTION_BYTES_CONFIG uses RETENTION_BYTES_CONFIG by default.
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 0L);
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 100L);
