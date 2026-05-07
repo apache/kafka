@@ -81,8 +81,8 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                 groupCoordinatorConfigsSupplier,
                 transactionTopicConfigsSupplier,
                 shareCoordinatorConfigsSupplier,
-                time,
                 topicCreator,
+                time,
                 // Hardcoded default capacity; can be overridden in tests via constructor param
                 DEFAULT_TOPIC_ERROR_CACHE_CAPACITY
         );
@@ -94,8 +94,8 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
             Supplier<Properties> groupCoordinatorConfigsSupplier,
             Supplier<Properties> transactionTopicConfigsSupplier,
             Supplier<Properties> shareCoordinatorConfigsSupplier,
-            Time time,
             TopicCreator topicCreator,
+            Time time,
             int topicErrorCacheCapacity
     ) {
         this.config = config;

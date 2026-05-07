@@ -142,8 +142,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         // Set up the topicCreator to return a successful response
@@ -189,8 +189,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var topicName = "topic";
@@ -249,8 +249,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var createTopicsResponseData = new CreateTopicsResponseData();
@@ -290,8 +290,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext,
@@ -316,8 +316,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var createTopicsResponseData = new CreateTopicsResponseData();
@@ -343,8 +343,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var topics = Map.of(
@@ -377,8 +377,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var topics = Map.of(
@@ -417,8 +417,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         // First cache an error by simulating topic creation failure
@@ -460,8 +460,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 3);
 
         var requestContext = initializeRequestContextWithUserPrincipal();
@@ -509,8 +509,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var topics = Map.of("test-topic",
@@ -549,8 +549,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var topics = Map.of("test-topic",
@@ -596,8 +596,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var topics = Map.of("test-topic",
@@ -630,8 +630,8 @@ public class DefaultAutoTopicCreationManagerTest {
                 Properties::new,
                 Properties::new,
                 Properties::new,
-                mockTime,
                 topicCreator,
+                mockTime,
                 testCacheCapacity);
 
         var requestContext = initializeRequestContextWithUserPrincipal();
