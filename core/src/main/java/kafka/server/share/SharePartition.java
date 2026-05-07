@@ -1140,7 +1140,7 @@ public class SharePartition {
                 }
 
                 // Successfully updated the state of the offset and created a persister state batch for write to persister.
-                Throwable dlqCause = updateResult.state() == RecordState.ARCHIVING ? ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED : null;
+                Throwable dlqCause = updateResult.state() == RecordState.ARCHIVING ? ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED : null;
                 persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(offsetState.getKey(),
                     offsetState.getKey(), updateResult.state().id(), (short) updateResult.deliveryCount()), dlqCause));
                 if (offsetState.getKey() >= startOffset && isStateTerminal(updateResult.state())) {
@@ -1184,7 +1184,7 @@ public class SharePartition {
 
             // Successfully updated the state of the batch and created a persister state batch for write to persister.
             // If DLQ support is enabled, then update the DLQ cause exception message.
-            Throwable dlqCause = updateResult.state() == RecordState.ARCHIVING ? ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED : null;
+            Throwable dlqCause = updateResult.state() == RecordState.ARCHIVING ? ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED : null;
             persisterBatches.add(new PersisterBatch(updateResult, new PersisterStateBatch(inFlightBatch.firstOffset(),
                 inFlightBatch.lastOffset(), updateResult.state().id(), (short) updateResult.deliveryCount()), dlqCause));
             if (isStateTerminal(updateResult.state())) {
@@ -2364,7 +2364,7 @@ public class SharePartition {
                     // This check makes sure that we don't skip the cause if updated result
                     // results in ARCHIVING due to max delivery count exceeded.
                     if (dlqCause == null && updateResult.state() == RecordState.ARCHIVING) {
-                        dlqCause = ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED;
+                        dlqCause = ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED;
                     }
 
                     // Successfully updated the state of the offset and created a persister state batch for write to persister.
@@ -2451,7 +2451,7 @@ public class SharePartition {
             // This check makes sure that we don't skip the cause if updated result
             // results in ARCHIVING due to max delivery count exceeded.
             if (dlqCause == null && updateResult.state() == RecordState.ARCHIVING) {
-                dlqCause = ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED;
+                dlqCause = ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED;
             }
 
             // Successfully updated the state of the batch and created a persister state batch for write to persister.
@@ -2993,7 +2993,7 @@ public class SharePartition {
                         dlqBatch.firstOffset(),
                         dlqBatch.lastOffset(),
                         dlqBatch.deliveryCount(),
-                        ShareGroupDLQ.DELIVERY_COUNT_EXCEEDED
+                        ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED
                     ));
                 });
             }

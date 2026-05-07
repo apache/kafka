@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
@@ -63,17 +64,14 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
 
         public final TxnOffsetCommitRequestData data;
-        public final boolean isTransactionV2Enabled;
 
         private Builder(
             final TxnOffsetCommitRequestData data,
-            final boolean isTransactionV2Enabled,
             final short oldestAllowedVersion,
             final short latestAllowedVersion
         ) {
             super(ApiKeys.TXN_OFFSET_COMMIT, oldestAllowedVersion, latestAllowedVersion);
             this.data = data;
-            this.isTransactionV2Enabled = isTransactionV2Enabled;
         }
 
         public static Builder forTopicNames(
@@ -82,9 +80,22 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         ) {
             return new Builder(
                 data,
-                isTransactionV2Enabled,
                 ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(),
-                (short) 5
+                isTransactionV2Enabled ? (short) 5 : LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2
+            );
+        }
+
+        public static Builder forTopicIdsOrNames(
+            final TxnOffsetCommitRequestData data,
+            final boolean isTransactionV2Enabled,
+            final boolean enableUnstableLastVersion
+        ) {
+            return new Builder(
+                data,
+                ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(),
+                isTransactionV2Enabled
+                    ? ApiKeys.TXN_OFFSET_COMMIT.latestVersion(enableUnstableLastVersion)
+                    : LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2
             );
         }
 
@@ -94,8 +105,20 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("Broker doesn't support group metadata commit API on version " + version
                     + ", minimum supported request version is 3 which requires brokers to be on version 2.5 or above.");
             }
-            if (!isTransactionV2Enabled) {
-                version = (short) Math.min(version, LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2);
+            if (version >= 6) {
+                for (TxnOffsetCommitRequestTopic topic : data.topics()) {
+                    if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
+                        throw new UnsupportedVersionException("The broker TxnOffsetCommit api version " +
+                            version + " does require usage of topic ids.");
+                    }
+                }
+            } else {
+                for (TxnOffsetCommitRequestTopic topic : data.topics()) {
+                    if (topic.name() == null || topic.name().isEmpty()) {
+                        throw new UnsupportedVersionException("The broker TxnOffsetCommit api version " +
+                            version + " does require usage of topic names.");
+                    }
+                }
             }
             return new TxnOffsetCommitRequest(data, version);
         }
@@ -132,7 +155,16 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return offsetMap;
     }
 
-    public static List<TxnOffsetCommitRequestTopic> getTopics(Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
+    public static List<TxnOffsetCommitRequestTopic> getTopics(
+        Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits
+    ) {
+        return getTopics(pendingTxnOffsetCommits, Map.of());
+    }
+
+    public static List<TxnOffsetCommitRequestTopic> getTopics(
+        Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
+        Map<String, Uuid> topicIds
+    ) {
         Map<String, List<TxnOffsetCommitRequestPartition>> topicPartitionMap = new HashMap<>();
         for (Map.Entry<TopicPartition, CommittedOffset> entry : pendingTxnOffsetCommits.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
@@ -151,6 +183,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return topicPartitionMap.entrySet().stream()
                    .map(entry -> new TxnOffsetCommitRequestTopic()
                                      .setName(entry.getKey())
+                                     .setTopicId(topicIds.getOrDefault(entry.getKey(), Uuid.ZERO_UUID))
                                      .setPartitions(entry.getValue()))
                    .collect(Collectors.toList());
     }
