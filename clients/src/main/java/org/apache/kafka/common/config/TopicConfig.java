@@ -103,14 +103,14 @@ public class TopicConfig {
 
     public static final String REMOTE_COPY_LAG_MS_CONFIG = "remote.copy.lag.ms";
     public static final String REMOTE_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
-            "When set to 0, immediate upload when time-based retention is used; otherwise no time-based delay check. " +
+            "When set to 0, immediate upload when local time-based retention is used; otherwise no time-based delay check. " +
             "When set to a positive value (ms), a segment can't become eligible for upload until the time since the latest record in the segment reaches the value. " +
             "The value should not exceed the real local retention ms. " +
             "For how the real local retention time is computed, see <code>local.retention.ms</code>.";
 
     public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
     public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
-            "When set to 0, immediate upload when size-based retention is used; otherwise no size-based delay check. " +
+            "When set to 0, immediate upload when local size-based retention is used; otherwise no size-based delay check. " +
             "When set to a positive value (bytes), a segment can't become eligible for upload until the total bytes of log data after the segment reach the value. " +
             "The value should not exceed the real local retention bytes. " +
             "For how the real local retention size is computed, see <code>local.retention.bytes</code>.";
