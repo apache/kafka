@@ -2334,7 +2334,9 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testCandidateLogSegmentsUploadWhenEitherRemoteCopyLagConfigIsZero() {
+    public void testCandidateLogSegmentsUploadWhenRemoteCopyLagMsIsZeroAndLocalRetentionMsIsLimited() {
+        // If local retention ms is limited and remote.copy.lag.ms is the default 0, upload immediately to avoid
+        // breaking time-based deletion behavior driven by local retention policy.
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
@@ -2349,6 +2351,7 @@ public class RemoteLogManagerTest {
 
         Map<String, Long> logProps = new HashMap<>();
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
+        //LOCAL_LOG_RETENTION_MS_CONFIG use RETENTION_MS_CONFIG by default
         logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 0L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 60L);
@@ -2364,6 +2367,110 @@ public class RemoteLogManagerTest {
                 );
         List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testCandidateLogSegmentsUploadWhenRemoteCopyLagBytesIsZeroAndLocalRetentionBytesIsLimited() {
+        // If local retention size is limited and remote.copy.lag.bytes is the default 0, upload immediately to avoid
+        // breaking size-based deletion behavior driven by local retention policy.
+        UnifiedLog log = mock(UnifiedLog.class);
+        LogSegment segment1 = mock(LogSegment.class);
+        LogSegment segment2 = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(segment1.baseOffset()).thenReturn(5L);
+        when(segment2.baseOffset()).thenReturn(10L);
+        when(activeSegment.baseOffset()).thenReturn(15L);
+        when(segment1.size()).thenReturn(40);
+        when(segment2.size()).thenReturn(30);
+        when(activeSegment.size()).thenReturn(20);
+
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
+        // LOCAL_LOG_RETENTION_BYTES_CONFIG use RETENTION_BYTES_CONFIG by default
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 0L);
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 100L);
+        LogConfig logConfig = new LogConfig(logProps);
+        when(log.config()).thenReturn(logConfig);
+        when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
+
+        RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES);
+        List<RemoteLogManager.EnrichedLogSegment> expected =
+                List.of(
+                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
+                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
+                );
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testCandidateLogSegmentsUploadWhenRemoteCopyLagMsIsZeroAndSizeLagExceeded() {
+        // If local retention ms is unlimited and remote.copy.lag.ms is the default 0, whether
+        // upload is delayed depends on the size-based lag configuration.
+        // This case verifies non-delayed upload.
+        UnifiedLog log = mock(UnifiedLog.class);
+        LogSegment segment1 = mock(LogSegment.class);
+        LogSegment segment2 = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(segment1.baseOffset()).thenReturn(5L);
+        when(segment2.baseOffset()).thenReturn(10L);
+        when(activeSegment.baseOffset()).thenReturn(15L);
+        when(segment1.size()).thenReturn(40);
+        when(segment2.size()).thenReturn(30);
+        when(activeSegment.size()).thenReturn(20);
+
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 0L);
+        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 50L);
+        LogConfig logConfig = new LogConfig(logProps);
+        when(log.config()).thenReturn(logConfig);
+        when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
+
+        RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES);
+        List<RemoteLogManager.EnrichedLogSegment> expected =
+                List.of(
+                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L)
+                );
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testCandidateLogSegmentsDelayUploadWhenRemoteCopyLagMsIsZeroAndSizeLagNotExceeded() {
+        // If local retention ms is unlimited and remote.copy.lag.ms is the default 0, whether
+        // upload is delayed depends on the size-based lag configuration.
+        // This case verifies delayed upload.
+        UnifiedLog log = mock(UnifiedLog.class);
+        LogSegment segment1 = mock(LogSegment.class);
+        LogSegment segment2 = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(segment1.baseOffset()).thenReturn(5L);
+        when(segment2.baseOffset()).thenReturn(10L);
+        when(activeSegment.baseOffset()).thenReturn(15L);
+        when(segment1.size()).thenReturn(40);
+        when(segment2.size()).thenReturn(30);
+        when(activeSegment.size()).thenReturn(20);
+
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 0L);
+        logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 60L);
+        LogConfig logConfig = new LogConfig(logProps);
+        when(log.config()).thenReturn(logConfig);
+        when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
+
+        RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES);
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
+        assertTrue(actual.isEmpty());
     }
 
     @Test
