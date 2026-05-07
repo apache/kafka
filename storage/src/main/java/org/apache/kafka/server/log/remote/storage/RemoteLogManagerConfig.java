@@ -174,7 +174,7 @@ public final class RemoteLogManagerConfig {
             "When set to a positive value (ms), a segment can't become eligible for upload until the time since the latest record in the segment reaches the value. " +
             "The value should not exceed the real local retention ms. " +
             "For how the real local retention time is computed, see <code>log.local.retention.ms</code>.";
-    public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_MS = -2L;
+    public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_MS = 0L;
 
     public static final String LOG_REMOTE_COPY_LAG_BYTES_PROP = "log.remote.copy.lag.bytes";
     public static final String LOG_REMOTE_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
@@ -182,7 +182,7 @@ public final class RemoteLogManagerConfig {
             "When set to a positive value (bytes), a segment can't become eligible for upload until the total bytes of log data after the segment reach the value. " +
             "The value should not exceed the real local retention bytes. " +
             "For how the real local retention size is computed, see <code>log.local.retention.bytes</code>.";
-    public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_BYTES = -2L;
+    public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_BYTES = 0L;
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_DOC = "The maximum number of bytes that can be copied from local storage to remote storage per second. " +
