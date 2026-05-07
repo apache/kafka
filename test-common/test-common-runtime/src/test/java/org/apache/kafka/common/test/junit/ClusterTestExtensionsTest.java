@@ -33,6 +33,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
@@ -76,6 +77,8 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -539,6 +542,13 @@ public class ClusterTestExtensionsTest {
         }
     )
     public void testSaslSslWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        clusterInstance.aliveBrokers().values().forEach(broker -> {
+            List<Endpoint> endpoints = CollectionConverters.asJava(broker.config().dataPlaneListeners());
+            assertTrue(
+                endpoints.stream().anyMatch(ep -> ep.securityProtocol() == SecurityProtocol.SASL_SSL),
+                "Expected broker to have SASL_SSL data-plane listener"
+            );
+        });
         testSecurityProtocol(clusterInstance);
     }
 

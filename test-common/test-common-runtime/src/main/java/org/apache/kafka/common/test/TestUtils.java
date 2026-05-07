@@ -51,25 +51,6 @@ class TestUtils {
     private static final long DEFAULT_MAX_WAIT_MS = 15_000;
 
     /**
-     * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
-     * suffix to generate its name.
-     */
-    public static File tempFile() throws IOException {
-        return tempFile("kafka", ".tmp");
-    }
-
-    /**
-     * Create an empty file in the default temporary-file directory, using the given prefix and suffix
-     * to generate its name.
-     * @throws IOException
-     */
-    public static File tempFile(final String prefix, final String suffix) throws IOException {
-        final File file = Files.createTempFile(prefix, suffix).toFile();
-        file.deleteOnExit();
-        return file;
-    }
-
-    /**
      * Generate a random string of letters and digits of the given length
      *
      * @param len The length of the string

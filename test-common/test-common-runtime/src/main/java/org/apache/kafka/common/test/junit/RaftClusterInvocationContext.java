@@ -28,7 +28,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
-import org.apache.kafka.common.test.SslManager;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
@@ -40,6 +39,7 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandlerException;
+import org.apache.kafka.test.TestSslUtils;
 
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
@@ -199,11 +199,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
                            clusterTestKit.sslManager().trustStoreLocation());
 
-                    props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, SslManager.CLUSTER_TRUSTSTORE_PASSWORD);
+                    props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, TestSslUtils.TRUST_STORE_PASSWORD);
                     props.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
 
-                    props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
-                    props.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of("TLSv1.2"));
+                    props.put(SslConfigs.SSL_PROTOCOL_CONFIG, TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS);
+                    props.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS));
                     props.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "");
                     props.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, "PKIX");
                 }
