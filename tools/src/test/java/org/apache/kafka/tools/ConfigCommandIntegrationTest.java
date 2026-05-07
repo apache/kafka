@@ -316,7 +316,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.session.timeout.ms=1"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be greater than or equal to group.streams.min.session.timeout.ms"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."));
 
         // Should fail to set above max
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -324,7 +324,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.session.timeout.ms=100000"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be less than or equal to group.streams.max.session.timeout.ms"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."));
     }
 
     @ClusterTest(serverProperties = {
@@ -347,7 +347,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.heartbeat.interval.ms=1"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be greater than or equal to group.streams.min.heartbeat.interval.ms"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be in the range 5000 to 55000 inclusive."));
 
         // Should fail to set above max
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -355,7 +355,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.heartbeat.interval.ms=100000"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be less than or equal to group.streams.max.heartbeat.interval.ms"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be in the range 5000 to 55000 inclusive."));
 
         // Should fail to set above session timeout
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -398,7 +398,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.num.standby.replicas=3"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("streams.num.standby.replicas must be less than or equal to group.streams.max.standby.replicas"));
+        assertTrue(message.contains("streams.num.standby.replicas must be less than or equal to 2"));
     }
 
     @ClusterTest
@@ -432,7 +432,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.task.offset.interval.ms=1"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("streams.task.offset.interval.ms must be greater than or equal to group.streams.min.task.offset.interval.ms"));
+        assertTrue(message.contains("streams.task.offset.interval.ms must be greater than or equal to 15000"));
 
     }
 
@@ -467,7 +467,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.num.warmup.replicas=25"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("streams.num.warmup.replicas must be less than or equal to group.streams.max.warmup.replicas"));
+        assertTrue(message.contains("streams.num.warmup.replicas must be less than or equal to 20"));
     }
 
     private void verifyGroupConfigUpdate(List<String> alterOpts) throws Exception {

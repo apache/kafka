@@ -446,25 +446,19 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs()
         );
         validateIntRange(
             parsed,
             CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxAssignmentIntervalMs()
         );
 
         // Share group configs.
@@ -472,49 +466,37 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             SHARE_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs()
         );
         validateIntRange(
             parsed,
             SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
             shareGroupConfig.shareGroupMinRecordLockDurationMs(),
-            ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG,
-            shareGroupConfig.shareGroupMaxRecordLockDurationMs(),
-            ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG
+            shareGroupConfig.shareGroupMaxRecordLockDurationMs()
         );
         validateIntRange(
             parsed,
             SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
             shareGroupConfig.shareGroupMinDeliveryCountLimit(),
-            ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG,
-            shareGroupConfig.shareGroupMaxDeliveryCountLimit(),
-            ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG
+            shareGroupConfig.shareGroupMaxDeliveryCountLimit()
         );
         validateIntRange(
             parsed,
             SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG,
             shareGroupConfig.shareGroupMinPartitionMaxRecordLocks(),
-            ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG,
-            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks(),
-            ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG
+            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks()
         );
         validateIntRange(
             parsed,
             SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxAssignmentIntervalMs()
         );
 
         // Streams group configs.
@@ -522,43 +504,34 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs()
         );
         validateIntMax(
             parsed,
             STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas()
         );
         validateIntRange(
             parsed,
             STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxAssignmentIntervalMs()
         );
         validateIntMin(
             parsed,
             STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs()
         );
         validateIntMax(
             parsed,
             STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxWarmupReplicas(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
 
         // Cross-field validations: session timeout must be greater than heartbeat interval.
@@ -601,16 +574,12 @@ public final class GroupConfig extends AbstractConfig {
         Map<String, Object> parsed,
         String key,
         int min,
-        String minConfigName,
-        int max,
-        String maxConfigName
+        int max
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
-        if (value < min)
-            throw new InvalidConfigurationException(key + " must be greater than or equal to " + minConfigName);
-        if (value > max)
-            throw new InvalidConfigurationException(key + " must be less than or equal to " + maxConfigName);
+        if (value < min || value > max)
+            throw new InvalidConfigurationException(key + " must be in the range " + min + " to " + max + " inclusive.");
     }
 
     /**
@@ -620,13 +589,12 @@ public final class GroupConfig extends AbstractConfig {
     private static void validateIntMax(
         Map<String, Object> parsed,
         String key,
-        int max,
-        String maxConfigName
+        int max
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
         if (value > max)
-            throw new InvalidConfigurationException(key + " must be less than or equal to " + maxConfigName);
+            throw new InvalidConfigurationException(key + " must be less than or equal to " + max);
     }
 
     /**
@@ -636,13 +604,12 @@ public final class GroupConfig extends AbstractConfig {
     private static void validateIntMin(
         Map<String, Object> parsed,
         String key,
-        int min,
-        String minConfigName
+        int min
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
         if (value < min)
-            throw new InvalidConfigurationException(key + " must be greater than or equal to " + minConfigName);
+            throw new InvalidConfigurationException(key + " must be greater than or equal to " + min);
     }
 
     /**

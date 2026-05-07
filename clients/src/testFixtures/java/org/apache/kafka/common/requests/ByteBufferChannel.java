@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransferableChannel;
+import org.apache.kafka.common.record.internal.UnalignedRecords;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ByteBufferChannel implements TransferableChannel {
     private final ByteBuffer buf;
@@ -75,5 +79,20 @@ public class ByteBufferChannel implements TransferableChannel {
     @Override
     public long transferFrom(FileChannel fileChannel, long position, long count) throws IOException {
         return fileChannel.transferTo(position, count, this);
+    }
+
+    public static ByteBuffer toBuffer(Send send) {
+        ByteBufferChannel channel = new ByteBufferChannel(send.size());
+        try {
+            assertEquals(send.size(), send.writeTo(channel));
+            channel.close();
+            return channel.buffer();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static ByteBuffer toBuffer(UnalignedRecords records) {
+        return toBuffer(records.toSend());
     }
 }

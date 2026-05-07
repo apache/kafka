@@ -79,9 +79,9 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -1249,7 +1249,7 @@ public class TransactionManagerTest {
             assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
             assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
             assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
-            return txnOffsetCommitRequest.data().generationId() != generationId;
+            return txnOffsetCommitRequest.data().generationIdOrMemberEpoch() != generationId;
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.ILLEGAL_GENERATION)));
 
         runUntil(transactionManager::hasError);
@@ -4475,7 +4475,7 @@ public class TransactionManagerTest {
             assertEquals(producerEpoch, txnOffsetCommitRequest.data().producerEpoch());
             assertEquals(groupInstanceId, txnOffsetCommitRequest.data().groupInstanceId());
             assertEquals(memberId, txnOffsetCommitRequest.data().memberId());
-            assertEquals(generationId, txnOffsetCommitRequest.data().generationId());
+            assertEquals(generationId, txnOffsetCommitRequest.data().generationIdOrMemberEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
     }

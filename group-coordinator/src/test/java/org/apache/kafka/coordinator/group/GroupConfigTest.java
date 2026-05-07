@@ -353,6 +353,77 @@ public class GroupConfigTest {
         assertDoesNotThrow(() -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
 
+    private static Stream<Arguments> outOfRangeValuesAndExpectedMessages() {
+        return Stream.of(
+            // Consumer group configs.
+            Arguments.of(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "1",
+                "consumer.heartbeat.interval.ms must be in the range 5 to 15000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "20000",
+                "consumer.heartbeat.interval.ms must be in the range 5 to 15000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "1",
+                "consumer.session.timeout.ms must be in the range 45 to 60000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "70000",
+                "consumer.session.timeout.ms must be in the range 45 to 60000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "500",
+                "consumer.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000",
+                "consumer.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+
+            // Share group configs.
+            Arguments.of(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "1",
+                "share.heartbeat.interval.ms must be in the range 5 to 15000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "20000",
+                "share.heartbeat.interval.ms must be in the range 5 to 15000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "1",
+                "share.session.timeout.ms must be in the range 45 to 60000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG, "70000",
+                "share.session.timeout.ms must be in the range 45 to 60000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "10000",
+                "share.record.lock.duration.ms must be in the range 15000 to 60000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "70000",
+                "share.record.lock.duration.ms must be in the range 15000 to 60000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, "11",
+                "share.delivery.count.limit must be in the range 2 to 10 inclusive."),
+            Arguments.of(GroupConfig.SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, "11000",
+                "share.partition.max.record.locks must be in the range 100 to 10000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "500",
+                "share.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000",
+                "share.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+
+            // Streams group configs.
+            Arguments.of(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "1000",
+                "streams.heartbeat.interval.ms must be in the range 5000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "20000",
+                "streams.heartbeat.interval.ms must be in the range 5000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "1",
+                "streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "70000",
+                "streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "5",
+                "streams.num.standby.replicas must be less than or equal to 2"),
+            Arguments.of(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "500",
+                "streams.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "20000",
+                "streams.assignment.interval.ms must be in the range 1000 to 15000 inclusive."),
+            Arguments.of(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "1000",
+                "streams.task.offset.interval.ms must be greater than or equal to 15000"),
+            Arguments.of(GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG, "50",
+                "streams.num.warmup.replicas must be less than or equal to 20")
+        );
+    }
+
+    @ParameterizedTest(name = "testValidationErrorMessageIncludesBound[{0}={1}]")
+    @MethodSource("outOfRangeValuesAndExpectedMessages")
+    public void testValidationErrorMessageIncludesBound(String key, String value, String expectedMessage) {
+        var props = Map.of(key, value);
+        var exception = assertThrows(
+            InvalidConfigurationException.class,
+            () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig())
+        );
+        assertEquals(expectedMessage, exception.getMessage());
+    }
+
     @Test
     public void testFromPropsWithDefaultValue() {
         Map<String, String> defaultValue = new HashMap<>();
