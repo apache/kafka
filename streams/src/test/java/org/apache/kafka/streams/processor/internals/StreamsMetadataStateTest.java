@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -98,7 +99,7 @@ public class StreamsMetadataStateTest {
         builder.stream("topic-five", Consumed.with(Serdes.Integer(), Serdes.String()))
             .selectKey((k, v) -> k + ":" + v)
             .markAsPartitioned()
-            .groupByKey()
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .count(Materialized.as("marked-table"));
 
         builder.globalTable("global-topic",
@@ -437,7 +438,7 @@ public class StreamsMetadataStateTest {
         assertEquals(expectedPartition, forOriginalKey.partition());
     }
 
-    private int partitionOf(byte[] key, int numPartitions) {
+    private int partitionOf(final byte[] key, final int numPartitions) {
         return Utils.toPositive(Utils.murmur2(key)) % numPartitions;
     }
 }

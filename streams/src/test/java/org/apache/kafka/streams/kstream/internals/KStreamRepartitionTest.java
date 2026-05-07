@@ -26,9 +26,11 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -177,7 +179,7 @@ public class KStreamRepartitionTest {
 
     @Test
     public void canMarkAsPartitionedWhenKeyNotChanging() {
-        final KStream<Integer, String> notMarked = builder.<Integer, String>stream(inputTopic).mapValues(v -> v.toLowerCase());
+        final KStream<Integer, String> notMarked = builder.<Integer, String>stream(inputTopic).mapValues(v -> v + ":" + v);
         final String topologyNotMarked = builder.build().describe().toString();
         notMarked.markAsPartitioned();
         final String topologyMarked = builder.build().describe().toString();
@@ -189,9 +191,24 @@ public class KStreamRepartitionTest {
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
             .selectKey((k, v) -> k + ":" +  v)
             .markAsPartitioned()
-            .groupByKey()
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .count(Materialized.as("test-count-store"));
-        final String topology = builder.build().describe().toString();
-        assertThat(topology.toLowerCase(), not(containsString("repartition")));
+        final Topology topology = builder.build();
+        assertThat(topology.describe().toString(), not(containsString("repartition")));
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+            final TestInputTopic<Integer, String> testInputTopic = driver.createInputTopic(inputTopic, Serdes.Integer().serializer(), Serdes.String().serializer());
+
+            final int expectedCount = 2;
+            for (int i = 0; i < expectedCount; i++) {
+                testInputTopic.pipeInput(123, "foo", Instant.ofEpochMilli(10 + i));
+            }
+
+            for (final String name : driver.producedTopicNames()) {
+                assertThat(name, not(containsString("repartition")));
+            }
+
+            assertEquals((long) expectedCount, driver.getKeyValueStore("test-count-store").get("123:foo"));
+        }
     }
 }
