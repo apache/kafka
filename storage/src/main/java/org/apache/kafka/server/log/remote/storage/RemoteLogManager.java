@@ -958,6 +958,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                         previousSeg, copyLagMs, copyLagBytes, currentTimeMs, totalLogSize, cumulativeSize, totalLogSize - cumulativeSize);
             }
 
+            if (logConfig.localRetentionMs() != -1 && copyLagMs == 0) {
+                return false;
+            }
+
+            if (logConfig.localRetentionBytes() != -1 && copyLagBytes == 0) {
+                return false;
+            }
+
             boolean needCheckCopyLagMs =  copyLagMs > 0;
             boolean needCheckCopyLagBytes = copyLagBytes > 0;
 
