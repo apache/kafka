@@ -469,6 +469,7 @@ public class DefaultAutoTopicCreationManagerTest {
         // Create 5 topics to exceed the cache size of 3
         List<String> topicNames = IntStream.rangeClosed(1, 5).mapToObj(i -> "test-topic-" + i).toList();
 
+        // Add errors for all 5 topics to the cache
         for (String topicName : topicNames) {
             var topics = Map.of(topicName,
                     new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor((short) 1));
@@ -636,7 +637,7 @@ public class DefaultAutoTopicCreationManagerTest {
         var requestContext = initializeRequestContextWithUserPrincipal();
         long timeoutMs = 5000L;
 
-        // Step 1: Simulate error response for backoff-topic
+        // Simulate error response for backoff-topic
         var backoffResponseData = new CreateTopicsResponseData();
         backoffResponseData.topics().add(new CreatableTopicResult()
                 .setName("backoff-topic")
@@ -649,7 +650,7 @@ public class DefaultAutoTopicCreationManagerTest {
                 new CreatableTopic().setName("backoff-topic").setNumPartitions(1).setReplicationFactor((short) 1));
         autoTopicCreationManager.createStreamsInternalTopics(backoffTopics, requestContext, timeoutMs);
 
-        // Step 2: Make inflight-topic in-flight (without completing the request)
+        // Make inflight-topic in-flight (without completing the request)
         var inflightFuture = new CompletableFuture<CreateTopicsResponse>();
         topicCreator.setFutureForWithPrincipal(inflightFuture);
 
@@ -657,7 +658,7 @@ public class DefaultAutoTopicCreationManagerTest {
                 new CreatableTopic().setName("inflight-topic").setNumPartitions(1).setReplicationFactor((short) 1));
         autoTopicCreationManager.createStreamsInternalTopics(inflightTopics, requestContext, timeoutMs);
 
-        // Step 3: Now attempt to create all three topics together
+        // Now attempt to create all three topics together
         var normalResponseData = new CreateTopicsResponseData();
         normalResponseData.topics().add(new CreatableTopicResult()
                 .setName("normal-topic")

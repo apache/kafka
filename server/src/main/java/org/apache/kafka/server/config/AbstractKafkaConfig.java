@@ -490,7 +490,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     // ********* Replication configuration ***********
     public int defaultReplicationFactor() {
-        return getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG).shortValue();
+        return getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG);
     }
 
     // ********* Log Configuration **********

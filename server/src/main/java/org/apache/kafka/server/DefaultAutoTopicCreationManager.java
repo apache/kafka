@@ -17,7 +17,10 @@
 
 package org.apache.kafka.server;
 
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
@@ -222,11 +225,11 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     }
 
     private static void logError(Map<String, CreatableTopic> creatableTopics, Throwable throwable) {
-        if (throwable instanceof org.apache.kafka.common.errors.TimeoutException) {
+        if (throwable instanceof TimeoutException) {
             LOGGER.debug("Auto topic creation timed out for {}.", creatableTopics.keySet());
-        } else if (throwable instanceof org.apache.kafka.common.errors.AuthenticationException) {
+        } else if (throwable instanceof AuthenticationException) {
             LOGGER.warn("Auto topic creation failed for {} with authentication exception.", creatableTopics.keySet());
-        } else if (throwable instanceof org.apache.kafka.common.errors.UnsupportedVersionException) {
+        } else if (throwable instanceof UnsupportedVersionException) {
             LOGGER.warn("Auto topic creation failed for {} with invalid version exception.", creatableTopics.keySet());
         } else {
             LOGGER.warn("Auto topic creation failed for {} with exception.", creatableTopics.keySet(), throwable);

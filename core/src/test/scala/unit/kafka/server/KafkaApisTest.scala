@@ -792,7 +792,7 @@ class KafkaApisTest extends Logging {
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
 
-    verifyTopicCreation(topicName, enableAutoTopicCreation = true, isInternal = true, request)
+    val capturedRequest = verifyTopicCreation(topicName, enableAutoTopicCreation = true, isInternal = true, request)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer),
       overrideProperties = topicConfigOverride)
     kafkaApis.handleFindCoordinatorRequest(request)
@@ -805,6 +805,10 @@ class KafkaApisTest extends Logging {
       assertEquals(key, response.data.coordinators.get(0).key)
     } else {
       assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.errorCode)
+      assertTrue(capturedRequest.getValue.isEmpty)
+    }
+    if (checkAutoCreateTopic) {
+      assertTrue(capturedRequest.getValue.isEmpty)
     }
   }
 
@@ -962,7 +966,7 @@ class KafkaApisTest extends Logging {
 
     assertEquals(expectedMetadataResponse, response.topicMetadata())
 
-    if (enableAutoTopicCreation && isInternal) {
+    if (enableAutoTopicCreation) {
       assertTrue(capturedRequest.getValue.isPresent)
       assertEquals(request.context, capturedRequest.getValue.get)
     }
@@ -983,12 +987,11 @@ class KafkaApisTest extends Logging {
       when(autoTopicCreationManager.createTopics(
         ArgumentMatchers.eq(util.Set.of(topicName)),
         ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA),
-        capturedRequest.capture()
-      )).thenReturn(
+        capturedRequest.capture())).thenReturn(
         util.List.of(new MetadataResponseTopic()
-          .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-          .setIsInternal(isInternal)
-          .setName(topicName))
+        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+        .setIsInternal(isInternal)
+        .setName(topicName))
       )
     }
     capturedRequest
