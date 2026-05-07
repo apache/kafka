@@ -33,6 +33,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
@@ -51,6 +52,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -86,6 +88,8 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -591,6 +595,42 @@ public class StoreQueryIntegrationTest {
 
         assertThrows(IllegalArgumentException.class, () -> kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new BroadcastingPartitioner()));
     }
+
+    @Test
+    public void shouldQueryForOriginalKeyWhenMarkAsPartitioned() throws Exception {
+        final int originalKey = 123;
+        final String newKey = originalKey + ":foo";
+        final String storeName = "marked-store";
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+            .selectKey((k, v) -> k + ":" + "foo")
+            .markAsPartitioned()
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.Integer()))
+            .count(Materialized.as(storeName));
+
+        final KafkaStreams kafkaStreams = createKafkaStreams(builder, streamsConfiguration(false));
+        startApplicationAndWaitUntilRunning(singletonList(kafkaStreams), Duration.ofSeconds(60));
+
+        final int expectedCount = 10;
+        produceValueRange(originalKey, 0, expectedCount);
+
+        until(() -> {
+            // Resolve partition by the original key
+            final KeyQueryMetadata metadata = kafkaStreams.queryMetadataForKey(
+                storeName, originalKey, Serdes.Integer().serializer());
+
+            if (metadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
+                return false;
+            }
+
+            // Query the store by the new key
+            final ReadOnlyKeyValueStore<String, Long> store = getStore(
+                storeName, kafkaStreams, keyValueStore());
+            return store.get(newKey) != null && store.get(newKey) == (long) expectedCount;
+        });
+    }
+
 
 
     private Matcher<String> retriableException() {
