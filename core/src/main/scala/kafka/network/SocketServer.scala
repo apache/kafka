@@ -1390,6 +1390,16 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     connectionRatePerIp.getOrDefault(ip, defaultConnectionRatePerIp)
   }
 
+  // Visible for testing
+  private[network] def maxConnectionsPerIpForIp(ip: InetAddress): Int = {
+    maxConnectionsPerIpOverrides.getOrElse(ip, defaultMaxConnectionsPerIp)
+  }
+  
+  // Visible for testing
+  private[network] def maxConnectionsPerIpOverrideForIp(ip: InetAddress): Option[Int] = {
+    maxConnectionsPerIpOverrides.get(ip)
+  }
+
   private[network] def addListener(config: KafkaConfig, listenerName: ListenerName): Unit = {
     counts.synchronized {
       if (!maxConnectionsPerListener.contains(listenerName)) {

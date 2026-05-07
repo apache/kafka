@@ -96,7 +96,8 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
     @Test
     public void testBuilderAddPartitions() {
         TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
-        builder.addPartitions(topicOne, List.of(partitionOne, partitionTwo), p -> p, errorOne);
+        builder.addPartition(topicOne, partitionOne, errorOne);
+        builder.addPartition(topicOne, partitionTwo, errorOne);
 
         TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
