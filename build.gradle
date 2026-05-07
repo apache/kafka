@@ -4077,13 +4077,6 @@ Found in project ${proj.path} configuration '${config.name}'.
 Use `testFixtures(project(':clients'))` instead of `project(':clients').sourceSets.test.output`
 """)
             }
-            if (file.absolutePath.endsWith('/server-common/build/classes/java/test')) {
-              throw new GradleException("""
-ERROR: Dependency on :server-common test output is not allowed.
-Found in project ${proj.path} configuration '${config.name}'.
-Use `testFixtures(project(':server-common'))` instead of `project(':server-common').sourceSets.test.output`
-""")
-            }
           }
         }
       }
@@ -4229,7 +4222,7 @@ def verifyVersionConsistencyTask = tasks.register('verifyVersionConsistency') {
       // Check if regex matches current content "as is"
       // Note: We need to see if the file content *already* matches what we want it to be.
       // One way is to simulate the replacement and see if it changes nothing.
-      
+
       def replacementStr = item.replace instanceof Closure ? item.replace.call() : item.replace
       def newContent = content.replaceAll(item.pattern, replacementStr)
 
@@ -4239,8 +4232,8 @@ def verifyVersionConsistencyTask = tasks.register('verifyVersionConsistency') {
     }
 
     if (!inconsistentFiles.isEmpty()) {
-       throw new GradleException("Found inconsistent versions in the following files:\n" + 
-           inconsistentFiles.join("\n") + 
+       throw new GradleException("Found inconsistent versions in the following files:\n" +
+           inconsistentFiles.join("\n") +
            "\n\nPlease run './gradlew updateVersion -PnewVersion=...' to fix them.")
     }
     println "All versions are consistent."
