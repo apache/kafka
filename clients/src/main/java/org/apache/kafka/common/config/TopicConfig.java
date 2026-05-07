@@ -109,6 +109,8 @@ public class TopicConfig {
             "The value should not exceed the real local retention ms except the latter is retained indefinitely (-1). " +
             "When set to -1, resolves to the real local retention ms as maximum delay. " +
             "If the real local retention ms is configured as infinite, -1 is treated as an invalid configuration. " +
+            "Constraint: if <code>local.retention.ms</code> is explicitly set to a non-negative value, <code>remote.copy.lag.ms</code> cannot be -2 unless <code>remote.copy.lag.bytes</code> is also -2. " +
+            "Otherwise, it may break time-based delete policy. " +
             "For how the real local retention time is computed, see <code>local.retention.ms</code>.";
 
     public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
@@ -119,6 +121,8 @@ public class TopicConfig {
             "The value should not exceed the real local retention bytes except the latter is retained indefinitely (-1). " +
             "When set to -1, resolves to the real local retention bytes as maximum delay. " +
             "If the real local retention bytes is configured as infinite, -1 is treated as an invalid configuration. " +
+            "Constraint: if <code>local.retention.bytes</code> is explicitly set to a non-negative value, <code>remote.copy.lag.bytes</code> cannot be -2 unless <code>remote.copy.lag.ms</code> is also -2. " +
+            "Otherwise, it may break size-based delete policy. " +
             "For how the real local retention size is computed, see <code>local.retention.bytes</code>.";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
