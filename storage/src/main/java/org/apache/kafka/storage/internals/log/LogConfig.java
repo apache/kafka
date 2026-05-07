@@ -255,8 +255,8 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
-                .define(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_MS, atLeast(-2), MEDIUM, TopicConfig.REMOTE_COPY_LAG_MS_DOC)
-                .define(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_BYTES, atLeast(-2), MEDIUM, TopicConfig.REMOTE_COPY_LAG_BYTES_DOC)
+                .define(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_MS, atLeast(0), MEDIUM, TopicConfig.REMOTE_COPY_LAG_MS_DOC)
+                .define(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_BYTES, atLeast(0), MEDIUM, TopicConfig.REMOTE_COPY_LAG_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
                 .define(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC)
                 .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
