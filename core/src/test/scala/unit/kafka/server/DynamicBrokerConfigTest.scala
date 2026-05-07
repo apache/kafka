@@ -772,16 +772,6 @@ class DynamicBrokerConfigTest {
 
   @Test
   def testDynamicRemoteCopyLagThrowsOnIncorrectConfig(): Unit = {
-    // effective local retention ms = -1 and remote copy lag ms = -1 is invalid
-    verifyIncorrectRemoteCopyLagProps(
-      retentionMs = -1L,
-      logLocalRetentionMs = -2L,
-      remoteCopyLagMs = -1L,
-      retentionBytes = 1000L,
-      logLocalRetentionBytes = -2L,
-      remoteCopyLagBytes = 100L
-    )
-
     // remote copy lag ms cannot exceed effective local retention ms
     verifyIncorrectRemoteCopyLagProps(
       retentionMs = 1000L,
@@ -790,16 +780,6 @@ class DynamicBrokerConfigTest {
       retentionBytes = 1000L,
       logLocalRetentionBytes = -2L,
       remoteCopyLagBytes = 100L
-    )
-
-    // effective local retention bytes = -1 and remote copy lag bytes = -1 is invalid
-    verifyIncorrectRemoteCopyLagProps(
-      retentionMs = 1000L,
-      logLocalRetentionMs = -2L,
-      remoteCopyLagMs = 100L,
-      retentionBytes = -1L,
-      logLocalRetentionBytes = -2L,
-      remoteCopyLagBytes = -1L
     )
 
     // remote copy lag bytes cannot exceed effective local retention bytes
@@ -812,25 +792,6 @@ class DynamicBrokerConfigTest {
       remoteCopyLagBytes = 1001L
     )
 
-    // when local retention ms is explicitly configured, remote copy lag ms cannot be disabled alone
-    verifyIncorrectRemoteCopyLagProps(
-      retentionMs = 1000L,
-      logLocalRetentionMs = 500L,
-      remoteCopyLagMs = -2L,
-      retentionBytes = 1000L,
-      logLocalRetentionBytes = -2L,
-      remoteCopyLagBytes = 100L
-    )
-
-    // when local retention bytes is explicitly configured, remote copy lag bytes cannot be disabled alone
-    verifyIncorrectRemoteCopyLagProps(
-      retentionMs = 1000L,
-      logLocalRetentionMs = -2L,
-      remoteCopyLagMs = 100L,
-      retentionBytes = 1000L,
-      logLocalRetentionBytes = 500L,
-      remoteCopyLagBytes = -2L
-    )
   }
 
   def verifyIncorrectRemoteCopyLagProps(retentionMs: Long,

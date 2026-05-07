@@ -585,17 +585,6 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
       val effectiveLocalRetentionMs = if (logLocalRetentionMs == -2L) logRetentionMs else logLocalRetentionMs
       val logRemoteCopyLagMs = newConfig.remoteLogManagerConfig.logRemoteCopyLagMs
       val logRemoteCopyLagBytes = newConfig.remoteLogManagerConfig.logRemoteCopyLagBytes
-      if (logRemoteCopyLagMs == LogConfig.DEFAULT_REMOTE_COPY_LAG_MS &&
-          logRemoteCopyLagBytes != LogConfig.DEFAULT_REMOTE_COPY_LAG_BYTES &&
-          effectiveLocalRetentionMs >= 0L) {
-        throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs,
-          s"Value must not be -2 when effective ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP} is non-negative " +
-            s"unless ${RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP} is also -2.")
-      }
-      if (effectiveLocalRetentionMs == -1L && logRemoteCopyLagMs == -1L) {
-        throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs,
-          s"Value must not be -1 when effective ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP} is -1")
-      }
       if (logRemoteCopyLagMs > 0L && effectiveLocalRetentionMs >= 0L && logRemoteCopyLagMs > effectiveLocalRetentionMs) {
         throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs,
           s"Value must not exceed ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP} (effective value: $effectiveLocalRetentionMs)")
@@ -608,17 +597,6 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
       val effectiveLocalRetentionBytes = if (logLocalRetentionBytes == -2L) logRetentionBytes else logLocalRetentionBytes
       val logRemoteCopyLagBytes = newConfig.remoteLogManagerConfig.logRemoteCopyLagBytes
       val logRemoteCopyLagMs = newConfig.remoteLogManagerConfig.logRemoteCopyLagMs
-      if (logRemoteCopyLagBytes == LogConfig.DEFAULT_REMOTE_COPY_LAG_BYTES &&
-          logRemoteCopyLagMs != LogConfig.DEFAULT_REMOTE_COPY_LAG_MS &&
-          effectiveLocalRetentionBytes >= 0L) {
-        throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes,
-          s"Value must not be -2 when effective ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP} is non-negative " +
-            s"unless ${RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP} is also -2.")
-      }
-      if (effectiveLocalRetentionBytes == -1L && logRemoteCopyLagBytes == -1L) {
-        throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes,
-          s"Value must not be -1 when effective ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP} is -1")
-      }
       if (logRemoteCopyLagBytes > 0L && effectiveLocalRetentionBytes >= 0L && logRemoteCopyLagBytes > effectiveLocalRetentionBytes) {
         throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes,
           s"Value must not exceed ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP} (effective value: $effectiveLocalRetentionBytes)")
