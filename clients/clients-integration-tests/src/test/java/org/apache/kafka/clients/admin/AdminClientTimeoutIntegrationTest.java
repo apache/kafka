@@ -51,9 +51,10 @@ public class AdminClientTimeoutIntegrationTest {
     public void testCallInFlightTimeouts() throws Exception {
         var config = Map.of(
                 AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000",
-                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000",
-                AdminClientConfig.RETRIES_CONFIG, "0"
+                AdminClientConfig.RETRIES_CONFIG, "0",
+                // Set an extremely large overall API timeout to ensure the
+                // FailureInjectingTimeoutProcessor triggers before the API-level timeout does.
+                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000"
         );
 
         var factory = new FailureInjectingTimeoutProcessorFactory();
