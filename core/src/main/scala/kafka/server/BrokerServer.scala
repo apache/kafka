@@ -406,9 +406,9 @@ class BrokerServer(
       val topicCreator = new KRaftTopicCreator(clientToControllerChannelManager)
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config,
-        () => groupCoordinator.groupMetadataTopicConfigs(),
+        () => groupCoordinator.groupMetadataTopicConfigs,
         () => transactionCoordinator.transactionTopicConfigs,
-        () => shareCoordinator.shareGroupStateTopicConfigs(),
+        () => shareCoordinator.shareGroupStateTopicConfigs,
         topicCreator,
         time,
       )
