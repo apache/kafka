@@ -49,12 +49,15 @@ public interface AuthorizableRequestContext {
     InetAddress clientAddress();
 
     /**
-     * 16-bit API key of the request from the request header. See
-     * https://kafka.apache.org/protocol#protocol_api_keys for request types.
+     * The 16-bit API key ({@code request_api_key}) from the request header. See
+     * https://kafka.apache.org/42/design/protocol/#the-messages
+     * Returns the API key from the request header.
      */
     int requestType();
 
     /**
+     * The 16-bit API version ({@code request_api_version}) from the request header. See
+     * https://kafka.apache.org/42/design/protocol/#the-messages
      * Returns the request version from the request header.
      */
     int requestVersion();
