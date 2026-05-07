@@ -292,8 +292,8 @@ class LogConfigTest {
     props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
     props.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000")
     props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
-    props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "-2")
-    props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "-2")
+    props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "0")
+    props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "0")
 
     validateTopicLogConfig(props)
   }
