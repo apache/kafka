@@ -1628,7 +1628,7 @@ public final class QuorumController implements Controller {
                 if (!cidrHosts.isEmpty()) {
                     return Optional.of("Cannot downgrade below " + MetadataVersion.IBP_4_3_IV0 +
                         " while CIDR-based ACL host patterns exist: " + cidrHosts +
-                        ". Remove all CIDR ACLs Ifirst.");
+                        ". Remove all CIDR ACLs first.");
                 }
             }
             return Optional.empty();
