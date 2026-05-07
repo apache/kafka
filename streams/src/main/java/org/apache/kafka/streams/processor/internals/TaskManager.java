@@ -1631,6 +1631,38 @@ public class TaskManager {
         return ret;
     }
 
+    // VisibleForTesting
+    boolean hasAnyTaskForTopology(final String topologyName) {
+        return allTasks().keySet().stream().anyMatch(taskId -> topologyName.equals(taskId.topologyName()));
+    }
+
+    /**
+     * Returns {@code true} if every task for the given topology is initialized and in
+     * {@link State#RUNNING}.
+     *
+     * <p>If there are no tasks for the given topology, this method returns {@code true}.
+     *
+     * @param topologyName the topology name
+     * @return {@code true} if all matching tasks are initialized and in {@link State#RUNNING},
+     *         or if there are no matching tasks; {@code false} otherwise
+     */
+    // VisibleForTesting
+    boolean areAllTasksRunningForTopology(final String topologyName) {
+        final Map<TaskId, Task> allTasks = allTasks();
+        final Set<TaskId> initializedTaskIds = tasks.allInitializedTaskIds();
+
+        for (final Map.Entry<TaskId, Task> entry : allTasks.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            if (topologyName.equals(taskId.topologyName())) {
+                if (!initializedTaskIds.contains(taskId) || entry.getValue().state() != State.RUNNING) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+    
     /**
      * Returns tasks owned by the stream thread.
      * This does not return any tasks currently owned by the state updater.

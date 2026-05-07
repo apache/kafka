@@ -86,7 +86,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MockConfigRepository}
+import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheTest, MockConfigRepository}
 import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
@@ -1509,7 +1509,7 @@ class KafkaApisTest extends Logging {
     val txnOffsetCommitRequest = new TxnOffsetCommitRequestData()
       .setGroupId("group")
       .setMemberId("member")
-      .setGenerationId(10)
+      .setGenerationIdOrMemberEpoch(10)
       .setProducerId(20)
       .setProducerEpoch(30)
       .setGroupInstanceId("instance-id")
@@ -1744,7 +1744,7 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT)
+  @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT, enableUnstableLastVersion = false)
   def shouldReplaceCoordinatorNotAvailableWithLoadInProcessInTxnOffsetCommitWithOlderClient(version: Short): Unit = {
     val topic = "topic"
     addTopicToMetadataCache(topic, numPartitions = 2)
@@ -4406,7 +4406,7 @@ class KafkaApisTest extends Logging {
         .setName(plaintextListener.value)
     )
     MetadataCacheTest.updateCache(metadataCache,
-      Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints))
+      util.List.of(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints))
     )
 
     // 2. Set up authorizer
@@ -4446,7 +4446,7 @@ class KafkaApisTest extends Logging {
     }
 
     val partitionRecords = Seq(authorizedTopicId, unauthorizedTopicId).map(createDummyPartitionRecord)
-    MetadataCacheTest.updateCache(metadataCache, partitionRecords)
+    MetadataCacheTest.updateCache(metadataCache, (partitionRecords : Seq[ApiMessage]).asJava)
 
     // 4. Send TopicMetadataReq using topicId
     val metadataReqByTopicId = MetadataRequest.Builder.forTopicIds(util.Set.of(authorizedTopicId, unauthorizedTopicId)).build()
@@ -10161,7 +10161,7 @@ class KafkaApisTest extends Logging {
     )
 
     MetadataCacheTest.updateCache(metadataCache,
-      Seq(new RegisterBrokerRecord()
+      util.List.of(new RegisterBrokerRecord()
         .setBrokerId(brokerId)
         .setRack("rack")
         .setFenced(false)
@@ -10215,7 +10215,7 @@ class KafkaApisTest extends Logging {
     )
 
     MetadataCacheTest.updateCache(metadataCache,
-      Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints0),
+      util.List.of(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints0),
       new RegisterBrokerRecord().setBrokerId(1).setRack("rack").setFenced(false).setEndPoints(endpoints1))
     )
 
@@ -10451,12 +10451,12 @@ class KafkaApisTest extends Logging {
 
   private def setupBasicMetadataCache(topic: String, numPartitions: Int, numBrokers: Int, topicId: Uuid): Unit = {
     val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadata)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadata.asJava)
   }
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
     val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadata)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadata.asJava)
   }
 
   private def createMetadataBroker(brokerId: Int,
