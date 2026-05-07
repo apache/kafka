@@ -4077,6 +4077,13 @@ Found in project ${proj.path} configuration '${config.name}'.
 Use `testFixtures(project(':clients'))` instead of `project(':clients').sourceSets.test.output`
 """)
             }
+            if (file.absolutePath.endsWith('/server-common/build/classes/java/test')) {
+              throw new GradleException("""
+ERROR: Dependency on :server-common test output is not allowed.
+Found in project ${proj.path} configuration '${config.name}'.
+Use `testFixtures(project(':server-common'))` instead of `project(':server-common').sourceSets.test.output`
+""")
+            }
           }
         }
       }
