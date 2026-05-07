@@ -2228,6 +2228,8 @@ public class RemoteLogManagerTest {
         when(activeSegment.size()).thenReturn(20);
 
         Map<String, Long> logProps = new HashMap<>();
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -2L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 60L);
         LogConfig logConfig = new LogConfig(logProps);
@@ -2254,6 +2256,8 @@ public class RemoteLogManagerTest {
         when(activeSegment.size()).thenReturn(20);
 
         Map<String, Long> logProps = new HashMap<>();
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -2L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 50L);
         LogConfig logConfig = new LogConfig(logProps);
@@ -2555,6 +2559,8 @@ public class RemoteLogManagerTest {
         when(activeSegment.size()).thenReturn(20);
 
         Map<String, Long> logProps = new HashMap<>();
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -2L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, 50L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 50L);
@@ -2587,6 +2593,8 @@ public class RemoteLogManagerTest {
         when(activeSegment.size()).thenReturn(20);
 
         Map<String, Long> logProps = new HashMap<>();
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -2L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, 60L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 60L);
