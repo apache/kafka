@@ -403,13 +403,12 @@ class BrokerServer(
         new KafkaScheduler(1, true, "transaction-log-manager-"),
         producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
 
-      val topicCreator = new KRaftTopicCreator(clientToControllerChannelManager)
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config,
         () => groupCoordinator.groupMetadataTopicConfigs,
         () => transactionCoordinator.transactionTopicConfigs,
         () => shareCoordinator.shareGroupStateTopicConfigs,
-        topicCreator,
+        new KRaftTopicCreator(clientToControllerChannelManager),
         time,
       )
 

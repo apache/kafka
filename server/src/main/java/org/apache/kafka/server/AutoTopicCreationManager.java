@@ -24,7 +24,6 @@ import org.apache.kafka.server.quota.ControllerMutationQuota;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 public interface AutoTopicCreationManager {
@@ -39,7 +38,19 @@ public interface AutoTopicCreationManager {
      *                               inside Envelope to send to the controller when forwarding is enabled.
      * @return auto created topic metadata responses
      */
-    List<MetadataResponseTopic> createTopics(Set<String> topics, ControllerMutationQuota controllerMutationQuota, Optional<RequestContext> metadataRequestContext);
+    List<MetadataResponseTopic> createTopics(Set<String> topics, ControllerMutationQuota controllerMutationQuota, RequestContext metadataRequestContext);
+
+    /**
+     * Initiate auto topic creation for the given topics without providing a RequestContext.
+     * This is a convenience method that calls the main createTopics method with a null RequestContext.
+     *
+     * @param topics the topics to create
+     * @param controllerMutationQuota the controller mutation quota for topic creation
+     * @return auto created topic metadata responses
+     */
+    default List<MetadataResponseTopic> createTopics(Set<String> topics, ControllerMutationQuota controllerMutationQuota) {
+        return createTopics(topics, controllerMutationQuota, null);
+    }
 
     /**
      * Initiate auto topic creation for the given topics.

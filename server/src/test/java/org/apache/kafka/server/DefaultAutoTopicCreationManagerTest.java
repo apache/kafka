@@ -215,7 +215,7 @@ public class DefaultAutoTopicCreationManagerTest {
         var response = new CreateTopicsResponse(createTopicsResponseData);
         topicCreator.setResponseForWithPrincipal(response);
 
-        autoTopicCreationManager.createTopics(Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Optional.of(requestContext));
+        autoTopicCreationManager.createTopics(Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, requestContext);
 
         assertEquals(1, topicCreator.withPrincipalCallCount(),
                 "Should have called createTopicWithPrincipal once");
@@ -717,7 +717,7 @@ public class DefaultAutoTopicCreationManagerTest {
             String topicName,
             boolean isInternal
     ) {
-        var topicResponses = autoTopicCreationManager.createTopics(Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, Optional.empty());
+        var topicResponses = autoTopicCreationManager.createTopics(Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA);
 
         var expectedResponses = List.of(new MetadataResponseTopic()
                 .setErrorCode(error.code())

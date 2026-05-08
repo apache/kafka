@@ -363,7 +363,7 @@ class KafkaApisTest extends Logging {
     cgConfigs.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000")
-    cgConfigs.put(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+    cgConfigs.put(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
     cgConfigs.put(SHARE_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(SHARE_RECORD_LOCK_DURATION_MS_CONFIG, ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT.toString)
@@ -373,13 +373,13 @@ class KafkaApisTest extends Logging {
     cgConfigs.put(SHARE_ISOLATION_LEVEL_CONFIG, GroupConfig.SHARE_ISOLATION_LEVEL_DEFAULT)
     cgConfigs.put(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT.toString)
     cgConfigs.put(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000")
-    cgConfigs.put(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+    cgConfigs.put(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
     cgConfigs.put(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT.toString)
     cgConfigs.put(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000")
-    cgConfigs.put(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+    cgConfigs.put(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
     cgConfigs.put(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT.toString)
     cgConfigs.put(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "")
@@ -805,10 +805,10 @@ class KafkaApisTest extends Logging {
       assertEquals(key, response.data.coordinators.get(0).key)
     } else {
       assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.errorCode)
-      assertTrue(capturedRequest.getValue.isEmpty)
+      assertNull(capturedRequest.getValue)
     }
     if (checkAutoCreateTopic) {
-      assertTrue(capturedRequest.getValue.isEmpty)
+      assertNull(capturedRequest.getValue)
     }
   }
 
@@ -967,22 +967,27 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedMetadataResponse, response.topicMetadata())
 
     if (enableAutoTopicCreation) {
-      assertTrue(capturedRequest.getValue.isPresent)
-      assertEquals(request.context, capturedRequest.getValue.get)
+      assertNotNull(capturedRequest.getValue)
+      assertEquals(request.context, capturedRequest.getValue)
     }
   }
 
   private def verifyTopicCreation(topicName: String,
                                   enableAutoTopicCreation: Boolean,
                                   isInternal: Boolean,
-                                  request: RequestChannel.Request): ArgumentCaptor[Optional[RequestContext]] = {
-    val capturedRequest: ArgumentCaptor[Optional[RequestContext]] = ArgumentCaptor.forClass(classOf[Optional[RequestContext]])
+                                  request: RequestChannel.Request): ArgumentCaptor[RequestContext] = {
+    val capturedRequest: ArgumentCaptor[RequestContext] = ArgumentCaptor.forClass(classOf[RequestContext])
     if (enableAutoTopicCreation) {
 
       when(clientControllerQuotaManager.newPermissiveQuotaFor(
         ArgumentMatchers.eq(request.session),
         ArgumentMatchers.eq(request.header.clientId())
       )).thenReturn(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
+
+      when(autoTopicCreationManager.createTopics(
+        ArgumentMatchers.eq(util.Set.of(topicName)),
+        ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
+      )).thenCallRealMethod()
 
       when(autoTopicCreationManager.createTopics(
         ArgumentMatchers.eq(util.Set.of(topicName)),

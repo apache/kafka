@@ -77,14 +77,14 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
             Time time
     ) {
         this(
-                config,
-                groupCoordinatorConfigsSupplier,
-                transactionTopicConfigsSupplier,
-                shareCoordinatorConfigsSupplier,
-                topicCreator,
-                time,
-                // Hardcoded default capacity; can be overridden in tests via constructor param
-                DEFAULT_TOPIC_ERROR_CACHE_CAPACITY
+            config,
+            groupCoordinatorConfigsSupplier,
+            transactionTopicConfigsSupplier,
+            shareCoordinatorConfigsSupplier,
+            topicCreator,
+            time,
+            // Hardcoded default capacity; can be overridden in tests via constructor param
+            DEFAULT_TOPIC_ERROR_CACHE_CAPACITY
         );
     }
 
@@ -111,7 +111,7 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     public List<MetadataResponseTopic> createTopics(
             Set<String> topics,
             ControllerMutationQuota controllerMutationQuota,
-            Optional<RequestContext> metadataRequestContext
+            RequestContext metadataRequestContext
     ) {
         var creatableTopics = new HashMap<String, CreatableTopic>();
         var uncreatableTopicResponses = new ArrayList<MetadataResponseTopic>();
@@ -173,11 +173,11 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
 
     private List<MetadataResponseTopic> sendCreateTopicRequest(
             Map<String, CreatableTopic> creatableTopics,
-            Optional<RequestContext> requestContext
+            RequestContext requestContext
     ) {
         var createTopicsRequest = makeCreateTopicsRequestBuilder(creatableTopics);
 
-        var responseFuture = requestContext
+        var responseFuture = Optional.ofNullable(requestContext)
                 .map(context -> topicCreator.createTopicWithPrincipal(context, createTopicsRequest))
                 .orElseGet(() -> topicCreator.createTopicWithoutPrincipal(createTopicsRequest));
 
