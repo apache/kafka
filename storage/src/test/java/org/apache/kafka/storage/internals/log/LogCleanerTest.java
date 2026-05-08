@@ -223,8 +223,8 @@ public class LogCleanerTest {
         CleanerStats stats = new CleanerStats(Time.SYSTEM);
         long expectedBytesRead = segments.stream().mapToLong(LogSegment::size).sum();
         List<Long> shouldRemain = LogTestUtils.keysInLog(log).stream().filter(key -> !keys.contains(key)).toList();
-        cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata(),
-            -1, segments.get(segments.size() - 1).readNextOffset());
+        log.updateHighWatermark(segments.get(segments.size() - 1).readNextOffset());
+        cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata(), -1);
         assertEquals(shouldRemain, LogTestUtils.keysInLog(log));
         assertEquals(expectedBytesRead, stats.bytesRead());
     }
@@ -322,8 +322,8 @@ public class LogCleanerTest {
         List<LogSegment> segments = List.copyOf(log.logSegments(0, log.activeSegment().baseOffset()));
         CleanerStats stats = new CleanerStats(Time.SYSTEM);
         cleaner.buildOffsetMap(log, 0, log.activeSegment().baseOffset(), offsetMap, stats);
-        cleaner.cleanSegments(log, segments, offsetMap, 0L, stats, new CleanedTransactionMetadata(),
-            -1, segments.get(segments.size() - 1).readNextOffset());
+        log.updateHighWatermark(segments.get(segments.size() - 1).readNextOffset());
+        cleaner.cleanSegments(log, segments, offsetMap, 0L, stats, new CleanedTransactionMetadata(), -1);
 
         // Validate based on the file name that log segment file is renamed exactly once for async deletion
         assertEquals(expectedFileName, firstLogFile.file().getPath());
@@ -513,8 +513,8 @@ public class LogCleanerTest {
         List<LogSegment> segments = List.copyOf(log.logSegments(0, log.activeSegment().baseOffset()));
         CleanerStats stats = new CleanerStats(time);
         cleaner.buildOffsetMap(log, dirtyOffset, log.activeSegment().baseOffset(), offsetMap, stats);
-        cleaner.cleanSegments(log, segments, offsetMap, time.milliseconds(), stats, new CleanedTransactionMetadata(),
-            Long.MAX_VALUE, segments.get(segments.size() - 1).readNextOffset());
+        log.updateHighWatermark(segments.get(segments.size() - 1).readNextOffset());
+        cleaner.cleanSegments(log, segments, offsetMap, time.milliseconds(), stats, new CleanedTransactionMetadata(), Long.MAX_VALUE);
         return offsetMap.latestOffset() + 1;
     }
 
@@ -994,8 +994,8 @@ public class LogCleanerTest {
 
         // clean the log
         CleanerStats stats = new CleanerStats(Time.SYSTEM);
-        cleaner.cleanSegments(log, List.of(log.logSegments().get(0)), map, 0L, stats, new CleanedTransactionMetadata(),
-            -1, log.logSegments().get(0).readNextOffset());
+        log.updateHighWatermark(log.logSegments().get(0).readNextOffset());
+        cleaner.cleanSegments(log, List.of(log.logSegments().get(0)), map, 0L, stats, new CleanedTransactionMetadata(), -1);
         List<Long> shouldRemain = LogTestUtils.keysInLog(log).stream().filter(key -> !keys.contains(key)).toList();
         assertEquals(shouldRemain, LogTestUtils.keysInLog(log));
     }
@@ -1010,9 +1010,9 @@ public class LogCleanerTest {
         var offsetMap = logAndMap.offsetMap();
 
         Cleaner cleaner = makeCleaner(Integer.MAX_VALUE, 1024);
+        log.updateHighWatermark(log.logSegments().get(0).readNextOffset());
         cleaner.cleanSegments(log, List.of(log.logSegments().get(0)), offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(),
-            -1, log.logSegments().get(0).readNextOffset());
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
         List<Long> shouldRemain = LogTestUtils.keysInLog(log).stream().filter(key -> !offsetMap.map().containsKey(key)).toList();
         assertEquals(shouldRemain, LogTestUtils.keysInLog(log));
     }
@@ -1032,10 +1032,10 @@ public class LogCleanerTest {
         }
 
         Cleaner cleaner = makeCleaner(Integer.MAX_VALUE, 1024);
+        log.updateHighWatermark(log.logSegments().get(0).readNextOffset());
         assertThrows(CorruptRecordException.class, () ->
             cleaner.cleanSegments(log, List.of(log.logSegments().get(0)), offsetMap, 0L,
-                new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(),
-                -1, log.logSegments().get(0).readNextOffset())
+                new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1)
         );
     }
 
@@ -1055,8 +1055,7 @@ public class LogCleanerTest {
         Cleaner cleaner = makeCleaner(Integer.MAX_VALUE, 1024);
         assertThrows(CorruptRecordException.class, () ->
             cleaner.cleanSegments(log, List.of(log.logSegments().get(0)), offsetMap, 0L,
-                new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(),
-                -1, log.logSegments().get(0).readNextOffset())
+                new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1)
         );
     }
 
@@ -1489,11 +1488,17 @@ public class LogCleanerTest {
         LogTestUtils.FakeOffsetMap map = new LogTestUtils.FakeOffsetMap(Integer.MAX_VALUE);
         keys.forEach(k -> map.put(key(k), Long.MAX_VALUE));
         List<LogSegment> segments = log.logSegments().subList(0, 3);
+        log.updateHighWatermark(segments.get(segments.size() - 1).readNextOffset());
         assertThrows(LogCleaningAbortedException.class, () -> cleaner.cleanSegments(log, segments, map, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1, segments.get(segments.size() - 1).readNextOffset())
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1)
         );
     }
 
+    /**
+     * Test that if a cleaned batch's next offset equals the high watermark, the batch is retained
+     * even if it is empty (i.e. all its records have been cleaned away). This ensures that the last
+     * offset information before the high watermark is not lost after log cleaning.
+     */
     @Test
     public void testCleanSegmentsRetainingLastEmptyBatch() throws IOException {
         Cleaner cleaner = makeCleaner(Integer.MAX_VALUE);
@@ -1516,7 +1521,8 @@ public class LogCleanerTest {
         // clean the log
         List<LogSegment> segments = log.logSegments().subList(0, 3);
         CleanerStats stats = new CleanerStats(Time.SYSTEM);
-        cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata(), -1, segments.get(segments.size() - 1).readNextOffset());
+        log.updateHighWatermark(segments.get(segments.size() - 1).readNextOffset());
+        cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata(), -1);
         assertEquals(2, log.logSegments().size());
         LogSegment firstSegAfter = log.logSegments().get(0);
         List<? extends RecordBatch> batchList = StreamSupport.stream(firstSegAfter.log().batches().spliterator(), false).toList();
@@ -1525,6 +1531,41 @@ public class LogCleanerTest {
         assertEquals(log.logSegments().get(log.logSegments().size() - 1).baseOffset() - 1, retainedBatch.lastOffset(),
             "the retained batch should be the last batch");
         assertFalse(retainedBatch.iterator().hasNext(), "the retained batch should be an empty batch");
+    }
+
+    /**
+     * Test that if the high watermark is beyond the cleaned segments (i.e. no batch's next offset
+     * equals the high watermark), empty batches produced by cleaning are NOT retained and can be
+     * safely deleted. This is the counterpart to [[testCleanSegmentsRetainingLastEmptyBatch]].
+     */
+    @Test
+    public void testCleanSegmentsNotRetainingLastEmptyBatch() throws IOException {
+        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE);
+        Properties logProps = new Properties();
+        logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024);
+
+        UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
+
+        // append messages to the log until we have four segments
+        while (log.numberOfSegments() < 4) {
+            log.appendAsLeader(record((int) log.logEndOffset(), (int) log.logEndOffset()), 0);
+        }
+        List<Long> keysFound = LogTestUtils.keysInLog(log);
+        assertEquals(LongStream.range(0L, log.logEndOffset()).boxed().toList(), keysFound);
+
+        // pretend all keys are deleted
+        LogTestUtils.FakeOffsetMap map = new LogTestUtils.FakeOffsetMap(Integer.MAX_VALUE);
+        keysFound.forEach(k -> map.put(key(k), Long.MAX_VALUE));
+
+        // clean the log
+        List<LogSegment> segments = log.logSegments().subList(0, 3);
+        CleanerStats stats = new CleanerStats(Time.SYSTEM);
+        log.updateHighWatermark(log.logSegments().get(log.logSegments().size() - 1).readNextOffset());
+        cleaner.cleanSegments(log, segments, map, 0L, stats, new CleanedTransactionMetadata(), -1);
+        assertEquals(2, log.logSegments().size());
+        LogSegment firstSegAfter = log.logSegments().get(0);
+        List<? extends RecordBatch> batchList = StreamSupport.stream(firstSegAfter.log().batches().spliterator(), false).toList();
+        assertEquals(0, batchList.size(), "no batches should remain in the cleaned segment");
     }
 
     /**
@@ -1802,9 +1843,9 @@ public class LogCleanerTest {
         // Before: sourceSegment0, sourceSegment1, activeSegment = 3 total
         int segmentCountBefore = log.logSegments().size();
 
+        log.updateHighWatermark(sourceSegments.get(sourceSegments.size() - 1).readNextOffset());
         cleaner.cleanSegments(log, sourceSegments, offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1,
-            sourceSegments.get(sourceSegments.size() - 1).readNextOffset());
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
 
         // With overflow, 2 source segments → 2 cleaned segments; net segment count unchanged.
         // Without overflow, 2 source → 1 cleaned; net count would be segmentCountBefore - 1.
@@ -1835,9 +1876,9 @@ public class LogCleanerTest {
 
         int segmentCountBefore = log.logSegments().size();
 
+        log.updateHighWatermark(sourceSegments.get(sourceSegments.size() - 1).readNextOffset());
         cleaner.cleanSegments(log, sourceSegments, offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1,
-            sourceSegments.get(sourceSegments.size() - 1).readNextOffset());
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
 
         assertEquals(segmentCountBefore, log.logSegments().size(),
             "offset overflow should produce 2 cleaned segments, keeping total segment count the same");
@@ -1879,11 +1920,10 @@ public class LogCleanerTest {
             offsetMap.put(key(k), Long.MAX_VALUE);
         }
 
-        long upperBoundOffset = log.activeSegment().baseOffset();
-
+        log.updateHighWatermark(log.activeSegment().baseOffset());
         // clean the log
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1, upperBoundOffset);
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
         // clear scheduler so that async deletes don't run
         time.scheduler.clear();
         log.close();
@@ -1901,7 +1941,7 @@ public class LogCleanerTest {
 
         // clean again
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1, upperBoundOffset);
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
         // clear scheduler so that async deletes don't run
         time.scheduler.clear();
         log.close();
@@ -1921,7 +1961,7 @@ public class LogCleanerTest {
 
         // clean again
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1, upperBoundOffset);
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
         // clear scheduler so that async deletes don't run
         time.scheduler.clear();
         List<Long> cleanedKeys = LogTestUtils.keysInLog(log);
@@ -1947,7 +1987,7 @@ public class LogCleanerTest {
             offsetMap.put(key(k), Long.MAX_VALUE);
         }
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1, upperBoundOffset);
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
         // clear scheduler so that async deletes don't run
         time.scheduler.clear();
         cleanedKeys = LogTestUtils.keysInLog(log);
@@ -1966,7 +2006,7 @@ public class LogCleanerTest {
             offsetMap.put(key(k), Long.MAX_VALUE);
         }
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1, upperBoundOffset);
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
         // clear scheduler so that async deletes don't run
         time.scheduler.clear();
         cleanedKeys = LogTestUtils.keysInLog(log);
@@ -1986,7 +2026,7 @@ public class LogCleanerTest {
             offsetMap.put(key(k), Long.MAX_VALUE);
         }
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
-            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1, upperBoundOffset);
+            new CleanerStats(Time.SYSTEM), new CleanedTransactionMetadata(), -1);
         // clear scheduler so that async deletes don't run
         time.scheduler.clear();
         cleanedKeys = LogTestUtils.keysInLog(log);

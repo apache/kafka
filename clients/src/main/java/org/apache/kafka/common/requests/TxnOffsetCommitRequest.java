@@ -23,8 +23,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
-import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
-import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
@@ -193,32 +191,9 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return data;
     }
 
-    static List<TxnOffsetCommitResponseTopic> getErrorResponseTopics(List<TxnOffsetCommitRequestTopic> requestTopics,
-                                                                     Errors e) {
-        List<TxnOffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
-        for (TxnOffsetCommitRequestTopic entry : requestTopics) {
-            List<TxnOffsetCommitResponsePartition> responsePartitions = new ArrayList<>();
-            for (TxnOffsetCommitRequestPartition requestPartition : entry.partitions()) {
-                responsePartitions.add(new TxnOffsetCommitResponsePartition()
-                                           .setPartitionIndex(requestPartition.partitionIndex())
-                                           .setErrorCode(e.code()));
-            }
-            responseTopicData.add(new TxnOffsetCommitResponseTopic()
-                                      .setName(entry.name())
-                                      .setPartitions(responsePartitions)
-            );
-        }
-        return responseTopicData;
-    }
-
     @Override
     public TxnOffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        List<TxnOffsetCommitResponseTopic> responseTopicData =
-            getErrorResponseTopics(data.topics(), Errors.forException(e));
-
-        return new TxnOffsetCommitResponse(new TxnOffsetCommitResponseData()
-                                               .setThrottleTimeMs(throttleTimeMs)
-                                               .setTopics(responseTopicData));
+        return new TxnOffsetCommitResponse(getErrorResponse(data, Errors.forException(e)).setThrottleTimeMs(throttleTimeMs));
     }
 
     @Override
@@ -233,6 +208,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
         request.topics().forEach(topic -> {
             TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic responseTopic = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                .setTopicId(topic.topicId())
                 .setName(topic.name());
             response.topics().add(responseTopic);
 
