@@ -103,7 +103,6 @@ public class LogCleanerTest {
 
     private final File tmpdir = TestUtils.tempDirectory();
     private final File dir = TestUtils.randomPartitionLogDir(tmpdir);
-    private final Properties logProps = new Properties();
     private final LogConfig logConfig;
     private final MockTime time = new MockTime();
     private final Throttler throttler = new Throttler(Double.MAX_VALUE, Long.MAX_VALUE, "throttler", "entries", time);
@@ -112,6 +111,7 @@ public class LogCleanerTest {
     private final ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false);
 
     public LogCleanerTest() {
+        Properties logProps = new Properties();
         logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024);
         logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024);
         logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
@@ -1326,7 +1326,7 @@ public class LogCleanerTest {
         for (LogSegment s : log.logSegments()) {
             Set<String> values = new HashSet<>();
             for (Record record : s.log().records()) {
-                values.add(LogTestUtils.readString(record.value()));
+                values.add(Utils.utf8(record.value()));
             }
             result.add(values.size());
         }
@@ -1449,8 +1449,10 @@ public class LogCleanerTest {
     private List<Long> offsetsInLog(UnifiedLog log) {
         List<Long> result = new ArrayList<>();
         for (LogSegment seg : log.logSegments()) {
-            for (org.apache.kafka.common.record.internal.Record r : seg.log().records()) {
-                result.add(r.offset());
+            for (Record r : seg.log().records()) {
+                if (r.hasValue() && r.hasKey()) {
+                    result.add(r.offset());
+                }
             }
         }
         return result;
@@ -1459,11 +1461,8 @@ public class LogCleanerTest {
     private int unkeyedMessageCountInLog(UnifiedLog log) {
         int count = 0;
         for (LogSegment seg : log.logSegments()) {
-            for (RecordBatch batch : seg.log().batches()) {
-                if (batch.isControlBatch()) continue;
-                for (org.apache.kafka.common.record.internal.Record r : batch) {
-                    if (!r.hasKey()) count++;
-                }
+            for (Record r : seg.log().records()) {
+                if (r.hasValue() && !r.hasKey()) count++;
             }
         }
         return count;
@@ -1767,7 +1766,7 @@ public class LogCleanerTest {
         assertEquals(end, endOffset, "Last offset should be the end offset.");
         assertEquals(end - start, map.size(), "Should have the expected number of messages in the map.");
         for (int i = start; i < end; i++) {
-            assertEquals((long) i, map.get(key(i)), "Should find all the keys");
+            assertEquals(i, map.get(key(i)), "Should find all the keys");
         }
         assertEquals(-1L, map.get(key(start - 1)), "Should not find a value too small");
         assertEquals(-1L, map.get(key(end)), "Should not find a value too large");
@@ -2094,7 +2093,7 @@ public class LogCleanerTest {
             for (RecordBatch batch : segment.log().batches()) {
                 for (Record record : batch) {
                     assertTrue(record.hasMagic(batch.magic()));
-                    long value = Long.parseLong(LogTestUtils.readString(record.value()));
+                    long value = Long.parseLong(Utils.utf8(record.value()));
                     assertEquals(record.offset(), value);
                 }
             }
@@ -2115,7 +2114,7 @@ public class LogCleanerTest {
 
         for (Record logEntry : records.records()) {
             long entryOffset = logEntry.offset();
-            long value = Long.parseLong(LogTestUtils.readString(logEntry.value()));
+            long value = Long.parseLong(Utils.utf8(logEntry.value()));
             assertEquals(entryOffset, value);
         }
     }
