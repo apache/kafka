@@ -45,7 +45,7 @@ public interface ShareGroupDLQMetadataCacheHelper {
     boolean isDlqEnabledOnTopic(String topic);
 
     /**
-     * Check is the cluster config to auto create DLQ topics is enabled.
+     * Check if the cluster config to auto create DLQ topics is enabled.
      *
      * @return Boolean which is true when DLQ topic auto create cluster config is set, false otherwise
      */
@@ -57,6 +57,14 @@ public interface ShareGroupDLQMetadataCacheHelper {
      * @return  Optional of string representing DLQ prefix if configured, empty otherwise
      */
     Optional<String> shareGroupDlqTopicPrefix();
+
+    /**
+     * Check is copy record data into DLQ topic is enabled.
+     *
+     * @param groupId The id of the share group
+     * @return  Boolean which is true if config is set, false otherwise
+     */
+    boolean isShareGroupDlqCopyRecordEnabled(String groupId);
 
     /**
      * Check if a topic is present in the metadata cache.

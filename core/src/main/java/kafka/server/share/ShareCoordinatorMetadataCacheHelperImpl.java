@@ -24,7 +24,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
@@ -45,16 +45,19 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     private final MetadataCache metadataCache;
     private final Function<SharePartitionKey, Integer> keyToPartitionMapper;
     private final ListenerName interBrokerListenerName;
+    private final GroupConfigManager groupConfigManager;
     private final Logger log = LoggerFactory.getLogger(ShareCoordinatorMetadataCacheHelperImpl.class);
 
     public ShareCoordinatorMetadataCacheHelperImpl(
         MetadataCache metadataCache,
         Function<SharePartitionKey, Integer> keyToPartitionMapper,
-        ListenerName interBrokerListenerName
+        ListenerName interBrokerListenerName,
+        GroupConfigManager groupConfigManager
     ) {
         this.metadataCache = Objects.requireNonNull(metadataCache, "metadataCache must not be null");
         this.keyToPartitionMapper = Objects.requireNonNull(keyToPartitionMapper, "keyToPartitionMapper must not be null");
         this.interBrokerListenerName = Objects.requireNonNull(interBrokerListenerName, "interBrokerListenerName must not be null");
+        this.groupConfigManager = Objects.requireNonNull(groupConfigManager, "groupConfigManager must not be null");
     }
 
     @Override
@@ -69,51 +72,18 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
 
     @Override
     public Optional<String> shareGroupDlqTopic(String groupId) {
-        Properties props = metadataCache.groupConfig(groupId);
-        if (props == null || props.isEmpty()) {
-            return Optional.empty();
-        }
-        Object topicName = props.get(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
-        if (topicName instanceof String) {
-            return Optional.of((String) topicName);
-        }
-        return Optional.empty();
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::errorsDLQTopicName);
     }
 
     @Override
     public boolean isDlqAutoTopicCreateEnabled() {
-        Optional<Integer> someBrokerId = metadataCache.getRandomAliveBrokerId();
-        if (someBrokerId.isEmpty() || someBrokerId.get() < 0) {
-            return false;
-        }
-        Properties props = metadataCache.brokerConfig(someBrokerId.get());
-
-        if (props == null || props.isEmpty()) {
-            return false;
-        }
-        Object isEnabled = props.get(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
-        if (isEnabled instanceof Boolean) {
-            return (boolean)  isEnabled;
-        }
-        return false;
+        return groupConfigManager.isDlqAutoTopicCreateEnabled();
     }
 
     @Override
     public Optional<String> shareGroupDlqTopicPrefix() {
-        Optional<Integer> someBrokerId = metadataCache.getRandomAliveBrokerId();
-        if (someBrokerId.isEmpty() || someBrokerId.get() < 0) {
-            return Optional.empty();
-        }
-        Properties props = metadataCache.brokerConfig(someBrokerId.get());
-
-        if (props == null || props.isEmpty()) {
-            return Optional.empty();
-        }
-        Object topicPrefix = props.get(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
-        if (topicPrefix instanceof String) {
-            return Optional.of((String) topicPrefix);
-        }
-        return Optional.empty();
+        return groupConfigManager.shareGroupDlqTopicPrefix();
     }
 
     @Override
@@ -127,6 +97,12 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
             return (boolean) isEnabled;
         }
         return false;
+    }
+
+    @Override
+    public boolean isShareGroupDlqCopyRecordEnabled(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::errorsDLQCopyRecordEnable).orElse(false);
     }
 
     @Override

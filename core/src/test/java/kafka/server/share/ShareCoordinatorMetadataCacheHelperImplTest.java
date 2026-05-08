@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
@@ -57,23 +57,34 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         Exception e = assertThrows(NullPointerException.class, () -> new ShareCoordinatorMetadataCacheHelperImpl(
             null,
             func,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         ));
         assertEquals("metadataCache must not be null", e.getMessage());
 
         e = assertThrows(NullPointerException.class, () -> new ShareCoordinatorMetadataCacheHelperImpl(
             mock(MetadataCache.class),
             null,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         ));
         assertEquals("keyToPartitionMapper must not be null", e.getMessage());
 
         e = assertThrows(NullPointerException.class, () -> new ShareCoordinatorMetadataCacheHelperImpl(
             mock(MetadataCache.class),
             func,
-            null
+            null,
+            mock(GroupConfigManager.class)
         ));
         assertEquals("interBrokerListenerName must not be null", e.getMessage());
+
+        e = assertThrows(NullPointerException.class, () -> new ShareCoordinatorMetadataCacheHelperImpl(
+            mock(MetadataCache.class),
+            func,
+            mock(ListenerName.class),
+            null
+        ));
+        assertEquals("groupConfigManager must not be null", e.getMessage());
     }
 
     @Test
@@ -86,7 +97,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -108,7 +120,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -130,7 +143,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         );
 
         assertEquals(
@@ -150,7 +164,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mockListenerName
+            mockListenerName,
+            mock(GroupConfigManager.class)
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -238,7 +253,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mockListenerName
+            mockListenerName,
+            mock(GroupConfigManager.class)
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -294,7 +310,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mockListenerName
+            mockListenerName,
+            mock(GroupConfigManager.class)
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -350,7 +367,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mockListenerName
+            mockListenerName,
+            mock(GroupConfigManager.class)
         );
 
         when(mockMetadataCache.contains(eq(Topic.SHARE_GROUP_STATE_TOPIC_NAME)))
@@ -407,7 +425,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mockListenerName
+            mockListenerName,
+            mock(GroupConfigManager.class)
         );
 
         when(mockMetadataCache.getAliveBrokerNodes(
@@ -433,7 +452,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelper cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             func,
-            mockListenerName
+            mockListenerName,
+            mock(GroupConfigManager.class)
         );
 
         List<Node> nodes = List.of(
@@ -458,269 +478,159 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
     // Tests for shareGroupDlqTopic
 
     @Test
-    public void testShareGroupDlqTopicReturnsEmptyWhenGroupConfigIsNull() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.groupConfig("test-group")).thenReturn(null);
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertEquals(Optional.empty(), cache.shareGroupDlqTopic("test-group"));
-        verify(mockMetadataCache, times(1)).groupConfig("test-group");
-    }
-
-    @Test
     public void testShareGroupDlqTopicReturnsEmptyWhenGroupConfigIsEmpty() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.groupConfig("test-group")).thenReturn(new Properties());
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        when(mockGroupConfigManager.groupConfig("test-group")).thenReturn(Optional.empty());
 
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
+            mock(MetadataCache.class),
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mockGroupConfigManager
         );
 
         assertEquals(Optional.empty(), cache.shareGroupDlqTopic("test-group"));
-    }
-
-    @Test
-    public void testShareGroupDlqTopicReturnsEmptyWhenConfigValueNotString() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        Properties props = new Properties();
-        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, 12345);
-        when(mockMetadataCache.groupConfig("test-group")).thenReturn(props);
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertEquals(Optional.empty(), cache.shareGroupDlqTopic("test-group"));
+        verify(mockGroupConfigManager, times(1)).groupConfig("test-group");
     }
 
     @Test
     public void testShareGroupDlqTopicReturnsTopicName() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        Properties props = new Properties();
-        props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "dlq-topic");
-        when(mockMetadataCache.groupConfig("test-group")).thenReturn(props);
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        GroupConfig mockGroupConfig = mock(GroupConfig.class);
+        when(mockGroupConfig.errorsDLQTopicName()).thenReturn("dlq-topic");
+        when(mockGroupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(mockGroupConfig));
 
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
+            mock(MetadataCache.class),
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mockGroupConfigManager
         );
 
         assertEquals(Optional.of("dlq-topic"), cache.shareGroupDlqTopic("test-group"));
+        verify(mockGroupConfigManager, times(1)).groupConfig("test-group");
+    }
+
+    // Tests for isShareGroupDlqCopyRecordEnabled
+
+    @Test
+    public void testIsShareGroupDlqCopyRecordEnabledReturnsFalseWhenGroupConfigEmpty() {
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        when(mockGroupConfigManager.groupConfig("test-group")).thenReturn(Optional.empty());
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mock(MetadataCache.class),
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mockGroupConfigManager
+        );
+
+        assertFalse(cache.isShareGroupDlqCopyRecordEnabled("test-group"));
+        verify(mockGroupConfigManager, times(1)).groupConfig("test-group");
+    }
+
+    @Test
+    public void testIsShareGroupDlqCopyRecordEnabledReturnsTrue() {
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        GroupConfig mockGroupConfig = mock(GroupConfig.class);
+        when(mockGroupConfig.errorsDLQCopyRecordEnable()).thenReturn(true);
+        when(mockGroupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(mockGroupConfig));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mock(MetadataCache.class),
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mockGroupConfigManager
+        );
+
+        assertTrue(cache.isShareGroupDlqCopyRecordEnabled("test-group"));
+        verify(mockGroupConfigManager, times(1)).groupConfig("test-group");
+    }
+
+    @Test
+    public void testIsShareGroupDlqCopyRecordEnabledReturnsFalse() {
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        GroupConfig mockGroupConfig = mock(GroupConfig.class);
+        when(mockGroupConfig.errorsDLQCopyRecordEnable()).thenReturn(false);
+        when(mockGroupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(mockGroupConfig));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mock(MetadataCache.class),
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mockGroupConfigManager
+        );
+
+        assertFalse(cache.isShareGroupDlqCopyRecordEnabled("test-group"));
+        verify(mockGroupConfigManager, times(1)).groupConfig("test-group");
     }
 
     // Tests for isDlqAutoTopicCreateEnabled
 
     @Test
-    public void testIsDlqAutoTopicCreateEnabledReturnsFalseWhenNoBroker() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.empty());
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertFalse(cache.isDlqAutoTopicCreateEnabled());
-    }
-
-    @Test
-    public void testIsDlqAutoTopicCreateEnabledReturnsFalseWhenBrokerIdNegative() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(-1));
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertFalse(cache.isDlqAutoTopicCreateEnabled());
-    }
-
-    @Test
-    public void testIsDlqAutoTopicCreateEnabledReturnsFalseWhenBrokerConfigNull() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(null);
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertFalse(cache.isDlqAutoTopicCreateEnabled());
-    }
-
-    @Test
-    public void testIsDlqAutoTopicCreateEnabledReturnsFalseWhenBrokerConfigEmpty() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(new Properties());
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertFalse(cache.isDlqAutoTopicCreateEnabled());
-    }
-
-    @Test
-    public void testIsDlqAutoTopicCreateEnabledReturnsFalseWhenConfigValueNotBoolean() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        Properties props = new Properties();
-        props.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, "true");
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(props);
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertFalse(cache.isDlqAutoTopicCreateEnabled());
-    }
-
-    @Test
     public void testIsDlqAutoTopicCreateEnabledReturnsTrue() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        Properties props = new Properties();
-        props.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(props);
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        when(mockGroupConfigManager.isDlqAutoTopicCreateEnabled()).thenReturn(true);
 
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
+            mock(MetadataCache.class),
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mockGroupConfigManager
         );
 
         assertTrue(cache.isDlqAutoTopicCreateEnabled());
+        verify(mockGroupConfigManager, times(1)).isDlqAutoTopicCreateEnabled();
     }
 
     @Test
-    public void testIsDlqAutoTopicCreateEnabledReturnsFalseValue() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        Properties props = new Properties();
-        props.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, false);
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(props);
+    public void testIsDlqAutoTopicCreateEnabledReturnsFalse() {
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        when(mockGroupConfigManager.isDlqAutoTopicCreateEnabled()).thenReturn(false);
 
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
+            mock(MetadataCache.class),
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mockGroupConfigManager
         );
 
         assertFalse(cache.isDlqAutoTopicCreateEnabled());
+        verify(mockGroupConfigManager, times(1)).isDlqAutoTopicCreateEnabled();
     }
 
     // Tests for shareGroupDlqTopicPrefix
 
     @Test
-    public void testShareGroupDlqTopicPrefixReturnsEmptyWhenNoBroker() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.empty());
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertEquals(Optional.empty(), cache.shareGroupDlqTopicPrefix());
-    }
-
-    @Test
-    public void testShareGroupDlqTopicPrefixReturnsEmptyWhenBrokerIdNegative() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(-1));
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertEquals(Optional.empty(), cache.shareGroupDlqTopicPrefix());
-    }
-
-    @Test
-    public void testShareGroupDlqTopicPrefixReturnsEmptyWhenBrokerConfigNull() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(null);
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertEquals(Optional.empty(), cache.shareGroupDlqTopicPrefix());
-    }
-
-    @Test
-    public void testShareGroupDlqTopicPrefixReturnsEmptyWhenBrokerConfigEmpty() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(new Properties());
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertEquals(Optional.empty(), cache.shareGroupDlqTopicPrefix());
-    }
-
-    @Test
-    public void testShareGroupDlqTopicPrefixReturnsEmptyWhenConfigValueNotString() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        Properties props = new Properties();
-        props.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, 12345);
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(props);
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class)
-        );
-
-        assertEquals(Optional.empty(), cache.shareGroupDlqTopicPrefix());
-    }
-
-    @Test
     public void testShareGroupDlqTopicPrefixReturnsPrefix() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        when(mockMetadataCache.getRandomAliveBrokerId()).thenReturn(Optional.of(0));
-        Properties props = new Properties();
-        props.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "dlq.");
-        when(mockMetadataCache.brokerConfig(0)).thenReturn(props);
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        when(mockGroupConfigManager.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("dlq."));
 
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
+            mock(MetadataCache.class),
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mockGroupConfigManager
         );
 
         assertEquals(Optional.of("dlq."), cache.shareGroupDlqTopicPrefix());
+        verify(mockGroupConfigManager, times(1)).shareGroupDlqTopicPrefix();
+    }
+
+    @Test
+    public void testShareGroupDlqTopicPrefixReturnsEmpty() {
+        GroupConfigManager mockGroupConfigManager = mock(GroupConfigManager.class);
+        when(mockGroupConfigManager.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mock(MetadataCache.class),
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mockGroupConfigManager
+        );
+
+        assertEquals(Optional.empty(), cache.shareGroupDlqTopicPrefix());
+        verify(mockGroupConfigManager, times(1)).shareGroupDlqTopicPrefix();
     }
 
     // Tests for isDlqEnabledOnTopic
@@ -733,7 +643,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         );
 
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
@@ -748,7 +659,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         );
 
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
@@ -764,7 +676,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         );
 
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
@@ -780,7 +693,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         );
 
         assertTrue(cache.isDlqEnabledOnTopic("test-topic"));
@@ -796,7 +710,8 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
             mockMetadataCache,
             sharePartitionKey -> 0,
-            mock(ListenerName.class)
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
         );
 
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
