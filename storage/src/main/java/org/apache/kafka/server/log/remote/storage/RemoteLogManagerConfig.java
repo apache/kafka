@@ -370,13 +370,13 @@ public final class RemoteLogManagerConfig {
                 .define(LOG_REMOTE_COPY_LAG_MS_PROP,
                         LONG,
                         DEFAULT_LOG_REMOTE_COPY_LAG_MS,
-                        atLeast(DEFAULT_LOG_REMOTE_COPY_LAG_MS),
+                        atLeast(-1),
                         MEDIUM,
                         LOG_REMOTE_COPY_LAG_MS_DOC)
                 .define(LOG_REMOTE_COPY_LAG_BYTES_PROP,
                         LONG,
                         DEFAULT_LOG_REMOTE_COPY_LAG_BYTES,
-                        atLeast(DEFAULT_LOG_REMOTE_COPY_LAG_BYTES),
+                        atLeast(-1),
                         MEDIUM,
                         LOG_REMOTE_COPY_LAG_BYTES_DOC)
                 .define(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
