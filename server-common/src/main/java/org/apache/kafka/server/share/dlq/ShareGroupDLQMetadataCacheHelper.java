@@ -25,7 +25,7 @@ import java.util.Optional;
 public interface ShareGroupDLQMetadataCacheHelper {
     Optional<String> shareGroupDlqTopic(String groupId);
 
-    boolean isDlqEnabledOnTopic(String topicId);
+    boolean isDlqEnabledOnTopic(String topic);
 
     boolean isDlqAutoTopicCreateEnabled();
 
