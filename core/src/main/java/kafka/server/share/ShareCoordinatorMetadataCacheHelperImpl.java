@@ -18,12 +18,16 @@
 package kafka.server.share;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
 import org.slf4j.Logger;
@@ -33,10 +37,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 
-public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper {
+public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper, ShareGroupDLQMetadataCacheHelper {
     private final MetadataCache metadataCache;
     private final Function<SharePartitionKey, Integer> keyToPartitionMapper;
     private final ListenerName interBrokerListenerName;
@@ -58,6 +63,68 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
             return metadataCache.contains(topic);
         } catch (Exception e) {
             log.warn("Exception checking {} in metadata cache", topic, e);
+        }
+        return false;
+    }
+
+    @Override
+    public Optional<String> shareGroupDlqTopic(String groupId) {
+        Properties props = metadataCache.groupConfig(groupId);
+        if (props == null || props.isEmpty()) {
+            return Optional.empty();
+        }
+        Object topicName = props.get(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG);
+        if (topicName instanceof String) {
+            return Optional.of((String) topicName);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public boolean isDlqAutoTopicCreateEnabled() {
+        Optional<Integer> someBrokerId = metadataCache.getRandomAliveBrokerId();
+        if (someBrokerId.isEmpty() || someBrokerId.get() < 0) {
+            return false;
+        }
+        Properties props = metadataCache.brokerConfig(someBrokerId.get());
+
+        if (props == null || props.isEmpty()) {
+            return false;
+        }
+        Object isEnabled = props.get(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG);
+        if (isEnabled instanceof Boolean) {
+            return (boolean)  isEnabled;
+        }
+        return false;
+    }
+
+    @Override
+    public Optional<String> shareGroupDlqTopicPrefix() {
+        Optional<Integer> someBrokerId = metadataCache.getRandomAliveBrokerId();
+        if (someBrokerId.isEmpty() || someBrokerId.get() < 0) {
+            return Optional.empty();
+        }
+        Properties props = metadataCache.brokerConfig(someBrokerId.get());
+
+        if (props == null || props.isEmpty()) {
+            return Optional.empty();
+        }
+        Object topicPrefix = props.get(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG);
+        if (topicPrefix instanceof String) {
+            return Optional.of((String) topicPrefix);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public boolean isDlqEnabledOnTopic(String topic) {
+        Properties props = metadataCache.topicConfig(topic);
+        if (props == null || props.isEmpty()) {
+            return false;
+        }
+        Object isEnabled = props.get(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+        if (isEnabled instanceof Boolean) {
+            return (boolean) isEnabled;
         }
         return false;
     }
