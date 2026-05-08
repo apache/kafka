@@ -80,9 +80,11 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
     private StateStoreContext stateStoreContext;
     private final Position position;
 
-    InMemorySessionStore(final String name,
-                         final long retentionPeriod,
-                         final String metricScope) {
+    public InMemorySessionStore(
+        final String name,
+        final long retentionPeriod,
+        final String metricScope
+    ) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.metricScope = metricScope;

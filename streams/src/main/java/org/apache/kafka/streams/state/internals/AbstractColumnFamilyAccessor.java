@@ -96,9 +96,13 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
 
     @Override
     public void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
-        accessor.put(offsetColumnFamilyHandle, statusKey, closedState);
+        // Only persist the closed state if the store was previously open.
+        // After an unclean shutdown, RocksDB may still be running background recovery,
+        // causing accessor.put() to block.
+        if (storeOpen.compareAndSet(true, false)) {
+            accessor.put(offsetColumnFamilyHandle, statusKey, closedState);
+        }
         offsetColumnFamilyHandle.close();
-        storeOpen.set(false);
     }
 
     @Override

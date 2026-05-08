@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -33,9 +37,14 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class ChangedSerdeTest {
     private static final String TOPIC = "some-topic";
+    private static final Headers HEADERS = new RecordHeaders().add("key", "value".getBytes());
 
     private static final Serializer<String> STRING_SERIALIZER = Serdes.String().serializer();
     private static final ChangedSerializer<String> CHANGED_STRING_SERIALIZER =
@@ -51,9 +60,9 @@ public class ChangedSerdeTest {
     final String nonNullOldValue = "world";
 
     private static <T> void checkRoundTrip(final T data, final Serializer<T> serializer, final Deserializer<T> deserializer) {
-        final byte[] serialized = serializer.serialize(TOPIC, data);
+        final byte[] serialized = serializer.serialize(TOPIC, HEADERS, data);
         assertThat(serialized, is(notNullValue()));
-        final T deserialized = deserializer.deserialize(TOPIC, serialized);
+        final T deserialized = deserializer.deserialize(TOPIC, HEADERS, serialized);
         assertThat(deserialized, is(data));
     }
 
@@ -63,7 +72,7 @@ public class ChangedSerdeTest {
 
         assertThrows(
                 StreamsException.class,
-                () -> CHANGED_STRING_SERIALIZER.serialize(TOPIC, data));
+                () -> CHANGED_STRING_SERIALIZER.serialize(TOPIC, HEADERS, data));
     }
 
     @Test
@@ -75,7 +84,7 @@ public class ChangedSerdeTest {
 
         assertThrows(
                 StreamsException.class,
-                () -> serializer.serialize(TOPIC, data));
+                () -> serializer.serialize(TOPIC, HEADERS, data));
     }
 
     @Test
@@ -99,7 +108,7 @@ public class ChangedSerdeTest {
     @Test
     public void shouldThrowErrorIfEncountersAnUnknownByteValueForOldNewFlag() {
         final Change<String> data = new Change<>(null, nonNullOldValue);
-        final byte[] serialized = CHANGED_STRING_SERIALIZER.serialize(TOPIC, data);
+        final byte[] serialized = CHANGED_STRING_SERIALIZER.serialize(TOPIC, HEADERS, data);
         assertThat(serialized, is(notNullValue()));
 
         // mutate the serialized array to replace OLD_NEW_FLAG with an unsupported byte value
@@ -109,7 +118,7 @@ public class ChangedSerdeTest {
 
         assertThrows(
             StreamsException.class,
-            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, serialized));
+            () -> CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized));
     }
 
     @Test
@@ -173,7 +182,38 @@ public class ChangedSerdeTest {
     private static void checkRoundTripForReservedVersion(final Change<String> data) {
         final byte[] serialized = serializeVersions3Through5(TOPIC, data);
         assertThat(serialized, is(notNullValue()));
-        final Change<String> deserialized = CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, serialized);
+        final Change<String> deserialized = CHANGED_STRING_DESERIALIZER.deserialize(TOPIC, HEADERS, serialized);
         assertThat(deserialized, is(data));
+    }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingSerializer() {
+        final Serializer<String> mockSerializer = mock(StringSerializer.class);
+        final ChangedSerializer<String> changedSerializer = new ChangedSerializer<>(mockSerializer);
+
+        final String value = "value";
+        final Change<String> data = new Change<>(value, null);
+        when(mockSerializer.serialize(TOPIC, HEADERS, value)).thenReturn(value.getBytes());
+
+        changedSerializer.serialize(TOPIC, HEADERS, data);
+
+        verify(mockSerializer).serialize(TOPIC, HEADERS, value);
+        verify(mockSerializer, never()).serialize(TOPIC, value);
+    }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingDeserializer() {
+        final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
+        final ChangedDeserializer<String> changedDeserializer = new ChangedDeserializer<>(mockDeserializer);
+
+        final String value = "value";
+        final Change<String> data = new Change<>(value, null);
+
+        final byte[] serialized = CHANGED_STRING_SERIALIZER.serialize(TOPIC, HEADERS, data);
+
+        changedDeserializer.deserialize(TOPIC, HEADERS, serialized);
+
+        verify(mockDeserializer).deserialize(TOPIC, HEADERS, value.getBytes());
+        verify(mockDeserializer, never()).deserialize(TOPIC, value.getBytes());
     }
 }

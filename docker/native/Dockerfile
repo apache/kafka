@@ -57,6 +57,8 @@ LABEL org.label-schema.name="kafka" \
       org.opencontainers.image.authors="Apache Kafka"
 
 RUN apk update ; \
+    # Fix CVE-2026-28390 and CVE-2026-22184. Remove this if alpine:latest is updated to a version that has these CVEs fixed.
+    apk upgrade --no-cache libcrypto3 libssl3 zlib; \
     apk add --no-cache gcompat ; \
     apk add --no-cache bash ; \
     mkdir -p /etc/kafka/docker /mnt/shared/config /opt/kafka/config /etc/kafka/secrets ; \

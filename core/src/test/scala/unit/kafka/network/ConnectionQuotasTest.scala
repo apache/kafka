@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.{ConnectionThrottledException, SocketServer, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
@@ -86,7 +87,7 @@ class ConnectionQuotasTest {
   @BeforeEach
   def setUp(): Unit = {
     // Clean-up any metrics left around by previous tests
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
 
     val metricsPackage = "kafka.network"
     val metricsClassName = "ConnectionQuotasTest"
@@ -109,7 +110,7 @@ class ConnectionQuotasTest {
       connectionQuotas.close()
     }
     metrics.close()
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
     blockedPercentMeters.clear()
   }
 

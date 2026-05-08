@@ -84,10 +84,10 @@ import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -551,7 +551,7 @@ public class SenderTest {
         try (Metrics m = new Metrics()) {
             // Create a new record accumulator with non-0 partitionAvailabilityTimeoutMs
             // otherwise it wouldn't update the stats.
-            RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42);
+            RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42, false, "");
             long totalSize = 1024 * 1024;
             accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
                 DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, null,

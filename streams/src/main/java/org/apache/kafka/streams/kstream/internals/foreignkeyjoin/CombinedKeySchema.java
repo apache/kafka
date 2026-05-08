@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -60,16 +61,22 @@ public class CombinedKeySchema<KRight, KLeft> {
         foreignKeyDeserializer = foreignKeyDeserializer == null ? (Deserializer<KRight>) context.keySerde().deserializer() : foreignKeyDeserializer;
     }
 
-    Bytes toBytes(final KRight foreignKey, final KLeft primaryKey) {
+    Bytes toBytes(final KRight foreignKey, final KLeft primaryKey, final Headers headers) {
         //The serialization format - note that primaryKeySerialized may be null, such as when a prefixScan
         //key is being created.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
-        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(foreignKeySerdeTopic,
-                                                                               foreignKey);
+        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(
+                foreignKeySerdeTopic,
+                headers,
+                foreignKey
+        );
 
         //? bytes
-        final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(primaryKeySerdeTopic,
-                                                                               primaryKey);
+        final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(
+                primaryKeySerdeTopic,
+                headers,
+                primaryKey
+        );
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length + primaryKeySerializedData.length);
         buf.putInt(foreignKeySerializedData.length);
@@ -79,26 +86,26 @@ public class CombinedKeySchema<KRight, KLeft> {
     }
 
 
-    public CombinedKey<KRight, KLeft> fromBytes(final Bytes data) {
+    public CombinedKey<KRight, KLeft> fromBytes(final Bytes data, final Headers headers) {
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
         final byte[] dataArray = data.get();
         final ByteBuffer dataBuffer = ByteBuffer.wrap(dataArray);
         final int foreignKeyLength = dataBuffer.getInt();
         final byte[] foreignKeyRaw = new byte[foreignKeyLength];
         dataBuffer.get(foreignKeyRaw, 0, foreignKeyLength);
-        final KRight foreignKey = foreignKeyDeserializer.deserialize(foreignKeySerdeTopic, foreignKeyRaw);
+        final KRight foreignKey = foreignKeyDeserializer.deserialize(foreignKeySerdeTopic, headers, foreignKeyRaw);
 
         final byte[] primaryKeyRaw = new byte[dataArray.length - foreignKeyLength - Integer.BYTES];
         dataBuffer.get(primaryKeyRaw, 0, primaryKeyRaw.length);
-        final KLeft primaryKey = primaryKeyDeserializer.deserialize(primaryKeySerdeTopic, primaryKeyRaw);
+        final KLeft primaryKey = primaryKeyDeserializer.deserialize(primaryKeySerdeTopic, headers, primaryKeyRaw);
         return new CombinedKey<>(foreignKey, primaryKey);
     }
 
-    Bytes prefixBytes(final KRight key) {
+    Bytes prefixBytes(final KRight key, final Headers headers) {
         //The serialization format. Note that primaryKeySerialized is not required/used in this function.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
 
-        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(foreignKeySerdeTopic, key);
+        final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(foreignKeySerdeTopic, headers, key);
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length);
         buf.putInt(foreignKeySerializedData.length);

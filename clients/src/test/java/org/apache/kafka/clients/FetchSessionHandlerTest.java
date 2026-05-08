@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -124,10 +124,10 @@ public class FetchSessionHandlerTest {
             if (!actualIter.hasNext()) {
                 fail("Element " + i + " not found.");
             }
-            Map.Entry<TopicPartition, FetchRequest.PartitionData> actuaLEntry = actualIter.next();
-            assertEquals(expectedEntry.getKey(), actuaLEntry.getKey(), "Element " + i +
+            Map.Entry<TopicPartition, FetchRequest.PartitionData> actualEntry = actualIter.next();
+            assertEquals(expectedEntry.getKey(), actualEntry.getKey(), "Element " + i +
                 " had a different TopicPartition than expected.");
-            assertEquals(expectedEntry.getValue(), actuaLEntry.getValue(), "Element " + i +
+            assertEquals(expectedEntry.getValue(), actualEntry.getValue(), "Element " + i +
                 " had different PartitionData than expected.");
             i++;
         }

@@ -31,9 +31,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1341,6 +1341,42 @@ public class StreamsMembershipManagerTest {
 
         assertTrue(onGroupLeft.isDone());
         assertFalse(onGroupLeft.isCompletedExceptionally());
+    }
+
+    /**
+     * Test that when unsubscribe/leaveGroup is called during an ongoing reconciliation and the pending
+     * assignment event is completed exceptionally, the member can still rejoin and start
+     * a new reconciliation.
+     */
+    @Test
+    public void testLeaveGroupDuringReconciliationThenRejoin() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        when(subscriptionState.assignedPartitions()).thenReturn(Set.of());
+        joining();
+
+        // Start reconciliation - assignment event is pending
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        final StreamsTasksAssignedEvent pendingAssignmentEvent =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of());
+
+        // Call leaveGroup while reconciliation is in progress
+        membershipManager.leaveGroup();
+
+        // Complete the pending assignment event exceptionally (simulating unsubscribe skipping it)
+        pendingAssignmentEvent.future().completeExceptionally(
+            new KafkaException("Assignment event skipped because consumer is unsubscribing"));
+
+        // Complete leave and rejoin
+        membershipManager.onHeartbeatRequestGenerated();
+        Mockito.clearInvocations(backgroundEventHandler);
+        tasksAssignedAddCount = 0;
+        joining();
+
+        // Receive assignment - verify new reconciliation starts
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of());
     }
 
     @Test

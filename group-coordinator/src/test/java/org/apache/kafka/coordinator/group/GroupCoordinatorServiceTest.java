@@ -86,9 +86,9 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
@@ -2246,7 +2246,7 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(
                         new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
                     ))
-            ).iterator());
+            ));
         OffsetDeleteRequestData request = new OffsetDeleteRequestData()
             .setGroupId("group")
             .setTopics(requestTopicCollection);
@@ -2254,11 +2254,11 @@ public class GroupCoordinatorServiceTest {
         OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
             new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection(List.of(
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(0)
-            ).iterator());
+            ));
         OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
             new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(List.of(
                 new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection)
-            ).iterator());
+            ));
         OffsetDeleteResponseData response = new OffsetDeleteResponseData()
             .setTopics(responseTopicCollection);
 
@@ -2294,7 +2294,7 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(
                         new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
                     ))
-            ).iterator());
+            ));
         OffsetDeleteRequestData request = new OffsetDeleteRequestData().setGroupId("")
             .setTopics(requestTopicCollection);
 
@@ -2337,7 +2337,7 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(
                         new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
                     ))
-            ).iterator());
+            ));
         OffsetDeleteRequestData request = new OffsetDeleteRequestData()
             .setGroupId("group")
             .setTopics(requestTopicCollection);
@@ -2833,7 +2833,7 @@ public class GroupCoordinatorServiceTest {
                 new DeleteGroupsResponseData.DeletableGroupResult()
                     .setGroupId("group-id")
                     .setErrorCode(expectedErrorCode)
-            ).iterator()),
+            )),
             future.get()
         );
     }
@@ -2858,7 +2858,7 @@ public class GroupCoordinatorServiceTest {
                 List.of(new DeleteGroupsResponseData.DeletableGroupResult()
                     .setGroupId("foo")
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                ).iterator()
+                )
             ),
             future.get()
         );
@@ -2876,7 +2876,7 @@ public class GroupCoordinatorServiceTest {
             .setGroupId("foo")
             .setTransactionalId("transactional-id")
             .setMemberId("member-id")
-            .setGenerationId(10)
+            .setGenerationIdOrMemberEpoch(10)
             .setTopics(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                 .setName(TOPIC_NAME)
                 .setPartitions(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
@@ -2914,7 +2914,7 @@ public class GroupCoordinatorServiceTest {
             .setGroupId(groupId)
             .setTransactionalId("transactional-id")
             .setMemberId("member-id")
-            .setGenerationId(10)
+            .setGenerationIdOrMemberEpoch(10)
             .setTopics(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                 .setName(TOPIC_NAME)
                 .setPartitions(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
@@ -2953,7 +2953,7 @@ public class GroupCoordinatorServiceTest {
             .setProducerId(10L)
             .setProducerEpoch((short) 5)
             .setMemberId("member-id")
-            .setGenerationId(10)
+            .setGenerationIdOrMemberEpoch(10)
             .setTopics(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                 .setName(TOPIC_NAME)
                 .setPartitions(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
@@ -3007,7 +3007,7 @@ public class GroupCoordinatorServiceTest {
             .setProducerId(10L)
             .setProducerEpoch((short) 5)
             .setMemberId("member-id")
-            .setGenerationId(10)
+            .setGenerationIdOrMemberEpoch(10)
             .setTopics(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                 .setName(TOPIC_NAME)
                 .setPartitions(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
@@ -5751,7 +5751,7 @@ public class GroupCoordinatorServiceTest {
                             .setPartitionIndex(0)
                             .setStartOffset(0L)
                     ))
-            ).iterator());
+            ));
         AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(requestTopicCollection);
@@ -5828,7 +5828,7 @@ public class GroupCoordinatorServiceTest {
                             .setPartitionIndex(0)
                             .setStartOffset(0L)
                     ))
-            ).iterator());
+            ));
 
         AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
             .setGroupId(groupId)

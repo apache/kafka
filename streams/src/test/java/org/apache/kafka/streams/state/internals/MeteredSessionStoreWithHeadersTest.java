@@ -841,6 +841,8 @@ public class MeteredSessionStoreWithHeadersTest {
         lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
             .thenReturn(KEY);
 
+        when(context.headers()).thenReturn(new RecordHeaders());
+
         final MeteredSessionStoreWithHeaders<String, String> mockStore = new MeteredSessionStoreWithHeaders<>(
             innerStore,
             STORE_TYPE,
