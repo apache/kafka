@@ -2053,13 +2053,6 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @return Map of the client tags.
      */
-    /**
-     * Return the configured default {@link IsolationLevel} used by interactive queries.
-     */
-    public IsolationLevel defaultInteractiveQueryIsolationLevel() {
-        return IsolationLevel.valueOf(
-            getString(DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
-    }
 
     @SuppressWarnings("WeakerAccess")
     public Map<String, String> getClientTags() {
@@ -2129,6 +2122,14 @@ public class StreamsConfig extends AbstractConfig {
     public KafkaClientSupplier getKafkaClientSupplier() {
         return getConfiguredInstance(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG,
             KafkaClientSupplier.class);
+    }
+
+    /**
+     * Return the configured default {@link IsolationLevel} used by interactive queries.
+     */
+    public IsolationLevel defaultInteractiveQueryIsolationLevel() {
+        return IsolationLevel.valueOf(
+            getString(DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
     }
 
     /**
