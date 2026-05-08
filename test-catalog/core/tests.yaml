@@ -296,7 +296,6 @@ kafka.api.PlaintextAdminIntegrationTest:
 - testAppendConfigToEmptyDefaultValue
 - testAppendConfigToExistentValue
 - testAuthorizedOperations
-- testCallInFlightTimeouts
 - testClose
 - testConsumeAfterDeleteRecords
 - testConsumerGroupWithMemberMigration
