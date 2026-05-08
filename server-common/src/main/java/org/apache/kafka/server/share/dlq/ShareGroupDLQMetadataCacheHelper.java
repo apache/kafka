@@ -22,16 +22,54 @@ import org.apache.kafka.common.Node;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Interface encapsulating metadata cache related methods which are
+ * required by share group DLQ operations. This will be helpful in testing
+ * and keeping implementations manageable.
+ */
 public interface ShareGroupDLQMetadataCacheHelper {
+    /**
+     * Return optional of string representing of DLQ topic.
+     *
+     * @param groupId Id of the share group
+     * @return  Optional of string representing of DLQ topic if set, empty otherwise
+     */
     Optional<String> shareGroupDlqTopic(String groupId);
 
+    /**
+     * Check if DLQ dynamic config is set on the topic to mark it available for DLQ writes.
+     *
+     * @param topic The name of the topic
+     * @return  Boolean which is true when DLQ is set on the topic, false otherwise
+     */
     boolean isDlqEnabledOnTopic(String topic);
 
+    /**
+     * Check is the cluster config to auto create DLQ topics is enabled.
+     *
+     * @return Boolean which is true when DLQ topic auto create cluster config is set, false otherwise
+     */
     boolean isDlqAutoTopicCreateEnabled();
 
+    /**
+     * Return optional of string representing the configured DLQ prefix.
+     *
+     * @return  Optional of string representing DLQ prefix if configured, empty otherwise
+     */
     Optional<String> shareGroupDlqTopicPrefix();
 
+    /**
+     * Check if a topic is present in the metadata cache.
+     *
+     * @param topic The name of the topic
+     * @return  Boolean which is true is topic exists, false otherwise
+     */
     boolean containsTopic(String topic);
 
+    /**
+     * Get all nodes in the kafka cluster encapsulated in the {@link Node} object.
+     *
+     * @return  List of nodes representing the cluster nodes
+     */
     List<Node> getClusterNodes();
 }
