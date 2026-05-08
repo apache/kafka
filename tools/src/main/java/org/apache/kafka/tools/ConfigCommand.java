@@ -591,7 +591,7 @@ public class ConfigCommand {
 
             Optional<ConfigEntry.ConfigSource> configSourceFilter = describeAll
                     ? Optional.empty()
-                    : context.dynamicConfigSource();
+                    : Optional.of(context.dynamicConfigSource());
             Config config = configs.get(context.configResource()).get(30, TimeUnit.SECONDS);
             filterAndSortEntries(config, configSourceFilter).forEach(entry -> {
                 String synonyms = entry.synonyms().stream()
@@ -619,39 +619,39 @@ public class ConfigCommand {
         }
     }
 
-    private record DescribeConfigContext(ConfigResource configResource, Optional<ConfigEntry.ConfigSource> dynamicConfigSource) {
+    private record DescribeConfigContext(ConfigResource configResource, ConfigEntry.ConfigSource dynamicConfigSource) {
     }
 
     private static DescribeConfigContext describeConfigContext(String entityType, String entityName) {
         ConfigResource.Type configResourceType;
-        Optional<ConfigEntry.ConfigSource> dynamicConfigSource;
+        ConfigEntry.ConfigSource dynamicConfigSource;
 
         if (TOPIC_TYPE.equals(entityType)) {
             if (!entityName.isEmpty()) {
                 Topic.validate(entityName);
             }
             configResourceType = ConfigResource.Type.TOPIC;
-            dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG);
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG;
         } else if (BROKER_TYPE.equals(entityType)) {
             configResourceType = ConfigResource.Type.BROKER;
             if (BROKER_DEFAULT_ENTITY_NAME.equals(entityName)) {
-                dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG);
+                dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG;
             } else {
                 validateBrokerId(entityName, entityType);
-                dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG);
+                dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
             }
         } else if (BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
             if (!entityName.isEmpty()) {
                 validateBrokerId(entityName, entityType);
             }
             configResourceType = ConfigResource.Type.BROKER_LOGGER;
-            dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG);
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG;
         } else if (CLIENT_METRICS_TYPE.equals(entityType)) {
             configResourceType = ConfigResource.Type.CLIENT_METRICS;
-            dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG);
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG;
         } else if (GROUP_TYPE.equals(entityType)) {
             configResourceType = ConfigResource.Type.GROUP;
-            dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG);
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG;
         } else {
             throw new IllegalArgumentException("Invalid entity type: " + entityType);
         }
@@ -670,7 +670,7 @@ public class ConfigCommand {
         DescribeConfigContext context = describeConfigContext(entityType, entityName);
         Optional<ConfigEntry.ConfigSource> configSourceFilter = describeAll
                 ? Optional.empty()
-                : context.dynamicConfigSource();
+                : Optional.of(context.dynamicConfigSource());
         DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms);
         Map<ConfigResource, Config> configs = adminClient.describeConfigs(Collections.singleton(context.configResource()), describeOptions)
                     .all().get(30, TimeUnit.SECONDS);
