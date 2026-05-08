@@ -66,10 +66,6 @@ public class SslManager {
         }
     }
 
-    public String trustStoreLocation() {
-        return trustStoreFile != null ? trustStoreFile.getAbsolutePath() : null;
-    }
-
     public void close() throws IOException {
         if (keyStoreFile != null) {
             Utils.delete(keyStoreFile);
