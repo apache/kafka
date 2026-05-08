@@ -4600,9 +4600,9 @@ org.apache.kafka.common.requests.TxnOffsetCommitResponseTest:
 - testBuilderMergeAddsNewTopic
 - testBuilderMergeAppendsToExistingTopic
 - testBuilderMergeIntoEmpty
+- testBuilderRejectsNullKey
 - testConstructorWithErrorResponse
 - testParse
-- testTopicNameBuilderRejectsNullTopicName
 org.apache.kafka.common.requests.UpdateFeaturesRequestTest:
 - testGetErrorResponse
 - testUpdateFeaturesV0
