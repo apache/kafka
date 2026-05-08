@@ -17,15 +17,12 @@
 
 package kafka.server;
 
-import kafka.raft.KafkaRaftManager;
-
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.MetadataLogConfig;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 
@@ -74,7 +71,7 @@ public class RaftClusterSnapshotTest {
             assertEquals(numberOfControllers + numberOfBrokers, cluster.raftManagers().size());
 
             // For every controller and broker perform some sanity checks against the latest snapshot
-            for (KafkaRaftManager<ApiMessageAndVersion> raftManager : cluster.raftManagers().values()) {
+            for (var raftManager : cluster.raftManagers().values()) {
                 try (var snapshot = RecordsSnapshotReader.of(
                         raftManager.raftLog().latestSnapshot().get(),
                         new MetadataRecordSerde(),
