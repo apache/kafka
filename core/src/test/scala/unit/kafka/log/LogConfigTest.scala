@@ -73,8 +73,8 @@ class LogConfigTest {
       case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-0.1")
       case TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG => assertPropertyInvalid(name, "not_a_number", "remove", "0")
       case TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG => assertPropertyInvalid(name, "not_a_number", "remove", "0")
-      case TopicConfig.REMOTE_COPY_LAG_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
-      case TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number", "-1")
+      case TopicConfig.REMOTE_COPY_LAG_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-2")
+      case TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number", "-2")
       case TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG => assertPropertyInvalid(name, "not_a_boolean")
       case LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG => // no op
 
@@ -296,6 +296,44 @@ class LogConfigTest {
     props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "0")
 
     validateTopicLogConfig(props)
+  }
+
+  @Test
+  def testValidRemoteCopyLagMinusOneResolvesToLocalRetention(): Unit = {
+    val props = new util.HashMap[String, String]()
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    props.put(TopicConfig.RETENTION_MS_CONFIG, "1000")
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "900")
+    props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "-1")
+    props.put(TopicConfig.RETENTION_BYTES_CONFIG, "2000")
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1800")
+    props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "-1")
+
+    validateTopicLogConfig(props)
+  }
+
+  @Test
+  def testInvalidRemoteCopyLagMinusOneWhenEffectiveLocalRetentionIsUnlimited(): Unit = {
+    val props = new util.HashMap[String, String]()
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    props.put(TopicConfig.RETENTION_MS_CONFIG, "-1")
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2")
+    props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "-1")
+
+    val exception = assertThrows(classOf[ConfigException], () => validateTopicLogConfig(props))
+    assertTrue(exception.getMessage.contains(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG))
+  }
+
+  @Test
+  def testInvalidRemoteCopyLagBytesMinusOneWhenEffectiveLocalRetentionIsUnlimited(): Unit = {
+    val props = new util.HashMap[String, String]()
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    props.put(TopicConfig.RETENTION_BYTES_CONFIG, "-1")
+    props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2")
+    props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "-1")
+
+    val exception = assertThrows(classOf[ConfigException], () => validateTopicLogConfig(props))
+    assertTrue(exception.getMessage.contains(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG))
   }
 
   private def validateTopicLogConfig(props: util.Map[String, String]): Unit = {
