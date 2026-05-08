@@ -40,7 +40,7 @@ import static org.mockito.Mockito.when;
 public class AdminUtilsTest {
 
     @Test
-    void testWaitUntilLeaderIsElectedOrChanged() throws Exception {
+    void testFetchOrWaitForLeader() throws Exception {
         String topic = "test-topic";
         int partition = 0;
         Admin admin = mock(Admin.class);
@@ -64,13 +64,13 @@ public class AdminUtilsTest {
             }
         });
 
-        int result = AdminUtils.waitUntilLeaderIsElectedOrChanged(admin, topic, partition, 1000);
+        int result = AdminUtils.fetchOrWaitForLeader(admin, topic, partition, 1000);
 
         assertEquals(1, result);
     }
 
     @Test
-    void testWaitUntilLeaderIsElectedOrChangedTimesOut() throws Exception {
+    void testFetchOrWaitForLeaderTimesOut() throws Exception {
         String topic = "test-topic";
         int partition = 0;
         Node leader = null;
@@ -81,7 +81,7 @@ public class AdminUtilsTest {
         when(admin.describeTopics(anyCollection())).thenReturn(describeResult);
 
         assertThrows(AssertionError.class, () ->
-                        AdminUtils.waitUntilLeaderIsElectedOrChanged(admin, topic, partition, 1),
+                        AdminUtils.fetchOrWaitForLeader(admin, topic, partition, 1),
                 "Timing out after 1 ms since a leader was not elected for partition test-topic-0");
     }
 }

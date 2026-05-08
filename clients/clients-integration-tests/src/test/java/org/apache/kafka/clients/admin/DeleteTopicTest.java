@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -221,7 +222,7 @@ public class DeleteTopicTest {
             cluster.waitTopicDeletion(topic);
 
             waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic test not created.");
-            cluster.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, DEFAULT_TOPIC, 0, 1000);
+            AdminUtils.fetchOrWaitForLeader(admin, DEFAULT_TOPIC, 0, 1000);
         }
     }
 

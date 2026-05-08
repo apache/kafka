@@ -20,78 +20,67 @@ package org.apache.kafka.common.test;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-public class AdminUtils {
+public final class AdminUtils {
+
+    private AdminUtils() {}
 
     /**
-     * Wait for a leader to be elected or changed using the provided admin client.
-     *
-     * @param admin           the admin client to use for describing the topic.
-     * @param topic           the topic to check for leadership.
-     * @param partitionNumber the partition number to check for leadership.
-     * @param timeoutMs       the maximum time to wait for a leader to be elected or changed in milliseconds.
-     * @return the id of the elected leader.
-     * @throws ExecutionException   if an unexpected exception occurs while describing the topic.
-     * @throws InterruptedException if the thread is interrupted while waiting for a leader to be elected or changed.
-     * @throws AssertionError       if a leader is not elected within the specified timeout.
+     * Fetch the partition leader or wait until one is elected using the provided admin client.
      */
-    public static int waitUntilLeaderIsElectedOrChanged(Admin admin,
+    public static int fetchOrWaitForLeader(Admin admin,
                                                         String topic,
                                                         int partitionNumber,
-                                                        long timeoutMs) throws ExecutionException, InterruptedException, AssertionError {
-        return waitUntilLeaderIsElectedOrChanged(admin, topic, partitionNumber, timeoutMs, System::currentTimeMillis);
-    }
+                                                        long timeoutMs) throws InterruptedException {
 
-
-    // overload with time supplier for testing
-    static int waitUntilLeaderIsElectedOrChanged(Admin admin,
-                                                 String topic,
-                                                 int partitionNumber,
-                                                 long timeoutMs,
-                                                 Supplier<Long> timeProvider) throws ExecutionException, InterruptedException, AssertionError {
-        long startTime = timeProvider.get();
-        TopicPartition topicPartition = new TopicPartition(topic, partitionNumber);
-
-        while (timeProvider.get() < startTime + timeoutMs) {
-            try {
-                TopicDescription topicDescription = admin.describeTopics(List.of(topic))
-                        .allTopicNames().get().get(topic);
-
-                Optional<Integer> leader = topicDescription.partitions().stream()
-                        .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
-                        .findFirst()
-                        .flatMap(partitionInfo -> Optional.ofNullable(partitionInfo.leader()))
-                        .map(node -> {
-                            int leaderId = node.id();
-                            return leaderId == Node.noNode().id() ? null : leaderId;
-                        });
-
-                if (leader.isPresent()) {
-                    return leader.get();
-                }
-            } catch (ExecutionException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof UnknownTopicOrPartitionException ||
-                        cause instanceof LeaderNotAvailableException) {
-                    continue;
-                } else {
-                    throw e;
-                }
+        var condition = new Supplier<Boolean>() {
+            int leader = Node.noNode().id();
+            @Override
+            public Boolean get() {
+                checkLeader();
+                return this.leader != Node.noNode().id();
             }
 
-            TimeUnit.MILLISECONDS.sleep(Math.min(100L, timeoutMs));
-        }
+            public void checkLeader() {
+                try {
+                    TopicDescription topicDescription = admin.describeTopics(List.of(topic))
+                            .allTopicNames().get().get(topic);
 
-        throw new AssertionError("Timing out after " + timeoutMs +
-                " ms since a leader was not elected for partition " + topicPartition);
+                    Optional<Integer> leader = topicDescription.partitions().stream()
+                            .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
+                            .findFirst()
+                            .flatMap(partitionInfo -> Optional.ofNullable(partitionInfo.leader()))
+                            .map(node -> {
+                                int leaderId = node.id();
+                                return leaderId == Node.noNode().id() ? null : leaderId;
+                            });
+
+                    if (leader.isPresent()) {
+                        this.leader = leader.get();
+                    }
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    boolean isTransient = cause instanceof UnknownTopicOrPartitionException
+                            || cause instanceof LeaderNotAvailableException;
+                    if (!isTransient) {
+                        throw new RuntimeException(e);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            }
+        };
+
+        TestUtils.waitForCondition(condition, timeoutMs, "Timing out after %d ms since a leader was not elected for partition %s-%d".formatted(timeoutMs, topic, partitionNumber));
+
+        return condition.leader;
     }
 }

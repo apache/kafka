@@ -409,16 +409,4 @@ public interface ClusterInstance {
                     .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
     }
-
-
-
-    /**
-     * Wait for a leader to be elected or changed using the provided admin client.
-     */
-    default int waitUntilLeaderIsElectedOrChangedWithAdmin(Admin admin,
-                                                           String topic,
-                                                           int partitionNumber,
-                                                           long timeoutMs) throws Exception {
-        return AdminUtils.waitUntilLeaderIsElectedOrChanged(admin, topic, partitionNumber, timeoutMs);
-    }
 }
