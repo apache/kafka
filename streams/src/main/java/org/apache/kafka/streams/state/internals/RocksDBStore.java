@@ -924,13 +924,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         default ManagedKeyValueIterator<Bytes, byte[]> range(final ColumnFamilyHandle cf, final String storeName,
-                                                              final Bytes from, final Bytes to,
-                                                              final boolean forward, final boolean toInclusive) {
+                                                             final Bytes from, final Bytes to,
+                                                             final boolean forward, final boolean toInclusive) {
             return new RocksDBRangeIterator(storeName, newIterator(cf), from, to, forward, toInclusive);
         }
 
         default ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final ColumnFamilyHandle cf, final String storeName,
-                                                                    final Bytes prefix, final Bytes to) {
+                                                                  final Bytes prefix, final Bytes to) {
             return new RocksDBRangeIterator(storeName, newIterator(cf), prefix, to, true, false);
         }
 
