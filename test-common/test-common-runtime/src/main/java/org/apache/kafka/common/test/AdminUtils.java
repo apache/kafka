@@ -36,9 +36,9 @@ public final class AdminUtils {
      * Fetch the partition leader or wait until one is elected using the provided admin client.
      */
     public static int fetchOrWaitForLeader(Admin admin,
-                                                        String topic,
-                                                        int partitionNumber,
-                                                        long timeoutMs) throws InterruptedException {
+                                           String topic,
+                                           int partitionNumber,
+                                           long timeoutMs) throws InterruptedException {
 
         var condition = new Supplier<Boolean>() {
             int leader = Node.noNode().id();
@@ -62,9 +62,7 @@ public final class AdminUtils {
                                 return leaderId == Node.noNode().id() ? null : leaderId;
                             });
 
-                    if (leader.isPresent()) {
-                        this.leader = leader.get();
-                    }
+                    leader.ifPresent(integer -> this.leader = integer);
                 } catch (ExecutionException e) {
                     Throwable cause = e.getCause();
                     boolean isTransient = cause instanceof UnknownTopicOrPartitionException
