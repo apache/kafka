@@ -929,6 +929,7 @@ kafka.log.LogCleanerTest:
 - testCleanCorruptMessageSet
 - testCleanEmptyControlBatch
 - testCleanSegments
+- testCleanSegmentsNotRetainingLastEmptyBatch
 - testCleanSegmentsRetainingLastEmptyBatch
 - testCleanSegmentsWithAbort
 - testCleanSegmentsWithConcurrentSegmentDeletion
