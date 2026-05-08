@@ -529,6 +529,7 @@ public class ClusterTestExtensionsTest {
         }
     )
     public void testSaslPlaintextWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        assertSecurityProtocol(clusterInstance, SecurityProtocol.SASL_PLAINTEXT, "Expected broker to have SASL_PLAINTEXT data-plane listener");
         testSecurityProtocol(clusterInstance);
     }
 
@@ -542,14 +543,18 @@ public class ClusterTestExtensionsTest {
         }
     )
     public void testSaslSslWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        assertSecurityProtocol(clusterInstance, SecurityProtocol.SASL_SSL, "Expected broker to have SASL_SSL data-plane listener");
+        testSecurityProtocol(clusterInstance);
+    }
+
+    private static void assertSecurityProtocol(ClusterInstance clusterInstance, SecurityProtocol saslPlaintext, String message) {
         clusterInstance.aliveBrokers().values().forEach(broker -> {
             List<Endpoint> endpoints = CollectionConverters.asJava(broker.config().dataPlaneListeners());
             assertTrue(
-                endpoints.stream().anyMatch(ep -> ep.securityProtocol() == SecurityProtocol.SASL_SSL),
-                "Expected broker to have SASL_SSL data-plane listener"
+                    endpoints.stream().anyMatch(ep -> ep.securityProtocol() == saslPlaintext),
+                    message
             );
         });
-        testSecurityProtocol(clusterInstance);
     }
 
     private static void testSecurityProtocol(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {

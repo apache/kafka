@@ -56,6 +56,16 @@ public class SslManager {
         }
     }
 
+    public Map<String, Object> createClientSslConfig() {
+        try {
+            return new TestSslUtils.SslConfigsBuilder(ConnectionMode.CLIENT)
+                .useExistingTrustStore(trustStoreFile)
+                .build();
+        } catch (IOException | GeneralSecurityException e) {
+            throw new RuntimeException("Failed to create client SSL config", e);
+        }
+    }
+
     public String trustStoreLocation() {
         return trustStoreFile != null ? trustStoreFile.getAbsolutePath() : null;
     }
