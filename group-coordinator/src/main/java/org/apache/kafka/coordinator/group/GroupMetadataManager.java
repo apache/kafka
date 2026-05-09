@@ -4491,6 +4491,7 @@ public class GroupMetadataManager {
                 .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                 .setState(nextState)
                 .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+                .resetAssignedTasksEpochsToZero()
                 .build();
 
         CoordinatorRecord record = newStreamsGroupCurrentAssignmentRecord(group.groupId(), leavingStaticMember);

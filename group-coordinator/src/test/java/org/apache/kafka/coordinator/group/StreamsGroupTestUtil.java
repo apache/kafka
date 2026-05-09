@@ -285,4 +285,28 @@ class StreamsGroupTestUtil {
                 .setWarmupTasks(List.of());
     }
     
+    static TasksTupleWithEpochs resetAssignedTasksEpochsToZero(TasksTupleWithEpochs assignedTasks) {
+        if (assignedTasks.isEmpty()) {
+            return assignedTasks;
+        }
+
+        if (assignedTasks.activeTasksWithEpochs().isEmpty()) {
+            return assignedTasks;
+        }
+
+        Map<String, Map<Integer, Integer>> resetActiveTasks = new HashMap<>();
+        for (Map.Entry<String, Map<Integer, Integer>> entry : assignedTasks.activeTasksWithEpochs().entrySet()) {
+            Map<Integer, Integer> resetActiveTaskEpochs = new HashMap<>();
+            for (Integer partitionId : entry.getValue().keySet()) {
+                resetActiveTaskEpochs.put(partitionId, 0);
+            }
+            resetActiveTasks.put(entry.getKey(), resetActiveTaskEpochs);
+        }
+        return new TasksTupleWithEpochs(
+                resetActiveTasks,
+                assignedTasks.standbyTasks(),
+                assignedTasks.warmupTasks()
+        );
+    }
+    
 }
