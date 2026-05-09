@@ -2200,7 +2200,12 @@ project(':clients:clients-integration-tests') {
     implementation project(':transaction-coordinator')
     testImplementation project(':test-common:test-common-util')
 
+    testImplementation libs.apachedsCoreApi
+    testImplementation libs.apachedsInterceptorKerberos
+    testImplementation libs.apachedsProtocolShared
+    testImplementation libs.apachedsProtocolKerberos
     testImplementation libs.apachedsProtocolLdap
+    testImplementation libs.apachedsLdifPartition
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine
 
