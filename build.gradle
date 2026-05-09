@@ -2263,10 +2263,10 @@ project(':server-common') {
     implementation libs.slf4jApi
 
     testFixturesImplementation testFixtures(project(':clients'))
-    testFixturesApi libs.slf4jApi
-    testFixturesApi libs.metrics
-    testFixturesApi libs.mockitoCore
-    testFixturesApi libs.junitJupiter
+    testFixturesImplementation libs.slf4jApi
+    testFixturesImplementation libs.metrics
+    testFixturesImplementation libs.mockitoCore
+    testFixturesImplementation libs.junitJupiter
 
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
