@@ -6630,9 +6630,7 @@ org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializerTest:
 - shouldExtractEmptyHeaders
 - shouldExtractHeaders
 - shouldExtractTimestamp
-- shouldExtractValue
 - shouldPassHeadersToDeserializer
-- shouldReturnNullForRawValueWhenInputIsNull
 - shouldReturnNullWhenExtractingHeadersFromNull
 - shouldReturnNullWhenSerializingNullValue
 - shouldThrowExceptionWhenDataIsTooShort
