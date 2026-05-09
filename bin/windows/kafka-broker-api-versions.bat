@@ -15,4 +15,4 @@ rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
 echo WARNING: kafka-broker-api-versions.bat is deprecated and will be removed in the next major release. Use "kafka-cluster.bat api-versions" instead. 1>&2
-%~dp0kafka-cluster.bat api-versions %*
+%~dp0kafka-run-class.bat org.apache.kafka.tools.BrokerApiVersionsCommand %*
