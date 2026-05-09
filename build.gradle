@@ -1947,11 +1947,14 @@ project(':clients') {
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testFixturesImplementation project(':test-common:test-common-util')
-    testFixturesApi libs.bcpkix
-    testFixturesApi libs.junitJupiter
-    testFixturesApi libs.jqwik
-    testFixturesApi testLog4j2Libs
+    testFixturesImplementation libs.bcpkix
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation libs.jqwik
+    testFixturesImplementation testLog4j2Libs
 
+    testImplementation libs.bcpkix
+    testImplementation libs.junitJupiter
+    testImplementation testLog4j2Libs
     testImplementation project(':test-common:test-common-util')
     testImplementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.jose4j
