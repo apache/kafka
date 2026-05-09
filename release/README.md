@@ -61,11 +61,24 @@ branch named after the release version.
 # Docker workflow triggers
 
 After the RC tag is pushed, the script triggers the Docker image build/test and
-RC release workflows on GitHub Actions. This requires a GitHub Personal Access
-Token with `repo` scope; the token is cached in `.release-settings.json` so it
-only needs to be entered once per release cycle.
+RC release workflows on GitHub Actions.
 
-Two optional environment variables control this step:
+## GitHub Personal Access Token
+
+Triggering the workflows requires a GitHub Personal Access Token. To generate one:
+
+1. Go to https://github.com/settings/tokens
+2. Click "Generate new token" → "Generate new token (classic)"
+3. Set a name (e.g. `kafka-release`)
+4. Set an expiration (7 days is sufficient for a release cycle)
+5. Select the `repo` scope (this includes the `actions` write permission)
+6. Click "Generate token" and copy the token (starts with `ghp_...`)
+
+The token is cached in `.release-settings.json` so it only needs to be entered
+once per release cycle. To reset the saved token, remove the `github_token`
+entry from `.release-settings.json` or delete the file entirely.
+
+## Optional environment variables
 
 - `GITHUB_REPO`: target repository for the workflow dispatches. Defaults to
   `apache/kafka`. Set this to your fork (e.g. `myuser/kafka`) when testing the
