@@ -156,6 +156,7 @@ In some cases, you may get errors on some repositories while closing them, see K
 If this is not the first RC, you need to 'Drop' the previous artifacts.
 Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/
 Docker image builds will be triggered automatically by this script after the RC tag is pushed.
+If the automation fails, fall back to the manual procedure: https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=34840886#ReleaseProcess-CreateJVMApacheKafkaDockerArtifacts(Forversions>=3.7.0)
 """
 
 def sanity_check_instructions(release_version, rc_tag):
