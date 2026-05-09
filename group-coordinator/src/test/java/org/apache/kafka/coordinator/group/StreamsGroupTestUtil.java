@@ -170,6 +170,14 @@ class StreamsGroupTestUtil {
         public List<StreamsGroupHeartbeatResponseData.TaskIds> responseTasks(Integer... partitions) {
             return mkResponseTasks(subtopologyId, partitions);
         }
+
+        public List<StreamsGroupHeartbeatRequestData.TaskIds> requestTasks(List<Integer> partitions) {
+            return List.of(
+                    new StreamsGroupHeartbeatRequestData.TaskIds()
+                            .setSubtopologyId(subtopologyId)
+                            .setPartitions(partitions)
+            );
+        }
     }
 
     static GroupMetadataManagerTestContext contextWithStreamsGroup(
