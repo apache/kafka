@@ -72,7 +72,6 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
@@ -168,6 +167,7 @@ import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
@@ -870,10 +870,10 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            return new ConsumerGroup(logContext, snapshotRegistry, groupId, groupCreationTimeMsForNewGroup());
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
-            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            return new ConsumerGroup(logContext, snapshotRegistry, groupId, groupCreationTimeMsForNewGroup());
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -1037,7 +1037,9 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            // -1L placeholder; the real timestamp is filled in from the persisted
+            // ConsumerGroupMetadataValue.CreationTimeMs when the metadata record is replayed.
+            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId, -1L);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
@@ -1047,7 +1049,7 @@ public class GroupMetadataManager {
             // offsets if no group existed. Simple classic groups are not backed by any records
             // in the __consumer_offsets topic hence we can safely replace it here. Without this,
             // replaying consumer group records after offset commit records would not work.
-            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
+            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId, -1L);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else {
@@ -1470,6 +1472,7 @@ public class GroupMetadataManager {
                     "Please refer to the documentation or switch to a default assignor before re-attempting the upgrade.", classicGroup.groupId())
             );
         }
+        consumerGroup.setCreationTimeMs(groupCreationTimeMsForNewGroup());
         consumerGroup.createConsumerGroupRecords(records);
 
         // Create the session timeouts for the new members. If the conversion fails, the group will remain a
@@ -2623,10 +2626,111 @@ public class GroupMetadataManager {
         // 2. The member's assignment has been updated.
         boolean isFullRequest = rebalanceTimeoutMs != -1 && (subscribedTopicNames != null || subscribedTopicRegex != null) && ownedTopicPartitions != null;
         if (memberEpoch == 0 || isFullRequest || ConsumerGroupMember.hasAssignedPartitionsChanged(member, updatedMember)) {
-            response.setAssignment(ConsumerGroupHeartbeatResponse.createAssignment(updatedMember.assignedPartitions()));
+            response.setAssignment(createResponseAssignment(group, updatedMember));
         }
 
         return new CoordinatorResult<>(records, response);
+    }
+
+    /**
+     * @return The creation timestamp to stamp on a newly created consumer group, or -1 if
+     *         partition-expansion classification (KIP-1327) is not enabled on the cluster.
+     *         When the feature is disabled the coordinator does not record the creation time,
+     *         keeping the behavior consistent across coordinator replicas during a rolling upgrade.
+     */
+    private long groupCreationTimeMsForNewGroup() {
+        return isNewPartitionsClassificationEnabled() ? time.milliseconds() : -1L;
+    }
+
+    /**
+     * @return Whether the cluster's group.version enables partition-expansion classification (GV_2+, KIP-1327).
+     */
+    private boolean isNewPartitionsClassificationEnabled() {
+        return metadataImage.finalizedFeatureLevel(GroupVersion.FEATURE_NAME) >= GroupVersion.GV_2.featureLevel();
+    }
+
+    /**
+     * Builds the heartbeat response assignment for a member. When partition-expansion
+     * classification is enabled (KIP-1327), the per-topic NewPartitions list is populated with
+     * the subset of assigned partitions whose creation time postdates the group's creation time.
+     *
+     * @param group  The consumer group.
+     * @param member The member whose assignment is returned.
+     * @return The assignment to set on the heartbeat response.
+     */
+    private ConsumerGroupHeartbeatResponseData.Assignment createResponseAssignment(
+        ConsumerGroup group,
+        ConsumerGroupMember member
+    ) {
+        boolean classify = isNewPartitionsClassificationEnabled();
+        long groupCreationTimeMs = group.creationTimeMs();
+
+        List<ConsumerGroupHeartbeatResponseData.TopicPartitions> topicPartitions =
+            new ArrayList<>(member.assignedPartitions().size());
+        for (Map.Entry<Uuid, Map<Integer, Integer>> entry : member.assignedPartitions().entrySet()) {
+            Uuid topicId = entry.getKey();
+            List<Integer> partitions = new ArrayList<>(entry.getValue().keySet());
+            ConsumerGroupHeartbeatResponseData.TopicPartitions topicPartition =
+                new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setPartitions(partitions);
+            if (classify) {
+                List<Integer> newPartitions = computeNewPartitions(topicId, partitions, groupCreationTimeMs);
+                if (!newPartitions.isEmpty()) {
+                    topicPartition.setNewPartitions(newPartitions);
+                }
+            }
+            topicPartitions.add(topicPartition);
+        }
+
+        return new ConsumerGroupHeartbeatResponseData.Assignment().setTopicPartitions(topicPartitions);
+    }
+
+    /**
+     * Computes the subset of the given partitions classified as newly expanded (KIP-1327), i.e.
+     * partitions whose creation time postdates the group's creation time.
+     *
+     * @param topicId             The topic id.
+     * @param partitions          The assigned partitions of the topic.
+     * @param groupCreationTimeMs The group's creation time, or -1 if unknown.
+     * @return The newly expanded partition indices (possibly empty).
+     */
+    private List<Integer> computeNewPartitions(
+        Uuid topicId,
+        List<Integer> partitions,
+        long groupCreationTimeMs
+    ) {
+        Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadata = metadataImage.topicMetadata(topicId);
+        if (topicMetadata.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> newPartitions = new ArrayList<>();
+        for (int partition : partitions) {
+            if (isNewPartition(groupCreationTimeMs, topicMetadata.get().partitionCreationTimeMs(partition))) {
+                newPartitions.add(partition);
+            }
+        }
+        return newPartitions;
+    }
+
+    /**
+     * Classifies a partition as newly expanded or pre-existing using the conservative rules of
+     * KIP-1327. An unknown partition creation time (-1) is treated as pre-existing; an unknown
+     * group creation time (-1) is treated as -infinity, so any partition with a known creation
+     * time is classified as new.
+     *
+     * @param groupCreationTimeMs     The group's creation time, or -1 if unknown.
+     * @param partitionCreationTimeMs The partition's creation time, or -1 if unknown.
+     * @return Whether the partition is newly expanded.
+     */
+    private static boolean isNewPartition(long groupCreationTimeMs, long partitionCreationTimeMs) {
+        if (partitionCreationTimeMs < 0) {
+            return false;
+        }
+        if (groupCreationTimeMs < 0) {
+            return true;
+        }
+        return partitionCreationTimeMs > groupCreationTimeMs;
     }
 
     /**
@@ -3715,7 +3819,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash, group.creationTimeMs()));
                 log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
@@ -4054,7 +4158,7 @@ public class GroupMetadataManager {
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash));
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, groupMetadataHash, group.creationTimeMs()));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, groupMetadataHash);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
@@ -4700,7 +4804,7 @@ public class GroupMetadataManager {
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash, group.creationTimeMs()));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", group.groupId(), groupEpoch, groupMetadataHash);
 
             // If all members are being fenced, the group becomes empty so
@@ -5778,6 +5882,7 @@ public class GroupMetadataManager {
             ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             consumerGroup.setGroupEpoch(value.epoch());
             consumerGroup.setMetadataHash(value.metadataHash());
+            consumerGroup.setCreationTimeMs(value.creationTimeMs());
         } else {
             ConsumerGroup consumerGroup;
             try {

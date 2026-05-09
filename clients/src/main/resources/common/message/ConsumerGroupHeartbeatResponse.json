@@ -17,7 +17,8 @@
   "apiKey": 68,
   "type": "response",
   "name": "ConsumerGroupHeartbeatResponse",
-  "validVersions": "0-1",
+  // Version 2 adds the tagged NewPartitions field to the assignment (KIP-1327).
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -57,7 +58,10 @@
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic ID." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partitions." }
+        "about": "The partitions." },
+      { "name": "NewPartitions", "type": "[]int32",
+        "versions": "2+", "taggedVersions": "2+", "tag": 0, "ignorable": true,
+        "about": "Subset of partition indices in Partitions that the group coordinator classified as newly expanded (partition.creationTime > group.creationTime). For each partition index listed here that has no committed offset, the consumer applies auto.offset.reset.new.partitions; for any other partition without a committed offset, it applies the base auto.offset.reset. Absent (or empty) on older brokers; consumers then apply auto.offset.reset uniformly." }
     ]}
   ]
 }

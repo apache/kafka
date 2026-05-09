@@ -44,6 +44,12 @@ public interface CoordinatorMetadataImage {
     boolean isEmpty();
 
     /**
+     * @param featureName The finalized feature name (e.g. "group.version").
+     * @return The finalized feature level for the given feature, or 0 if the feature is not finalized.
+     */
+    short finalizedFeatureLevel(String featureName);
+
+    /**
      * Metadata about a particular topic
      */
     interface TopicMetadata {
@@ -54,6 +60,13 @@ public interface CoordinatorMetadataImage {
         int partitionCount();
 
         List<String> partitionRacks(int partitionId);
+
+        /**
+         * @param partitionId The partition id.
+         * @return The time in milliseconds when the partition was created, or -1 if unknown
+         *         (e.g. the partition predates KIP-1327 or does not exist).
+         */
+        long partitionCreationTimeMs(int partitionId);
     }
 
     private static CoordinatorMetadataImage emptyImage() {
@@ -92,6 +105,11 @@ public interface CoordinatorMetadataImage {
             @Override
             public boolean isEmpty() {
                 return true;
+            }
+
+            @Override
+            public short finalizedFeatureLevel(String featureName) {
+                return 0;
             }
         };
     }

@@ -83,6 +83,17 @@ public class ImageWriterOptionsTest {
         assertFalse(options.isEligibleLeaderReplicasEnabled());
     }
 
+    @Test
+    public void testSetPartitionCreationTimestampSupported() {
+        MetadataVersion version = MetadataVersion.MINIMUM_VERSION;
+        ImageWriterOptions options = new ImageWriterOptions.Builder(version)
+            .setPartitionCreationTimestampSupported(true).build();
+        assertTrue(options.isPartitionCreationTimestampSupported());
+
+        options = new ImageWriterOptions.Builder(version).build();
+        assertFalse(options.isPartitionCreationTimestampSupported());
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testConstructionWithImage(boolean isElrEnabled) {

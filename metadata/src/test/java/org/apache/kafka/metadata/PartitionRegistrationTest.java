@@ -397,4 +397,97 @@ public class PartitionRegistrationTest {
         PartitionRegistration registration = new PartitionRegistration(record);
         assertArrayEquals(new Uuid[]{DirectoryId.MIGRATING, DirectoryId.MIGRATING}, registration.directories);
     }
+
+    @Test
+    public void testCreationTimeMsPreservedInMerge() {
+        PartitionRegistration reg = new PartitionRegistration.Builder()
+            .setReplicas(new int[]{1, 2, 3})
+            .setDirectories(DirectoryId.unassignedArray(3))
+            .setIsr(new int[]{1})
+            .setLeader(1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(0)
+            .setCreationTimeMs(1000L)
+            .build();
+
+        PartitionChangeRecord change = new PartitionChangeRecord()
+            .setLeader(2)
+            .setIsr(List.of(2));
+        PartitionRegistration merged = reg.merge(change);
+
+        assertEquals(1000L, merged.creationTimeMs);
+    }
+
+    @Test
+    public void testCreationTimeMsInToRecord_Supported() {
+        PartitionRegistration reg = new PartitionRegistration.Builder()
+            .setReplicas(new int[]{1})
+            .setDirectories(DirectoryId.unassignedArray(1))
+            .setIsr(new int[]{1})
+            .setLeader(1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(0)
+            .setCreationTimeMs(5000L)
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_4_4_IV1)
+            .setPartitionCreationTimestampSupported(true)
+            .build();
+        ApiMessageAndVersion record = reg.toRecord(topicId, 0, options);
+        PartitionRecord partitionRecord = (PartitionRecord) record.message();
+
+        assertEquals(5000L, partitionRecord.creationTimeMs());
+    }
+
+    @Test
+    public void testCreationTimeMsInToRecord_NotSupported() {
+        PartitionRegistration reg = new PartitionRegistration.Builder()
+            .setReplicas(new int[]{1})
+            .setDirectories(DirectoryId.unassignedArray(1))
+            .setIsr(new int[]{1})
+            .setLeader(1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(0)
+            .setCreationTimeMs(5000L)
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+        ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_4_0_IV1).build();
+        ApiMessageAndVersion record = reg.toRecord(topicId, 0, options);
+        PartitionRecord partitionRecord = (PartitionRecord) record.message();
+
+        assertEquals(-1L, partitionRecord.creationTimeMs());
+    }
+
+    @Test
+    public void testCreationTimeMsInEqualsAndDiff() {
+        PartitionRegistration reg1 = new PartitionRegistration.Builder()
+            .setReplicas(new int[]{1})
+            .setDirectories(DirectoryId.unassignedArray(1))
+            .setIsr(new int[]{1})
+            .setLeader(1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(0)
+            .setCreationTimeMs(1000L)
+            .build();
+
+        PartitionRegistration reg2 = new PartitionRegistration.Builder()
+            .setReplicas(new int[]{1})
+            .setDirectories(DirectoryId.unassignedArray(1))
+            .setIsr(new int[]{1})
+            .setLeader(1)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(0)
+            .setCreationTimeMs(2000L)
+            .build();
+
+        assertNotEquals(reg1, reg2);
+        assertTrue(reg2.diff(reg1).contains("creationTimeMs:"));
+    }
 }

@@ -139,17 +139,19 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     /**
-     * Creates a ConsumerGroupMetadata record.
+     * Creates a ConsumerGroupMetadataValue record with creation time.
      *
-     * @param groupId       The consumer group id.
-     * @param newGroupEpoch The consumer group epoch.
-     * @param metadataHash  The consumer group metadata hash.
+     * @param groupId        The consumer group id.
+     * @param newGroupEpoch  The consumer group epoch.
+     * @param metadataHash   The consumer group metadata hash.
+     * @param creationTimeMs The creation time of the group in milliseconds, or -1 if unknown.
      * @return The record.
      */
     public static CoordinatorRecord newConsumerGroupEpochRecord(
         String groupId,
         int newGroupEpoch,
-        long metadataHash
+        long metadataHash,
+        long creationTimeMs
     ) {
         return CoordinatorRecord.record(
             new ConsumerGroupMetadataKey()
@@ -157,7 +159,8 @@ public class GroupCoordinatorRecordHelpers {
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
                     .setEpoch(newGroupEpoch)
-                    .setMetadataHash(metadataHash),
+                    .setMetadataHash(metadataHash)
+                    .setCreationTimeMs(creationTimeMs),
                 (short) 0
             )
         );

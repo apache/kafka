@@ -196,7 +196,10 @@ public class Assertions {
         Consumer<ConsumerGroupHeartbeatResponseData> normalize = message -> {
             if (message.assignment() != null) {
                 message.assignment().topicPartitions().sort(Comparator.comparing(ConsumerGroupHeartbeatResponseData.TopicPartitions::topicId));
-                message.assignment().topicPartitions().forEach(topic -> topic.partitions().sort(Integer::compareTo));
+                message.assignment().topicPartitions().forEach(topic -> {
+                    topic.partitions().sort(Integer::compareTo);
+                    topic.newPartitions().sort(Integer::compareTo);
+                });
             }
         };
 

@@ -180,7 +180,8 @@ public class GroupCoordinatorRecordHelpersTest {
         assertEquals(expectedRecord, newConsumerGroupEpochRecord(
             "group-id",
             10,
-            10
+            10,
+            -1L
         ));
     }
 

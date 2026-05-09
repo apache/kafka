@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -54,6 +55,32 @@ public class MetadataImageBuilder {
                 .setPartitionId(i)
                 .setReplicas(List.of(i % 4, (i + 1) % 4)));
         }
+        return this;
+    }
+
+    public MetadataImageBuilder addTopic(
+        Uuid topicId,
+        String topicName,
+        int numPartitions,
+        long partitionCreationTimeMs
+    ) {
+        delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
+        for (int i = 0; i < numPartitions; i++) {
+            delta.replay(new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(i)
+                .setReplicas(List.of(i % 4, (i + 1) % 4))
+                .setCreationTimeMs(partitionCreationTimeMs));
+        }
+        return this;
+    }
+
+    /**
+     * Finalizes a feature (e.g. group.version) at the given level so that callers can exercise
+     * feature-gated coordinator behavior.
+     */
+    public MetadataImageBuilder addFeature(String featureName, short featureLevel) {
+        delta.replay(new FeatureLevelRecord().setName(featureName).setFeatureLevel(featureLevel));
         return this;
     }
 

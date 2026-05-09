@@ -1524,8 +1524,12 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         target.sourceVariable())));
             } else if (field.type().isArray()) {
                 cond.ifShouldNotBeNull(() -> {
+                    // Prefix the temporary copy with an underscore so it can never shadow a
+                    // sibling field. Field names are camelCase and never start with an
+                    // underscore, so e.g. a field named "newPartitions" no longer collides
+                    // with the temp generated for a sibling "partitions" field.
                     String newArrayName =
-                        String.format("new%s", field.capitalizedCamelCaseName());
+                        String.format("_new%s", field.capitalizedCamelCaseName());
                     String type = field.concreteJavaType(headerGenerator, structRegistry);
                     buffer.printf("%s %s = new %s(%s.size());%n",
                         type, newArrayName, type, target.sourceVariable());
@@ -1538,8 +1542,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         String.format("%s.add(%s)", newArrayName, input)));
                     buffer.decrementIndent();
                     buffer.printf("}%n");
-                    buffer.printf("%s;%n", target.assignmentStatement(
-                        String.format("new%s", field.capitalizedCamelCaseName())));
+                    buffer.printf("%s;%n", target.assignmentStatement(newArrayName));
                 });
             } else {
                 throw new RuntimeException("Unhandled field type " + field.type());

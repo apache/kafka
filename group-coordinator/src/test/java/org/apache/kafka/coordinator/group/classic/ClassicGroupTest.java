@@ -1414,7 +1414,8 @@ public class ClassicGroupTest {
         ConsumerGroup consumerGroup = new ConsumerGroup(
             logContext,
             new SnapshotRegistry(logContext),
-            groupId
+            groupId,
+            -1L
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentMetadata(10, time.milliseconds());
@@ -1567,7 +1568,8 @@ public class ClassicGroupTest {
         ConsumerGroup consumerGroup = new ConsumerGroup(
             logContext,
             new SnapshotRegistry(logContext),
-            groupId
+            groupId,
+            -1L
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentMetadata(10, time.milliseconds());

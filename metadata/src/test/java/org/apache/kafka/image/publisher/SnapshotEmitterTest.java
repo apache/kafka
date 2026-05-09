@@ -18,14 +18,21 @@
 package org.apache.kafka.image.publisher;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.FakeSnapshotWriter;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataImageTest;
+import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
@@ -174,5 +181,59 @@ public class SnapshotEmitterTest {
         // Second call to emit does nothing because we already have a snapshot at that offset and epoch.
         emitter.maybeEmit(MetadataImageTest.IMAGE1);
         assertEquals(1, mockRaftClient.writers.size());
+    }
+
+    @Test
+    public void testEmitPreservesPartitionCreationTimeMs() {
+        MockRaftClient mockRaftClient = new MockRaftClient();
+        MockTime time = new MockTime(0, 10000L, 20000L);
+        SnapshotEmitter emitter = new SnapshotEmitter.Builder().
+            setTime(time).
+            setBatchSize(2).
+            setRaftClient(mockRaftClient).
+            build();
+
+        // Build a MetadataImage with a partition that has a non-default creationTimeMs.
+        long expectedCreationTimeMs = 5000L;
+        Uuid topicId = Uuid.randomUuid();
+        MetadataDelta delta = new MetadataDelta.Builder().setImage(MetadataImage.EMPTY).build();
+        delta.replay(new org.apache.kafka.common.metadata.FeatureLevelRecord()
+            .setName(MetadataVersion.FEATURE_NAME)
+            .setFeatureLevel(MetadataVersion.IBP_4_4_IV1.featureLevel()));
+        delta.replay(new org.apache.kafka.common.metadata.TopicRecord()
+            .setName("test-topic")
+            .setTopicId(topicId));
+        delta.replay(new org.apache.kafka.common.metadata.PartitionRecord()
+            .setTopicId(topicId)
+            .setPartitionId(0)
+            .setReplicas(List.of(0))
+            .setIsr(List.of(0))
+            .setLeader(0)
+            .setLeaderEpoch(0)
+            .setPartitionEpoch(0)
+            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+            .setCreationTimeMs(expectedCreationTimeMs));
+        MetadataImage image = delta.apply(new MetadataProvenance(100, 4, 2000, true));
+
+        emitter.maybeEmit(image);
+
+        FakeSnapshotWriter writer = mockRaftClient.writers.get(image.provenance().snapshotId());
+        assertNotNull(writer);
+        assertTrue(writer.isFrozen());
+
+        // Find the PartitionRecord in the written batches and verify creationTimeMs is preserved.
+        boolean foundPartitionRecord = false;
+        for (List<ApiMessageAndVersion> batch : writer.batches()) {
+            for (ApiMessageAndVersion record : batch) {
+                if (record.message() instanceof PartitionRecord partitionRecord) {
+                    if (partitionRecord.topicId().equals(topicId)) {
+                        assertEquals(expectedCreationTimeMs, partitionRecord.creationTimeMs(),
+                            "PartitionRecord should preserve creationTimeMs in snapshot");
+                        foundPartitionRecord = true;
+                    }
+                }
+            }
+        }
+        assertTrue(foundPartitionRecord, "Should have found a PartitionRecord in the snapshot");
     }
 }

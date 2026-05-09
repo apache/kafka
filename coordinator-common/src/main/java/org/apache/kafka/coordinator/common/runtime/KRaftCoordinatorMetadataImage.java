@@ -96,6 +96,11 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
     }
 
     @Override
+    public short finalizedFeatureLevel(String featureName) {
+        return metadataImage.features().finalizedVersions().getOrDefault(featureName, (short) 0);
+    }
+
+    @Override
     public String toString() {
         return metadataImage.toString();
     }
@@ -151,6 +156,12 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
             } else {
                 return List.of();
             }
+        }
+
+        @Override
+        public long partitionCreationTimeMs(int partition) {
+            PartitionRegistration partitionRegistration = topicImage.partitions().get(partition);
+            return partitionRegistration != null ? partitionRegistration.creationTimeMs : -1L;
         }
     }
 }

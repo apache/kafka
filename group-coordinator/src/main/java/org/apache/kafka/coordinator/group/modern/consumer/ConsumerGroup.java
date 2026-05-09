@@ -48,6 +48,7 @@ import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
+import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
 import org.slf4j.Logger;
@@ -156,10 +157,17 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
 
+    /**
+     * The creation time of this consumer group in milliseconds since epoch.
+     * Set once at group creation, never updated. -1 if unknown (pre-upgrade groups).
+     */
+    private final TimelineLong creationTimeMs;
+
     public ConsumerGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
-        String groupId
+        String groupId,
+        long creationTimeMs
     ) {
         super(snapshotRegistry, groupId);
         this.log = logContext.logger(ConsumerGroup.class);
@@ -172,6 +180,33 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         this.subscribedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.resolvedRegularExpressions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.hasSubscriptionMetadataRecord = new TimelineObject<>(snapshotRegistry, false);
+        this.creationTimeMs = new TimelineLong(snapshotRegistry);
+        this.creationTimeMs.set(creationTimeMs);
+    }
+
+    /**
+     * @return The creation time of this consumer group in milliseconds since epoch, or -1 if unknown.
+     */
+    public long creationTimeMs() {
+        return creationTimeMs.get();
+    }
+
+    /**
+     * @return The creation time of this consumer group at the given committed offset, or -1 if unknown.
+     */
+    public long creationTimeMs(long committedOffset) {
+        return creationTimeMs.get(committedOffset);
+    }
+
+    /**
+     * Sets the creation time of this consumer group.
+     *
+     * @param creationTimeMs The creation time in milliseconds since epoch.
+     */
+    public void setCreationTimeMs(long creationTimeMs) {
+        if (this.creationTimeMs.get() == -1L) {
+            this.creationTimeMs.set(creationTimeMs);
+        }
     }
 
     /**
@@ -1218,7 +1253,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         CoordinatorMetadataImage metadataImage
     ) {
         String groupId = classicGroup.groupId();
-        ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
+        // -1L placeholder; the caller stamps the real timestamp via setCreationTimeMs after upgrade.
+        ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId, -1L);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
         consumerGroup.setTargetAssignmentMetadata(classicGroup.generationId(), 0L);
 
@@ -1292,7 +1328,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), metadataHash()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId(), groupEpoch(), metadataHash(), creationTimeMs()));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(

@@ -19,7 +19,8 @@
   "listeners": ["broker"],
   "name": "ConsumerGroupHeartbeatRequest",
   // Version 1 adds SubscribedTopicRegex (KIP-848), and requires the consumer to generate their own Member ID (KIP-1082)
-  "validVersions": "0-1",
+  // Version 2 is bumped to pair with the response, which adds the tagged NewPartitions field (KIP-1327).
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",

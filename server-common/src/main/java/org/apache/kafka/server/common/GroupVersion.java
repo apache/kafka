@@ -24,7 +24,12 @@ public enum GroupVersion implements FeatureVersion {
     GV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables the consumer rebalance protocol (KIP-848).
-    GV_1(1, MetadataVersion.IBP_4_0_IV0, Map.of());
+    GV_1(1, MetadataVersion.IBP_4_0_IV0, Map.of()),
+
+    // Version 2 enables partition-expansion classification for consumer groups (KIP-1327).
+    // It depends on metadata.version IBP_4_4_IV1 so that partition.creationTime is available
+    // in the metadata image when the coordinator computes NewPartitions.
+    GV_2(2, MetadataVersion.IBP_4_4_IV1, Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV1.featureLevel()));
 
     public static final String FEATURE_NAME = "group.version";
 
@@ -68,12 +73,18 @@ public enum GroupVersion implements FeatureVersion {
         return featureLevel >= GV_1.featureLevel;
     }
 
+    public boolean isNewPartitionsClassificationSupported() {
+        return featureLevel >= GV_2.featureLevel;
+    }
+
     public static GroupVersion fromFeatureLevel(short version) {
         switch (version) {
             case 0:
                 return GV_0;
             case 1:
                 return GV_1;
+            case 2:
+                return GV_2;
             default:
                 throw new RuntimeException("Unknown group feature level: " + (int) version);
         }

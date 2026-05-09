@@ -148,6 +148,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
         try {
             image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
                     setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
+                    setPartitionCreationTimestampSupported(image.features().metadataVersionOrThrow().isPartitionCreationTimestampSupported()).
                     build());
             writer.close(true);
             metrics.setLatestSnapshotGeneratedTimeMs(time.milliseconds());

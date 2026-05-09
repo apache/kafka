@@ -1483,8 +1483,8 @@ public class GroupCoordinatorShardTest {
 
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
 
-        ConsumerGroup group1 = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id");
-        ConsumerGroup group2 = new ConsumerGroup(new LogContext(), snapshotRegistry, "other-group-id");
+        ConsumerGroup group1 = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id", -1L);
+        ConsumerGroup group2 = new ConsumerGroup(new LogContext(), snapshotRegistry, "other-group-id", -1L);
 
         when(groupMetadataManager.groupIds()).thenReturn(Set.of("group-id", "other-group-id"));
         when(groupMetadataManager.group("group-id")).thenReturn(group1);

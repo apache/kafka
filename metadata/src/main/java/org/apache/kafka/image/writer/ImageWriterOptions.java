@@ -33,6 +33,7 @@ public final class ImageWriterOptions {
             throw e;
         };
         private boolean isEligibleLeaderReplicasEnabled = false;
+        private boolean isPartitionCreationTimestampSupported = false;
 
         public Builder(MetadataVersion metadataVersion) {
             this.metadataVersion = metadataVersion;
@@ -41,6 +42,7 @@ public final class ImageWriterOptions {
         public Builder(MetadataImage image) {
             this.metadataVersion = image.features().metadataVersionOrThrow();
             this.isEligibleLeaderReplicasEnabled = image.features().isElrEnabled();
+            this.isPartitionCreationTimestampSupported = image.features().metadataVersionOrThrow().isPartitionCreationTimestampSupported();
         }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
@@ -53,6 +55,11 @@ public final class ImageWriterOptions {
             return this;
         }
 
+        public Builder setPartitionCreationTimestampSupported(boolean isPartitionCreationTimestampSupported) {
+            this.isPartitionCreationTimestampSupported = isPartitionCreationTimestampSupported;
+            return this;
+        }
+
         public MetadataVersion metadataVersion() {
             return metadataVersion;
         }
@@ -61,28 +68,35 @@ public final class ImageWriterOptions {
             return isEligibleLeaderReplicasEnabled;
         }
 
+        public boolean isPartitionCreationTimestampSupported() {
+            return isPartitionCreationTimestampSupported;
+        }
+
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {
             this.lossHandler = lossHandler;
             return this;
         }
 
         public ImageWriterOptions build() {
-            return new ImageWriterOptions(metadataVersion, lossHandler, isEligibleLeaderReplicasEnabled);
+            return new ImageWriterOptions(metadataVersion, lossHandler, isEligibleLeaderReplicasEnabled, isPartitionCreationTimestampSupported);
         }
     }
 
     private final MetadataVersion metadataVersion;
     private final Consumer<UnwritableMetadataException> lossHandler;
     private final boolean isEligibleLeaderReplicasEnabled;
+    private final boolean isPartitionCreationTimestampSupported;
 
     private ImageWriterOptions(
         MetadataVersion metadataVersion,
         Consumer<UnwritableMetadataException> lossHandler,
-        boolean isEligibleLeaderReplicasEnabled
+        boolean isEligibleLeaderReplicasEnabled,
+        boolean isPartitionCreationTimestampSupported
     ) {
         this.metadataVersion = metadataVersion;
         this.lossHandler = lossHandler;
         this.isEligibleLeaderReplicasEnabled = isEligibleLeaderReplicasEnabled;
+        this.isPartitionCreationTimestampSupported = isPartitionCreationTimestampSupported;
     }
 
     public MetadataVersion metadataVersion() {
@@ -90,6 +104,10 @@ public final class ImageWriterOptions {
     }
     public boolean isEligibleLeaderReplicasEnabled() {
         return isEligibleLeaderReplicasEnabled;
+    }
+
+    public boolean isPartitionCreationTimestampSupported() {
+        return isPartitionCreationTimestampSupported;
     }
 
     public void handleLoss(String loss) {

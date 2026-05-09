@@ -96,7 +96,8 @@ public class ConsumerGroupTest {
         return new ConsumerGroup(
             new LogContext(),
             snapshotRegistry,
-            groupId
+            groupId,
+            -1L
         );
     }
 
@@ -728,7 +729,7 @@ public class ConsumerGroupTest {
     @Test
     public void testUpdateInvertedAssignment() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup consumerGroup = new ConsumerGroup(new LogContext(), snapshotRegistry, "test-group");
+        ConsumerGroup consumerGroup = new ConsumerGroup(new LogContext(), snapshotRegistry, "test-group", -1L);
         Uuid topicId = Uuid.randomUuid();
         String memberId1 = "member1";
         String memberId2 = "member2";
@@ -1108,7 +1109,7 @@ public class ConsumerGroupTest {
     @Test
     public void testAsListedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo");
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo", -1L);
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -1124,9 +1125,10 @@ public class ConsumerGroupTest {
     public void testValidateOffsetFetch() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(
-            new LogContext(), 
+            new LogContext(),
             snapshotRegistry,
-            "group-foo"
+            "group-foo",
+            -1L
         );
 
         // Simulate a call from the admin client without member id and member epoch.
@@ -1185,7 +1187,7 @@ public class ConsumerGroupTest {
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty(), Uuid.ZERO_UUID);
-        ConsumerGroup group = new ConsumerGroup(new LogContext(), new SnapshotRegistry(new LogContext()), "group-id");
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), new SnapshotRegistry(new LogContext()), "group-id", -1L);
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
         assertTrue(offsetExpirationCondition.isPresent());
@@ -1222,7 +1224,7 @@ public class ConsumerGroupTest {
     @Test
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id-1");
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id-1", -1L);
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
@@ -1264,7 +1266,7 @@ public class ConsumerGroupTest {
     @Test
     public void testIsInStatesCaseInsensitive() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo");
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo", -1L);
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertTrue(group.isInStates(Set.of("empty"), 0));
         assertFalse(group.isInStates(Set.of("Empty"), 0));
@@ -1503,9 +1505,10 @@ public class ConsumerGroupTest {
         );
 
         ConsumerGroup expectedConsumerGroup = new ConsumerGroup(
-            new LogContext(), 
+            new LogContext(),
             new SnapshotRegistry(logContext),
-            groupId
+            groupId,
+            -1L
         );
         expectedConsumerGroup.setGroupEpoch(10);
         expectedConsumerGroup.setTargetAssignmentMetadata(10, 0L);

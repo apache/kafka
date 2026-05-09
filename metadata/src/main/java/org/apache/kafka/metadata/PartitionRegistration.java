@@ -51,6 +51,7 @@ public class PartitionRegistration {
         private LeaderRecoveryState leaderRecoveryState;
         private Integer leaderEpoch;
         private Integer partitionEpoch;
+        private long creationTimeMs = -1L;
 
         public Builder setReplicas(int[] replicas) {
             this.replicas = replicas;
@@ -107,6 +108,11 @@ public class PartitionRegistration {
             return this;
         }
 
+        public Builder setCreationTimeMs(long creationTimeMs) {
+            this.creationTimeMs = creationTimeMs;
+            return this;
+        }
+
         public PartitionRegistration build() {
             if (replicas == null) {
                 throw new IllegalStateException("You must set replicas.");
@@ -145,7 +151,8 @@ public class PartitionRegistration {
                 leaderEpoch,
                 partitionEpoch,
                 elr,
-                lastKnownElr
+                lastKnownElr,
+                creationTimeMs
             );
         }
     }
@@ -161,6 +168,7 @@ public class PartitionRegistration {
     public final LeaderRecoveryState leaderRecoveryState;
     public final int leaderEpoch;
     public final int partitionEpoch;
+    public final long creationTimeMs;
 
     public static boolean electionWasUnclean(byte leaderRecoveryState) {
         return leaderRecoveryState == LeaderRecoveryState.RECOVERING.value();
@@ -210,12 +218,14 @@ public class PartitionRegistration {
             record.leaderEpoch(),
             record.partitionEpoch(),
             Replicas.toArray(record.eligibleLeaderReplicas()),
-            Replicas.toArray(record.lastKnownElr()));
+            Replicas.toArray(record.lastKnownElr()),
+            record.creationTimeMs());
     }
 
     private PartitionRegistration(int[] replicas, Uuid[] directories, int[] isr, int[] removingReplicas,
                                   int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
-                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
+                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr,
+                                  long creationTimeMs) {
         Objects.requireNonNull(directories);
         if (directories.length > 0 && directories.length != replicas.length) {
             throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
@@ -229,6 +239,7 @@ public class PartitionRegistration {
         this.leaderRecoveryState = leaderRecoveryState;
         this.leaderEpoch = leaderEpoch;
         this.partitionEpoch = partitionEpoch;
+        this.creationTimeMs = creationTimeMs;
 
         // We could parse a lower version record without elr/lastKnownElr.
         this.elr = elr == null ? new int[0] : elr;
@@ -273,7 +284,8 @@ public class PartitionRegistration {
             newLeaderEpoch,
             partitionEpoch + 1,
             newElr,
-            newLastKnownElr);
+            newLastKnownElr,
+            this.creationTimeMs);
     }
 
     public String diff(PartitionRegistration prev) {
@@ -339,6 +351,11 @@ public class PartitionRegistration {
         if (partitionEpoch != prev.partitionEpoch) {
             builder.append(prefix).append("partitionEpoch: ").
                 append(prev.partitionEpoch).append(" -> ").append(partitionEpoch);
+            prefix = ", ";
+        }
+        if (creationTimeMs != prev.creationTimeMs) {
+            builder.append(prefix).append("creationTimeMs: ").
+                append(prev.creationTimeMs).append(" -> ").append(creationTimeMs);
         }
         return builder.toString();
     }
@@ -390,6 +407,9 @@ public class PartitionRegistration {
             if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));
             if (lastKnownElr.length > 0) record.setLastKnownElr(Replicas.toList(lastKnownElr));
         }
+        if (options.isPartitionCreationTimestampSupported()) {
+            record.setCreationTimeMs(creationTimeMs);
+        }
 
         if (options.metadataVersion() == null) {
             options.handleLoss("the metadata version");
@@ -412,7 +432,8 @@ public class PartitionRegistration {
     public int hashCode() {
         return Objects.hash(Arrays.hashCode(replicas), Arrays.hashCode(isr), Arrays.hashCode(removingReplicas),
             Arrays.hashCode(directories), Arrays.hashCode(elr), Arrays.hashCode(lastKnownElr),
-            Arrays.hashCode(addingReplicas), leader, leaderRecoveryState, leaderEpoch, partitionEpoch);
+            Arrays.hashCode(addingReplicas), leader, leaderRecoveryState, leaderEpoch, partitionEpoch,
+            creationTimeMs);
     }
 
     @Override
@@ -428,7 +449,8 @@ public class PartitionRegistration {
             leader == other.leader &&
             leaderRecoveryState == other.leaderRecoveryState &&
             leaderEpoch == other.leaderEpoch &&
-            partitionEpoch == other.partitionEpoch;
+            partitionEpoch == other.partitionEpoch &&
+            creationTimeMs == other.creationTimeMs;
     }
 
     @Override
@@ -444,6 +466,7 @@ public class PartitionRegistration {
                 ", leaderRecoveryState=" + leaderRecoveryState +
                 ", leaderEpoch=" + leaderEpoch +
                 ", partitionEpoch=" + partitionEpoch +
+                ", creationTimeMs=" + creationTimeMs +
                 ")";
     }
 }

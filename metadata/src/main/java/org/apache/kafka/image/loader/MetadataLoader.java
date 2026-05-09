@@ -317,6 +317,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         ImageReWriter writer = new ImageReWriter(delta);
         image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
                 setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
+                setPartitionCreationTimestampSupported(image.features().metadataVersionOrThrow().isPartitionCreationTimestampSupported()).
                 build());
         // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(
