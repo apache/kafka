@@ -92,21 +92,21 @@ import joptsimple.OptionSpec;
  * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
- *     <li> topic: --topic <topic> OR --entity-type topics --entity-name <topic>
- *     <li> client: --client <client> OR --entity-type clients --entity-name <client-id>
- *     <li> user: --user <user-principal> OR --entity-type users --entity-name <user-principal>
- *     <li> <user, client>: --user <user-principal> --client <client-id> OR
- *                          --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>
- *     <li> broker: --broker <broker-id> OR --entity-type brokers --entity-name <broker-id>
- *     <li> broker-logger: --broker-logger <broker-id> OR --entity-type broker-loggers --entity-name <broker-id>
- *     <li> ip: --ip <ip> OR --entity-type ips --entity-name <ip>
- *     <li> client-metrics: --client-metrics <name> OR --entity-type client-metrics --entity-name <name>
- *     <li> group: --group <group> OR --entity-type groups --entity-name <group>
+ *     <li> topic: {@code --topic <topic>} OR {@code --entity-type topics --entity-name <topic>}
+ *     <li> client: {@code --client <client>} OR {@code --entity-type clients --entity-name <client-id>}
+ *     <li> user: {@code --user <user-principal>} OR {@code --entity-type users --entity-name <user-principal>}
+ *     <li> {@code <user, client>}: {@code --user <user-principal> --client <client-id>} OR
+ *                          {@code --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>}
+ *     <li> broker: {@code --broker <broker-id>} OR {@code --entity-type brokers --entity-name <broker-id>}
+ *     <li> broker-logger: {@code --broker-logger <broker-id>} OR {@code --entity-type broker-loggers --entity-name <broker-id>}
+ *     <li> ip: {@code --ip <ip>} OR {@code --entity-type ips --entity-name <ip>}
+ *     <li> client-metrics: {@code --client-metrics <name>} OR {@code --entity-type client-metrics --entity-name <name>}
+ *     <li> group: {@code --group <group>} OR {@code --entity-type groups --entity-name <group>}
  * </ul>
- * --entity-type <users|clients|brokers|ips> --entity-default may be specified in place of --entity-type <users|clients|brokers|ips> --entity-name <entityName>
+ * {@code --entity-type <users|clients|brokers|ips> --entity-default} may be specified in place of {@code --entity-type <users|clients|brokers|ips> --entity-name <entityName>}
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
- * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --ip-defaults may be specified in place of
- * --entity-type <users|clients|brokers|ips> --entity-default, respectively.
+ * Alternatively, {@code --user-defaults}, {@code --client-defaults}, {@code --broker-defaults}, or {@code --ip-defaults} may be specified in place of
+ * {@code --entity-type <users|clients|brokers|ips> --entity-default}, respectively.
  */
 public class ConfigCommand {
 
@@ -249,12 +249,15 @@ public class ConfigCommand {
             } else if (CLIENT_METRICS_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.CLIENT_METRICS;
             } else if (BROKER_TYPE.equals(entityType)) {
+                if (!BROKER_DEFAULT_ENTITY_NAME.equals(entityName)) {
+                    validateBrokerId(entityName, entityType);
+                }
                 configResourceType = ConfigResource.Type.BROKER;
             } else {
                 configResourceType = ConfigResource.Type.GROUP;
             }
             try {
-                alterResourceConfig(adminClient, entityType, entityName, configsToBeDeleted, configsToBeAdded, configResourceType);
+                alterResourceConfig(adminClient, entityName, configsToBeDeleted, configsToBeAdded, configResourceType);
             } catch (ExecutionException ee) {
                 if (ee.getCause() instanceof UnsupportedVersionException) {
                     throw new UnsupportedVersionException("The " + ApiKeys.INCREMENTAL_ALTER_CONFIGS + " API is not supported by the cluster. The API is supported starting from version 2.3.0."
@@ -263,7 +266,7 @@ public class ConfigCommand {
                 throw ee;
             }
         } else if (BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
-            List<String> validLoggers = getResourceConfig(adminClient, entityType, entityName, true, false).stream().map(ConfigEntry::name).toList();
+            List<String> validLoggers = getResourceConfig(adminClient, entityType, entityName, false, false).stream().map(ConfigEntry::name).toList();
             // fail the command if any of the configured broker loggers do not exist
             List<String> invalidBrokerLoggers = Stream.concat(
                     configsToBeDeleted.stream().filter(c -> !validLoggers.contains(c)),
@@ -577,18 +580,7 @@ public class ConfigCommand {
         }
     }
 
-    private static void alterResourceConfig(Admin adminClient, String entityTypeHead, String entityNameHead, List<String> configsToBeDeleted, Map<String, ConfigEntry> configsToBeAdded, ConfigResource.Type resourceType) throws ExecutionException, InterruptedException, TimeoutException {
-        Map<String, ConfigEntry> oldConfig = getResourceConfig(adminClient, entityTypeHead, entityNameHead, false, false)
-                .stream()
-                .collect(Collectors.toMap(ConfigEntry::name, entry -> entry));
-
-        // fail the command if any of the configs to be deleted does not exist
-        List<String> invalidConfigs = configsToBeDeleted.stream()
-                .filter(config -> !oldConfig.containsKey(config))
-                .toList();
-        if (!invalidConfigs.isEmpty())
-            throw new InvalidConfigurationException("Invalid config(s): " + String.join(",", invalidConfigs));
-
+    private static void alterResourceConfig(Admin adminClient, String entityNameHead, List<String> configsToBeDeleted, Map<String, ConfigEntry> configsToBeAdded, ConfigResource.Type resourceType) throws ExecutionException, InterruptedException, TimeoutException {
         ConfigResource configResource = new ConfigResource(resourceType, entityNameHead);
         AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false);
         List<AlterConfigOp> addEntries = configsToBeAdded.values().stream().map(k -> new AlterConfigOp(k, AlterConfigOp.OpType.SET)).toList();

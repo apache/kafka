@@ -113,6 +113,11 @@
             <allow pkg="org.apache.kafka.server.util" />
             <allow pkg="org.apache.kafka.test" />
           </subpackage>
+          <subpackage name="dlq">
+            <allow pkg="org.apache.kafka.clients" />
+            <allow pkg="org.apache.kafka.server.util" />
+            <allow pkg="org.apache.kafka.test" />
+          </subpackage>
         </subpackage>
 
         <subpackage name="util">

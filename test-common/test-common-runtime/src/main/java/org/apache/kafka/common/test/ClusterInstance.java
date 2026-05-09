@@ -150,7 +150,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaProducer<>(setClientSaslConfig(props));
+        return new KafkaProducer<>(setClientSaslConfig(setClientSslConfig(props)));
     }
 
     default <K, V> Producer<K, V> producer() {
@@ -164,7 +164,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaConsumer<>(setClientSaslConfig(props));
+        return new KafkaConsumer<>(setClientSaslConfig(setClientSslConfig(props)));
     }
 
     default <K, V> Consumer<K, V> consumer() {
@@ -189,7 +189,7 @@ public interface ClusterInstance {
         }
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaShareConsumer<>(setClientSaslConfig(props), keyDeserializer, valueDeserializer);
+        return new KafkaShareConsumer<>(setClientSaslConfig(setClientSslConfig(props)), keyDeserializer, valueDeserializer);
     }
 
     default Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
@@ -201,7 +201,7 @@ public interface ClusterInstance {
             props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
             props.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         }
-        return Admin.create(setClientSaslConfig(props));
+        return Admin.create(setClientSaslConfig(setClientSslConfig(props)));
     }
 
     default Map<String, Object> setClientSaslConfig(Map<String, Object> configs) {
@@ -219,6 +219,8 @@ public interface ClusterInstance {
         }
         return props;
     }
+
+    Map<String, Object> setClientSslConfig(Map<String, Object> configs);
 
     default Admin admin(Map<String, Object> configs) {
         return admin(configs, false);

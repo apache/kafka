@@ -27,9 +27,10 @@ type: docs
 
 
 Kafka ships with a pluggable authorization framework, which is configured with the `authorizer.class.name` property in the server configuration. Configured implementations must extend `org.apache.kafka.server.authorizer.Authorizer`. Kafka provides a default implementation which store ACLs in the cluster metadata (KRaft metadata log). For KRaft clusters, use the following configuration on all nodes (brokers, controllers, or combined broker/controller nodes): 
-    
-    
-    authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+
+```java-properties
+authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer
+```
 
 Kafka ACLs are defined in the general format of "Principal {P} is [Allowed|Denied] Operation {O} From Host {H} on any Resource {R} matching ResourcePattern {RP}". You can read more about the ACL structure in [KIP-11](https://cwiki.apache.org/confluence/x/XIUWAw) and resource patterns in [KIP-290](https://cwiki.apache.org/confluence/x/QpvLB). In order to add, remove, or list ACLs, you can use the Kafka ACL CLI `kafka-acls.sh`. 
 
@@ -40,14 +41,16 @@ If a resource (R) does not have any ACLs defined, meaning that no ACL matches th
 ### _Changing the Default Behavior:_
 
 If you prefer that resources without any ACLs be accessible by all users (instead of just super users), you can change the default behavior. To do this, add the following line to your server.properties file:
-    
-    
-    allow.everyone.if.no.acl.found=true
+
+```java-properties
+allow.everyone.if.no.acl.found=true
+```
 
 With this setting enabled, if a resource does not have any ACLs defined, Kafka will allow access to everyone. If a resource has one or more ACLs defined, those ACL rules will be enforced as usual, regardless of the setting. One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive. 
-    
-    
-    super.users=User:Bob;User:Alice
+
+```java-properties
+super.users=User:Bob;User:Alice
+```
 
 ### KRaft Principal Forwarding
 
@@ -58,41 +61,46 @@ All of this implies that Kafka must understand how to serialize and deserialize 
 
 By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting `ssl.principal.mapping.rules` to a customized rule in server.properties. This config allows a list of rules for mapping X.500 distinguished name to short name. The rules are evaluated in order and the first rule that matches a distinguished name is used to map it to a short name. Any later rules in the list are ignored.   
 The format of `ssl.principal.mapping.rules` is a list where each rule starts with "RULE:" and contains an expression as the following formats. Default rule will return string representation of the X.500 certificate distinguished name. If the distinguished name matches the pattern, then the replacement command will be run over the name. This also supports lowercase/uppercase options, to force the translated result to be all lower/uppercase case. This is done by adding a "/L" or "/U' to the end of the rule. 
-    
-    
-    RULE:pattern/replacement/
-    RULE:pattern/replacement/[LU]
+
+```text
+RULE:pattern/replacement/
+RULE:pattern/replacement/[LU]
+```
 
 Example `ssl.principal.mapping.rules` values are: 
-    
-    
-    RULE:^CN=(.*?),OU=ServiceUsers.*$/$1/,
-    RULE:^CN=(.*?),OU=(.*?),O=(.*?),L=(.*?),ST=(.*?),C=(.*?)$/$1@$2/L,
-    RULE:^.*[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/L,
-    DEFAULT
+
+```text
+RULE:^CN=(.*?),OU=ServiceUsers.*$/$1/,
+RULE:^CN=(.*?),OU=(.*?),O=(.*?),L=(.*?),ST=(.*?),C=(.*?)$/$1@$2/L,
+RULE:^.*[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/L,
+DEFAULT
+```
 
 Above rules translate distinguished name "CN=serviceuser,OU=ServiceUsers,O=Unknown,L=Unknown,ST=Unknown,C=Unknown" to "serviceuser" and "CN=adminUser,OU=Admin,O=Unknown,L=Unknown,ST=Unknown,C=Unknown" to "adminuser@admin".   
 For advanced use cases, one can customize the name by setting a customized PrincipalBuilder in server.properties like the following. 
-    
-    
-    principal.builder.class=CustomizedPrincipalBuilderClass
+
+```java-properties
+principal.builder.class=CustomizedPrincipalBuilderClass
+```
 
 ### Customizing SASL User Name
 
 By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting `sasl.kerberos.principal.to.local.rules` to a customized rule in server.properties. The format of `sasl.kerberos.principal.to.local.rules` is a list where each rule works in the same way as the auth_to_local in [Kerberos configuration file (krb5.conf)](https://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html). This also support additional lowercase/uppercase rule, to force the translated result to be all lowercase/uppercase. This is done by adding a "/L" or "/U" to the end of the rule. check below formats for syntax. Each rules starts with RULE: and contains an expression as the following formats. See the kerberos documentation for more details. 
-    
-    
-    RULE:[n:string](regexp)s/pattern/replacement/
-    RULE:[n:string](regexp)s/pattern/replacement/g
-    RULE:[n:string](regexp)s/pattern/replacement//L
-    RULE:[n:string](regexp)s/pattern/replacement/g/L
-    RULE:[n:string](regexp)s/pattern/replacement//U
-    RULE:[n:string](regexp)s/pattern/replacement/g/U
+
+```text
+RULE:[n:string](regexp)s/pattern/replacement/
+RULE:[n:string](regexp)s/pattern/replacement/g
+RULE:[n:string](regexp)s/pattern/replacement//L
+RULE:[n:string](regexp)s/pattern/replacement/g/L
+RULE:[n:string](regexp)s/pattern/replacement//U
+RULE:[n:string](regexp)s/pattern/replacement/g/U
+```
 
 An example of adding a rule to properly translate user@MYDOMAIN.COM to user while also keeping the default rule in place is: 
-    
-    
-    sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT
+
+```java-properties
+sasl.kerberos.principal.to.local.rules=RULE:[1:$1@$0](.*@MYDOMAIN.COM)s/@.*//,DEFAULT
+```
 
 ## Command Line Interface
 
@@ -536,53 +544,75 @@ Convenience
 
   * **Adding Acls**  
 Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from IP 198.51.100.0 and IP 198.51.100.1". You can do that by executing the CLI with following options: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic
+```
 
 By default, all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:'*' --allow-host '*' --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:'*' --allow-host '*' --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic
+```
 
 Note that `--allow-host` and `--deny-host` only support IP addresses (hostnames are not supported). Above examples add acls to a topic by specifying --topic [topic-name] as the resource pattern option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name]. You can add acls on any resource of a certain type, e.g. suppose you wanted to add an acl "Principal User:Peter is allowed to produce to any Topic from IP 198.51.200.0" You can do that by using the wildcard resource '*', e.g. by executing the CLI with following options: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic '*'
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic '*'
+```
 
 You can add acls on prefixed resource patterns, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name starts with 'Test-' from any host". You can do that by executing the CLI with following options: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed
+```
 
 Note, --resource-pattern-type defaults to 'literal', which only affects resources with the exact same name or, in the case of the wildcard resource name '*', a resource with any name.
   * **Removing Acls**  
 Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic 
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic
+```
 
 If you want to remove the acl added to the prefixed resource pattern above we can execute the CLI with following options: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --remove --allow-principal User:Jane --producer --topic Test- --resource-pattern-type Prefixed
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --remove --allow-principal User:Jane --producer --topic Test- --resource-pattern-type Prefixed
+```
 
   * **List Acls**  
 We can list acls for any resource by specifying the --list option with the resource. To list all acls on the literal resource pattern Test-topic, we can execute the CLI with following options: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --list --topic Test-topic
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --list --topic Test-topic
+```
 
 However, this will only return the acls that have been added to this exact resource pattern. Other acls can exist that affect access to the topic, e.g. any acls on the topic wildcard '*', or any acls on prefixed resource patterns. Acls on the wildcard resource pattern can be queried explicitly: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --list --topic '*'
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --list --topic '*'
+```
 
 However, it is not necessarily possible to explicitly query for acls on prefixed resource patterns that match Test-topic as the name of such patterns may not be known. We can list _all_ acls affecting Test-topic by using '--resource-pattern-type match', e.g. 
-        
-        > bin/kafka-acls.sh --bootstrap-server localhost:9092 --list --topic Test-topic --resource-pattern-type match
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --list --topic Test-topic --resource-pattern-type match
+```
 
 This will list acls on all matching literal, wildcard and prefixed resource patterns.
   * **Adding or removing a principal as producer or consumer**  
 The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of Test-topic we can execute the following command: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Bob --producer --topic Test-topic
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Bob --producer --topic Test-topic
+```
 
 Similarly to add Alice as a consumer of Test-topic with consumer group Group-1 we just have to pass --consumer option: 
-        
-        $ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1 
+
+```bash
+$ bin/kafka-acls.sh --bootstrap-server localhost:9092 --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1
+```
 
 Note that for consumer option we must also specify the consumer group. In order to remove a principal from producer or consumer role we just need to pass --remove option. 
 

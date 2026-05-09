@@ -25,7 +25,8 @@ import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
-import org.apache.kafka.common.utils.{LogContext, MockTime}
+import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState}

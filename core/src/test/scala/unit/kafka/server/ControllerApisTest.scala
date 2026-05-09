@@ -744,7 +744,8 @@ class ControllerApisTest {
     assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
       hasClusterAuth = false,
       _ => Set("baz", "indescribable"),
-      _ => Set("baz")).get().topics().asScala.toSet)
+      _ => Set("baz"),
+      forwarded = false).get().topics().asScala.toSet)
   }
 
   @ParameterizedTest(name = "testCreateTopicsMutationQuota with throttle: {0}")

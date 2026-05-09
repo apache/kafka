@@ -33,6 +33,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.IntegrationTestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
@@ -70,10 +71,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def createTransactionStateTopic(): Unit = {
     val admin = cluster.admin()
     try {
-      TestUtils.createTransactionStateTopicWithAdmin(
+      TestUtils.createTopicWithAdmin(
         admin = admin,
+        topic = Topic.TRANSACTION_STATE_TOPIC_NAME,
+        numPartitions = brokers().head.config.getInt(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG),
+        replicationFactor = brokers().head.config.getShort(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG).toInt,
         brokers = brokers(),
-        controllers = controllerServers()
+        controllers = controllerServers(),
+        topicConfig = new Properties()
       )
     } finally {
       admin.close()
@@ -258,11 +263,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
      expectedError: Errors,
      version: Short = ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
   ): Unit = {
-    val request = new TxnOffsetCommitRequest.Builder(
+    val request = TxnOffsetCommitRequest.Builder.forTopicNames(
       new TxnOffsetCommitRequestData()
         .setGroupId(groupId)
         .setMemberId(memberId)
-        .setGenerationId(generationId)
+        .setGenerationIdOrMemberEpoch(generationId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
         .setTransactionalId(transactionalId)
@@ -274,7 +279,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
                 .setPartitionIndex(partition)
                 .setCommittedOffset(offset)
             ).asJava)
-        ).asJava)
+        ).asJava),
+      true
     ).build(version)
 
     val expectedResponse = new TxnOffsetCommitResponseData()
