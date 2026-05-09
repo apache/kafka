@@ -155,8 +155,7 @@ There will be more than one repository entries created, please close all of them
 In some cases, you may get errors on some repositories while closing them, see KAFKA-15033.
 If this is not the first RC, you need to 'Drop' the previous artifacts.
 Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/
-Note: Docker image builds are triggered automatically by this script after the RC tag is pushed.
-Monitor the workflow runs at https://github.com/apache/kafka/actions
+Docker image builds will be triggered automatically by this script after the RC tag is pushed.
 """
 
 def sanity_check_instructions(release_version, rc_tag):

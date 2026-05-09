@@ -40,7 +40,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from runtime import confirm, confirm_or_fail, prompt
-import github
+import gh_actions
 import preferences
 import templates
 
@@ -69,7 +69,7 @@ def _load_trigger_docker_workflows():
     func_source = '\n'.join(func_lines)
 
     ns = {
-        'github': github,
+        'gh_actions': gh_actions,
         'confirm': confirm,
         'confirm_or_fail': confirm_or_fail,
         'preferences': preferences,
@@ -86,8 +86,8 @@ if __name__ == "__main__":
     print("=" * 70)
     print("  Docker Workflow Trigger - Interactive Test")
     print("=" * 70)
-    print(f"\n  Target repo  : {github.GITHUB_REPO}")
-    print(f"  Dry-run mode : {github.DRY_RUN}")
+    print(f"\n  Target repo  : {gh_actions.GITHUB_REPO}")
+    print(f"  Dry-run mode : {gh_actions.DRY_RUN}")
     print()
 
     release_version = prompt("Enter release version (e.g. 4.3.0): ")

@@ -67,7 +67,7 @@ from runtime import (
     repo_dir,
 )
 import git
-import github
+import gh_actions
 import gpg
 import notes
 import preferences
@@ -224,10 +224,10 @@ def trigger_docker_workflows(rc_tag, release_version, dev_branch):
     Prompts the user for confirmation before each step.
     """
     print("\n=== Docker Image Workflows ===")
-    if github.DRY_RUN:
+    if gh_actions.DRY_RUN:
         print("NOTE: GITHUB_DRY_RUN is enabled. No actual API calls will be made.")
-    if github.GITHUB_REPO != "apache/kafka":
-        print(f"NOTE: Using custom repository: {github.GITHUB_REPO}")
+    if gh_actions.GITHUB_REPO != "apache/kafka":
+        print(f"NOTE: Using custom repository: {gh_actions.GITHUB_REPO}")
     if not confirm("Trigger Docker image build workflows via GitHub Actions?"):
         print("Skipping Docker image workflows.")
         return
@@ -240,30 +240,24 @@ def trigger_docker_workflows(rc_tag, release_version, dev_branch):
 
     # Step 1: Trigger build/test workflows and loop until CVE-free
     while True:
-        print(f"\nStep 1/2: Triggering Docker Build Test workflows for JVM and native images...")
+        print("\nStep 1/2: Triggering Docker Build Test workflows for JVM and native images...")
         for image_type in ["jvm", "native"]:
-            github.trigger_docker_build_test(github_token, dev_branch, image_type, kafka_url)
-        print("\nDocker Build Test workflows triggered successfully for both JVM and native images.")
-        print(f"\nPlease check the build results and CVE scan reports at:")
-        print(f"  https://github.com/{github.GITHUB_REPO}/actions/workflows/docker_build_and_test.yml")
-        print("\nVerify that:")
-        print("  1. Both JVM and native image builds succeeded")
-        print("  2. The CVE scan reports show no CRITICAL or HIGH vulnerabilities")
-        print("  3. If CVEs are found, update the Dockerfiles and re-trigger")
-        print("     Dockerfiles are located at: docker/jvm/Dockerfile and docker/native/Dockerfile")
-        if confirm("Have the builds passed with no CVEs? (n to re-trigger after fixing Dockerfiles)"):
+            gh_actions.trigger_docker_build_test(github_token, dev_branch, image_type, kafka_url)
+        print(f"\nReview build results and CVE scan reports at:")
+        print(f"  https://github.com/{gh_actions.GITHUB_REPO}/actions/workflows/docker_build_and_test.yml")
+        print("Both JVM and native builds should succeed with no CRITICAL or HIGH CVEs.")
+        print("If CVEs are found, update docker/jvm/Dockerfile or docker/native/Dockerfile and answer 'n' below to retry.")
+        if confirm("Have the builds passed with no CVEs?"):
             break
-        print("\nRe-triggering Docker Build Test workflows after Dockerfile updates...")
 
     # Step 2: Push RC images to DockerHub
-    print(f"\nStep 2/2: Triggering Docker RC Release workflows for JVM and native images...")
+    print("\nStep 2/2: Triggering Docker RC Release workflows for JVM and native images...")
     for image_type in ["jvm", "native"]:
         docker_image_name = "apache/kafka-native" if image_type == "native" else "apache/kafka"
         rc_docker_image = f"{docker_image_name}:{rc_tag}"
-        github.trigger_docker_rc_release(github_token, dev_branch, image_type, rc_docker_image, kafka_url)
-    print("\nDocker RC Release workflows triggered successfully for both JVM and native images.")
+        gh_actions.trigger_docker_rc_release(github_token, dev_branch, image_type, rc_docker_image, kafka_url)
 
-    print(f"\nAll Docker workflow runs can be monitored at: https://github.com/{github.GITHUB_REPO}/actions")
+    print(f"\nMonitor all Docker workflow runs at: https://github.com/{gh_actions.GITHUB_REPO}/actions")
 
 
 def verify_gpg_key():
