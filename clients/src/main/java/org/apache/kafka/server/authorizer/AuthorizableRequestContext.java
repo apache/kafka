@@ -50,17 +50,15 @@ public interface AuthorizableRequestContext {
 
     /**
      * Returns the 16-bit API key ({@code request_api_key}) from the request header.
-     * @see <a href="https://kafka.apache.org/42/design/protocol/#the-messages">RequestHeader</a>
-     * <br/>
-     * RequestHeader.json
+     * @see <a href="https://github.com/apache/kafka/blob/trunk/clients/src/main/resources/common/message/RequestHeader.json#L29-L30">RequestHeader.json</a>
+     *
      */
     int requestType();
 
     /**
      * Returns the 16-bit API version ({@code request_api_version}) from the request header.
-     * @see <a href="https://kafka.apache.org/42/design/protocol/#the-messages">RequestHeader</a>
-     * <br/>
-     * RequestHeader.json
+     * @see <a href="https://github.com/apache/kafka/blob/trunk/clients/src/main/resources/common/message/RequestHeader.json#L31-L32">RequestHeader.json</a>
+     *
      */
     int requestVersion();
 
