@@ -598,7 +598,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         StreamsGroupMember temporarilyLeftMember = streamsGroupMemberBuilderWithDefaults(oldMemberId, instanceId)
                 .setMemberEpoch(leaveEpoch)
                 .setPreviousMemberEpoch(memberEpoch - 1)
-                .setAssignedTasks(assignedTasks)
+                .setAssignedTasks(resetAssignedTasksEpochsToZero(assignedTasks))
                 .build();
 
         GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, group -> group
@@ -933,7 +933,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         StreamsGroupMember oldMember = streamsGroupMemberBuilderWithDefaults(oldMemberId, instanceId)
                 .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(groupEpoch)
-                .setAssignedTasks(assignedTasks)
+                .setAssignedTasks(resetAssignedTasksEpochsToZero(assignedTasks))
                 .build();
 
         GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, group -> group
