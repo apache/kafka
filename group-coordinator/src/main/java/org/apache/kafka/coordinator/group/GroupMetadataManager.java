@@ -2056,9 +2056,9 @@ public class GroupMetadataManager {
 
         // Get or create the member.
         StreamsGroupMember member;
-        Optional<String> maybeReplacedStaticMemberId;
+        StreamsGroupMember maybeReplacedStaticMember;
         if (instanceId == null) {
-            maybeReplacedStaticMemberId = Optional.empty();
+            maybeReplacedStaticMember = null;
             member = getOrMaybeCreateDynamicStreamsGroupMember(
                 group,
                 memberId,
@@ -2069,10 +2069,7 @@ public class GroupMetadataManager {
                 isJoining
             );
         } else {
-            StreamsGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
-            maybeReplacedStaticMemberId = existingStaticMemberOrNull == null ?
-                    Optional.empty() :
-                    Optional.of(existingStaticMemberOrNull.memberId());
+            maybeReplacedStaticMember = group.staticMember(instanceId);
             member = getOrMaybeCreateStaticStreamsGroupMember(
                     group,
                     memberId,
@@ -2087,7 +2084,7 @@ public class GroupMetadataManager {
         }
 
         // 1. Create or update the member.
-        StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member)
+        StreamsGroupMember.Builder updatedMemberBuilder = new StreamsGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
             .maybeUpdateRackId(Optional.ofNullable(rackId))
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
@@ -2095,10 +2092,18 @@ public class GroupMetadataManager {
             .setClientId(clientId)
             .setClientHost(clientHost)
             .maybeUpdateProcessId(Optional.ofNullable(processId))
-            .maybeUpdateClientTags(Optional.ofNullable(clientTags).map(x -> x.stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value))))
-            .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())))
-            .build();
+            .maybeUpdateClientTags(Optional.ofNullable(clientTags).map(x -> x.stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value))));
 
+        if (isJoining) {
+            StreamsGroupMemberMetadataValue.Endpoint userEndpointMetadata = userEndpoint == null ? null :
+                    new StreamsGroupMemberMetadataValue.Endpoint().setHost(userEndpoint.host()).setPort(userEndpoint.port());
+            updatedMemberBuilder.setUserEndpoint(userEndpointMetadata);
+        } else {
+            updatedMemberBuilder
+                    .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
+        }
+
+        StreamsGroupMember updatedMember = updatedMemberBuilder.build();
         // If the member is new or has changed, a StreamsGroupMemberMetadataValue record is written to the __consumer_offsets partition
         // to persist the change, and bump the group epoch later.
         boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, instanceId, member, updatedMember, records);
@@ -2235,10 +2240,10 @@ public class GroupMetadataManager {
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
             group.invalidateCachedEndpointToPartitions(updatedMember.memberId());
-            if (maybeReplacedStaticMemberId.isPresent() && !maybeReplacedStaticMemberId.get().equals(updatedMember.memberId())) {
-                group.invalidateCachedEndpointToPartitions(maybeReplacedStaticMemberId.get());
+            if (maybeReplacedStaticMember != null && !maybeReplacedStaticMember.memberId().equals(updatedMember.memberId())) {
+                group.invalidateCachedEndpointToPartitions(maybeReplacedStaticMember.memberId());
             }
-            if (updatedMember.userEndpoint().isPresent()) {
+            if (hasUserEndpointChanged(maybeReplacedStaticMember, updatedMember)) {
                 // If no user endpoint is defined, there is no change in the endpoint information.
                 // Otherwise, bump the endpoint information epoch
                 group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
@@ -2246,7 +2251,7 @@ public class GroupMetadataManager {
         }
 
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
-            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage, maybeReplacedStaticMemberId));
+            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage, maybeReplacedStaticMember));
         }
         if (groups.containsKey(group.groupId())) {
             // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
@@ -9232,6 +9237,22 @@ public class GroupMetadataManager {
         ));
     }
 
+    private boolean hasUserEndpointChanged(StreamsGroupMember maybeReplacedStaticMember, StreamsGroupMember updatedMember) {
+
+        boolean hasPreviousUserEndpoint = maybeReplacedStaticMember != null && maybeReplacedStaticMember.userEndpoint().isPresent();
+        boolean hasCurrentUserEndpoint = updatedMember.userEndpoint().isPresent();
+
+        if (hasPreviousUserEndpoint && hasCurrentUserEndpoint) {
+            return !maybeReplacedStaticMember.userEndpoint().get().equals(updatedMember.userEndpoint().get());
+        }
+
+        if (!hasPreviousUserEndpoint && !hasCurrentUserEndpoint) {
+            return false;
+        }
+
+        return true;
+    }
+    
     private static boolean hasEpochRelevantMemberConfigChanged(
             StreamsGroupMember oldMember,
             StreamsGroupMember newMember

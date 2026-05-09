@@ -1202,13 +1202,13 @@ public class StreamsGroup implements Group {
      *
      * @param updatedMember The member that was just updated (may have a stale entry in the members map).
      * @param metadataImage The current metadata image for resolving topic partitions.
-     * @param maybeReplacedStaticMemberId The replaced static member ID.
+     * @param maybeReplacedStaticMember The replaced static member. it can be null.
      * @return The list of endpoint-to-partitions mappings for all members with endpoints.
      */
     public List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpointToPartitions(
         StreamsGroupMember updatedMember,
         CoordinatorMetadataImage metadataImage,
-        Optional<String> maybeReplacedStaticMemberId
+        StreamsGroupMember maybeReplacedStaticMember
     ) {
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
         if (updatedMember == null) {
@@ -1220,7 +1220,7 @@ public class StreamsGroup implements Group {
             if (entry.getKey().equals(updatedMember.memberId())) {
                 continue;
             }
-            if (maybeReplacedStaticMemberId.isPresent() && entry.getKey().equals(maybeReplacedStaticMemberId.get())) {
+            if (maybeReplacedStaticMember != null && entry.getKey().equals(maybeReplacedStaticMember.memberId())) {
                 continue;
             }
             getOrComputeEndpointToPartitions(entry.getValue(), metadataImage)
