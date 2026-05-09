@@ -5423,16 +5423,12 @@ public class GroupMetadataManagerTest {
     }
 
     private StreamsGroupMember.Builder streamsGroupMemberBuilderWithDefaults(String memberId) {
-        return streamsGroupMemberBuilderWithDefaults(memberId, null);
-    }
-    
-    private StreamsGroupMember.Builder streamsGroupMemberBuilderWithDefaults(String memberId, String instanceId) {
         return new StreamsGroupMember.Builder(memberId)
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
             .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
             .setRackId(null)
-            .setInstanceId(instanceId)
+            .setInstanceId(null)
             .setRebalanceTimeoutMs(1500)
             .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
             .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
