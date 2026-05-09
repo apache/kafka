@@ -2842,20 +2842,25 @@ public class RequestResponseTest {
         offsets.put(new TopicPartition("topic", 74),
                 new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
 
+        Map<String, Uuid> topicIds = Map.of("topic", Uuid.randomUuid());
         TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
             .setTransactionalId("transactionalId")
             .setGroupId("groupId")
             .setProducerId(21L)
             .setProducerEpoch((short) 42)
-            .setTopics(TxnOffsetCommitRequest.getTopics(offsets));
+            .setTopics(TxnOffsetCommitRequest.getTopics(offsets, topicIds));
 
         if (version >= 3) {
             data.setMemberId("member")
-                .setGenerationId(2)
+                .setGenerationIdOrMemberEpoch(2)
                 .setGroupInstanceId("instance");
         }
 
-        return TxnOffsetCommitRequest.Builder.forTopicNames(data, version >= 5).build(version);
+        if (version >= 6) {
+            return TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build(version);
+        } else {
+            return TxnOffsetCommitRequest.Builder.forTopicNames(data, version >= 5).build(version);
+        }
     }
 
     private TxnOffsetCommitRequest createTxnOffsetCommitRequestWithAutoDowngrade() {
@@ -2871,7 +2876,7 @@ public class RequestResponseTest {
             .setProducerId(21L)
             .setProducerEpoch((short) 42)
             .setMemberId("member")
-            .setGenerationId(2)
+            .setGenerationIdOrMemberEpoch(2)
             .setGroupInstanceId("instance")
             .setTopics(TxnOffsetCommitRequest.getTopics(offsets));
         return TxnOffsetCommitRequest.Builder.forTopicNames(data, false).build();

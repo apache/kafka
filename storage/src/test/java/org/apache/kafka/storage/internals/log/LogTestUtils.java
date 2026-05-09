@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.AbortedTxn;
@@ -30,8 +32,15 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
+import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.server.common.RequestLocal;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.storage.log.FetchIsolation;
+import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,11 +53,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.LongFunction;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 
 public class LogTestUtils {
     public static LogSegment createSegment(long offset, File logDir, int indexIntervalBytes, Time time) throws IOException {
@@ -92,6 +104,38 @@ public class LogTestUtils {
                                               long timestamp) {
         EndTransactionMarker marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch);
         return MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, epoch, marker);
+    }
+
+    /**
+     * Wrap a single record log buffer.
+     */
+    public static MemoryRecords singletonRecords(byte[] value) {
+        return records(
+                List.of(new SimpleRecord(RecordBatch.NO_TIMESTAMP, value)),
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                0L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    /**
+     * Wrap a single record log buffer.
+     */
+    public static MemoryRecords singletonRecords(byte[] value, long timestamp) {
+        return records(
+                List.of(new SimpleRecord(timestamp, value)),
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                0L,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
     }
 
     /**
@@ -334,6 +378,69 @@ public class LogTestUtils {
             assertDoesNotThrow(() -> log.appendAsLeader(records, 0));
             sequence.addAndGet(numRecords);
         };
+    }
+
+    public static LogManager createLogManager(List<File> logDirs,
+                                              LogConfig defaultConfig,
+                                              ConfigRepository configRepository,
+                                              MockTime time,
+                                              int recoveryThreadsPerDataDir,
+                                              long initialTaskDelayMs) throws IOException {
+        return createLogManager(logDirs, defaultConfig, configRepository, new CleanerConfig(false), time, recoveryThreadsPerDataDir, false, Optional.empty(), false, initialTaskDelayMs);
+    }
+
+    public static LogManager createLogManager(List<File> logDirs,
+                                              LogConfig defaultConfig,
+                                              ConfigRepository configRepository,
+                                              MockTime time,
+                                              int recoveryThreadsPerDataDir,
+                                              boolean remoteStorageSystemEnable) throws IOException {
+        return createLogManager(logDirs, defaultConfig, configRepository, new CleanerConfig(false), time, recoveryThreadsPerDataDir, false, Optional.empty(), remoteStorageSystemEnable, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT);
+    }
+
+    public static LogManager createLogManager(List<File> logDirs,
+                                              LogConfig defaultConfig,
+                                              ConfigRepository configRepository,
+                                              CleanerConfig cleanerConfig,
+                                              MockTime time,
+                                              int recoveryThreadsPerDataDir,
+                                              boolean transactionVerificationEnabled,
+                                              Optional<BiFunction<TopicPartition, Optional<Uuid>, UnifiedLog>> logFn,
+                                              boolean remoteStorageSystemEnable,
+                                              long initialTaskDelayMs) throws IOException {
+        LogManager logManager = new LogManager(logDirs.stream().map(File::getAbsoluteFile).toList(),
+                List.of(),
+                configRepository,
+                defaultConfig,
+                cleanerConfig,
+                recoveryThreadsPerDataDir,
+                1000L,
+                10000L,
+                10000L,
+                1000L,
+                5 * 60 * 1000,
+                new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, transactionVerificationEnabled),
+                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                time.scheduler,
+                new BrokerTopicStats(),
+                new LogDirFailureChannel(logDirs.size()),
+                time,
+                remoteStorageSystemEnable,
+                initialTaskDelayMs,
+                (config, files, map, logDirFailureChannel, t) -> Mockito.spy(new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time))
+        );
+
+        if (logFn.isPresent()) {
+            LogManager spyLogManager = Mockito.spy(logManager);
+            Mockito.doAnswer(answer -> {
+                TopicPartition topicPartition = answer.getArgument(0, TopicPartition.class);
+                Optional<Uuid> topicId = answer.getArgument(3, Optional.class);
+                return logFn.get().apply(topicPartition, topicId);
+            }).when(spyLogManager).getOrCreateLog(any(TopicPartition.class), anyBoolean(), anyBoolean(), any(Optional.class), any(Optional.class));
+            return spyLogManager;
+        } else {
+            return logManager;
+        }
     }
 
     public static class LogConfigBuilder {
