@@ -458,7 +458,7 @@ public class StreamsRebalanceData {
      * Returns the acceptable recovery lag.
      *
      * <p>If acceptable recovery lag is set to {@code -1}, it means the broker doesn't support warmup tasks,
-     * and the Kafka Streams client it's not required to populate {@code TaskOffsets} or {@code TaskEndOffsets} fields
+     * and the Kafka Streams client is not required to populate {@code TaskOffsets} or {@code TaskEndOffsets} fields
      * in {@link org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest}.
      */
     public long acceptableRecoveryLag() {

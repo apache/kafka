@@ -19180,11 +19180,11 @@ public class GroupMetadataManagerTest {
         StreamsGroupHeartbeatResult response = result.response();
         StreamsGroupHeartbeatResponseData data = response.data();
 
-        // If ok for version0 to set `acceptableRecoveryLag` because the field is marked as `ignorable`
         assertEquals(0, data.acceptableRecoveryLagLegacy(),
             "Version 0 response should NOT include acceptableRecoveryLagLegacy (should be default 0)");
+        // It's ok for version0 to set `acceptableRecoveryLag` because the field is marked as `ignorable`
         assertEquals(10_000L, data.acceptableRecoveryLag(),
-            "Version 0 response should NOT include acceptableRecoveryLag (should be default -1)");
+            "Version 0 response should NOT include acceptableRecoveryLag (should be default 10_000L)");
 
         // Verify other fields are set correctly
         assertEquals(memberId, data.memberId());
@@ -19201,7 +19201,7 @@ public class GroupMetadataManagerTest {
         assertEquals(0, deserializedData.acceptableRecoveryLagLegacy(),
             "AcceptableRecoveryLagLegacy must survive the version-0 roundtrip unchanged");
         assertEquals(-1L, deserializedData.acceptableRecoveryLag(),
-            "AcceptableRecoveryLag (ignorable, versions 1+) must be absent after version-0 roundtrip; should revert to default -1");
+            "AcceptableRecoveryLag (ignorable, versions 1+) must be absent after version-0 roundtrip; should revert to default -1, even if it was set to default 10_000L");
     }
 
     @Test
