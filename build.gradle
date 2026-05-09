@@ -1024,7 +1024,7 @@ project(':server') {
     testImplementation testLog4j2Libs
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
-    testImplementation project(':storage:storage-api').sourceSets.test.output
+    testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation testFixtures(project(':server-common'))
 
     testRuntimeOnly runtimeTestLibs
@@ -1144,7 +1144,7 @@ project(':core') {
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation testFixtures(project(':server-common'))
-    testImplementation project(':storage:storage-api').sourceSets.test.output
+    testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation project(':server').sourceSets.test.output
     testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
@@ -2324,11 +2324,15 @@ project(':storage:storage-api') {
     archivesName = "kafka-storage-api"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
     implementation libs.metrics
     implementation libs.slf4jApi
+
+    testFixturesImplementation project(':clients')
 
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
@@ -2403,7 +2407,7 @@ project(':storage') {
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':storage:storage-api').sourceSets.test.output
+    testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
@@ -4067,18 +4071,22 @@ task aggregatedJavadoc(type: Javadoc) {
 
 gradle.projectsEvaluated {
   // Validate that no module depends on test output directly
-  def protectedModules = ['clients', 'server-common']
+  def protectedModules = [
+    'clients': ':clients',
+    'server-common': ':server-common',
+    'storage/api': ':storage:storage-api',
+  ]
   allprojects { proj ->
     proj.configurations.all { config ->
       config.dependencies.each { dep ->
         if (dep instanceof FileCollectionDependency) {
           dep.files.files.each { file ->
-            protectedModules.each { module ->
-              if (file.absolutePath.endsWith("/${module}/build/classes/java/test")) {
+            protectedModules.each { dir, projectPath ->
+              if (file.absolutePath.endsWith("/${dir}/build/classes/java/test")) {
                 throw new GradleException("""
-ERROR: Dependency on :${module} test output is not allowed.
+ERROR: Dependency on ${projectPath} test output is not allowed.
 Found in project ${proj.path} configuration '${config.name}'.
-Use `testFixtures(project(':${module}'))` instead of `project(':${module}').sourceSets.test.output`
+Use `testFixtures(project('${projectPath}'))` instead of `project('${projectPath}').sourceSets.test.output`
 """)
               }
             }
