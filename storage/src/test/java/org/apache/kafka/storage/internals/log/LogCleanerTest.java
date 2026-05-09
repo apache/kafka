@@ -73,6 +73,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -290,8 +291,8 @@ public class LogCleanerTest {
             }
         };
 
-        // Start a thread which execute log.deleteOldSegments() right before replaceSegments() is executed
-        Thread t = new Thread(() -> {
+        // Start an async task that executes log.deleteOldSegments() right before replaceSegments() is executed.
+        CompletableFuture.runAsync(() -> {
             try {
                 deleteStartLatch.await(5000, TimeUnit.MILLISECONDS);
                 log.updateHighWatermark(log.activeSegment().baseOffset());
@@ -303,7 +304,6 @@ public class LogCleanerTest {
                 throw new RuntimeException(e);
             }
         });
-        t.start();
 
         // Append records so that segment number increase to 3
         while (log.numberOfSegments() < 3) {
@@ -1937,7 +1937,7 @@ public class LogCleanerTest {
                     Utils.replaceSuffix(file.getPath(), LogFileUtils.DELETED_FILE_SUFFIX, "")), false);
             }
         }
-        log = recoverAndCheck(config, allKeys);
+        log = LogTestUtils.recoverAndCheck(dir, config, allKeys, new BrokerTopicStats(), time, time.scheduler);
 
         // clean again
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
@@ -1957,7 +1957,7 @@ public class LogCleanerTest {
                     Utils.replaceSuffix(file.getPath(), LogFileUtils.DELETED_FILE_SUFFIX, "")), false);
             }
         }
-        log = recoverAndCheck(config, allKeys);
+        log = LogTestUtils.recoverAndCheck(dir, config, allKeys, new BrokerTopicStats(), time, time.scheduler);
 
         // clean again
         cleaner.cleanSegments(log, log.logSegments().subList(0, 9), offsetMap, 0L,
@@ -1976,7 +1976,7 @@ public class LogCleanerTest {
                     Utils.replaceSuffix(file.getPath(), LogFileUtils.DELETED_FILE_SUFFIX, "")), false);
             }
         }
-        log = recoverAndCheck(config, cleanedKeys);
+        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, new BrokerTopicStats(), time, time.scheduler);
 
         // add some more messages and clean the log again
         while (log.numberOfSegments() < 10) {
@@ -1995,7 +1995,7 @@ public class LogCleanerTest {
         // 4) Simulate recovery after swap file is created and old segments files are renamed
         //    to .deleted. Clean operation is resumed during recovery.
         log.logSegments().get(0).changeFileSuffixes("", UnifiedLog.SWAP_FILE_SUFFIX);
-        log = recoverAndCheck(config, cleanedKeys);
+        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, new BrokerTopicStats(), time, time.scheduler);
 
         // add some more messages and clean the log again
         while (log.numberOfSegments() < 10) {
@@ -2015,7 +2015,7 @@ public class LogCleanerTest {
         //    to .deleted. Clean operation is resumed during recovery.
         File timeIndexFile = log.logSegments().get(0).timeIndex().file();
         timeIndexFile.renameTo(new File(Utils.replaceSuffix(timeIndexFile.getPath(), "", UnifiedLog.SWAP_FILE_SUFFIX)));
-        log = recoverAndCheck(config, cleanedKeys);
+        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, new BrokerTopicStats(), time, time.scheduler);
 
         // add some more messages and clean the log again
         while (log.numberOfSegments() < 10) {
@@ -2034,7 +2034,7 @@ public class LogCleanerTest {
 
         // 6) Simulate recovery after swap is complete, but async deletion
         //    is not yet complete. Clean operation is resumed during recovery.
-        log = recoverAndCheck(config, cleanedKeys);
+        log = LogTestUtils.recoverAndCheck(dir, config, cleanedKeys, new BrokerTopicStats(), time, time.scheduler);
         log.close();
     }
 
@@ -2668,10 +2668,6 @@ public class LogCleanerTest {
         var endTxnMarker = new EndTransactionMarker(controlRecordType, 0);
         return MemoryRecords.withEndTransactionMarker(offset, timestamp, RecordBatch.NO_PARTITION_LEADER_EPOCH,
             producerId, producerEpoch, endTxnMarker);
-    }
-
-    private UnifiedLog recoverAndCheck(LogConfig config, List<Long> expectedKeys) throws IOException {
-        return LogTestUtils.recoverAndCheck(dir, config, expectedKeys, new BrokerTopicStats(), time, time.scheduler);
     }
 
     /**
