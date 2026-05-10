@@ -81,8 +81,8 @@ Running in SASL mode
 - Set `KAFKA_OPTS` to `-Djava.security.auth.login.config=/etc/kafka/secrets/<jaas_config_filename>`.
 - Set `KAFKA_SASL_ENABLED_MECHANISMS` to the desired SASL mechanism (e.g. `GSSAPI` , `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`).
 - Ensure `KAFKA_ADVERTISED_LISTENERS` contains a `SASL_PLAINTEXT://` or `SASL_SSL://` listener.
-- For inter-broker SASL communication, set `KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL` to the desired mechanism (SASL_PLAINTEXT (or SASL_SSL)).
-- The Docker image `configure` script will validate that `KAFKA_OPTS` contains the `java.security.auth.login.config` property when SASL listeners are detected.
+- For inter-broker SASL communication, set `KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL` to the desired SASL *mechanism* (e.g. `PLAIN`, `SCRAM-SHA-256`). To choose between `SASL_PLAINTEXT` and `SASL_SSL` for inter-broker traffic, set `KAFKA_INTER_BROKER_LISTENER_NAME` to a listener whose security protocol is mapped accordingly in `KAFKA_LISTENER_SECURITY_PROTOCOL_MAP`.
+- The Docker image `configure` script will log a warning if `KAFKA_OPTS` does not contain the `java.security.auth.login.config` property when SASL listeners are detected.
 - For more details on SASL mechanisms and configuration, refer to the [Kafka SASL authentication documentation](https://kafka.apache.org/documentation/#security_sasl).
 
 Running in SSL mode

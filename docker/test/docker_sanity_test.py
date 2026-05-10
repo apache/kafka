@@ -120,49 +120,23 @@ class DockerSanityTest(unittest.TestCase):
 
         return errors
 
-    def ssl_flow(self, ssl_broker_port, test_name, test_error_prefix, topic):
+    def secure_flow(self, broker_port, client_config, test_name, test_error_prefix, topic):
         print(f"Running {test_name}")
         errors = []
         try:
-            self.assertTrue(self.create_topic(topic, ["--bootstrap-server", ssl_broker_port, "--command-config", f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}"]))
+            self.assertTrue(self.create_topic(topic, ["--bootstrap-server", broker_port, "--command-config", f"{self.FIXTURES_DIR}/{client_config}"]))
         except AssertionError as e:
             errors.append(test_error_prefix + str(e))
             return errors
 
-        producer_config = ["--bootstrap-server", ssl_broker_port,
-                           "--command-config", f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}"]
+        producer_config = ["--bootstrap-server", broker_port,
+                           "--command-config", f"{self.FIXTURES_DIR}/{client_config}"]
         self.produce_message(topic, producer_config, "key", "message")
 
         consumer_config = [
-            "--bootstrap-server", ssl_broker_port,
+            "--bootstrap-server", broker_port,
             "--command-property", "auto.offset.reset=earliest",
-            "--command-config", f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}",
-        ]
-        message = self.consume_message(topic, consumer_config)
-        try:
-            self.assertEqual(message, "key:message")
-        except AssertionError as e:
-            errors.append(test_error_prefix + str(e))
-        
-        return errors
-    
-    def sasl_flow(self, sasl_broker_port, test_name, test_error_prefix, topic):
-        print(f"Running {test_name}")
-        errors = []
-        try:
-            self.assertTrue(self.create_topic(topic, ["--bootstrap-server", sasl_broker_port, "--command-config", f"{self.FIXTURES_DIR}/{constants.SASL_CLIENT_CONFIG}"]))
-        except AssertionError as e:
-            errors.append(test_error_prefix + str(e))
-            return errors
-
-        producer_config = ["--bootstrap-server", sasl_broker_port,
-                           "--command-config", f"{self.FIXTURES_DIR}/{constants.SASL_CLIENT_CONFIG}"]
-        self.produce_message(topic, producer_config, "key", "message")
-
-        consumer_config = [
-            "--bootstrap-server", sasl_broker_port,
-            "--command-property", "auto.offset.reset=earliest",
-            "--command-config", f"{self.FIXTURES_DIR}/{constants.SASL_CLIENT_CONFIG}",
+            "--command-config", f"{self.FIXTURES_DIR}/{client_config}",
         ]
         message = self.consume_message(topic, consumer_config)
         try:
@@ -207,19 +181,19 @@ class DockerSanityTest(unittest.TestCase):
             print(constants.BROKER_METRICS_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
         try:
-            total_errors.extend(self.ssl_flow('localhost:9093', constants.SSL_FLOW_TESTS, constants.SSL_ERROR_PREFIX, constants.SSL_TOPIC))
+            total_errors.extend(self.secure_flow('localhost:9093', constants.SSL_CLIENT_CONFIG, constants.SSL_FLOW_TESTS, constants.SSL_ERROR_PREFIX, constants.SSL_TOPIC))
         except Exception as e:
             print(constants.SSL_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
         try:
-            total_errors.extend(self.ssl_flow('localhost:9094', constants.FILE_INPUT_FLOW_TESTS, constants.FILE_INPUT_ERROR_PREFIX, constants.FILE_INPUT_TOPIC))
+            total_errors.extend(self.secure_flow('localhost:9094', constants.SSL_CLIENT_CONFIG, constants.FILE_INPUT_FLOW_TESTS, constants.FILE_INPUT_ERROR_PREFIX, constants.FILE_INPUT_TOPIC))
         except Exception as e:
             print(constants.FILE_INPUT_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
         # SASL is not supported on native image due to missing reflection config (KAFKA-19584)
         if self.MODE == "jvm":
             try:
-                total_errors.extend(self.sasl_flow('localhost:9095', constants.SASL_FLOW_TESTS, constants.SASL_ERROR_PREFIX, constants.SASL_TOPIC))
+                total_errors.extend(self.secure_flow('localhost:9095', constants.SASL_CLIENT_CONFIG, constants.SASL_FLOW_TESTS, constants.SASL_ERROR_PREFIX, constants.SASL_TOPIC))
             except Exception as e:
                 print(constants.SASL_ERROR_PREFIX, str(e))
                 total_errors.append(str(e))
