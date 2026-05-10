@@ -76,6 +76,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -150,6 +151,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
+import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -312,7 +314,7 @@ public class GroupMetadataManager {
             if (member.isPresent()) {
                 return new UpdateTargetAssignmentResult<>(
                     group.assignmentEpoch(),
-                    group.targetAssignment(member.get().memberId())
+                    group.targetAssignment(member.get().memberId(), member.get().instanceId())
                 );
             } else {
                 return new UpdateTargetAssignmentResult<>(
@@ -1693,6 +1695,26 @@ public class GroupMetadataManager {
     /**
      * Validates if the received instanceId has been released from the group
      *
+     * @param member                The streams group member.
+     * @param groupId               The streams group id.
+     * @param receivedMemberId      The member id received in the request.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws UnreleasedInstanceIdException if the instance id received in the request is still in use by an existing static member.
+     */
+    private void throwIfInstanceIdIsUnreleased(StreamsGroupMember member, String groupId, String receivedMemberId, String receivedInstanceId) {
+        if (member.memberEpoch() != StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+            // The new member can't join.
+            log.info("[GroupId {}] Static member {} with instance id {} cannot join the group because the instance id is" +
+                    " owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
+            throw Errors.UNRELEASED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
+                    + receivedInstanceId + " cannot join the group because the instance id is owned by " + member.memberId() + " member.");
+        }
+    }
+    
+    /**
+     * Validates if the received instanceId has been released from the group
+     *
      * @param member                The consumer group member.
      * @param groupId               The consumer group id.
      * @param receivedMemberId      The member id received in the request.
@@ -1710,6 +1732,26 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Validates if the received instanceId has been fenced from the group
+     *
+     * @param member                The streams group member.
+     * @param groupId               The streams group id.
+     * @param receivedMemberId      The member id received in the request.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws FencedInstanceIdException if the instance id provided is fenced because of another static member.
+     */
+    private void throwIfInstanceIdIsFenced(StreamsGroupMember member, String groupId, String receivedMemberId, String receivedInstanceId) {
+        if (!member.memberId().equals(receivedMemberId)) {
+            log.info("[GroupId {}] Static member {} with instance id {} is fenced by existing member {}.",
+                    groupId, receivedMemberId, receivedInstanceId, member.memberId());
+            throw Errors.FENCED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
+                    + receivedInstanceId + " was fenced by member " + member.memberId() + ".");
+        }
+    }
+    
+    
+    /**
      * Validates if the received instanceId has been released from the group
      *
      * @param staticMember          The static member in the group.
@@ -1724,16 +1766,40 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Validates whether a static member exists for the given instanceId.
+     *
+     * @param staticMember          The static member in the group.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws UnknownMemberIdException if no static member exists in the group against the provided instance id.
+     */
+    private void throwIfStaticMemberIsUnknown(StreamsGroupMember staticMember, String receivedInstanceId) {
+        if (staticMember == null) {
+            throw Errors.UNKNOWN_MEMBER_ID.exception("Instance id " + receivedInstanceId + " is unknown.");
+        }
+    }
+
+    /**
      * Checks whether the streams group can accept a new member or not based on the
      * max group size defined.
      *
      * @param group     The streams group.
+     * @param instanceId   The instance id.
      *
      * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
      */
     private void throwIfStreamsGroupIsFull(
-        StreamsGroup group
+        StreamsGroup group,
+        String instanceId
     ) throws GroupMaxSizeReachedException {
+        // If a static member already exists, we do not enforce the maximum group size check.
+        // An existing static member will fall into one of the following two cases, 
+        // and neither affects the group size:
+        // 1. The member is replaced due to the static member rejoining.
+        // 2. 'UnreleasedInstanceIdException' is raised due to an epoch mismatch.
+        if (instanceId != null && group.hasStaticMember(instanceId))
+            return;
+        
         // If the streams group has reached its maximum capacity, the member is rejected if it is not
         // already a member of the streams group.
         if (group.numMembers() >= config.streamsGroupMaxSize()) {
@@ -1984,18 +2050,20 @@ public class GroupMetadataManager {
         final List<StreamsGroupHeartbeatResponseData.Status> returnedStatus = new ArrayList<>();
 
         // Get or create the streams group.
-        boolean isJoining = memberEpoch == 0;
+        boolean isJoining = memberEpoch == StreamsGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
         StreamsGroup group;
         if (isJoining) {
             group = getOrCreateStreamsGroup(groupId, records);
-            throwIfStreamsGroupIsFull(group);
+            throwIfStreamsGroupIsFull(group, instanceId);
         } else {
             group = getStreamsGroupOrThrow(groupId);
         }
 
         // Get or create the member.
         StreamsGroupMember member;
+        StreamsGroupMember maybeReplacedStaticMember;
         if (instanceId == null) {
+            maybeReplacedStaticMember = null;
             member = getOrMaybeCreateDynamicStreamsGroupMember(
                 group,
                 memberId,
@@ -2006,25 +2074,44 @@ public class GroupMetadataManager {
                 isJoining
             );
         } else {
-            throw new UnsupportedOperationException("Static members are not supported yet.");
+            maybeReplacedStaticMember = group.staticMember(instanceId);
+            member = getOrMaybeCreateStaticStreamsGroupMember(
+                    group,
+                    memberId,
+                    memberEpoch,
+                    instanceId,
+                    ownedActiveTasks,
+                    ownedStandbyTasks,
+                    ownedWarmupTasks,
+                    isJoining,
+                    records
+            );
         }
 
         // 1. Create or update the member.
-        StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member)
-            .maybeUpdateInstanceId(Optional.empty())
+        StreamsGroupMember.Builder updatedMemberBuilder = new StreamsGroupMember.Builder(member)
+            .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
             .maybeUpdateRackId(Optional.ofNullable(rackId))
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateTopologyEpoch(topology != null ? OptionalInt.of(topology.epoch()) : OptionalInt.empty())
             .setClientId(clientId)
             .setClientHost(clientHost)
             .maybeUpdateProcessId(Optional.ofNullable(processId))
-            .maybeUpdateClientTags(Optional.ofNullable(clientTags).map(x -> x.stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value))))
-            .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())))
-            .build();
+            .maybeUpdateClientTags(Optional.ofNullable(clientTags).map(x -> x.stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value))));
 
+        if (isJoining) {
+            StreamsGroupMemberMetadataValue.Endpoint userEndpointMetadata = userEndpoint == null ? null :
+                    new StreamsGroupMemberMetadataValue.Endpoint().setHost(userEndpoint.host()).setPort(userEndpoint.port());
+            updatedMemberBuilder.setUserEndpoint(userEndpointMetadata);
+        } else {
+            updatedMemberBuilder
+                    .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
+        }
+
+        StreamsGroupMember updatedMember = updatedMemberBuilder.build();
         // If the member is new or has changed, a StreamsGroupMemberMetadataValue record is written to the __consumer_offsets partition
         // to persist the change, and bump the group epoch later.
-        boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, member, updatedMember, records);
+        boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, instanceId, member, updatedMember, records);
 
         // 2. Initialize/Update the group topology.
         // If the topology is new or has changed, a StreamsGroupTopologyValue record is written to the __consumer_offsets partition to persist
@@ -2170,7 +2257,10 @@ public class GroupMetadataManager {
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
             group.invalidateCachedEndpointToPartitions(updatedMember.memberId());
-            if (updatedMember.userEndpoint().isPresent()) {
+            if (maybeReplacedStaticMember != null && !maybeReplacedStaticMember.memberId().equals(updatedMember.memberId())) {
+                group.invalidateCachedEndpointToPartitions(maybeReplacedStaticMember.memberId());
+            }
+            if (hasUserEndpointChanged(maybeReplacedStaticMember, updatedMember)) {
                 // If no user endpoint is defined, there is no change in the endpoint information.
                 // Otherwise, bump the endpoint information epoch
                 group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
@@ -2178,7 +2268,7 @@ public class GroupMetadataManager {
         }
 
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
-            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage));
+            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage, maybeReplacedStaticMember));
         }
         if (groups.containsKey(group.groupId())) {
             // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
@@ -3207,6 +3297,82 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Gets an existing static Streams group member or creates/replaces one for static membership.
+     *
+     * If the member is joining:
+     * 1. Creates a new static member when no member exists for the instance ID.
+     * 2. Replaces the previous static member when the instance ID is released.
+     *
+     * If the member is not joining, validates static member identity and member epoch
+     * and returns the existing static member.
+     *
+     * @param group                 The streams group.
+     * @param memberId              The member id from the request.
+     * @param memberEpoch           The member epoch from the request.
+     * @param instanceId            The static instance id from the request.
+     * @param ownedActiveTasks      The owned active tasks from the request.
+     * @param ownedStandbyTasks     The owned standby tasks from the request.
+     * @param ownedWarmupTasks      The owned warmup tasks from the request.
+     * @param memberIsJoining       Whether the member is joining (epoch 0).
+     * @param records               The records accumulator used for member replacement.
+     *
+     * @return The resolved streams group member.
+     */
+    private StreamsGroupMember getOrMaybeCreateStaticStreamsGroupMember(
+            StreamsGroup group,
+            String memberId,
+            int memberEpoch,
+            String instanceId,
+            List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks,
+            List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
+            List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks,
+            boolean memberIsJoining,
+            List<CoordinatorRecord> records
+    ) {
+        StreamsGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
+        if (memberIsJoining) {
+            // A new static member joins or the existing static member rejoins.
+            if (existingStaticMemberOrNull == null) {
+                // New static member.
+                StreamsGroupMember newMember = group.getOrCreateDefaultMember(memberId);
+                log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} joins the streams group.",
+                        group.groupId(), memberId, memberId, instanceId);
+                return newMember;
+            } else {
+                throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
+
+                // Copy the member but with its new member id.
+                StreamsGroupMember newMember = new StreamsGroupMember.Builder(existingStaticMemberOrNull, memberId)
+                        .setMemberEpoch(0)
+                        .setPreviousMemberEpoch(0)
+                        .build();
+
+                // Generate the records to replace the member. We don't care about the regular expression
+                // here because it is taken care of later after the static membership replacement.
+                replaceStreamsMember(records, group, existingStaticMemberOrNull, newMember);
+
+                log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the stream group " +
+                                "using the streams protocol. Created a new member {} to replace the existing member {}.",
+                        group.groupId(), memberId, instanceId, memberId, existingStaticMemberOrNull.memberId());
+
+                return newMember;
+            }
+        } else {
+            throwIfStaticMemberIsUnknown(existingStaticMemberOrNull, instanceId);
+            throwIfInstanceIdIsFenced(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
+            throwIfStreamsGroupMemberEpochIsInvalid(
+                    existingStaticMemberOrNull,
+                    memberEpoch,
+                    ownedActiveTasks,
+                    ownedStandbyTasks,
+                    ownedWarmupTasks
+            );
+            return existingStaticMemberOrNull;
+        }
+    }
+
+
+    /**
      * Gets or subscribes a new dynamic share group member.
      *
      * @param group                 The share group.
@@ -3547,6 +3713,7 @@ public class GroupMetadataManager {
      * when a member is first created.
      *
      * @param groupId       The group id.
+     * @param instanceId    The instance id.   
      * @param member        The old member.
      * @param updatedMember The updated member.
      * @param records       The list to accumulate any new records.
@@ -3555,6 +3722,7 @@ public class GroupMetadataManager {
      */
     private boolean hasStreamsMemberMetadataChanged(
         String groupId,
+        String instanceId,
         StreamsGroupMember member,
         StreamsGroupMember updatedMember,
         List<CoordinatorRecord> records
@@ -3564,8 +3732,17 @@ public class GroupMetadataManager {
             records.add(newStreamsGroupMemberRecord(groupId, updatedMember));
             log.info("[GroupId {}][MemberId {}] Member updated its member metadata to {}.",
                 groupId, memberId, updatedMember);
-
-            return true;
+            if (instanceId == null) {
+                return true;
+            } else {
+                // When a static member rejoins, its member ID may change.
+                // According to KIP-1071, the group epoch should be bumped only 
+                // when the topology metadata, rack ID, client tags, or process ID changes. 
+                // Therefore, if we compare the old and new members using equals(), 
+                // the group epoch can be bumped unintentionally, 
+                // which may trigger unnecessary task rebalancing.  
+                return hasEpochRelevantMemberConfigChanged(member, updatedMember);
+            }
         }
         return false;
     }
@@ -4108,9 +4285,17 @@ public class GroupMetadataManager {
                 .withMetadataImage(metadataImage)
                 .withTargetAssignment(group.targetAssignment());
 
-            updatedMember.ifPresent(member ->
-                assignmentResultBuilder.addOrUpdateMember(member.memberId(), member)
-            );
+            updatedMember.ifPresent(member -> {
+                assignmentResultBuilder.addOrUpdateMember(member.memberId(), member);
+                // If the instance id was associated to a different member, it means that the
+                // static member is replaced by the current member hence we remove the previous one.
+                member.instanceId().ifPresent(instanceId -> {
+                    StreamsGroupMember previousMember = group.staticMember(instanceId);
+                    if (previousMember != null && !member.memberId().equals(previousMember.memberId())) {
+                        assignmentResultBuilder.removeMember(previousMember.memberId());
+                    }
+                });
+            });
 
             long startTimeMs = time.milliseconds();
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -4256,7 +4441,18 @@ public class GroupMetadataManager {
             log.info("[GroupId {}][MemberId {}] Member {} left the streams group.", groupId, memberId, memberId);
             return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch()));
         } else {
-            throw new UnsupportedOperationException("Static members are not supported in streams groups.");
+            StreamsGroupMember member = group.staticMember(instanceId);
+            throwIfStaticMemberIsUnknown(member, instanceId);
+            throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
+            if (memberEpoch == StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} temporarily left the streams group.",
+                        group.groupId(), memberId, memberId, instanceId);
+                return streamsGroupStaticMemberGroupLeave(group, member);
+            } else {
+                log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} left the streams group.",
+                        group.groupId(), memberId, memberId, instanceId);
+                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of()));
+            }
         }
     }
 
@@ -4290,6 +4486,45 @@ public class GroupMetadataManager {
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(member.memberId())
                 .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+        );
+    }
+
+    /**
+     * Handles the case when a static member decides to leave the group.
+     * The member is not actually fenced from the group, and instead it's
+     * member epoch is updated to -2 to reflect that a member using the given
+     * instance id decided to leave the group and would be back within session
+     * timeout.
+     *
+     * @param group     The group.
+     * @param member    The static member in the group for the instance id.
+     *
+     * @return A CoordinatorResult with a single record signifying that the static member is leaving.
+     */
+    private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupStaticMemberGroupLeave(
+            StreamsGroup group,
+            StreamsGroupMember member
+    ) {
+        // We will write a member epoch of -2 for this departing static member.
+        org.apache.kafka.coordinator.group.streams.MemberState nextState = member.isUnrevokedState() ?
+                org.apache.kafka.coordinator.group.streams.MemberState.STABLE :
+                member.state();
+        StreamsGroupMember leavingStaticMember = new StreamsGroupMember.Builder(member)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                .setState(nextState)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+                .resetAssignedTasksEpochsToZero()
+                .build();
+
+        CoordinatorRecord record = newStreamsGroupCurrentAssignmentRecord(group.groupId(), leavingStaticMember);
+        StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
+                .setMemberId(member.memberId())
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                .setStatus(List.of());
+
+        return new CoordinatorResult<>(
+                List.of(record),
+                new StreamsGroupHeartbeatResult(response, Map.of())
         );
     }
 
@@ -4502,6 +4737,42 @@ public class GroupMetadataManager {
         ));
     }
 
+    /**
+     * Write records to replace the old member by the new member.
+     *
+     * @param records   The list of records to append to.
+     * @param group     The streams group.
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     */
+    private void replaceStreamsMember(
+            List<CoordinatorRecord> records,
+            StreamsGroup group,
+            StreamsGroupMember oldMember,
+            StreamsGroupMember newMember
+    ) {
+        String groupId = group.groupId();
+
+        // Remove the member without canceling its timers in case the change is reverted. If the
+        // change is not reverted, the group validation will fail and the timer will do nothing.
+        records.addAll(removeStreamsMember(groupId, oldMember.memberId()));
+
+        // Generate records.
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
+                groupId,
+                newMember
+        ));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(
+                groupId,
+                newMember.memberId(),
+                group.targetAssignment(oldMember.memberId(), oldMember.instanceId())
+        ));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(
+                groupId,
+                newMember
+        ));
+    }
+    
     /**
      * Fences a member from a streams group.
      *
@@ -9024,6 +9295,34 @@ public class GroupMetadataManager {
         return new TreeMap<>(Map.of(
             "num.standby.replicas", numStandbyReplicas.toString()
         ));
+    }
+
+    private boolean hasUserEndpointChanged(StreamsGroupMember maybeReplacedStaticMember, StreamsGroupMember updatedMember) {
+
+        boolean hasPreviousUserEndpoint = maybeReplacedStaticMember != null && maybeReplacedStaticMember.userEndpoint().isPresent();
+        boolean hasCurrentUserEndpoint = updatedMember.userEndpoint().isPresent();
+
+        if (hasPreviousUserEndpoint && hasCurrentUserEndpoint) {
+            return !maybeReplacedStaticMember.userEndpoint().get().equals(updatedMember.userEndpoint().get());
+        }
+
+        if (!hasPreviousUserEndpoint && !hasCurrentUserEndpoint) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static boolean hasEpochRelevantMemberConfigChanged(
+            StreamsGroupMember oldMember,
+            StreamsGroupMember newMember
+    ) {
+        // The group epoch is bumped: (KIP-1071)
+        // - When a member updates its topology metadata, rack ID, client tags or process ID. 
+        return !Objects.equals(oldMember.topologyEpoch(), newMember.topologyEpoch())
+                || !Objects.equals(oldMember.rackId(), newMember.rackId())
+                || !Objects.equals(oldMember.clientTags(), newMember.clientTags())
+                || !Objects.equals(oldMember.processId(), newMember.processId());
     }
 
     /**

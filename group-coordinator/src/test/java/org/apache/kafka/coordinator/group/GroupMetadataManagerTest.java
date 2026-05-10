@@ -22710,9 +22710,9 @@ public class GroupMetadataManagerTest {
                     TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
             );
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord("foo", "m1", tasks));
-        assertEquals(tasks.activeTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").activeTasks());
-        assertEquals(tasks.standbyTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").standbyTasks());
-        assertEquals(tasks.warmupTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").warmupTasks());
+        assertEquals(tasks.activeTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).activeTasks());
+        assertEquals(tasks.standbyTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).standbyTasks());
+        assertEquals(tasks.warmupTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).warmupTasks());
     }
 
     @Test
@@ -22743,7 +22743,7 @@ public class GroupMetadataManagerTest {
 
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
 
-        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").isEmpty());
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).isEmpty());
     }
 
     @Test

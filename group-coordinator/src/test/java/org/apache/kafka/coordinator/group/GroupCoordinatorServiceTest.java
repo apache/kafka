@@ -595,21 +595,6 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("Static membership is not yet supported."),
-                Map.of(),
-                -1
-            ),
-            service.streamsGroupHeartbeat(
-                context,
-                new StreamsGroupHeartbeatRequestData()
-                    .setInstanceId(Uuid.randomUuid().toString())
-            ).get(5, TimeUnit.SECONDS)
-        );
-
-        assertEquals(
-            new StreamsGroupHeartbeatResult(
-                new StreamsGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("TaskOffsets are not supported yet."),
                 Map.of(),
                 -1
@@ -2125,7 +2110,7 @@ public class GroupCoordinatorServiceTest {
         int partitionCount = 2;
         service.startup(() -> partitionCount);
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<CoordinatorRuntime.CoordinatorReadOperation<GroupCoordinatorShard, StreamsGroupDescribeResult>> readOperationCaptor =
+        ArgumentCaptor<CoordinatorRuntime.CoordinatorReadOperation<GroupCoordinatorShard, List<StreamsGroupDescribeResponseData.DescribedGroup>>> readOperationCaptor =
             ArgumentCaptor.forClass(CoordinatorRuntime.CoordinatorReadOperation.class);
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup1 = new StreamsGroupDescribeResponseData.DescribedGroup()
@@ -2141,9 +2126,9 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             readOperationCaptor.capture()
-        )).thenReturn(CompletableFuture.completedFuture(new StreamsGroupDescribeResult(List.of(describedGroup1), Map.of())));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup1)));
 
-        CompletableFuture<StreamsGroupDescribeResult> describedGroupFuture = new CompletableFuture<>();
+        CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 1)),
@@ -2154,7 +2139,7 @@ public class GroupCoordinatorServiceTest {
             service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"));
 
         assertFalse(future.isDone());
-        describedGroupFuture.complete(new StreamsGroupDescribeResult(List.of(describedGroup2), Map.of()));
+        describedGroupFuture.complete(List.of(describedGroup2));
         assertEquals(expectedDescribedGroups, future.get());
 
         // Validate that the captured read operations, on the first and the second partition
@@ -2188,7 +2173,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(new StreamsGroupDescribeResult(List.of(describedGroup), Map.of())));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup)));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
             service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("", null));

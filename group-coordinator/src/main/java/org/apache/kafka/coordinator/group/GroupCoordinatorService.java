@@ -584,7 +584,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private static void throwIfStreamsGroupHeartbeatRequestIsUsingUnsupportedFeatures(
         StreamsGroupHeartbeatRequestData request
     ) throws InvalidRequestException {
-        throwIfNotNull(request.instanceId(), "Static membership is not yet supported.");
         throwIfNotNull(request.taskOffsets(), "TaskOffsets are not supported yet.");
         throwIfNotNull(request.taskEndOffsets(), "TaskEndOffsets are not supported yet.");
         throwIfNotNullOrEmpty(request.warmupTasks(), "WarmupTasks are not supported yet.");
