@@ -1139,8 +1139,8 @@ project(':core') {
     implementation libs.re2j
 
     testImplementation testFixtures(project(':clients'))
-    testImplementation project(':group-coordinator').sourceSets.test.output
-    testImplementation project(':share-coordinator').sourceSets.test.output
+    testImplementation testFixtures(project(':group-coordinator'))
+    testImplementation testFixtures(project(':share-coordinator'))
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation testFixtures(project(':server-common'))
@@ -1520,6 +1520,8 @@ project(':group-coordinator') {
     archivesName = "kafka-group-coordinator"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -1538,6 +1540,11 @@ project(':group-coordinator') {
     implementation libs.re2j
     implementation libs.slf4jApi
     implementation libs.hash4j
+
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation project(':coordinator-common')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.junitJupiter
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
@@ -1791,6 +1798,8 @@ project(':share-coordinator') {
     archivesName = "kafka-share-coordinator"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -1803,6 +1812,8 @@ project(':share-coordinator') {
     implementation project(':server-common')
     implementation libs.metrics
     implementation libs.slf4jApi
+
+    testFixturesImplementation project(':clients')
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
@@ -4075,6 +4086,8 @@ gradle.projectsEvaluated {
     'clients': ':clients',
     'server-common': ':server-common',
     'storage/api': ':storage:storage-api',
+    'group-coordinator': ':group-coordinator',
+    'share-coordinator': ':share-coordinator',
   ]
   allprojects { proj ->
     proj.configurations.all { config ->
