@@ -117,6 +117,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG);
     }
 
+    public int defaultReplicationFactor() {
+        return getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG);
+    }
+
     public int numRecoveryThreadsPerDataDir() {
         return getInt(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG);
     }
@@ -490,11 +494,6 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public long connectionSetupTimeoutMaxMs() {
         return getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
-    }
-
-    // ********* Replication configuration ***********
-    public int defaultReplicationFactor() {
-        return getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG);
     }
 
     // ********* Log Configuration **********
