@@ -1750,7 +1750,6 @@ public class GroupMetadataManager {
         }
     }
     
-    
     /**
      * Validates if the received instanceId has been released from the group
      *
@@ -2107,8 +2106,8 @@ public class GroupMetadataManager {
             updatedMemberBuilder
                     .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
         }
-
         StreamsGroupMember updatedMember = updatedMemberBuilder.build();
+        
         // If the member is new or has changed, a StreamsGroupMemberMetadataValue record is written to the __consumer_offsets partition
         // to persist the change, and bump the group epoch later.
         boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, instanceId, member, updatedMember, records);
@@ -3370,7 +3369,6 @@ public class GroupMetadataManager {
             return existingStaticMemberOrNull;
         }
     }
-
 
     /**
      * Gets or subscribes a new dynamic share group member.
