@@ -1276,9 +1276,11 @@ public class TransactionManagerTest {
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, Map.of(tp, error));
-        runUntil(transactionManager::hasError);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
 
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, Map.of(tp, error));
+
+        runUntil(transactionManager::hasError);
         assertInstanceOf(CommitFailedException.class, transactionManager.lastError());
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
