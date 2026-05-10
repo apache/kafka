@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.coordinator.common.runtime.*;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
 import org.apache.kafka.coordinator.group.streams.*;
@@ -53,7 +54,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
 
     private static final int DEFAULT_MEMBER_EPOCH = 10;
     private static final int DEFAULT_GROUP_EPOCH = 10;
-    
+
     @Test
     public void testUnknownStaticMemberLeaveStreamsGroup() {
         StaticMemberFixtureWith2Members fixture = new StaticMemberFixtureWith2Members(2);
@@ -83,7 +84,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         // rejoining with the same memberId/instanceId is allowed even at max size.
         int streamsGroupMaxSize = 2;
         StaticMemberFixtureWith2Members fixture = new StaticMemberFixtureWith2Members(streamsGroupMaxSize);
-        
+
         fixture.assertJoinSucceeds(
                 fixture.leftMemberRejoinsWithSameInstanceId()
         );
@@ -95,7 +96,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         // a different memberId joining with that instanceId must fail even at max size.
         int streamsGroupMaxSize = 2;
         StaticMemberFixtureWith2Members fixture = new StaticMemberFixtureWith2Members(streamsGroupMaxSize);
-        
+
         fixture.assertJoinFails(
                 fixture.newMemberJoinsWithActiveInstanceId(),
                 UnreleasedInstanceIdException.class
@@ -119,7 +120,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 Arguments.of(1000, FencedInstanceIdException.class)   // static member try to send bigger epoch when static member already existed, then throw FencedInstanceIdException.
         );
     }
-    
+
     @Test
     public void testStaticMemberJoinThenRevokeAndReceiveTasks() {
         int enoughMaxSize = 100;
@@ -246,7 +247,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         String groupId = "fooup";
         int groupEpoch = DEFAULT_GROUP_EPOCH;
         int bumpedGroupEpoch = groupEpoch + 1;
-        
+
         String oldMemberId = Uuid.randomUuid().toString();
         String rejoinMemberId = Uuid.randomUuid().toString();
         String instanceId = Uuid.randomUuid().toString();
@@ -302,7 +303,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         String groupId = "fooup";
         int groupEpoch = DEFAULT_GROUP_EPOCH;
         int bumpedGroupEpoch = groupEpoch + 1;
-        
+
         String memberId = Uuid.randomUuid().toString();
         String instanceId = Uuid.randomUuid().toString();
 
@@ -413,7 +414,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
 
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
                 context.streamsGroupHeartbeat(staticHeartbeat(groupId, memberId, instanceId, leaveEpoch));
-        
+
 
         // THEN
         assertResponseEquals(staticLeaveResponse(memberId, leaveEpoch), result.response().data());
@@ -558,7 +559,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, group -> group
                 .withMember(unrevokedMember)
                 .withTargetAssignment(memberId, targetAssignment));
-        
+
         // WHEN
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
                 staticHeartbeat(groupId, memberId, instanceId, leaveEpoch)
@@ -641,7 +642,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, group -> group
                 .withMember(unreleasedMember)
                 .withTargetAssignment(memberId, targetAssignment));
-        
+
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
                 staticHeartbeat(groupId, memberId, instanceId, leaveEpoch)
         );
@@ -710,7 +711,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 staticHeartbeat(groupId, newMemberId, instanceId, StreamsGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH)
         );
 
-        assertResponseEquals(  heartbeatResponseWithActiveTasks(newMemberId, memberEpoch, topic, 0, 1), result.response().data());
+        assertResponseEquals(heartbeatResponseWithActiveTasks(newMemberId, memberEpoch, topic, 0, 1), result.response().data());
         assertEquals(MemberState.UNRELEASED_TASKS, context.streamsGroupMemberState(groupId, newMemberId));
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
     }
@@ -793,7 +794,6 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
     }
 
-    
 
     @Test
     public void testStaticMemberLeaveWithLeaveGroupStaticMemberEpochAndRejoinAndOtherRackIdThenGroupBumpOccur() {
@@ -1050,7 +1050,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         int currentMemberEpoch = 10;
         int previousMemberEpoch = 9;
         int requestMemberEpoch = 9;
-        
+
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
         String instanceId = Uuid.randomUuid().toString();
@@ -1154,7 +1154,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         StreamsGroupHeartbeatRequestData.Topology topology = new StreamsGroupHeartbeatRequestData.Topology().setSubtopologies(List.of());
         MockTaskAssignor assignor = new MockTaskAssignor("sticky");
         assignor.prepareGroupAssignment(Map.of(memberId, TasksTuple.EMPTY));
-        
+
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
                 .withMetadataImage(new MetadataImageBuilder().buildCoordinatorMetadataImage())
                 .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
@@ -1182,6 +1182,143 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         assertEquals(Optional.of(instanceId), group.getMemberOrThrow(memberId).instanceId());
     }
 
+    @ParameterizedTest
+    @MethodSource("userEndpointTestCases")
+    public void testStaticMemberRejoinUpdatesUserEndpointInformationEpoch(
+            StreamsGroupHeartbeatRequestData.Endpoint firstUserEndpoint,
+            int firstExpectedUserEndpointEpoch,
+            List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> firstExpectedPartitionsByUserEndpoint,
+            StreamsGroupMemberMetadataValue.Endpoint firstExpectedUserEndpointMetadata,
+            
+            StreamsGroupHeartbeatRequestData.Endpoint secondUserEndpoint,
+            int secondExpectedUserEndpointEpoch,
+            List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> secondExpectedPartitionsByUserEndpoint,
+            StreamsGroupMemberMetadataValue.Endpoint secondExpectedUserEndpointMetadata
+    ) {
+        int memberEpoch = DEFAULT_MEMBER_EPOCH;
+        int groupEpoch = DEFAULT_GROUP_EPOCH;
+        int bumpedEpoch = memberEpoch + 1;
+
+        String groupId = "fooup";
+        String instanceId = Uuid.randomUuid().toString();
+        String oldMemberId = "old-member-id";
+        String rejoinMemberId = "new-member-id";
+
+        StreamsTopicFixture topic = streamsTopicFixture("subtopology1", "foo", 3);
+        TasksTuple targetAssignment = topic.targetAssignment(0, 1, 2);
+
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        assignor.prepareGroupAssignment(Map.of(oldMemberId, topic.targetAssignment(0, 1, 2)));
+
+        GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, assignor, 0, group -> group
+                .withTargetAssignment(oldMemberId, targetAssignment));
+
+        assertEquals(0, context.groupMetadataManager.streamsGroup(groupId).endpointInformationEpoch());
+
+        // First Join -> First Input
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+                staticJoinHeartbeat(groupId, oldMemberId, instanceId, topic)
+                        .setUserEndpoint(firstUserEndpoint) // first input
+        );
+
+        // First Check
+        assertResponseEquals(
+                heartbeatResponseWithActiveTasks(oldMemberId, bumpedEpoch, topic, 0, 1, 2)
+                        .setEndpointInformationEpoch(firstExpectedUserEndpointEpoch) // first endpoint epoch
+                        .setPartitionsByUserEndpoint(firstExpectedPartitionsByUserEndpoint), // first partitions by user endpoint
+                result.response().data()
+        );
+
+        if (firstExpectedUserEndpointMetadata != null) {
+            assertEquals(firstExpectedUserEndpointMetadata, context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(oldMemberId).userEndpoint().get());    
+        } else {
+            assertTrue(context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(oldMemberId).userEndpoint().isEmpty());
+        }
+        assertEquals(firstExpectedUserEndpointEpoch, context.groupMetadataManager.streamsGroup(groupId).endpointInformationEpoch());
+
+        // static leave
+        context.streamsGroupHeartbeat(
+                staticHeartbeat(groupId, oldMemberId, instanceId, StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+        );
+
+        // second - static member rejoins
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> rejoinResult = context.streamsGroupHeartbeat(
+                staticJoinHeartbeat(groupId, rejoinMemberId, instanceId, topic)
+                        .setUserEndpoint(secondUserEndpoint)
+        );
+
+        // second check.
+        assertResponseEquals(
+                heartbeatResponseWithActiveTasks(rejoinMemberId, bumpedEpoch, topic, 0, 1, 2)
+                        .setEndpointInformationEpoch(secondExpectedUserEndpointEpoch)
+                        .setPartitionsByUserEndpoint(secondExpectedPartitionsByUserEndpoint),
+                rejoinResult.response().data()
+        );
+
+        if (secondExpectedUserEndpointMetadata != null) {
+            assertEquals(secondExpectedUserEndpointMetadata, context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(rejoinMemberId).userEndpoint().get());
+        } else {
+            assertTrue(context.groupMetadataManager.streamsGroup(groupId).getMemberOrThrow(rejoinMemberId).userEndpoint().isEmpty());
+        }
+        assertEquals(secondExpectedUserEndpointEpoch, context.groupMetadataManager.streamsGroup(groupId).endpointInformationEpoch());
+    }
+
+    private static Stream<Arguments> userEndpointTestCases() {
+        return Stream.of(
+                Arguments.of(
+                        null, // firstInput
+                        0, // first endpoint Epoch
+                        null, // first partitionsByUserEndpoint 
+                        null, // first group metadata userEndpoint
+                        userEndpoint("bar.com", 8080), // second input
+                        1, // second endpoint epoch
+                        buildEndpoints("bar.com", 8080, "foo", List.of(0, 1, 2)), // second partitionsByUserEndpoint
+                        userEndpointForMetadata("bar.com", 8080)
+                ),
+                Arguments.of(
+                        null, // firstInput
+                        0, // first endpoint Epoch
+                        null, // first partitionsByUserEndpoint 
+                        null, // first group metadata userEndpoint
+                        null, // second input
+                        0, // second endpoint epoch
+                        null, // second partitionsByUserEndpoint
+                        null
+                ),
+                Arguments.of(
+                        userEndpoint("foo.com", 8080), // firstInput
+                        1, // first endpoint Epoch
+                        buildEndpoints("foo.com", 8080, "foo", List.of(0, 1, 2)), // first partitionsByUserEndpoint 
+                        userEndpointForMetadata("foo.com", 8080), // first group metadata userEndpoint
+                        null, // second input
+                        2, // second endpoint epoch
+                        List.of(), // second partitionsByUserEndpoint
+                        null
+                ),
+                Arguments.of(
+                        userEndpoint("foo.com", 8080), // firstInput
+                        1, // first endpoint Epoch
+                        buildEndpoints("foo.com", 8080, "foo", List.of(0, 1, 2)), // first partitionsByUserEndpoint 
+                        userEndpointForMetadata("foo.com", 8080), // first group metadata userEndpoint
+                        userEndpoint("foo.com", 8080), // second input
+                        1, // second endpoint epoch
+                        buildEndpoints("foo.com", 8080, "foo", List.of(0, 1, 2)), // second partitionsByUserEndpoint
+                        userEndpointForMetadata("foo.com", 8080)
+                ),
+                Arguments.of(
+                        userEndpoint("foo.com", 8080), // firstInput
+                        1, // first endpoint Epoch
+                        buildEndpoints("foo.com", 8080, "foo", List.of(0, 1, 2)), // first partitionsByUserEndpoint 
+                        userEndpointForMetadata("foo.com", 8080), // first group metadata userEndpoint
+                        userEndpoint("bar.com", 8080), // second input
+                        2, // second endpoint epoch
+                        buildEndpoints("bar.com", 8080, "foo", List.of(0, 1, 2)), // second partitionsByUserEndpoint
+                        userEndpointForMetadata("bar.com", 8080)
+                )
+        );
+    }
+
     private static class StaticMemberFixtureWith2Members {
         // a single static member is active, the other static member leaves with -2. 
         private static final String GROUP_ID = "streams-group";
@@ -1192,10 +1329,10 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
 
         private final String activeMemberId = "active-member";
         private final String activeInstanceId = "active-instance";
-        
+
         private final String leftMemberId = "left-member";
         private final String leftInstanceId = "left-instance";
-        
+
         private final String newMemberId = "new-member";
         private final String newInstanceId = "new-instance";
 
@@ -1242,7 +1379,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
         private StreamsGroupHeartbeatRequestData newMemberHeartbeatsWithActiveInstanceId(int memberEpoch) {
             return request(newMemberId, activeInstanceId, memberEpoch);
         }
-        
+
         private StreamsGroupHeartbeatRequestData joinRequest(String memberId, String instanceId) {
             return request(memberId, instanceId, StreamsGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH);
         }
@@ -1283,4 +1420,29 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             assertHeartbeatFails(request, expectedException);
         }
     }
+    
+    private static StreamsGroupHeartbeatRequestData.Endpoint userEndpoint(String host, int port) {
+        return new StreamsGroupHeartbeatRequestData.Endpoint()
+                .setHost(host)
+                .setPort(port);
+    }
+
+    private static List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpoints(String host, int port, String topic, List<Integer> partitions) {
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpoints = new ArrayList<>();
+        endpoints.add(new StreamsGroupHeartbeatResponseData.EndpointToPartitions()
+                .setUserEndpoint(new StreamsGroupHeartbeatResponseData.Endpoint()
+                        .setHost(host)
+                        .setPort(port))
+                .setActivePartitions(List.of(topicPartition(topic, partitions))));
+        return endpoints;
+    }
+    
+    private static StreamsGroupMemberMetadataValue.Endpoint userEndpointForMetadata(String host, int port) {
+        return new StreamsGroupMemberMetadataValue.Endpoint().setHost(host).setPort(port);
+    }
+    
+    private static StreamsGroupHeartbeatResponseData.TopicPartition topicPartition(String topic, List<Integer> partitions) {
+        return new StreamsGroupHeartbeatResponseData.TopicPartition().setTopic(topic).setPartitions(partitions);
+    }
+    
 }

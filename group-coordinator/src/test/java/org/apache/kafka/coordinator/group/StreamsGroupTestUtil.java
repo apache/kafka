@@ -202,6 +202,17 @@ class StreamsGroupTestUtil {
             MockTaskAssignor assignor,
             java.util.function.UnaryOperator<StreamsGroupBuilder> configureGroup
     ) {
+        return contextWithStreamsGroup(groupId, groupEpoch, topic, assignor,  GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT, configureGroup);
+    }
+
+    static GroupMetadataManagerTestContext contextWithStreamsGroup(
+            String groupId,
+            int groupEpoch,
+            StreamsTopicFixture topic,
+            MockTaskAssignor assignor,
+            int initialRebalanceDelayMs,
+            java.util.function.UnaryOperator<StreamsGroupBuilder> configureGroup
+    ) {
         StreamsGroupBuilder group = new StreamsGroupBuilder(groupId, groupEpoch)
                 .withTargetAssignmentEpoch(groupEpoch)
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
@@ -213,6 +224,7 @@ class StreamsGroupTestUtil {
                 .withStreamsGroupTaskAssignors(List.of(assignor))
                 .withMetadataImage(topic.metadataImage())
                 .withStreamsGroup(configureGroup.apply(group))
+                .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, initialRebalanceDelayMs)
                 .build();
     }
 
