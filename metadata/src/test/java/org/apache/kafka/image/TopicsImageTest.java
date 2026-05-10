@@ -48,14 +48,14 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHAN
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
-import static org.apache.kafka.image.TopicsImageTestFixtures.BAM_UUID2;
-import static org.apache.kafka.image.TopicsImageTestFixtures.BAR_UUID;
-import static org.apache.kafka.image.TopicsImageTestFixtures.BAZ_UUID;
-import static org.apache.kafka.image.TopicsImageTestFixtures.FOO_0;
-import static org.apache.kafka.image.TopicsImageTestFixtures.FOO_UUID;
-import static org.apache.kafka.image.TopicsImageTestFixtures.newTopicImage;
-import static org.apache.kafka.image.TopicsImageTestFixtures.newTopicsByIdMap;
-import static org.apache.kafka.image.TopicsImageTestFixtures.newTopicsByNameMap;
+import static org.apache.kafka.image.TopicsImageFixtures.BAM_UUID2;
+import static org.apache.kafka.image.TopicsImageFixtures.BAR_UUID;
+import static org.apache.kafka.image.TopicsImageFixtures.BAZ_UUID;
+import static org.apache.kafka.image.TopicsImageFixtures.FOO_0;
+import static org.apache.kafka.image.TopicsImageFixtures.FOO_UUID;
+import static org.apache.kafka.image.TopicsImageFixtures.newTopicImage;
+import static org.apache.kafka.image.TopicsImageFixtures.newTopicsByIdMap;
+import static org.apache.kafka.image.TopicsImageFixtures.newTopicsByNameMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -64,12 +64,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class TopicsImageTest {
-    public static final TopicsImage IMAGE1 = TopicsImageTestFixtures.IMAGE1;
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = TopicsImageTestFixtures.DELTA1_RECORDS;
+    public static final TopicsImage IMAGE1 = TopicsImageFixtures.IMAGE1;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = TopicsImageFixtures.DELTA1_RECORDS;
 
-    static final TopicsImage IMAGE2 = TopicsImageTestFixtures.IMAGE2;
+    static final TopicsImage IMAGE2 = TopicsImageFixtures.IMAGE2;
 
-    private static final TopicsDelta DELTA1 = TopicsImageTestFixtures.DELTA1;
+    private static final TopicsDelta DELTA1 = TopicsImageFixtures.DELTA1;
 
     private ApiMessageAndVersion newPartitionRecord(Uuid topicId, int partitionId, List<Integer> replicas) {
         return new ApiMessageAndVersion(

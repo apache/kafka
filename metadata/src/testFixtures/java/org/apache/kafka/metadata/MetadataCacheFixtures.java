@@ -24,9 +24,9 @@ import org.apache.kafka.server.common.KRaftVersion;
 
 import java.util.List;
 
-public final class MetadataCacheTestFixtures {
+public final class MetadataCacheFixtures {
 
-    private MetadataCacheTestFixtures() {
+    private MetadataCacheFixtures() {
     }
 
     public static MetadataCache createCache() {

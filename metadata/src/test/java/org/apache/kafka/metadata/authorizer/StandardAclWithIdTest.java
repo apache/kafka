@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(value = 40)
 public class StandardAclWithIdTest {
-    public static final List<StandardAclWithId> TEST_ACLS = StandardAclWithIdTestFixtures.TEST_ACLS;
+    public static final List<StandardAclWithId> TEST_ACLS = StandardAclWithIdFixtures.TEST_ACLS;
 
     @Test
     public void testToRecordRoundTrips() {

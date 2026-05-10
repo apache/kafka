@@ -59,11 +59,11 @@ public class MetadataCacheTest {
     protected static final long BROKER_EPOCH = 0L;
 
     public static MetadataCache createCache() {
-        return MetadataCacheTestFixtures.createCache();
+        return MetadataCacheFixtures.createCache();
     }
 
     public static void updateCache(MetadataCache cache, List<ApiMessage> records) {
-        MetadataCacheTestFixtures.updateCache(cache, records);
+        MetadataCacheFixtures.updateCache(cache, records);
     }
 
     @Test

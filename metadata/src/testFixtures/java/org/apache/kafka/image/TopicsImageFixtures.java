@@ -41,7 +41,7 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECO
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
 
-public final class TopicsImageTestFixtures {
+public final class TopicsImageFixtures {
     public static final TopicsImage IMAGE1;
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
     public static final TopicsDelta DELTA1;
@@ -153,6 +153,6 @@ public final class TopicsImageTestFixtures {
         IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
     }
 
-    private TopicsImageTestFixtures() {
+    private TopicsImageFixtures() {
     }
 }

@@ -40,13 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class ConfigurationsImageTest {
-    public static final ConfigurationsImage IMAGE1 = ConfigurationsImageTestFixtures.IMAGE1;
+    public static final ConfigurationsImage IMAGE1 = ConfigurationsImageFixtures.IMAGE1;
 
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = ConfigurationsImageTestFixtures.DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = ConfigurationsImageFixtures.DELTA1_RECORDS;
 
-    static final ConfigurationsDelta DELTA1 = ConfigurationsImageTestFixtures.DELTA1;
+    static final ConfigurationsDelta DELTA1 = ConfigurationsImageFixtures.DELTA1;
 
-    static final ConfigurationsImage IMAGE2 = ConfigurationsImageTestFixtures.IMAGE2;
+    static final ConfigurationsImage IMAGE2 = ConfigurationsImageFixtures.IMAGE2;
 
     @Test
     public void testEmptyImageRoundTrip() {

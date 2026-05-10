@@ -32,13 +32,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class AclsImageTest {
-    public static final AclsImage IMAGE1 = AclsImageTestFixtures.IMAGE1;
+    public static final AclsImage IMAGE1 = AclsImageFixtures.IMAGE1;
 
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = AclsImageTestFixtures.DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = AclsImageFixtures.DELTA1_RECORDS;
 
-    static final AclsDelta DELTA1 = AclsImageTestFixtures.DELTA1;
+    static final AclsDelta DELTA1 = AclsImageFixtures.DELTA1;
 
-    static final AclsImage IMAGE2 = AclsImageTestFixtures.IMAGE2;
+    static final AclsImage IMAGE2 = AclsImageFixtures.IMAGE2;
 
     @Test
     public void testEmptyImageRoundTrip() {

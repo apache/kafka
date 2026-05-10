@@ -35,13 +35,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(value = 40)
 public class ScramImageTest {
-    public static final ScramImage IMAGE1 = ScramImageTestFixtures.IMAGE1;
+    public static final ScramImage IMAGE1 = ScramImageFixtures.IMAGE1;
 
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = ScramImageTestFixtures.DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = ScramImageFixtures.DELTA1_RECORDS;
 
-    static final ScramDelta DELTA1 = ScramImageTestFixtures.DELTA1;
+    static final ScramDelta DELTA1 = ScramImageFixtures.DELTA1;
 
-    static final ScramImage IMAGE2 = ScramImageTestFixtures.IMAGE2;
+    static final ScramImage IMAGE2 = ScramImageFixtures.IMAGE2;
 
     @Test
     public void testEmptyImageRoundTrip() {

@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(value = 40)
 public class StandardAclTest {
-    public static final List<StandardAcl> TEST_ACLS = StandardAclTestFixtures.TEST_ACLS;
+    public static final List<StandardAcl> TEST_ACLS = StandardAclFixtures.TEST_ACLS;
 
     private static int signum(int input) {
         return Integer.compare(input, 0);

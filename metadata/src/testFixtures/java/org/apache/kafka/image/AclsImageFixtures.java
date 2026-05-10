@@ -21,7 +21,7 @@ import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
-import org.apache.kafka.metadata.authorizer.StandardAclWithIdTestFixtures;
+import org.apache.kafka.metadata.authorizer.StandardAclWithIdFixtures;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class AclsImageTestFixtures {
+public final class AclsImageFixtures {
     public static final AclsImage IMAGE1;
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
     public static final AclsDelta DELTA1;
@@ -38,7 +38,7 @@ public final class AclsImageTestFixtures {
     static {
         Map<Uuid, StandardAcl> map = new HashMap<>();
         for (int i = 0; i < 4; i++) {
-            StandardAclWithId aclWithId = StandardAclWithIdTestFixtures.TEST_ACLS.get(i);
+            StandardAclWithId aclWithId = StandardAclWithIdFixtures.TEST_ACLS.get(i);
             map.put(aclWithId.id(), aclWithId.acl());
         }
         IMAGE1 = new AclsImage(map);
@@ -46,7 +46,7 @@ public final class AclsImageTestFixtures {
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveAccessControlEntryRecord().
             setId(Uuid.fromString("QZDDv-R7SyaPgetDPGd0Mw")), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(StandardAclWithIdTestFixtures.TEST_ACLS.get(4).toRecord(), (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(StandardAclWithIdFixtures.TEST_ACLS.get(4).toRecord(), (short) 0));
 
         DELTA1 = new AclsDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
@@ -54,12 +54,12 @@ public final class AclsImageTestFixtures {
 
         Map<Uuid, StandardAcl> map2 = new HashMap<>();
         for (int i = 1; i < 5; i++) {
-            StandardAclWithId aclWithId = StandardAclWithIdTestFixtures.TEST_ACLS.get(i);
+            StandardAclWithId aclWithId = StandardAclWithIdFixtures.TEST_ACLS.get(i);
             map2.put(aclWithId.id(), aclWithId.acl());
         }
         IMAGE2 = new AclsImage(map2);
     }
 
-    private AclsImageTestFixtures() {
+    private AclsImageFixtures() {
     }
 }

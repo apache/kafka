@@ -22,58 +22,60 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceType;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD_PRINCIPAL;
 
-public final class StandardAclTestFixtures {
-    public static final List<StandardAcl> TEST_ACLS = new ArrayList<>();
-
-    static {
-        TEST_ACLS.add(new StandardAcl(
+public final class StandardAclFixtures {
+    public static final List<StandardAcl> TEST_ACLS = List.of(
+        new StandardAcl(
             ResourceType.CLUSTER,
             Resource.CLUSTER_NAME,
             PatternType.LITERAL,
             WILDCARD_PRINCIPAL,
             WILDCARD,
             AclOperation.ALTER,
-            AclPermissionType.ALLOW));
-        TEST_ACLS.add(new StandardAcl(
+            AclPermissionType.ALLOW
+        ),
+        new StandardAcl(
             ResourceType.TOPIC,
             "foo_",
             PatternType.PREFIXED,
             WILDCARD_PRINCIPAL,
             WILDCARD,
             AclOperation.READ,
-            AclPermissionType.ALLOW));
-        TEST_ACLS.add(new StandardAcl(
+            AclPermissionType.ALLOW
+        ),
+        new StandardAcl(
             ResourceType.GROUP,
             "mygroup",
             PatternType.LITERAL,
             "User:foo",
             WILDCARD,
             AclOperation.READ,
-            AclPermissionType.DENY));
-        TEST_ACLS.add(new StandardAcl(
+            AclPermissionType.DENY
+        ),
+        new StandardAcl(
             ResourceType.GROUP,
             "mygroup",
             PatternType.PREFIXED,
             "User:foo",
             WILDCARD,
             AclOperation.READ,
-            AclPermissionType.DENY));
-        TEST_ACLS.add(new StandardAcl(
+            AclPermissionType.DENY
+        ),
+        new StandardAcl(
             ResourceType.GROUP,
             "foo",
             PatternType.PREFIXED,
             "User:foo",
             WILDCARD,
             AclOperation.READ,
-            AclPermissionType.DENY));
-    }
+            AclPermissionType.DENY
+        )
+    );
 
-    private StandardAclTestFixtures() {
+    private StandardAclFixtures() {
     }
 }

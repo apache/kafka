@@ -35,13 +35,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(value = 40)
 public class DelegationTokenImageTest {
-    public static final DelegationTokenImage IMAGE1 = DelegationTokenImageTestFixtures.IMAGE1;
+    public static final DelegationTokenImage IMAGE1 = DelegationTokenImageFixtures.IMAGE1;
 
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = DelegationTokenImageTestFixtures.DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = DelegationTokenImageFixtures.DELTA1_RECORDS;
 
-    static final DelegationTokenDelta DELTA1 = DelegationTokenImageTestFixtures.DELTA1;
+    static final DelegationTokenDelta DELTA1 = DelegationTokenImageFixtures.DELTA1;
 
-    static final DelegationTokenImage IMAGE2 = DelegationTokenImageTestFixtures.IMAGE2;
+    static final DelegationTokenImage IMAGE2 = DelegationTokenImageFixtures.IMAGE2;
 
     @Test
     public void testEmptyImageRoundTrip() throws Throwable {

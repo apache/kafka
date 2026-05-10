@@ -53,9 +53,10 @@ public class RecordTestUtils {
      *
      * @param target                The object to invoke the replay function on.
      * @param recordsAndVersions    A list of records.
+     * @return                      The {@code target} argument, for chained initialization.
      */
-    public static void replayAll(Object target,
-                                 List<ApiMessageAndVersion> recordsAndVersions) {
+    public static <T> T replayAll(T target,
+                                  List<ApiMessageAndVersion> recordsAndVersions) {
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
             ApiMessage record = recordAndVersion.message();
             try {
@@ -78,6 +79,7 @@ public class RecordTestUtils {
                 throw new RuntimeException(e);
             }
         }
+        return target;
     }
 
     public static <T extends ApiMessage> Optional<T> recordAtIndexAs(

@@ -41,19 +41,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Timeout(value = 40)
 public class ClusterImageTest {
 
-    public static final ClusterImage IMAGE1 = ClusterImageTestFixtures.IMAGE1;
+    public static final ClusterImage IMAGE1 = ClusterImageFixtures.IMAGE1;
 
-    static final List<ApiMessageAndVersion> DELTA1_RECORDS = ClusterImageTestFixtures.DELTA1_RECORDS;
+    static final List<ApiMessageAndVersion> DELTA1_RECORDS = ClusterImageFixtures.DELTA1_RECORDS;
 
-    static final ClusterDelta DELTA1 = ClusterImageTestFixtures.DELTA1;
+    static final ClusterDelta DELTA1 = ClusterImageFixtures.DELTA1;
 
-    static final ClusterImage IMAGE2 = ClusterImageTestFixtures.IMAGE2;
+    static final ClusterImage IMAGE2 = ClusterImageFixtures.IMAGE2;
 
-    static final List<ApiMessageAndVersion> DELTA2_RECORDS = ClusterImageTestFixtures.DELTA2_RECORDS;
+    static final List<ApiMessageAndVersion> DELTA2_RECORDS = ClusterImageFixtures.DELTA2_RECORDS;
 
-    static final ClusterDelta DELTA2 = ClusterImageTestFixtures.DELTA2;
+    static final ClusterDelta DELTA2 = ClusterImageFixtures.DELTA2;
 
-    static final ClusterImage IMAGE3 = ClusterImageTestFixtures.IMAGE3;
+    static final ClusterImage IMAGE3 = ClusterImageFixtures.IMAGE3;
 
     @Test
     public void testEmptyImageRoundTrip() {

@@ -51,7 +51,7 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FENCE_BROKER_R
 import static org.apache.kafka.common.metadata.MetadataRecordType.REGISTER_BROKER_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER_RECORD;
 
-public final class ClusterImageTestFixtures {
+public final class ClusterImageFixtures {
     public static final ClusterImage IMAGE1;
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
     public static final ClusterDelta DELTA1;
@@ -223,6 +223,6 @@ public final class ClusterImageTestFixtures {
         IMAGE3 = new ClusterImage(map3, cmap2);
     }
 
-    private ClusterImageTestFixtures() {
+    private ClusterImageFixtures() {
     }
 }

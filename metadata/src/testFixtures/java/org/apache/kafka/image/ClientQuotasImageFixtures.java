@@ -30,7 +30,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.CLIENT_QUOTA_RECORD;
 
-public final class ClientQuotasImageTestFixtures {
+public final class ClientQuotasImageFixtures {
     public static final ClientQuotasImage IMAGE1;
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
     public static final ClientQuotasDelta DELTA1;
@@ -80,6 +80,6 @@ public final class ClientQuotasImageTestFixtures {
         IMAGE2 = new ClientQuotasImage(entities2);
     }
 
-    private ClientQuotasImageTestFixtures() {
+    private ClientQuotasImageFixtures() {
     }
 }

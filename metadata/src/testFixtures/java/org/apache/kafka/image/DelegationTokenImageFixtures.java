@@ -30,7 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class DelegationTokenImageTestFixtures {
+public final class DelegationTokenImageFixtures {
     public static final DelegationTokenImage IMAGE1;
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
     public static final DelegationTokenDelta DELTA1;
@@ -75,6 +75,6 @@ public final class DelegationTokenImageTestFixtures {
         IMAGE2 = new DelegationTokenImage(image2);
     }
 
-    private DelegationTokenImageTestFixtures() {
+    private DelegationTokenImageFixtures() {
     }
 }

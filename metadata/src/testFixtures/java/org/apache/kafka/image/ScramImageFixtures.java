@@ -33,7 +33,7 @@ import java.util.Random;
 import static org.apache.kafka.clients.admin.ScramMechanism.SCRAM_SHA_256;
 import static org.apache.kafka.clients.admin.ScramMechanism.SCRAM_SHA_512;
 
-public final class ScramImageTestFixtures {
+public final class ScramImageFixtures {
     public static final ScramImage IMAGE1;
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
     public static final ScramDelta DELTA1;
@@ -113,6 +113,6 @@ public final class ScramImageTestFixtures {
         IMAGE2 = new ScramImage(image2mechanisms);
     }
 
-    private ScramImageTestFixtures() {
+    private ScramImageFixtures() {
     }
 }
