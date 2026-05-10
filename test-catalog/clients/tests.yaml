@@ -3222,6 +3222,7 @@ org.apache.kafka.clients.producer.internals.TransactionManagerTest:
 - testForegroundInvalidStateTransitionIsRecoverable
 - testGroupAuthorizationFailureInFindCoordinator
 - testGroupAuthorizationFailureInTxnOffsetCommit
+- testGroupMetadataMismatchErrorInTxnOffsetCommit
 - testHandlingOfCoordinatorLoadingErrorOnTxnOffsetCommit
 - testHandlingOfInvalidProducerEpochErrorOnTxnOffsetCommit
 - testHandlingOfNetworkExceptionOnTxnOffsetCommit
