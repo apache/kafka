@@ -1949,7 +1949,6 @@ project(':clients') {
     testFixturesImplementation project(':test-common:test-common-util')
     testFixturesImplementation libs.bcpkix
     testFixturesImplementation libs.junitJupiter
-    testFixturesImplementation libs.jqwik
     testFixturesImplementation testLog4j2Libs
 
     testImplementation libs.bcpkix
