@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+// TODO: Remove Scala KafkaConfig dependency once KAFKA-15853 migrates KafkaConfig to Java
 import kafka.server.KafkaConfig;
 
 import org.apache.kafka.common.config.ConfigDef;
@@ -74,7 +75,7 @@ public class LogConfigTest {
 
     private Object[] invalidValuesForProp(String name) {
         return switch (name) {
-            case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG -> new Object[]{"not a boolean"};
+            case TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG -> new Object[]{"not a boolean"};
             case TopicConfig.RETENTION_BYTES_CONFIG, TopicConfig.RETENTION_MS_CONFIG -> new Object[]{"not_a_number"};
             case TopicConfig.CLEANUP_POLICY_CONFIG -> new Object[]{"true", "foobar"};
             case TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG -> new Object[]{"not_a_number", "-0.1", "1.2"};
