@@ -68,12 +68,19 @@ public class ProducerMetadata extends Metadata {
         return new MetadataRequest.Builder(new ArrayList<>(newTopics), true);
     }
 
-    public synchronized void add(String topic, long nowMs) {
+    /**
+     * Add the topic to the working set or refresh its expiry if already
+     * present. Returns {@code true} if the topic was newly added (in which
+     * case a metadata fetch has been requested).
+     */
+    public synchronized boolean add(String topic, long nowMs) {
         Objects.requireNonNull(topic, "topic cannot be null");
         if (topics.put(topic, nowMs + metadataIdleMs) == null) {
             newTopics.add(topic);
             requestUpdateForNewTopics();
+            return true;
         }
+        return false;
     }
 
     public synchronized int requestUpdateForTopic(String topic) {

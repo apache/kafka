@@ -94,10 +94,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 
 /**
@@ -741,7 +743,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Note, that the consumer should have {@code enable.auto.commit=false} and should
      * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
-     * This method will raise {@link TimeoutException} if the producer cannot send offsets before expiration of {@code max.block.ms}.
+     * This method will raise {@link TimeoutException} if the producer cannot resolve the metadata for the topics in
+     * {@code offsets} and send the offsets before expiration of {@code max.block.ms}.
      * Additionally, it will raise {@link InterruptException} if interrupted.
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started.
@@ -762,7 +765,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         to the partition leader. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
-     * @throws TimeoutException if the time taken for sending the offsets has surpassed <code>max.block.ms</code>.
+     * @throws TimeoutException if the combined time taken for resolving topic metadata and sending the offsets
+     *         has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -774,11 +778,42 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (!offsets.isEmpty()) {
             long start = time.nanoseconds();
+            var topics = offsets.keySet().stream().map(TopicPartition::topic).collect(Collectors.toSet());
+            var waitMs = awaitTopicMetadata(topics);
+            var remainingMs = Math.max(0L, maxBlockTimeMs - waitMs);
             TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
             sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
+            result.await(remainingMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
             producerMetrics.recordSendOffsets(time.nanoseconds() - start);
         }
+    }
+
+    /**
+     * Ensure every topic is present in the producer's metadata cache.
+     * {@link ProducerMetadata#add(String, long)} refreshes the expiry for known
+     * topics and triggers a fetch for new ones; if any topic is new, blocks the
+     * user thread on {@link ProducerMetadata#awaitUpdate(int, long)} up to
+     * {@code max.block.ms}, mirroring {@link #partitionsFor(String)}. Returns
+     * the elapsed wait time in milliseconds so the caller can subtract it from
+     * its own {@code max.block.ms} budget.
+     */
+    private long awaitTopicMetadata(Set<String> topics) {
+        long nowMs = time.milliseconds();
+        boolean hasNewTopics = false;
+        for (String topic : topics) {
+            hasNewTopics |= metadata.add(topic, nowMs);
+        }
+        if (!hasNewTopics) return 0L;
+        int version = metadata.requestUpdate(true);
+        // Wake the sender so it picks up the metadata request immediately
+        // instead of waiting for its next selector poll to elapse.
+        sender.wakeup();
+        try {
+            metadata.awaitUpdate(version, maxBlockTimeMs);
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        }
+        return time.milliseconds() - nowMs;
     }
 
     /**
