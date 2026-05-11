@@ -368,9 +368,9 @@ public class LogCleanerTest {
         long pid3 = 3;
         long pid4 = 4;
 
-        appendIdempotentAsLeader(log, pid1, producerEpoch).append(1, 2, 3);
-        appendIdempotentAsLeader(log, pid2, producerEpoch).append(3, 1, 4);
-        appendIdempotentAsLeader(log, pid3, producerEpoch).append(1, 4);
+        appendIdempotentAsLeader(log, pid1, producerEpoch).append(List.of(1, 2, 3));
+        appendIdempotentAsLeader(log, pid2, producerEpoch).append(List.of(3, 1, 4));
+        appendIdempotentAsLeader(log, pid3, producerEpoch).append(List.of(1, 4));
 
         log.roll();
         cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), false));
@@ -384,22 +384,22 @@ public class LogCleanerTest {
         log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
 
         // check duplicate append from producer 1
-        LogAppendInfo logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch).append(1, 2, 3);
+        LogAppendInfo logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch).append(List.of(1, 2, 3));
         assertEquals(0L, logAppendInfo.firstOffset());
         assertEquals(2L, logAppendInfo.lastOffset());
 
         // check duplicate append from producer 3
-        logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch).append(1, 4);
+        logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch).append(List.of(1, 4));
         assertEquals(6L, logAppendInfo.firstOffset());
         assertEquals(7L, logAppendInfo.lastOffset());
 
         // check duplicate append from producer 2
-        logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch).append(3, 1, 4);
+        logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch).append(List.of(3, 1, 4));
         assertEquals(3L, logAppendInfo.firstOffset());
         assertEquals(5L, logAppendInfo.lastOffset());
 
         // do one more append and a round of cleaning to force another deletion from producer 1's batch
-        appendIdempotentAsLeader(log, pid4, producerEpoch).append(2);
+        appendIdempotentAsLeader(log, pid4, producerEpoch).append(List.of(2));
         log.roll();
         cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), false));
         assertEquals(Map.of(pid1, 2, pid2, 2, pid3, 1, pid4, 0), lastSequencesInLog(log));
@@ -411,7 +411,7 @@ public class LogCleanerTest {
         log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
 
         // duplicate append from producer1 should still be fine
-        logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch).append(1, 2, 3);
+        logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch).append(List.of(1, 2, 3));
         assertEquals(0L, logAppendInfo.firstOffset());
         assertEquals(2L, logAppendInfo.lastOffset());
     }
@@ -451,18 +451,18 @@ public class LogCleanerTest {
                 RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
 
         // Append some transaction data (offset range in parenthesis)
-        appendProducer1.append(1, 2);          // [0, 1]
-        appendProducer2.append(2, 3);          // [2, 3]
-        appendProducer1.append(3, 4);          // [4, 5]
+        appendProducer1.append(List.of(1, 2));          // [0, 1]
+        appendProducer2.append(List.of(2, 3));          // [2, 3]
+        appendProducer1.append(List.of(3, 4));          // [4, 5]
         commit.accept(producerId1);            // [6, 6]
         commit.accept(producerId2);            // [7, 7]
-        appendProducer1.append(2, 3);          // [8, 9]
+        appendProducer1.append(List.of(2, 3));          // [8, 9]
         abort.accept(producerId1);             // [10, 10]
-        appendProducer2.append(4, 5);          // [11, 12]
-        appendProducer1.append(5, 6);          // [13, 14]
+        appendProducer2.append(List.of(4, 5));          // [11, 12]
+        appendProducer1.append(List.of(5, 6));          // [13, 14]
         commit.accept(producerId1);            // [15, 15]
         abort.accept(producerId2);             // [16, 16]
-        appendProducer2.append(6, 7);          // [17, 18]
+        appendProducer2.append(List.of(6, 7));          // [17, 18]
         commit.accept(producerId2);            // [19, 19]
 
         log.roll();
@@ -532,14 +532,14 @@ public class LogCleanerTest {
         var appendProducer1 = appendTransactionalAsLeader(log, pid1, producerEpoch);
         var appendProducer2 = appendTransactionalAsLeader(log, pid2, producerEpoch);
 
-        appendProducer1.append(1, 2);
-        appendProducer2.append(2, 3);
-        appendProducer1.append(3, 4);
+        appendProducer1.append(List.of(1, 2));
+        appendProducer2.append(List.of(2, 3));
+        appendProducer1.append(List.of(3, 4));
         log.appendAsLeader(abortMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
         log.appendAsLeader(commitMarker(pid2, producerEpoch), 0, AppendOrigin.COORDINATOR,
             RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
-        appendProducer1.append(2);
+        appendProducer1.append(List.of(2));
         log.appendAsLeader(commitMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
 
@@ -570,21 +570,21 @@ public class LogCleanerTest {
         var appendProducer2 = appendTransactionalAsLeader(log, pid2, producerEpoch);
         var appendProducer3 = appendTransactionalAsLeader(log, pid3, producerEpoch);
 
-        appendProducer1.append(1, 2);
-        appendProducer3.append(2, 3);
-        appendProducer2.append(3, 4);
+        appendProducer1.append(List.of(1, 2));
+        appendProducer3.append(List.of(2, 3));
+        appendProducer2.append(List.of(3, 4));
 
         log.roll();
 
-        appendProducer2.append(5, 6);
-        appendProducer3.append(6, 7);
-        appendProducer1.append(7, 8);
+        appendProducer2.append(List.of(5, 6));
+        appendProducer3.append(List.of(6, 7));
+        appendProducer1.append(List.of(7, 8));
         log.appendAsLeader(abortMarker(pid2, producerEpoch), 0, AppendOrigin.COORDINATOR,
             RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
-        appendProducer3.append(8, 9);
+        appendProducer3.append(List.of(8, 9));
         log.appendAsLeader(commitMarker(pid3, producerEpoch), 0, AppendOrigin.COORDINATOR,
             RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
-        appendProducer1.append(9, 10);
+        appendProducer1.append(List.of(9, 10));
         log.appendAsLeader(abortMarker(pid1, producerEpoch), 0, AppendOrigin.COORDINATOR,
             RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
 
@@ -595,8 +595,8 @@ public class LogCleanerTest {
         log.roll();
 
         // append a couple extra segments in the new segment to ensure we have sequence numbers
-        appendProducer2.append(11);
-        appendProducer1.append(12);
+        appendProducer2.append(List.of(11));
+        appendProducer1.append(List.of(12));
 
         // finally only the keys from pid3 should remain
         cleaner.clean(new LogToClean(log, dirtyOffset, log.activeSegment().baseOffset(), false));
@@ -614,11 +614,11 @@ public class LogCleanerTest {
         long producerId = 1L;
         var appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch);
 
-        appendProducer.append(1);
-        appendProducer.append(2, 3);
+        appendProducer.append(List.of(1));
+        appendProducer.append(List.of(2, 3));
         log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR,
                 RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
-        appendProducer.append(2);
+        appendProducer.append(List.of(2));
         log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR,
                 RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
         log.roll();
@@ -628,7 +628,7 @@ public class LogCleanerTest {
         assertEquals(List.of(1L, 3L, 2L), LogTestUtils.keysInLog(log));
         assertEquals(List.of(0L, 2L, 3L, 4L, 5L), offsetsInLog(log));
 
-        appendProducer.append(1, 3);
+        appendProducer.append(List.of(1, 3));
         log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
         log.roll();
@@ -665,11 +665,11 @@ public class LogCleanerTest {
         long producerId = 1L;
         var appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch);
 
-        appendProducer.append(1);
+        appendProducer.append(List.of(1));
         log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
-        appendProducer.append(2);
-        appendProducer.append(2);
+        appendProducer.append(List.of(2));
+        appendProducer.append(List.of(2));
         log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
         log.roll();
@@ -696,11 +696,11 @@ public class LogCleanerTest {
         var producer2 = appendTransactionalAsLeader(log, 2L, producerEpoch);
 
         // [{Producer1: 2, 3}]
-        producer1.append(2, 3); // offsets 0, 1
+        producer1.append(List.of(2, 3)); // offsets 0, 1
         log.roll();
 
         // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}]
-        producer2.append(2, 3); // offsets 2, 3
+        producer2.append(List.of(2, 3)); // offsets 2, 3
         log.appendAsLeader(commitMarker(2L, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel()); // offset 4
         log.roll();
@@ -730,7 +730,7 @@ public class LogCleanerTest {
         // append a new record from the producer to allow cleaning of the empty batch
         // [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}, {Producer2: 1}, {Producer2: Commit}]
         //  {1},                     {3},                     {4},                 {5}, {6}, {7},                 {8},            {9} ==> Offsets
-        producer2.append(1); // offset 8
+        producer2.append(List.of(1)); // offset 8
         log.appendAsLeader(commitMarker(2L, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel()); // offset 9
         log.roll();
@@ -793,7 +793,7 @@ public class LogCleanerTest {
         long producerId = 1L;
 
         var appendTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch);
-        appendTransaction.append(1);
+        appendTransaction.append(List.of(1));
         log.roll();
 
         log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
@@ -816,7 +816,7 @@ public class LogCleanerTest {
         long producerId = 1L;
 
         var appendTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch);
-        appendTransaction.append(1);
+        appendTransaction.append(List.of(1));
         log.roll();
 
         log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
@@ -847,11 +847,11 @@ public class LogCleanerTest {
         long producerId = 1L;
         var appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch);
 
-        appendProducer.append(1);
-        appendProducer.append(2, 3);
+        appendProducer.append(List.of(1));
+        appendProducer.append(List.of(2, 3));
         log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
-        appendProducer.append(3);
+        appendProducer.append(List.of(3));
         log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
         log.roll();
@@ -880,12 +880,12 @@ public class LogCleanerTest {
         UnifiedLog log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
 
         var appendFirstTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch, 0, AppendOrigin.REPLICATION);
-        appendFirstTransaction.append(1);
+        appendFirstTransaction.append(List.of(1));
         log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
 
         var appendSecondTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch, 0, AppendOrigin.REPLICATION);
-        appendSecondTransaction.append(2);
+        appendSecondTransaction.append(List.of(2));
         log.appendAsLeader(commitMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
 
@@ -918,7 +918,7 @@ public class LogCleanerTest {
         long producerId = 1L;
         var appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch);
 
-        appendProducer.append(2, 3); // batch last offset is 1
+        appendProducer.append(List.of(2, 3)); // batch last offset is 1
         log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
             VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
         log.roll();
@@ -940,7 +940,7 @@ public class LogCleanerTest {
         assertEquals(List.of(1L, 2L), lastOffsetsPerBatchInLog(log)); // empty batch is retained
 
         // now update the last sequence so that the empty batch can be removed
-        appendProducer.append(1);
+        appendProducer.append(List.of(1));
         log.roll();
 
         dirtyOffset = cleaner.doClean(new LogToClean(log, dirtyOffset, log.activeSegment().baseOffset(), false), largeTimestamp).getKey();
@@ -1178,8 +1178,8 @@ public class LogCleanerTest {
         long producerId = 1L;
         var appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch);
 
-        appendProducer.append(1);
-        appendProducer.append(2, 3);
+        appendProducer.append(List.of(1));
+        appendProducer.append(List.of(2, 3));
         log.appendAsLeader(abortMarker(producerId, producerEpoch), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
                 VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
         log.roll();
@@ -1191,7 +1191,7 @@ public class LogCleanerTest {
         assertEquals(List.of(3L), offsetsInLog(log));
 
         // Append a new entry from the producer and verify that the empty batch is cleaned up
-        appendProducer.append(1, 5);
+        appendProducer.append(List.of(1, 5));
         log.roll();
         cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), false));
 
@@ -1213,7 +1213,7 @@ public class LogCleanerTest {
         // First we append one committed transaction
         long producerId1 = 1L;
         var appendProducer = appendTransactionalAsLeader(log, producerId1, producerEpoch, leaderEpoch, AppendOrigin.CLIENT);
-        appendProducer.append(1);
+        appendProducer.append(List.of(1));
         log.appendAsLeader(commitMarker(producerId1, producerEpoch), leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
                 VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel());
 
@@ -2110,16 +2110,16 @@ public class LogCleanerTest {
 
         // one compressed log entry with duplicates
         int dupSetOffset = 25;
-        int[] dupSetKeys = {0, 1, 0, 1};
-        List<Map.Entry<Integer, Integer>> dupSet = IntStream.range(0, dupSetKeys.length)
-            .mapToObj(i -> Map.entry(dupSetKeys[i], dupSetOffset + i))
+        List<Integer> dupSetKeys = List.of(0, 1, 0, 1);
+        List<Map.Entry<Integer, Integer>> dupSet = IntStream.range(0, dupSetKeys.size())
+            .mapToObj(i -> Map.entry(dupSetKeys.get(i), dupSetOffset + i))
             .toList();
 
         // and one without (should still be fixed by the cleaner)
         int noDupSetOffset = 50;
-        int[] noDupSetKeys = {3, 4};
-        List<Map.Entry<Integer, Integer>> noDupSet = IntStream.range(0, noDupSetKeys.length)
-            .mapToObj(i -> Map.entry(noDupSetKeys[i], noDupSetOffset + i))
+        List<Integer> noDupSetKeys = List.of(3, 4);
+        List<Map.Entry<Integer, Integer>> noDupSet = IntStream.range(0, noDupSetKeys.size())
+            .mapToObj(i -> Map.entry(noDupSetKeys.get(i), noDupSetOffset + i))
             .toList();
 
         log.appendAsFollower(invalidCleanedMessage(dupSetOffset, dupSet, codec), Integer.MAX_VALUE);
@@ -2192,58 +2192,65 @@ public class LogCleanerTest {
     }
 
     /**
-     * Verify that the clean is able to move beyond missing offsets records in dirty log
+     * Verify that the clean is able to move beyond missing offsets records in dirty log in a single segment.
      */
     @Test
-    public void testCleaningBeyondMissingOffsets() throws Exception {
+    public void testCleaningBeyondMissingOffsetsSingleSegment() throws Exception {
         Properties logProps = new Properties();
         logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024 * 1024);
         logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
         LogConfig logConfig = new LogConfig(logProps);
         Cleaner cleaner = makeCleaner(Integer.MAX_VALUE);
 
-        {
-            UnifiedLog log = makeLog(TestUtils.randomPartitionLogDir(tmpdir), logConfig, 0L);
-            List<Map.Entry<Integer, Integer>> seq = IntStream.rangeClosed(0, 9)
-                .mapToObj(i -> Map.entry(i, i))
-                .toList();
-            List<Long> offsetSeq = LongStream.rangeClosed(0, 9).boxed().toList();
-            writeToLog(log, seq, offsetSeq);
-            // roll new segment with baseOffset 11, leaving previous with holes in offset range [9,10]
-            log.roll(Optional.of(11L));
+        UnifiedLog log = makeLog(TestUtils.randomPartitionLogDir(tmpdir), logConfig, 0L);
+        List<Map.Entry<Integer, Integer>> seq = IntStream.rangeClosed(0, 9)
+            .mapToObj(i -> Map.entry(i, i))
+            .toList();
+        List<Long> offsetSeq = LongStream.rangeClosed(0, 9).boxed().toList();
+        writeToLog(log, seq, offsetSeq);
+        // roll new segment with baseOffset 11, leaving previous with holes in offset range [9,10]
+        log.roll(Optional.of(11L));
 
-            // active segment record
-            log.appendAsFollower(messageWithOffset(1015, 1015, 11L), Integer.MAX_VALUE);
+        // active segment record
+        log.appendAsFollower(messageWithOffset(1015, 1015, 11L), Integer.MAX_VALUE);
 
-            long nextDirtyOffset = cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), true)).getKey();
-            assertEquals(log.activeSegment().baseOffset(), nextDirtyOffset, "Cleaning point should pass offset gap");
-        }
+        long nextDirtyOffset = cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), true)).getKey();
+        assertEquals(log.activeSegment().baseOffset(), nextDirtyOffset, "Cleaning point should pass offset gap");
+    }
 
+    /**
+     * Verify that the clean is able to move beyond missing offsets records in dirty log across multiple segments.
+     */
+    @Test
+    public void testCleaningBeyondMissingOffsetsMultipleSegments() throws Exception {
+        Properties logProps = new Properties();
+        logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024 * 1024);
+        logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        LogConfig logConfig = new LogConfig(logProps);
+        Cleaner cleaner = makeCleaner(Integer.MAX_VALUE);
 
-        {
-            UnifiedLog log = makeLog(TestUtils.randomPartitionLogDir(tmpdir), logConfig, 0L);
-            List<Map.Entry<Integer, Integer>> seq = IntStream.rangeClosed(0, 9)
-                .mapToObj(i -> Map.entry(i, i))
-                .toList();
-            List<Long> offsetSeq = LongStream.rangeClosed(0, 9).boxed().toList();
-            writeToLog(log, seq, offsetSeq);
-            // roll new segment with baseOffset 15, leaving previous with holes in offset range [10, 14]
-            log.roll(Optional.of(15L));
+        UnifiedLog log = makeLog(TestUtils.randomPartitionLogDir(tmpdir), logConfig, 0L);
+        List<Map.Entry<Integer, Integer>> seq = IntStream.rangeClosed(0, 9)
+            .mapToObj(i -> Map.entry(i, i))
+            .toList();
+        List<Long> offsetSeq = LongStream.rangeClosed(0, 9).boxed().toList();
+        writeToLog(log, seq, offsetSeq);
+        // roll new segment with baseOffset 15, leaving previous with holes in offset range [10, 14]
+        log.roll(Optional.of(15L));
 
-            List<Map.Entry<Integer, Integer>> seq2 = IntStream.rangeClosed(15, 24)
-                .mapToObj(i -> Map.entry(i, i))
-                .toList();
-            List<Long> offsetSeq2 = LongStream.rangeClosed(15, 24).boxed().toList();
-            writeToLog(log, seq2, offsetSeq2);
-            // roll new segment with baseOffset 30, leaving previous with holes in offset range [25, 29]
-            log.roll(Optional.of(30L));
+        List<Map.Entry<Integer, Integer>> seq2 = IntStream.rangeClosed(15, 24)
+            .mapToObj(i -> Map.entry(i, i))
+            .toList();
+        List<Long> offsetSeq2 = LongStream.rangeClosed(15, 24).boxed().toList();
+        writeToLog(log, seq2, offsetSeq2);
+        // roll new segment with baseOffset 30, leaving previous with holes in offset range [25, 29]
+        log.roll(Optional.of(30L));
 
-            // active segment record
-            log.appendAsFollower(messageWithOffset(1015, 1015, 30L), Integer.MAX_VALUE);
+        // active segment record
+        log.appendAsFollower(messageWithOffset(1015, 1015, 30L), Integer.MAX_VALUE);
 
-            long nextDirtyOffset = cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), true)).getKey();
-            assertEquals(log.activeSegment().baseOffset(), nextDirtyOffset, "Cleaning point should pass offset gap in multiple segments");
-        }
+        long nextDirtyOffset = cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), true)).getKey();
+        assertEquals(log.activeSegment().baseOffset(), nextDirtyOffset, "Cleaning point should pass offset gap in multiple segments");
     }
 
     @Test
@@ -2602,7 +2609,7 @@ public class LogCleanerTest {
 
     @FunctionalInterface
     private interface ProducerAppender {
-        LogAppendInfo append(int... keys) throws IOException;
+        LogAppendInfo append(List<Integer> keys) throws IOException;
     }
 
     private record LogAndOffsetMap(UnifiedLog log, LogTestUtils.FakeOffsetMap offsetMap) { }
@@ -2625,19 +2632,19 @@ public class LogCleanerTest {
         AtomicInteger sequence = new AtomicInteger(0);
         return keys -> {
             int baseSequence = sequence.get();
-            SimpleRecord[] simpleRecords = new SimpleRecord[keys.length];
-            for (int i = 0; i < keys.length; i++) {
-                byte[] keyBytes = Integer.toString(keys[i]).getBytes();
-                // the value doesn't matter since we validate offsets
-                simpleRecords[i] = new SimpleRecord(time.milliseconds(), keyBytes, keyBytes);
-            }
+            SimpleRecord[] simpleRecords = keys.stream()
+                .map(key -> {
+                    byte[] keyBytes = Integer.toString(key).getBytes();
+                    return new SimpleRecord(time.milliseconds(), keyBytes, keyBytes);
+                })
+                .toArray(SimpleRecord[]::new);
             MemoryRecords records = isTransactional
                 ? MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch,
                         baseSequence, simpleRecords)
                 : MemoryRecords.withIdempotentRecords(Compression.NONE, producerId, producerEpoch,
                         baseSequence, simpleRecords);
             LogAppendInfo appendInfo = log.appendAsLeader(records, leaderEpoch, origin);
-            sequence.addAndGet(keys.length);
+            sequence.addAndGet(keys.size());
             return appendInfo;
         };
     }
