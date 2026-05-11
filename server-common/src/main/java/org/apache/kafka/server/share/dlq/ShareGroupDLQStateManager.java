@@ -137,6 +137,7 @@ public class ShareGroupDLQStateManager {
             Optional<String> topicNameOpt = cacheHelper.shareGroupDlqTopic(param.groupId());
             Optional<String> topicPrefix = cacheHelper.shareGroupDlqTopicPrefix();
 
+            // Verify that DLQ topic for the share group is set and is correctly named.
             if (topicNameOpt.isEmpty()) {
                 return Optional.of(new ConfigException("Configured DLQ topic name in share group " + param.groupId() + " is empty."));
             } else if (!topicNameOpt.get().startsWith("__")) {
@@ -145,10 +146,17 @@ public class ShareGroupDLQStateManager {
 
             String topicName = topicNameOpt.get();
 
+            // Verify that DLQ is enabled on a correctly named topic, configured on a share group.
             if (cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqEnabledOnTopic(topicName)) {
                 return Optional.of(new ConfigException("DLQ is not enabled on configured DLQ topic for share group " + param.groupId() + " topic: ." + topicName));
             }
 
+            // Verify that for a non-existent correctly named DLQ topic, auto create should be enabled.
+            if (!cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqAutoTopicCreateEnabled()) {
+                return Optional.of(new ConfigException("DLQ topic does not exist and auto create is disabled on cluster for share group " + param.groupId() + "topic: ." + topicName));
+            }
+
+            // Verify that if configured, the DLQ topic name prefix aligns with the topic name.
             return topicPrefix.map(prefix -> {
                 if (!prefix.isEmpty() && !topicName.startsWith(prefix)) {
                     return new ConfigException("Configured DLQ topic name does not comply with the dlq prefix in share group " +
@@ -216,28 +224,25 @@ public class ShareGroupDLQStateManager {
         public Collection<RequestAndCompletionHandler> generateRequests() {
             if (!queue.isEmpty()) {
                 ShareGroupDLQStateManager.ShareGroupDLQStateManagerHandler handler = queue.poll();
+                // At this point either a correctly named and configured DLQ topic exists or
+                // one is configured but does non-exist. We have already validated that the
+                // auto create should be enabled, in that case.
                 if (!handler.dlqTopicExists()) {
-                    if (cacheHelper.isDlqAutoTopicCreateEnabled()) {
-                        // We need to send RPC to create the topic
-                        Node randomNode = randomNode();
-                        if (randomNode == Node.noNode()) {
-                            log.error("Unable to find node to use for coordinator lookup.");
-                            // fatal failure, cannot retry or progress
-                            // fail the RPC
-                            handler.createTopicErrorResponse(Errors.BROKER_NOT_AVAILABLE.exception());
-                            return List.of();
-                        }
-                        return List.of(new RequestAndCompletionHandler(
-                            time.milliseconds(),
-                            randomNode,
-                            handler.createTopicBuilder(),
-                            handler
-                        ));
-                    } else {
-                        log.error("DLQ topic for share group {} does not exist and auto create is disabled.", handler.recordParam().groupId());
-                        handler.createTopicErrorResponse(Errors.INVALID_CONFIG.exception());
+                    // We need to send RPC to create the topic
+                    Node randomNode = randomNode();
+                    if (randomNode == Node.noNode()) {
+                        log.error("Unable to find node to use for coordinator lookup.");
+                        // fatal failure, cannot retry or progress
+                        // fail the RPC
+                        handler.createTopicErrorResponse(Errors.BROKER_NOT_AVAILABLE.exception());
                         return List.of();
                     }
+                    return List.of(new RequestAndCompletionHandler(
+                        time.milliseconds(),
+                        randomNode,
+                        handler.createTopicBuilder(),
+                        handler
+                    ));
                 }
             }
             return List.of();
