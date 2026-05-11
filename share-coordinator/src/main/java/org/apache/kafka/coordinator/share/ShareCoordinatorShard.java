@@ -777,7 +777,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(topicId);
         if (topicMetadataOp.isEmpty() ||
             topicMetadataOp.get().partitionCount() <= partitionId) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.error("Topic or partition not found in metadata image when writing: {}:null-{}.", topicId, partitionId);
             return Optional.of(getWriteErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
@@ -825,7 +825,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(topicId);
         if (topicMetadataOp.isEmpty() ||
             topicMetadataOp.get().partitionCount() <= partitionId) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.error("Topic or partition not found in metadata image when reading: {}:null-{}.", topicId, partitionId);
             return Optional.of(ReadShareGroupStateResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         }
 
@@ -859,7 +859,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(topicId);
         if (topicMetadataOp.isEmpty() ||
             topicMetadataOp.get().partitionCount() <= partitionId) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.error("Topic or partition not found in metadata image when reading summary: {}:null-{}.", topicId, partitionId);
             return Optional.of(ReadShareGroupStateSummaryResponse.toErrorResponseData(topicId, partitionId, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         }
 
@@ -891,7 +891,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(topicId);
         if (topicMetadataOp.isEmpty() ||
             topicMetadataOp.get().partitionCount() <= partitionId) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.error("Topic or partition not found in metadata image when deleting: {}:null-{}.", topicId, partitionId);
             return Optional.of(getDeleteErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
@@ -929,7 +929,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadataOp = metadataImage.topicMetadata(topicId);
         if (topicMetadataOp.isEmpty() ||
             topicMetadataOp.get().partitionCount() <= partitionId) {
-            log.error("Topic/TopicPartition not found in metadata image.");
+            log.error("Topic or partition not found in metadata image when initializing: {}:null-{}.", topicId, partitionId);
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
         }
 
