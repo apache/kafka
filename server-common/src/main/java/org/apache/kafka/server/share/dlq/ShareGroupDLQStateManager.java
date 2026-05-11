@@ -153,7 +153,7 @@ public class ShareGroupDLQStateManager {
 
             // Verify that for a non-existent correctly named DLQ topic, auto create should be enabled.
             if (!cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqAutoTopicCreateEnabled()) {
-                return Optional.of(new ConfigException("DLQ topic does not exist and auto create is disabled on cluster for share group " + param.groupId() + "topic: ." + topicName));
+                return Optional.of(new ConfigException("DLQ topic does not exist and auto create is disabled on cluster for share group " + param.groupId() + " topic: ." + topicName));
             }
 
             // Verify that if configured, the DLQ topic name prefix aligns with the topic name.
