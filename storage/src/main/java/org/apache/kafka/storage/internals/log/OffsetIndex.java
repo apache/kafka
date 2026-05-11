@@ -194,6 +194,30 @@ public final class OffsetIndex extends AbstractIndex {
         if (length() % entrySize() != 0)
             throw new CorruptIndexException("Index file " + file().getAbsolutePath() + " is corrupt, found " + length() +
                 " bytes which is neither positive nor a multiple of " + entrySize());
+        // Validate that entries are monotonically non-decreasing in both offset and position.
+        // This catches corruption that passes the above checks (e.g., when the file size is
+        // divisible by the entry size but the content is garbage).
+        if (entries() > 1) {
+            inRemapReadLock(() -> {
+                ByteBuffer idx = mmap().duplicate();
+                int prevRelOff = relativeOffset(idx, 0);
+                long prevPos = physical(idx, 0);
+                if (prevRelOff < 0 || prevPos < 0)
+                    throw new CorruptIndexException("Corrupt index found, index file " + file().getAbsolutePath() +
+                        " has negative first entry: relativeOffset=" + prevRelOff + ", position=" + prevPos);
+                for (int i = 1; i < entries(); i++) {
+                    int relOff = relativeOffset(idx, i);
+                    long pos = physical(idx, i);
+                    if (relOff < prevRelOff || pos < prevPos)
+                        throw new CorruptIndexException("Corrupt index found, index file " + file().getAbsolutePath() +
+                            " has non-monotonic entry at slot " + i + ": relativeOffset=" + relOff +
+                            " (prev=" + prevRelOff + "), position=" + pos + " (prev=" + prevPos + ")");
+                    prevRelOff = relOff;
+                    prevPos = pos;
+                }
+                return null;
+            });
+        }
     }
 
     /**
