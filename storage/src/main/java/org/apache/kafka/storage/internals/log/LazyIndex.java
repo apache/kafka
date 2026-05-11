@@ -143,22 +143,28 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
     private final long baseOffset;
     private final int maxIndexSize;
     private final IndexType indexType;
+    private final boolean useLargeOffsetFormat;
 
     private volatile IndexWrapper indexWrapper;
 
-    private LazyIndex(IndexWrapper indexWrapper, long baseOffset, int maxIndexSize, IndexType indexType) {
+    private LazyIndex(IndexWrapper indexWrapper, long baseOffset, int maxIndexSize, IndexType indexType, boolean useLargeOffsetFormat) {
         this.indexWrapper = indexWrapper;
         this.baseOffset = baseOffset;
         this.maxIndexSize = maxIndexSize;
         this.indexType = indexType;
+        this.useLargeOffsetFormat = useLargeOffsetFormat;
     }
 
     public static LazyIndex<OffsetIndex> forOffset(File file, long baseOffset, int maxIndexSize) {
-        return new LazyIndex<>(new IndexFile(file), baseOffset, maxIndexSize, IndexType.OFFSET);
+        return forOffset(file, baseOffset, maxIndexSize, false);
+    }
+
+    public static LazyIndex<OffsetIndex> forOffset(File file, long baseOffset, int maxIndexSize, boolean useLargeFormat) {
+        return new LazyIndex<>(new IndexFile(file), baseOffset, maxIndexSize, IndexType.OFFSET, useLargeFormat);
     }
 
     public static LazyIndex<TimeIndex> forTime(File file, long baseOffset, int maxIndexSize) {
-        return new LazyIndex<>(new IndexFile(file), baseOffset, maxIndexSize, IndexType.TIME);
+        return new LazyIndex<>(new IndexFile(file), baseOffset, maxIndexSize, IndexType.TIME, false);
     }
 
     public File file() {
@@ -236,7 +242,7 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
     @SuppressWarnings("unchecked")
     private T loadIndex(File file) throws IOException {
         return switch (indexType) {
-            case OFFSET -> (T) new OffsetIndex(file, baseOffset, maxIndexSize, true);
+            case OFFSET -> (T) new OffsetIndex(file, baseOffset, maxIndexSize, true, useLargeOffsetFormat);
             case TIME -> (T) new TimeIndex(file, baseOffset, maxIndexSize, true);
         };
     }

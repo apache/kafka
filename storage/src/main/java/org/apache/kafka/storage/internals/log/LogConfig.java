@@ -263,6 +263,7 @@ public class LogConfig extends AbstractConfig {
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
+    public final boolean useLargeIndexFormat;
     public final long flushInterval;
     public final long flushMs;
     public final long retentionSize;
@@ -308,6 +309,7 @@ public class LogConfig extends AbstractConfig {
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
+        this.useLargeIndexFormat = false; // Set to true when MetadataVersion >= IBP_4_4_IV1
         this.flushInterval = getLong(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG);
         this.flushMs = getLong(TopicConfig.FLUSH_MS_CONFIG);
         this.retentionSize = getLong(TopicConfig.RETENTION_BYTES_CONFIG);
