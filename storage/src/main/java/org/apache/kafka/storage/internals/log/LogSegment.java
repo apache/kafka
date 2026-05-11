@@ -183,8 +183,9 @@ public class LogSegment implements Closeable {
             // Resize the time index file to 0 if it is newly created.
             if (timeIndexFileNewlyCreated)
                 timeIndex().resize(0);
-            // Check offset index format — detects old 8-byte entry format and triggers
-            // rebuild via CorruptIndexException caught by LogLoader.
+            // Validate index file integrity (entry count alignment, offset ordering).
+            // If the file is corrupt or has misaligned entry size, sanityCheck throws
+            // CorruptIndexException which LogLoader catches and triggers recovery.
             offsetIndex().sanityCheck();
             timeIndex().sanityCheck();
             txnIndex.sanityCheck();

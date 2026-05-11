@@ -163,6 +163,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param size The number of bytes after the start position to include
      * @return A unaligned slice of records on this message set limited based on the given position and size
      */
+    // Note: availableBytes is cast to int because UnalignedFileRecords (used by Raft snapshot
+    // replication) is bounded by fetch size which fits in int. The availableBytesLong result
+    // is always <= size (int param), so no truncation occurs.
     public UnalignedFileRecords sliceUnaligned(int position, int size) {
         long availableBytes = availableBytesLong(position, size);
         return new UnalignedFileRecords(channel, this.start + position, (int) availableBytes);

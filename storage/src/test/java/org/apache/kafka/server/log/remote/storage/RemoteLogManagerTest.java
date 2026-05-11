@@ -512,6 +512,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -626,6 +627,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -721,6 +723,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -808,6 +811,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -888,6 +892,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -1008,6 +1013,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -1275,6 +1281,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -2663,6 +2670,7 @@ public class RemoteLogManagerTest {
         FileRecords fileRecords = mock(FileRecords.class);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
 
         when(oldSegment.log()).thenReturn(fileRecords);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
@@ -3815,7 +3823,7 @@ public class RemoteLogManagerTest {
             // Verify quota check was performed
             verify(rlmCopyQuotaManager, times(1)).getThrottleTimeMs();
             // Verify bytes to copy was recorded with the quota manager
-            verify(rlmCopyQuotaManager, times(1)).record(10);
+            verify(rlmCopyQuotaManager, times(1)).record(10L);
 
             Map<org.apache.kafka.common.MetricName, KafkaMetric> allMetrics = metrics.metrics();
             KafkaMetric avgMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-avg", "RemoteLogManager"));
@@ -3876,6 +3884,7 @@ public class RemoteLogManagerTest {
         FileRecords fileRecords = mock(FileRecords.class);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
 
         // Set up the segment that is eligible for copy
         when(oldSegment.log()).thenReturn(fileRecords);

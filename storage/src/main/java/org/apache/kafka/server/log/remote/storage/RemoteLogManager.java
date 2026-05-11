@@ -983,7 +983,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                     boolean ignored = copyQuotaManagerLockCondition.await(quotaTimeout().toMillis(), TimeUnit.MILLISECONDS);
                                     throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
                                 }
-                                rlmCopyQuotaManager.record(candidateLogSegment.logSegment.log().sizeInBytes());
+                                rlmCopyQuotaManager.record(candidateLogSegment.logSegment.log().sizeInBytesLong());
                                 // Signal waiting threads to check the quota again
                                 copyQuotaManagerLockCondition.signalAll();
                             } finally {
@@ -1036,8 +1036,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             epochEntries.forEach(entry -> segmentLeaderEpochs.put(entry.epoch(), entry.startOffset()));
 
             boolean isTxnIdxEmpty = segment.txnIndex().isEmpty();
+            long actualSegmentSize = segment.log().sizeInBytesLong();
+            // TODO: RemoteLogSegmentMetadata.segmentSizeInBytes is int (schema uses int32).
+            // Segments >2GB will have truncated size in metadata until the schema is evolved.
+            int segmentSizeForMetadata = (int) Math.min(actualSegmentSize, Integer.MAX_VALUE);
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(segmentId, segment.baseOffset(), endOffset,
-                    segment.largestTimestamp(), brokerId, time.milliseconds(), segment.log().sizeInBytes(),
+                    segment.largestTimestamp(), brokerId, time.milliseconds(), segmentSizeForMetadata,
                     segmentLeaderEpochs, isTxnIdxEmpty);
 
             remoteLogMetadataManagerPlugin.get().addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
@@ -2019,7 +2023,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     // Visible for testing
     EnrichedRecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
-        int skippedBytes = 0;
+        long skippedBytes = 0;
         RecordBatch nextBatch = null;
         // Look for the batch which has the desired offset
         // We will always have a batch in that segment as it is a non-compacted topic.
@@ -2369,9 +2373,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     static class EnrichedRecordBatch {
         private final RecordBatch batch;
-        private final int skippedBytes;
+        private final long skippedBytes;
 
-        public EnrichedRecordBatch(RecordBatch batch, int skippedBytes) {
+        public EnrichedRecordBatch(RecordBatch batch, long skippedBytes) {
             this.batch = batch;
             this.skippedBytes = skippedBytes;
         }

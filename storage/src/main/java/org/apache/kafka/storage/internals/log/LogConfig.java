@@ -309,7 +309,12 @@ public class LogConfig extends AbstractConfig {
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
-        this.useLargeIndexFormat = false; // Set to true when MetadataVersion >= IBP_4_4_IV1
+        // TODO: Wire this from MetadataVersion.isLargeIndexFormatSupported() via KafkaConfig.
+        // Currently defaults to false (legacy 8-byte index entries). When the MetadataVersion
+        // finalization hook is implemented, this should be set to:
+        //   metadataVersion.isLargeIndexFormatSupported()
+        // Until then, the 12-byte index format is only reachable via explicit constructor in tests.
+        this.useLargeIndexFormat = false;
         this.flushInterval = getLong(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG);
         this.flushMs = getLong(TopicConfig.FLUSH_MS_CONFIG);
         this.retentionSize = getLong(TopicConfig.RETENTION_BYTES_CONFIG);

@@ -42,8 +42,9 @@ import java.util.Optional;
  *
  * <p>No attempt is made to checksum the contents of this file, in the event of a crash it is rebuilt.
  *
- * <p>The file format is a series of entries. The physical format is a 4 byte "relative" offset and an 8 byte file location for the
- * message with that offset. The offset stored is relative to the base offset of the index file. So, for example,
+ * <p>The file format is a series of entries. In legacy mode (default), each entry is a 4-byte "relative" offset and a 4-byte
+ * physical file position (8 bytes total). In large mode (after MetadataVersion IBP_4_4_IV1), each entry is a 4-byte "relative"
+ * offset and an 8-byte physical file position (12 bytes total), supporting segments larger than 2GB. The offset stored is relative to the base offset of the index file. So, for example,
  * if the base offset was 50, then the offset 55 would be stored as 5. Using relative offsets in this way let's us use
  * only 4 bytes for the offset.
  *
@@ -254,6 +255,10 @@ public final class OffsetIndex extends AbstractIndex {
                 if (indexEntrySize == LARGE_ENTRY_SIZE) {
                     mmap().putLong(position);
                 } else {
+                    if (position > Integer.MAX_VALUE) {
+                        throw new IllegalArgumentException("Position " + position +
+                            " exceeds Integer.MAX_VALUE. Finalize MetadataVersion to IBP_4_4_IV1 to enable large index format.");
+                    }
                     mmap().putInt((int) position);
                 }
                 incrementEntries();
