@@ -2060,9 +2060,9 @@ public class GroupMetadataManager {
 
         // Get or create the member.
         StreamsGroupMember member;
-        StreamsGroupMember maybeReplacedStaticMember;
+        StreamsGroupMember maybeOldMember;
         if (instanceId == null) {
-            maybeReplacedStaticMember = null;
+            maybeOldMember = group.dynamicMember(memberId); 
             member = getOrMaybeCreateDynamicStreamsGroupMember(
                 group,
                 memberId,
@@ -2073,7 +2073,7 @@ public class GroupMetadataManager {
                 isJoining
             );
         } else {
-            maybeReplacedStaticMember = group.staticMember(instanceId);
+            maybeOldMember = group.staticMember(instanceId);
             member = getOrMaybeCreateStaticStreamsGroupMember(
                     group,
                     memberId,
@@ -2251,23 +2251,28 @@ public class GroupMetadataManager {
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
-        if (memberEpoch == 0 || hasAssignedTasksChanged(member, updatedMember)) {
+        boolean newlyJoinOrAssignmentChanged = memberEpoch == 0 || hasAssignedTasksChanged(member, updatedMember);
+        boolean hasReplacedStaticMember = maybeOldMember != null && !maybeOldMember.memberId().equals(updatedMember.memberId());
+        boolean userEndpointChanged = hasUserEndpointChanged(maybeOldMember, updatedMember);
+        if (newlyJoinOrAssignmentChanged) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
+        }
+
+        if (newlyJoinOrAssignmentChanged || hasReplacedStaticMember || userEndpointChanged) {
             group.invalidateCachedEndpointToPartitions(updatedMember.memberId());
-            if (maybeReplacedStaticMember != null && !maybeReplacedStaticMember.memberId().equals(updatedMember.memberId())) {
-                group.invalidateCachedEndpointToPartitions(maybeReplacedStaticMember.memberId());
-            }
-            if (hasUserEndpointChanged(maybeReplacedStaticMember, updatedMember)) {
-                // If no user endpoint is defined, there is no change in the endpoint information.
-                // Otherwise, bump the endpoint information epoch
-                group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
+            if (hasReplacedStaticMember) {
+                group.invalidateCachedEndpointToPartitions(maybeOldMember.memberId());
             }
         }
 
+        if (userEndpointChanged || (hasAssignedTasksChanged(member, updatedMember) && updatedMember.userEndpoint().isPresent())) {
+            group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
+        }
+
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
-            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage, maybeReplacedStaticMember));
+            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage, maybeOldMember));
         }
         if (groups.containsKey(group.groupId())) {
             // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
@@ -9295,13 +9300,14 @@ public class GroupMetadataManager {
         ));
     }
 
-    private boolean hasUserEndpointChanged(StreamsGroupMember maybeReplacedStaticMember, StreamsGroupMember updatedMember) {
-
-        boolean hasPreviousUserEndpoint = maybeReplacedStaticMember != null && maybeReplacedStaticMember.userEndpoint().isPresent();
+    private boolean hasUserEndpointChanged(StreamsGroupMember maybeOldMember, StreamsGroupMember updatedMember) {
+        boolean hasPreviousUserEndpoint = maybeOldMember != null && maybeOldMember.userEndpoint().isPresent();
         boolean hasCurrentUserEndpoint = updatedMember.userEndpoint().isPresent();
 
+        // Both the previous and updated member have a user endpoint. This can happen for
+        // regular heartbeats after join, or for static member rejoins with an endpoint.
         if (hasPreviousUserEndpoint && hasCurrentUserEndpoint) {
-            return !maybeReplacedStaticMember.userEndpoint().get().equals(updatedMember.userEndpoint().get());
+            return !maybeOldMember.userEndpoint().get().equals(updatedMember.userEndpoint().get());
         }
 
         if (!hasPreviousUserEndpoint && !hasCurrentUserEndpoint) {

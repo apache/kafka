@@ -485,6 +485,16 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * Gets a dynamic member.
+     *
+     * @param memberId The Member ID.
+     * @return The member corresponding to the given member ID or null if it does not exist
+     */
+    public StreamsGroupMember dynamicMember(String memberId) {
+        return members.get(memberId);
+    }
+
+    /**
      * Adds or updates the member.
      *
      * @param newMember The new member state.
