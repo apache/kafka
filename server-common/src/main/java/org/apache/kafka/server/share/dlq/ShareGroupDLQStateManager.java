@@ -139,28 +139,28 @@ public class ShareGroupDLQStateManager {
 
             // Verify that DLQ topic for the share group is set and is correctly named.
             if (topicNameOpt.isEmpty()) {
-                return Optional.of(new ConfigException("Configured DLQ topic name in share group " + param.groupId() + " is empty."));
+                return Optional.of(new ConfigException("Configured DLQ topic name in share group: " + param.groupId() + " is empty."));
             } else if (!topicNameOpt.get().startsWith("__")) {
-                return Optional.of(new ConfigException("Configured DLQ topic name in share group " + param.groupId() + " is invalid: " + topicNameOpt.get()));
+                return Optional.of(new ConfigException("Configured DLQ topic name in share group: " + param.groupId() + " is invalid, topic: " + topicNameOpt.get()));
             }
 
             String topicName = topicNameOpt.get();
 
             // Verify that DLQ is enabled on a correctly named topic, configured on a share group.
             if (cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqEnabledOnTopic(topicName)) {
-                return Optional.of(new ConfigException("DLQ is not enabled on configured DLQ topic for share group " + param.groupId() + " topic: ." + topicName));
+                return Optional.of(new ConfigException("DLQ is not enabled on configured DLQ topic for share group: " + param.groupId() + ", topic: " + topicName));
             }
 
             // Verify that for a non-existent correctly named DLQ topic, auto create should be enabled.
             if (!cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqAutoTopicCreateEnabled()) {
-                return Optional.of(new ConfigException("DLQ topic does not exist and auto create is disabled on cluster for share group " + param.groupId() + " topic: ." + topicName));
+                return Optional.of(new ConfigException("DLQ topic does not exist and auto create is disabled on cluster for share group: " + param.groupId() + ", topic: " + topicName));
             }
 
             // Verify that if configured, the DLQ topic name prefix aligns with the topic name.
             return topicPrefix.map(prefix -> {
                 if (!prefix.isEmpty() && !topicName.startsWith(prefix)) {
-                    return new ConfigException("Configured DLQ topic name does not comply with the dlq prefix in share group " +
-                        param.groupId() + ", topic: " + topicName + ",prefix: " + prefix);
+                    return new ConfigException("Configured DLQ topic name does not comply with the dlq prefix in share group: " +
+                        param.groupId() + ", topic: " + topicName + ", prefix: " + prefix);
                 }
                 return null;
             });
