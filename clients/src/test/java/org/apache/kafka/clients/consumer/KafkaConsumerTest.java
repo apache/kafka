@@ -1409,7 +1409,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) {
+    public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1422,6 +1422,7 @@ public class KafkaConsumerTest {
 
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
         consumer.poll(Duration.ZERO);
+        TestUtils.waitForCondition(() -> requestGenerated(client, ApiKeys.FETCH), "No fetch request sent");
 
         // respond to the outstanding fetch so that we have data available on the next poll
         client.respondFrom(fetchResponse(tp0, 0, 5), node);
@@ -1436,7 +1437,7 @@ public class KafkaConsumerTest {
 
         consumer.poll(Duration.ZERO);
 
-        assertTrue(commitReceived.get());
+        TestUtils.waitForCondition(commitReceived::get, "Auto-commit was not sent before position update");
     }
 
     // NOTE: the assertion path is specific to the CLASSIC consumer.
