@@ -1210,6 +1210,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testOffsetsForTimesWithZeroTimeout
 - testPartitionsAssignedEventSendsErrorWhenApplyAssignmentFails
 - testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight
+- testPollDoesNotWaitForReconciliationCheckIfNoPendingReconciliation
 - testPollThrowsInterruptExceptionIfInterrupted
 - testPollWaitsForReconciliationCheckComplete
 - testPollWithManualAssignmentDoesNotBusyLoop
