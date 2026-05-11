@@ -791,7 +791,7 @@ public class KStreamRepartitionIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-               .selectKey((key, value) -> key.toString(), Named.as(keyChangedName))
+               .selectKey((k, v) -> k + ":" + v, Named.as(keyChangedName))
                .markAsPartitioned()
                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                .count()
@@ -804,8 +804,8 @@ public class KStreamRepartitionIntegrationTest {
             new StringDeserializer(),
             new LongDeserializer(),
             Arrays.asList(
-                new KeyValue<>("1", 1L),
-                new KeyValue<>("2", 1L)
+                new KeyValue<>("1:A", 1L),
+                new KeyValue<>("2:B", 1L)
             )
         );
 

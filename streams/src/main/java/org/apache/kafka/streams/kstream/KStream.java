@@ -535,7 +535,7 @@ public interface KStream<K, V> {
      *     For reasons that when repartitions happen, records are physically shuffled by a composite key defined in the stateful operation.
      *     However, if the repartitions were cancelled, records stayed in their original partition by its original key. IQ or joins
      *     assumes and uses the composite key instead of the original key.
-     * </p></em>
+     * </em></p>
      *
      * @return a new, mutated {@code KStream} that will not repartition in subsequent operations.
      */

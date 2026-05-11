@@ -617,8 +617,7 @@ public class StoreQueryIntegrationTest {
 
         until(() -> {
             // Resolve partition by the original key
-            final KeyQueryMetadata metadata = kafkaStreams.queryMetadataForKey(
-                storeName, originalKey, Serdes.Integer().serializer());
+            final KeyQueryMetadata metadata = kafkaStreams.queryMetadataForKey(storeName, originalKey, Serdes.Integer().serializer());
 
             if (metadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
                 return false;
