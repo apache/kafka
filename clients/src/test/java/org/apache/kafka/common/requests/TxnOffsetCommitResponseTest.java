@@ -43,7 +43,6 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
     public void testConstructorWithErrorResponse() {
         TxnOffsetCommitResponse response = new TxnOffsetCommitResponse(throttleTimeMs, errorsMap);
 
-        assertEquals(errorsMap, response.errors());
         assertEquals(expectedErrorCounts, response.errorCounts());
         assertEquals(throttleTimeMs, response.throttleTimeMs());
     }

@@ -264,17 +264,6 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
                         Errors.forCode(partition.errorCode()))));
     }
 
-    public Map<TopicPartition, Errors> errors() {
-        Map<TopicPartition, Errors> errorMap = new HashMap<>();
-        for (TxnOffsetCommitResponseTopic topic : data.topics()) {
-            for (TxnOffsetCommitResponsePartition partition : topic.partitions()) {
-                errorMap.put(new TopicPartition(topic.name(), partition.partitionIndex()),
-                             Errors.forCode(partition.errorCode()));
-            }
-        }
-        return errorMap;
-    }
-
     public static TxnOffsetCommitResponse parse(Readable readable, short version) {
         return new TxnOffsetCommitResponse(new TxnOffsetCommitResponseData(readable, version));
     }

@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -1912,58 +1913,61 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
             boolean coordinatorReloaded = false;
-            Map<TopicPartition, Errors> errors = txnOffsetCommitResponse.errors();
 
-            log.debug("Received TxnOffsetCommit response for consumer group {}: {}", builder.data.groupId(),
-                    errors);
+            log.debug("Received TxnOffsetCommit response for consumer group {}: {}",
+                builder.data.groupId(), txnOffsetCommitResponse.data().topics());
 
-            for (Map.Entry<TopicPartition, Errors> entry : errors.entrySet()) {
-                TopicPartition topicPartition = entry.getKey();
-                Errors error = entry.getValue();
-                if (error == Errors.NONE) {
-                    pendingTxnOffsetCommits.remove(topicPartition);
-                } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
-                        || error == Errors.NOT_COORDINATOR
-                        || error == Errors.REQUEST_TIMED_OUT) {
-                    if (!coordinatorReloaded) {
-                        coordinatorReloaded = true;
-                        lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.data.groupId());
+            for (TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic responseTopic : txnOffsetCommitResponse.data().topics()) {
+                for (TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition responsePartition : responseTopic.partitions()) {
+                    TopicPartition topicPartition = new TopicPartition(responseTopic.name(), responsePartition.partitionIndex());
+                    Errors error = Errors.forCode(responsePartition.errorCode());
+                    if (error == Errors.NONE) {
+                        pendingTxnOffsetCommits.remove(topicPartition);
+                    } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
+                            || error == Errors.NOT_COORDINATOR
+                            || error == Errors.REQUEST_TIMED_OUT) {
+                        if (!coordinatorReloaded) {
+                            coordinatorReloaded = true;
+                            lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.data.groupId());
+                        }
+                    } else if (error.exception() instanceof RetriableException) {
+                        // The topic is unknown, the coordinator is loading, or it is another retriable error;
+                        // retry with the current coordinator.
+                    } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                        abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
+                        break;
+                    } else if (error == Errors.FENCED_INSTANCE_ID ||
+                            error == Errors.TRANSACTION_ABORTABLE) {
+                        abortableError(error.exception());
+                        break;
+                    } else if (error == Errors.UNKNOWN_MEMBER_ID
+                            || error == Errors.ILLEGAL_GENERATION
+                            || error == Errors.GROUP_ID_NOT_FOUND
+                            || error == Errors.STALE_MEMBER_EPOCH) {
+                        // GROUP_ID_NOT_FOUND and STALE_MEMBER_EPOCH are returned by
+                        // TxnOffsetCommit v6+. Older versions map them to
+                        // ILLEGAL_GENERATION. All four indicate a consumer group
+                        // metadata mismatch and must abort the transaction.
+                        abortableError(new CommitFailedException("Transaction offset Commit failed " +
+                            "due to consumer group metadata mismatch: " + error.exception().getMessage()));
+                        break;
+                    } else if (error == Errors.INVALID_PRODUCER_EPOCH
+                            || error == Errors.PRODUCER_FENCED) {
+                        // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
+                        // just treat it the same as PRODUCE_FENCED.
+                        fatalError(Errors.PRODUCER_FENCED.exception());
+                        break;
+                    } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                            || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
+                        fatalError(error.exception());
+                        break;
+                    } else {
+                        fatalError(new KafkaException("Unexpected error in TxnOffsetCommitResponse: " + error.message()));
+                        break;
                     }
-                } else if (error.exception() instanceof RetriableException) {
-                    // If the topic is unknown, the coordinator is loading, or is another retriable error, retry with the current coordinator
-                    continue;
-                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
-                    break;
-                } else if (error == Errors.FENCED_INSTANCE_ID ||
-                        error == Errors.TRANSACTION_ABORTABLE) {
-                    abortableError(error.exception());
-                    break;
-                } else if (error == Errors.UNKNOWN_MEMBER_ID
-                        || error == Errors.ILLEGAL_GENERATION
-                        || error == Errors.GROUP_ID_NOT_FOUND
-                        || error == Errors.STALE_MEMBER_EPOCH) {
-                    // GROUP_ID_NOT_FOUND and STALE_MEMBER_EPOCH are returned by
-                    // TxnOffsetCommit v6+. Older versions map them to
-                    // ILLEGAL_GENERATION. All four indicate a consumer group
-                    // metadata mismatch and must abort the transaction.
-                    abortableError(new CommitFailedException("Transaction offset Commit failed " +
-                        "due to consumer group metadata mismatch: " + error.exception().getMessage()));
-                    break;
-                } else if (error == Errors.INVALID_PRODUCER_EPOCH
-                        || error == Errors.PRODUCER_FENCED) {
-                    // We could still receive INVALID_PRODUCER_EPOCH from old versioned transaction coordinator,
-                    // just treat it the same as PRODUCE_FENCED.
-                    fatalError(Errors.PRODUCER_FENCED.exception());
-                    break;
-                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
-                        || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
-                    fatalError(error.exception());
-                    break;
-                } else {
-                    fatalError(new KafkaException("Unexpected error in TxnOffsetCommitResponse: " + error.message()));
-                    break;
                 }
+                // Stop processing further topics once the transaction has reached a terminal state.
+                if (result.isCompleted()) break;
             }
 
             if (result.isCompleted()) {
