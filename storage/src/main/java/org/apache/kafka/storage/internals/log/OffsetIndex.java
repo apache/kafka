@@ -78,18 +78,104 @@ public final class OffsetIndex extends AbstractIndex {
     }
 
     /**
-     * @param useLargeFormat If true, use 12-byte entries (8-byte physical position).
-     *                       If false, use legacy 8-byte entries (4-byte physical position).
+     * @param useLargeFormat If true, use 12-byte entries (8-byte physical position) for NEW files.
+     *                       If false, use legacy 8-byte entries (4-byte physical position) for NEW files.
+     *                       For EXISTING files, the format is auto-detected from the file content.
      *                       Gated by MetadataVersion.isLargeIndexFormatSupported().
      */
     public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable, boolean useLargeFormat) throws IOException {
-        super(file, baseOffset, maxIndexSize, writable, useLargeFormat ? LARGE_ENTRY_SIZE : LEGACY_ENTRY_SIZE);
-        this.indexEntrySize = useLargeFormat ? LARGE_ENTRY_SIZE : LEGACY_ENTRY_SIZE;
+        this(file, baseOffset, maxIndexSize, writable,
+                detectEntrySize(file, useLargeFormat ? LARGE_ENTRY_SIZE : LEGACY_ENTRY_SIZE));
+    }
+
+    private OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable, int detectedEntrySize) throws IOException {
+        super(file, baseOffset, maxIndexSize, writable, detectedEntrySize);
+        this.indexEntrySize = detectedEntrySize;
 
         lastOffset = lastEntry().offset();
 
         log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}, entrySize = {}",
             file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position(), indexEntrySize);
+    }
+
+    /**
+     * Detect the entry size of an index file. For new or empty files, returns the requested format.
+     * For existing files with data, auto-detects the format from the file size:
+     * - If file size is only divisible by 12 (not 8): large format
+     * - If file size is only divisible by 8 (not 12): legacy format
+     * - If divisible by both (ambiguous): validates entries to determine format
+     * - If divisible by neither: returns requested format (file will fail sanityCheck and be rebuilt)
+     */
+    static int detectEntrySize(File file, int requestedEntrySize) {
+        if (!file.exists()) return requestedEntrySize;
+        long fileSize = file.length();
+        if (fileSize == 0) return requestedEntrySize;
+
+        boolean validAsLegacy = (fileSize % LEGACY_ENTRY_SIZE == 0);
+        boolean validAsLarge = (fileSize % LARGE_ENTRY_SIZE == 0);
+
+        if (validAsLarge && !validAsLegacy) return LARGE_ENTRY_SIZE;
+        if (validAsLegacy && !validAsLarge) return LEGACY_ENTRY_SIZE;
+        if (!validAsLegacy && !validAsLarge) return requestedEntrySize; // corrupt, will fail sanityCheck
+
+        // Ambiguous: file size is divisible by both 8 and 12.
+        // Validate entries by reading the first few and checking if positions are reasonable.
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+            return detectEntryByValidation(raf, fileSize, requestedEntrySize);
+        } catch (Exception e) {
+            log.warn("Failed to auto-detect index format for {}, using requested entry size {}", file, requestedEntrySize, e);
+            return requestedEntrySize;
+        }
+    }
+
+    /**
+     * For ambiguous files (size divisible by both 8 and 12), validate entries with each format
+     * and return the one that produces valid data.
+     */
+    private static int detectEntryByValidation(java.io.RandomAccessFile raf, long fileSize, int requestedEntrySize) throws java.io.IOException {
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate((int) Math.min(fileSize, 120)); // read up to 10 large entries
+        raf.getChannel().read(buf, 0);
+        buf.flip();
+
+        boolean largeValid = validateEntries(buf, LARGE_ENTRY_SIZE);
+        buf.rewind();
+        boolean legacyValid = validateEntries(buf, LEGACY_ENTRY_SIZE);
+
+        if (largeValid && !legacyValid) return LARGE_ENTRY_SIZE;
+        if (legacyValid && !largeValid) return LEGACY_ENTRY_SIZE;
+
+        // Both valid or both invalid -- use requested format
+        return requestedEntrySize;
+    }
+
+    /**
+     * Check if entries read with the given entry size produce valid data:
+     * - Relative offsets should be non-negative and non-decreasing
+     * - Positions should be non-negative and non-decreasing
+     */
+    private static boolean validateEntries(java.nio.ByteBuffer buf, int entrySize) {
+        int numEntries = buf.limit() / entrySize;
+        if (numEntries == 0) return true;
+
+        int prevRelOffset = -1;
+        long prevPosition = -1;
+        for (int i = 0; i < Math.min(numEntries, 10); i++) {
+            int relOffset = buf.getInt(i * entrySize);
+            long position;
+            if (entrySize == LARGE_ENTRY_SIZE) {
+                position = buf.getLong(i * entrySize + 4);
+            } else {
+                position = buf.getInt(i * entrySize + 4);
+            }
+
+            if (relOffset < 0 || position < 0) return false;
+            if (prevRelOffset >= 0 && relOffset < prevRelOffset) return false;
+            if (prevPosition >= 0 && position < prevPosition) return false;
+
+            prevRelOffset = relOffset;
+            prevPosition = position;
+        }
+        return true;
     }
 
     @Override
