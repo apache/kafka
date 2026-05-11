@@ -1846,7 +1846,6 @@ kafka.server.KafkaApisTest:
 - testHandleOffsetCommitRequest
 - testHandleOffsetCommitRequestFutureFailed
 - testHandleOffsetCommitRequestTopicsAndPartitionsValidation
-- testHandleOffsetCommitRequestTopicsAndPartitionsValidationWithTopicIds
 - testHandleOffsetFetchAllOffsetsWithSingleGroup
 - testHandleOffsetFetchAuthorization
 - testHandleOffsetFetchWithMultipleGroups
