@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
@@ -44,7 +45,8 @@ import java.util.Optional;
  *
  * <p>The file format is a series of entries. In legacy mode (default), each entry is a 4-byte "relative" offset and a 4-byte
  * physical file position (8 bytes total). In large mode (after MetadataVersion IBP_4_4_IV1), each entry is a 4-byte "relative"
- * offset and an 8-byte physical file position (12 bytes total), supporting segments larger than 2GB. The offset stored is relative to the base offset of the index file. So, for example,
+ * offset and an 8-byte physical file position (12 bytes total), supporting segments larger than 2GB.
+ * The offset stored is relative to the base offset of the index file. So, for example,
  * if the base offset was 50, then the offset 55 would be stored as 5. Using relative offsets in this way let's us use
  * only 4 bytes for the offset.
  *
@@ -121,7 +123,7 @@ public final class OffsetIndex extends AbstractIndex {
 
         // Ambiguous: file size is divisible by both 8 and 12.
         // Validate entries by reading the first few and checking if positions are reasonable.
-        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(file, "r")) {
+        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
             return detectEntryByValidation(raf, fileSize, requestedEntrySize);
         } catch (Exception e) {
             log.warn("Failed to auto-detect index format for {}, using requested entry size {}", file, requestedEntrySize, e);
@@ -133,8 +135,8 @@ public final class OffsetIndex extends AbstractIndex {
      * For ambiguous files (size divisible by both 8 and 12), validate entries with each format
      * and return the one that produces valid data.
      */
-    private static int detectEntryByValidation(java.io.RandomAccessFile raf, long fileSize, int requestedEntrySize) throws java.io.IOException {
-        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate((int) Math.min(fileSize, 120)); // read up to 10 large entries
+    private static int detectEntryByValidation(RandomAccessFile raf, long fileSize, int requestedEntrySize) throws IOException {
+        ByteBuffer buf = ByteBuffer.allocate((int) Math.min(fileSize, 120)); // read up to 10 large entries
         raf.getChannel().read(buf, 0);
         buf.flip();
 
@@ -145,7 +147,12 @@ public final class OffsetIndex extends AbstractIndex {
         if (largeValid && !legacyValid) return LARGE_ENTRY_SIZE;
         if (legacyValid && !largeValid) return LEGACY_ENTRY_SIZE;
 
-        // Both valid or both invalid -- use requested format
+        // Both valid or both invalid -- use requested format.
+        // This can happen when the file has very few entries whose byte patterns are
+        // valid under both interpretations. Log a warning so operators have visibility.
+        log.warn("Ambiguous index format detection for file size {}: both legacy and large formats " +
+            "appear valid (largeValid={}, legacyValid={}). Using requested entry size {}.",
+            fileSize, largeValid, legacyValid, requestedEntrySize);
         return requestedEntrySize;
     }
 
@@ -154,7 +161,7 @@ public final class OffsetIndex extends AbstractIndex {
      * - Relative offsets should be non-negative and non-decreasing
      * - Positions should be non-negative and non-decreasing
      */
-    private static boolean validateEntries(java.nio.ByteBuffer buf, int entrySize) {
+    private static boolean validateEntries(ByteBuffer buf, int entrySize) {
         int numEntries = buf.limit() / entrySize;
         if (numEntries == 0) return true;
 

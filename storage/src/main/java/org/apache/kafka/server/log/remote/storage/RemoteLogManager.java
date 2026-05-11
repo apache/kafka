@@ -1037,8 +1037,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             boolean isTxnIdxEmpty = segment.txnIndex().isEmpty();
             long actualSegmentSize = segment.log().sizeInBytesLong();
-            // TODO: RemoteLogSegmentMetadata.segmentSizeInBytes is int (schema uses int32).
+            // RemoteLogSegmentMetadata.segmentSizeInBytes is int (schema uses int32).
             // Segments >2GB will have truncated size in metadata until the schema is evolved.
+            if (actualSegmentSize > Integer.MAX_VALUE) {
+                logger.warn("Segment {} has size {} bytes which exceeds Integer.MAX_VALUE. " +
+                    "The segment size in RemoteLogSegmentMetadata will be clamped to Integer.MAX_VALUE " +
+                    "until the metadata schema is evolved to support long sizes.",
+                    segment, actualSegmentSize);
+            }
             int segmentSizeForMetadata = (int) Math.min(actualSegmentSize, Integer.MAX_VALUE);
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(segmentId, segment.baseOffset(), endOffset,
                     segment.largestTimestamp(), brokerId, time.milliseconds(), segmentSizeForMetadata,
