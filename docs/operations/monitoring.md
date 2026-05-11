@@ -5081,7 +5081,7 @@ kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),pr
 
 ### State Store Metrics
 
-All the following metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level `trace` and `num-open-iterators` which has recording level `info`. Note that the `store-scope` value is specified in `StoreSupplier#metricsScope()` for user's customized state stores; for built-in state stores, currently we have: 
+All the following metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level `trace` and `num-open-iterators` and `num-keys` which have recording level `info`. Note that the `store-scope` value is specified in `StoreSupplier#metricsScope()` for user's customized state stores; for built-in state stores, currently we have: 
 
   * `in-memory-state`
   * `in-memory-lru-state`
@@ -5634,6 +5634,19 @@ num-open-iterators
 <td>
 
 The current number of iterators on the store that have been created, but not yet closed.
+</td>  
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>  
+<tr>  
+<td>
+
+num-keys
+</td>  
+<td>
+
+The current number of keys in the in-memory state store. Only reported for in-memory state stores; not available for RocksDB-backed stores.
 </td>  
 <td>
 
