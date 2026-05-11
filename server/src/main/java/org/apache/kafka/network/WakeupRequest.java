@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.network;
 
-public final class WakeupRequest implements BaseRequest {
-    public static final WakeupRequest INSTANCE = new WakeupRequest();
-
-    private WakeupRequest() {}
+public enum WakeupRequest implements BaseRequest {
+    INSTANCE;
 
     @Override
     public String toString() {

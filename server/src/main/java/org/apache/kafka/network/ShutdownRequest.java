@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.network;
 
-public final class ShutdownRequest implements BaseRequest {
-    public static final ShutdownRequest INSTANCE = new ShutdownRequest();
-
-    private ShutdownRequest() {}
+public enum ShutdownRequest implements BaseRequest {
+    INSTANCE;
 
     @Override
     public String toString() {

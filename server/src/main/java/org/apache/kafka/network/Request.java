@@ -49,7 +49,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
+import java.util.function.LongConsumer;
 
 public final class Request implements BaseRequest {
     private static final Logger LOG = LoggerFactory.getLogger(Request.class);
@@ -79,7 +79,7 @@ public final class Request implements BaseRequest {
 
     private volatile OptionalLong callbackRequestDequeueTimeNanos = OptionalLong.empty();
     private volatile OptionalLong callbackRequestCompleteTimeNanos = OptionalLong.empty();
-    private volatile Optional<Consumer<Long>> recordNetworkThreadTimeCallback = Optional.empty();
+    private volatile LongConsumer recordNetworkThreadTimeCallback = __ -> { };
 
     private static boolean isRequestLoggingEnabled(RequestHeader header) {
         return REQUEST_LOGGER.isDebugEnabled()
@@ -318,8 +318,7 @@ public final class Request implements BaseRequest {
      * to the nearest long.
      */
     private static double nanosToMs(long nanos) {
-        long positiveNanos = Math.max(nanos, 0);
-        return (double) TimeUnit.NANOSECONDS.toMicros(positiveNanos) / TimeUnit.MILLISECONDS.toMicros(1);
+        return (double) TimeUnit.NANOSECONDS.toMicros(nanos) / 1000;
     }
 
     public void updateRequestMetrics(long networkThreadTimeNanos, Optional<JsonNode> responseLog) {
@@ -374,7 +373,7 @@ public final class Request implements BaseRequest {
         // The time recorded here is the time spent on the network thread for receiving this request
         // and sending the response. Note that for the first request on a connection, the time includes
         // the total time spent on authentication, which may be significant for SASL/SSL.
-        recordNetworkThreadTimeCallback.ifPresent(longConsumer -> longConsumer.accept(networkThreadTimeNanos));
+        recordNetworkThreadTimeCallback.accept(networkThreadTimeNanos);
 
         if (isRequestLoggingEnabled(header())) {
             JsonNode desc = RequestConvertToJson.requestDescMetrics(header(), requestLog(), responseLog,
@@ -403,8 +402,8 @@ public final class Request implements BaseRequest {
         }
     }
 
-    public void setRecordNetworkThreadTimeCallback(Consumer<Long> callback) {
-        this.recordNetworkThreadTimeCallback = Optional.of(callback);
+    public void setRecordNetworkThreadTimeCallback(LongConsumer callback) {
+        this.recordNetworkThreadTimeCallback = callback;
     }
 
     @Override

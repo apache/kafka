@@ -18,37 +18,9 @@ package org.apache.kafka.network;
 
 import org.apache.kafka.server.common.RequestLocal;
 
-import java.util.Objects;
 import java.util.function.Consumer;
 
-public final class CallbackRequest implements BaseRequest {
-    private final Consumer<RequestLocal> fun;
-    private final Request originalRequest;
-
-    public CallbackRequest(Consumer<RequestLocal> fun, Request originalRequest) {
-        this.fun = fun;
-        this.originalRequest = originalRequest;
-    }
-
-    public Consumer<RequestLocal> fun() {
-        return fun;
-    }
-
-    public Request originalRequest() {
-        return originalRequest;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof CallbackRequest that)) return false;
-        return Objects.equals(fun, that.fun) && Objects.equals(originalRequest, that.originalRequest);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(fun, originalRequest);
-    }
+public record CallbackRequest(Consumer<RequestLocal> fun, Request originalRequest) implements BaseRequest {
 
     @Override
     public String toString() {
