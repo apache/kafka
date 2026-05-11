@@ -139,7 +139,7 @@ public class ShareGroupDLQStateManager {
 
             if (topicNameOpt.isEmpty()) {
                 return Optional.of(new ConfigException("Configured DLQ topic name in share group " + param.groupId() + " is empty."));
-            } else if (topicNameOpt.get().indexOf("__") == 0) {
+            } else if (!topicNameOpt.get().startsWith("__")) {
                 return Optional.of(new ConfigException("Configured DLQ topic name in share group " + param.groupId() + " is invalid: " + topicNameOpt.get()));
             }
 
@@ -150,7 +150,7 @@ public class ShareGroupDLQStateManager {
             }
 
             return topicPrefix.map(prefix -> {
-                if (!prefix.isEmpty() && topicName.indexOf(prefix) != 0) {
+                if (!prefix.isEmpty() && !topicName.startsWith(prefix)) {
                     return new ConfigException("Configured DLQ topic name does not comply with the dlq prefix in share group " +
                         param.groupId() + ", topic: " + topicName + ",prefix: " + prefix);
                 }
@@ -217,20 +217,27 @@ public class ShareGroupDLQStateManager {
             if (!queue.isEmpty()) {
                 ShareGroupDLQStateManager.ShareGroupDLQStateManagerHandler handler = queue.poll();
                 if (!handler.dlqTopicExists()) {
-                    Node randomNode = randomNode();
-                    if (randomNode == Node.noNode()) {
-                        log.error("Unable to find node to use for coordinator lookup.");
-                        // fatal failure, cannot retry or progress
-                        // fail the RPC
-                        handler.createTopicErrorResponse(Errors.BROKER_NOT_AVAILABLE.exception());
+                    if (cacheHelper.isDlqAutoTopicCreateEnabled()) {
+                        // We need to send RPC to create the topic
+                        Node randomNode = randomNode();
+                        if (randomNode == Node.noNode()) {
+                            log.error("Unable to find node to use for coordinator lookup.");
+                            // fatal failure, cannot retry or progress
+                            // fail the RPC
+                            handler.createTopicErrorResponse(Errors.BROKER_NOT_AVAILABLE.exception());
+                            return List.of();
+                        }
+                        return List.of(new RequestAndCompletionHandler(
+                            time.milliseconds(),
+                            randomNode,
+                            handler.createTopicBuilder(),
+                            handler
+                        ));
+                    } else {
+                        log.error("DLQ topic for share group {} does not exist and auto create is disabled.", handler.recordParam().groupId());
+                        handler.createTopicErrorResponse(Errors.INVALID_CONFIG.exception());
                         return List.of();
                     }
-                    return List.of(new RequestAndCompletionHandler(
-                        time.milliseconds(),
-                        randomNode,
-                        handler.createTopicBuilder(),
-                        handler
-                    ));
                 }
             }
             return List.of();
