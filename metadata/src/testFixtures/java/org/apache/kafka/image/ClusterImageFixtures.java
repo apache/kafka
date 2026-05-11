@@ -39,12 +39,11 @@ import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.BROKER_REGISTRATION_CHANGE_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.FENCE_BROKER_RECORD;
@@ -52,176 +51,182 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.REGISTER_BROKE
 import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER_RECORD;
 
 public final class ClusterImageFixtures {
-    public static final ClusterImage IMAGE1;
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
-    public static final ClusterDelta DELTA1;
-    public static final ClusterImage IMAGE2;
-    public static final List<ApiMessageAndVersion> DELTA2_RECORDS;
-    public static final ClusterDelta DELTA2;
-    public static final ClusterImage IMAGE3;
 
-    static {
-        Map<Integer, BrokerRegistration> map1 = new HashMap<>();
-        map1.put(0, new BrokerRegistration.Builder().
-            setId(0).
-            setEpoch(1000).
-            setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-            setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
-            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
-            setRack(Optional.empty()).
-            setFenced(true).
-            setInControlledShutdown(false).build());
-        map1.put(1, new BrokerRegistration.Builder().
-            setId(1).
-            setEpoch(1001).
-            setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
-            setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
-            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
-            setRack(Optional.empty()).
-            setFenced(false).
-            setInControlledShutdown(false).build());
-        map1.put(2, new BrokerRegistration.Builder().
-            setId(2).
-            setEpoch(123).
-            setIncarnationId(Uuid.fromString("hr4TVh3YQiu3p16Awkka6w")).
-            setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
-            setSupportedFeatures(Map.of()).
-            setRack(Optional.of("arack")).
-            setFenced(false).
-            setInControlledShutdown(false).build());
-        Map<Integer, ControllerRegistration> cmap1 = new HashMap<>();
-        cmap1.put(1000, new ControllerRegistration.Builder().
-            setId(1000).
-            setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).
-            setZkMigrationReady(false).
-            setListeners(Map.of("PLAINTEXT",
+    public static final ClusterImage IMAGE1 = new ClusterImage(
+        Map.of(
+            0, new BrokerRegistration.Builder().
+                setId(0).
+                setEpoch(1000).
+                setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+                setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
+                setRack(Optional.empty()).
+                setFenced(true).
+                setInControlledShutdown(false).build(),
+            1, new BrokerRegistration.Builder().
+                setId(1).
+                setEpoch(1001).
+                setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+                setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
+                setRack(Optional.empty()).
+                setFenced(false).
+                setInControlledShutdown(false).build(),
+            2, new BrokerRegistration.Builder().
+                setId(2).
+                setEpoch(123).
+                setIncarnationId(Uuid.fromString("hr4TVh3YQiu3p16Awkka6w")).
+                setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
+                setSupportedFeatures(Map.of()).
+                setRack(Optional.of("arack")).
+                setFenced(false).
+                setInControlledShutdown(false).build()
+        ),
+        Map.of(
+            1000, new ControllerRegistration.Builder().
+                setId(1000).
+                setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).
+                setZkMigrationReady(false).
+                setListeners(Map.of("PLAINTEXT",
                     new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
-            setSupportedFeatures(Map.of()).build());
-        IMAGE1 = new ClusterImage(map1, cmap1);
+                setSupportedFeatures(Map.of()).build()
+        )
+    );
 
-        DELTA1_RECORDS = new ArrayList<>();
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = List.of(
         // unfence b0
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
-            setId(0).setEpoch(1000), UNFENCE_BROKER_RECORD.highestSupportedVersion()));
+        new ApiMessageAndVersion(new UnfenceBrokerRecord().
+            setId(0).setEpoch(1000), UNFENCE_BROKER_RECORD.highestSupportedVersion()),
         // fence b1
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new FenceBrokerRecord().
-            setId(1).setEpoch(1001), FENCE_BROKER_RECORD.highestSupportedVersion()));
+        new ApiMessageAndVersion(new FenceBrokerRecord().
+            setId(1).setEpoch(1001), FENCE_BROKER_RECORD.highestSupportedVersion()),
         // mark b0 in controlled shutdown
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+        new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
             setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
                 BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()),
-            BROKER_REGISTRATION_CHANGE_RECORD.highestSupportedVersion()));
+            BROKER_REGISTRATION_CHANGE_RECORD.highestSupportedVersion()),
         // unregister b2
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
+        new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(2).setBrokerEpoch(123),
-            (short) 0));
-
-        ControllerEndpointCollection endpointsFor1001 = new ControllerEndpointCollection();
-        endpointsFor1001.add(new ControllerEndpoint().
-            setHost("localhost").
-            setName("PLAINTEXT").
-            setPort(19093).
-            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RegisterControllerRecord().
+            (short) 0),
+        new ApiMessageAndVersion(new RegisterControllerRecord().
             setControllerId(1001).
             setIncarnationId(Uuid.fromString("FdEHF-IqScKfYyjZ1CjfNQ")).
             setZkMigrationReady(true).
-            setEndPoints(endpointsFor1001),
-            (short) 0));
+            setEndPoints(new ControllerEndpointCollection(List.of(new ControllerEndpoint().
+                setHost("localhost").
+                setName("PLAINTEXT").
+                setPort(19093).
+                setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())),
+            (short) 0)
+    );
 
-        DELTA1 = new ClusterDelta(IMAGE1);
-        RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
+    public static final ClusterDelta DELTA1 = RecordTestUtils.replayAll(
+        new ClusterDelta(IMAGE1),
+        DELTA1_RECORDS
+    );
 
-        Map<Integer, BrokerRegistration> map2 = new HashMap<>();
-        map2.put(0, new BrokerRegistration.Builder().
-            setId(0).
-            setEpoch(1000).
-            setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-            setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
-            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
-            setRack(Optional.empty()).
-            setFenced(false).
-            setInControlledShutdown(true).build());
-        map2.put(1, new BrokerRegistration.Builder().
-            setId(1).
-            setEpoch(1001).
-            setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
-            setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
-            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
-            setRack(Optional.empty()).
-            setFenced(true).
-            setInControlledShutdown(false).build());
-        Map<Integer, ControllerRegistration> cmap2 = new HashMap<>(cmap1);
-        cmap2.put(1001, new ControllerRegistration.Builder().
-            setId(1001).
-            setIncarnationId(Uuid.fromString("FdEHF-IqScKfYyjZ1CjfNQ")).
-            setZkMigrationReady(true).
-            setListeners(Map.of("PLAINTEXT",
-                new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19093))).
-            setSupportedFeatures(Map.of()).build());
-        IMAGE2 = new ClusterImage(map2, cmap2);
+    public static final ClusterImage IMAGE2 = new ClusterImage(
+        Map.of(
+            0, new BrokerRegistration.Builder().
+                setId(0).
+                setEpoch(1000).
+                setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+                setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
+                setRack(Optional.empty()).
+                setFenced(false).
+                setInControlledShutdown(true).build(),
+            1, new BrokerRegistration.Builder().
+                setId(1).
+                setEpoch(1001).
+                setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+                setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
+                setRack(Optional.empty()).
+                setFenced(true).
+                setInControlledShutdown(false).build()
+        ),
+        Map.of(
+            1000, IMAGE1.controllers().get(1000),
+            1001, new ControllerRegistration.Builder().
+                setId(1001).
+                setIncarnationId(Uuid.fromString("FdEHF-IqScKfYyjZ1CjfNQ")).
+                setZkMigrationReady(true).
+                setListeners(Map.of("PLAINTEXT",
+                    new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19093))).
+                setSupportedFeatures(Map.of()).build()
+        )
+    );
 
-        DELTA2_RECORDS = new ArrayList<>(DELTA1_RECORDS);
-        // fence b0
-        DELTA2_RECORDS.add(new ApiMessageAndVersion(new FenceBrokerRecord().
-            setId(0).setEpoch(1000), FENCE_BROKER_RECORD.highestSupportedVersion()));
-        // unfence b1
-        DELTA2_RECORDS.add(new ApiMessageAndVersion(new UnfenceBrokerRecord().
-            setId(1).setEpoch(1001), UNFENCE_BROKER_RECORD.highestSupportedVersion()));
-        // mark b0 as not in controlled shutdown
-        DELTA2_RECORDS.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
-            setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
-                BrokerRegistrationInControlledShutdownChange.NONE.value()),
-            BROKER_REGISTRATION_CHANGE_RECORD.highestSupportedVersion()));
-        // re-register b2
-        DELTA2_RECORDS.add(new ApiMessageAndVersion(new RegisterBrokerRecord().
-            setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
-            setBrokerEpoch(1002).setEndPoints(new BrokerEndpointCollection(
-                List.of(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                    setPort(9094).setSecurityProtocol((short) 0)))).
-            setFeatures(new BrokerFeatureCollection(
-                Set.of(new BrokerFeature().
-                    setName(MetadataVersion.FEATURE_NAME).
-                    setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                    setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV0.featureLevel())))).
-            setRack("rack3"),
-            REGISTER_BROKER_RECORD.highestSupportedVersion()));
+    public static final List<ApiMessageAndVersion> DELTA2_RECORDS = Stream.concat(
+        DELTA1_RECORDS.stream(),
+        Stream.of(
+            // fence b0
+            new ApiMessageAndVersion(new FenceBrokerRecord().
+                setId(0).setEpoch(1000), FENCE_BROKER_RECORD.highestSupportedVersion()),
+            // unfence b1
+            new ApiMessageAndVersion(new UnfenceBrokerRecord().
+                setId(1).setEpoch(1001), UNFENCE_BROKER_RECORD.highestSupportedVersion()),
+            // mark b0 as not in controlled shutdown
+            new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
+                    BrokerRegistrationInControlledShutdownChange.NONE.value()),
+                BROKER_REGISTRATION_CHANGE_RECORD.highestSupportedVersion()),
+            // re-register b2
+            new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
+                setBrokerEpoch(1002).setEndPoints(new BrokerEndpointCollection(
+                    List.of(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9094).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(new BrokerFeatureCollection(
+                    Set.of(new BrokerFeature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
+                        setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV0.featureLevel())).iterator())).
+                setRack("rack3"),
+                REGISTER_BROKER_RECORD.highestSupportedVersion())
+        )
+    ).toList();
 
-        DELTA2 = new ClusterDelta(IMAGE2);
-        RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
+    public static final ClusterDelta DELTA2 = RecordTestUtils.replayAll(
+        new ClusterDelta(IMAGE2),
+        DELTA2_RECORDS
+    );
 
-        Map<Integer, BrokerRegistration> map3 = new HashMap<>();
-        map3.put(0, new BrokerRegistration.Builder().
-            setId(0).
-            setEpoch(1000).
-            setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-            setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
-            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
-            setRack(Optional.empty()).
-            setFenced(true).
-            setInControlledShutdown(true).build());
-        map3.put(1, new BrokerRegistration.Builder().
-            setId(1).
-            setEpoch(1001).
-            setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
-            setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
-            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
-            setRack(Optional.empty()).
-            setFenced(false).
-            setInControlledShutdown(false).build());
-        map3.put(2, new BrokerRegistration.Builder().
-            setId(2).
-            setEpoch(1002).
-            setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
-            setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
-            setSupportedFeatures(Map.of("metadata.version",
-                VersionRange.of(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel()))).
-            setRack(Optional.of("rack3")).
-            setFenced(true).
-            setIsMigratingZkBroker(true).build());
-
-        IMAGE3 = new ClusterImage(map3, cmap2);
-    }
+    public static final ClusterImage IMAGE3 = new ClusterImage(
+        Map.of(
+            0, new BrokerRegistration.Builder().
+                setId(0).
+                setEpoch(1000).
+                setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+                setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
+                setRack(Optional.empty()).
+                setFenced(true).
+                setInControlledShutdown(true).build(),
+            1, new BrokerRegistration.Builder().
+                setId(1).
+                setEpoch(1001).
+                setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+                setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 3))).
+                setRack(Optional.empty()).
+                setFenced(false).
+                setInControlledShutdown(false).build(),
+            2, new BrokerRegistration.Builder().
+                setId(2).
+                setEpoch(1002).
+                setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
+                setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
+                setSupportedFeatures(Map.of("metadata.version",
+                    VersionRange.of(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel()))).
+                setRack(Optional.of("rack3")).
+                setFenced(true).
+                setIsMigratingZkBroker(true).build()
+        ),
+        IMAGE2.controllers()
+    );
 
     private ClusterImageFixtures() {
     }
