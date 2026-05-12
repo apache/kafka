@@ -308,7 +308,7 @@ You can query timestamped state stores both with and without a timestamp.
 
 You can materialize Kafka [record headers](https://kafka.apache.org/documentation/#recordheaders) into RocksDB-backed state together with keys and values. Plain persistent key-value stores keep values without an embedded record timestamp; suppliers for timestamped key-value, windowed, or session semantics expose timestamps according to each store type. Use this when downstream processing needs access to record headers from prior input — for example, when an aggregation or join implemented with the Processor API must propagate headers to its output.
 
-Only persistent, RocksDB-backed suppliers exist for header-aware stores (the `Stores` factory names start with `persistent` and end with `WithHeaders`). There are no in-memory suppliers whose names end with `WithHeaders`.
+Only persistent, RocksDB-backed suppliers exist for header-aware stores (the `Stores` factory names start with `persistent` and end with `WithHeaders`). 
 
 Use [`Stores`](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html) methods whose names end with `WithHeaders`, each with its matching `StoreBuilder` factory. For example, pair `persistentTimestampedKeyValueStoreWithHeaders` with `timestampedKeyValueStoreBuilderWithHeaders`, `persistentTimestampedWindowStoreWithHeaders` with `timestampedWindowStoreWithHeadersBuilder`, and `persistentSessionStoreWithHeaders` with `sessionStoreBuilderWithHeaders`.
 
