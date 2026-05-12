@@ -2,6 +2,12 @@ org.apache.kafka.coordinator.group.GroupConfigManagerTest:
 - testClampWithCustomBrokerBounds
 - testGetNonExistentGroupConfig
 - testGroupIsRemovedWhenDynamicConfigsAreRemoved
+- testIsDlqAutoTopicCreateEnabledDefault
+- testIsDlqAutoTopicCreateEnabledFalse
+- testIsDlqAutoTopicCreateEnabledTrue
+- testShareGroupDlqTopicPrefixCustom
+- testShareGroupDlqTopicPrefixDefault
+- testShareGroupDlqTopicPrefixEmpty
 - testUpdateConfigWithInvalidGroupId
 - testUpdateConfigWithNullGroupId
 - testUpdateGroupConfig
