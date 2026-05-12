@@ -237,6 +237,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
@@ -272,7 +273,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
-import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
@@ -2841,33 +2842,24 @@ public class RequestResponseTest {
         offsets.put(new TopicPartition("topic", 74),
                 new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
 
-        if (version < 3) {
-            return new TxnOffsetCommitRequest.Builder("transactionalId",
-                "groupId",
-                21L,
-                (short) 42,
-                offsets,
-                false).build();
-        } else if (version < 5) {
-            return new TxnOffsetCommitRequest.Builder("transactionalId",
-                "groupId",
-                21L,
-                (short) 42,
-                offsets,
-                "member",
-                2,
-                Optional.of("instance"),
-                false).build(version);
+        Map<String, Uuid> topicIds = Map.of("topic", Uuid.randomUuid());
+        TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
+            .setTransactionalId("transactionalId")
+            .setGroupId("groupId")
+            .setProducerId(21L)
+            .setProducerEpoch((short) 42)
+            .setTopics(TxnOffsetCommitRequest.getTopics(offsets, topicIds));
+
+        if (version >= 3) {
+            data.setMemberId("member")
+                .setGenerationIdOrMemberEpoch(2)
+                .setGroupInstanceId("instance");
+        }
+
+        if (version >= 6) {
+            return TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build(version);
         } else {
-            return new TxnOffsetCommitRequest.Builder("transactionalId",
-                "groupId",
-                21L,
-                (short) 42,
-                offsets,
-                "member",
-                2,
-                Optional.of("instance"),
-                true).build(version);
+            return TxnOffsetCommitRequest.Builder.forTopicNames(data, version >= 5).build(version);
         }
     }
 
@@ -2878,15 +2870,16 @@ public class RequestResponseTest {
         offsets.put(new TopicPartition("topic", 74),
             new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
 
-        return new TxnOffsetCommitRequest.Builder("transactionalId",
-            "groupId",
-            21L,
-            (short) 42,
-            offsets,
-            "member",
-            2,
-            Optional.of("instance"),
-            false).build();
+        TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
+            .setTransactionalId("transactionalId")
+            .setGroupId("groupId")
+            .setProducerId(21L)
+            .setProducerEpoch((short) 42)
+            .setMemberId("member")
+            .setGenerationIdOrMemberEpoch(2)
+            .setGroupInstanceId("instance")
+            .setTopics(TxnOffsetCommitRequest.getTopics(offsets));
+        return TxnOffsetCommitRequest.Builder.forTopicNames(data, false).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {

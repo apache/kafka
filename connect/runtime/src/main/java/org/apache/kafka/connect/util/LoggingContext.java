@@ -37,7 +37,7 @@ import java.util.Set;
  * LoggingContext was created. Use {@link #clear()} to remove all MDC parameters from the
  * current thread context.
  *
- * <p>Compare this approach to {@link org.apache.kafka.common.utils.LogContext}, which must be
+ * <p>Compare this approach to {@link org.apache.kafka.common.utils.internals.LogContext}, which must be
  * used to create a new {@link org.slf4j.Logger} instance pre-configured with the desired prefix.
  * Currently, LogContext does not allow the prefix to be changed, and it requires that all
  * components use the LogContext to create their Logger instance.

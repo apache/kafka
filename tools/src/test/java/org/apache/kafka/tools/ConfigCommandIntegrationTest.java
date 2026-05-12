@@ -316,7 +316,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.session.timeout.ms=1"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be greater than or equal to group.streams.min.session.timeout.ms"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."));
 
         // Should fail to set above max
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -324,7 +324,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.session.timeout.ms=100000"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be less than or equal to group.streams.max.session.timeout.ms"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."));
     }
 
     @ClusterTest(serverProperties = {
@@ -347,7 +347,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.heartbeat.interval.ms=1"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be greater than or equal to group.streams.min.heartbeat.interval.ms"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be in the range 5000 to 55000 inclusive."));
 
         // Should fail to set above max
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -355,7 +355,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.heartbeat.interval.ms=100000"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be less than or equal to group.streams.max.heartbeat.interval.ms"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be in the range 5000 to 55000 inclusive."));
 
         // Should fail to set above session timeout
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -398,7 +398,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.num.standby.replicas=3"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("streams.num.standby.replicas must be less than or equal to group.streams.max.standby.replicas"));
+        assertTrue(message.contains("streams.num.standby.replicas must be less than or equal to 2"));
     }
 
     @ClusterTest
@@ -432,8 +432,42 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.task.offset.interval.ms=1"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("streams.task.offset.interval.ms must be greater than or equal to group.streams.min.task.offset.interval.ms"));
+        assertTrue(message.contains("streams.task.offset.interval.ms must be greater than or equal to 15000"));
 
+    }
+
+    @ClusterTest
+    public void testAlterStreamsGroupNumWarmupReplicas() {
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.num.warmup.replicas=2"));
+
+        // Alter num warmup replicas
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.num.warmup.replicas=5"));
+        message = captureStandardOut(run(command));
+        assertEquals("Completed updating config for group group.", message);
+
+        // Verify the updated config
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.num.warmup.replicas=5"));
+
+        // Should fail to set above max
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.num.warmup.replicas=25"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("streams.num.warmup.replicas must be less than or equal to 20"));
     }
 
     private void verifyGroupConfigUpdate(List<String> alterOpts) throws Exception {
@@ -641,6 +675,49 @@ public class ConfigCommandIntegrationTest {
                 List.of("--bootstrap-server", cluster.bootstrapServers(),
                     "--entity-type", "brokers", "--entity-default",
                     "--alter", "--delete-config", "non.existent.config"))));
+        }
+    }
+
+    @ClusterTest
+    public void testDeleteNonExistentConfigIsIdempotentWithBootstrapController() throws Exception {
+        String topicName = "test-delete-nonexistent-topic";
+        try (Admin bootstrapControllerClient = cluster.admin(Map.of(), true);
+             Admin bootstrapServerClient = cluster.admin(Map.of())) {
+            bootstrapServerClient.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "topics", "--entity-name", topicName,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-name", defaultBrokerId,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-default",
+                    "--alter", "--delete-config", "non.existent.config"))));
+        }
+    }
+
+    @ClusterTest(brokers = 2)
+    public void testAlterBrokerConfigWithOfflineBroker() throws Exception {
+        int offlineBrokerId = cluster.brokerIds().stream()
+            .filter(id -> !cluster.controllerIds().contains(id))
+            .findFirst()
+            .orElseThrow();
+        cluster.shutdownBroker(offlineBrokerId);
+        TestUtils.waitForCondition(
+            () -> !cluster.aliveBrokers().containsKey(offlineBrokerId),
+            "Broker " + offlineBrokerId + " did not shut down in time"
+        );
+
+        try (Admin client = cluster.admin(Map.of(), true)) {
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-name", String.valueOf(offlineBrokerId),
+                    "--alter", "--delete-config", "log.retention.ms"))));
         }
     }
 
