@@ -135,7 +135,7 @@ Every application instance can directly query any of its local state stores.
 
 The _name_ of a state store is defined when you create the store. You can create the store explicitly by using the Processor API or implicitly by using stateful operations in the DSL.
 
-The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in implementation from [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) as the second argument to `KafkaStreams#store(...)`. The helpers below are those implementations:
+The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in implementation from [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) as the second argument to `KafkaStreams#store(...)`. The available built-in helpers are:
 
   * **`QueryableStoreTypes#keyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
   * **`QueryableStoreTypes#timestampedKeyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
