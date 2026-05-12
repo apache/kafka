@@ -557,7 +557,6 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxSize;
     private final int streamsGroupNumStandbyReplicas;
     private final int streamsGroupMaxStandbyReplicas;
-    private final List<String> streamsGroupRackAwareAssignmentTags;
     private final int streamsGroupInitialRebalanceDelayMs;
     private final int streamsGroupMinAssignmentIntervalMs;
     private final int streamsGroupMaxAssignmentIntervalMs;
@@ -565,6 +564,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMinTaskOffsetIntervalMs;
     private final int streamsGroupNumWarmupReplicas;
     private final int streamsGroupMaxWarmupReplicas;
+    private final List<String> streamsGroupRackAwareAssignmentTags;
 
     private final AbstractConfig config;
 
