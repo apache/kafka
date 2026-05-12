@@ -45,7 +45,7 @@ import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNul
 class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, VOut>
     extends ContextualProcessor<StreamKey, StreamValue, StreamKey, VOut> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoinProcessor.class);
 
     private final KTableValueGetter<TableKey, TableValue> valueGetter;
     private final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> keyMapper;

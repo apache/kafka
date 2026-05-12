@@ -40,7 +40,8 @@ import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, ClientI
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, SocketServer => JSocketServer, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.security.CredentialProvider
@@ -1387,6 +1388,16 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   // Visible for testing
   def connectionRateForIp(ip: InetAddress): Int = {
     connectionRatePerIp.getOrDefault(ip, defaultConnectionRatePerIp)
+  }
+
+  // Visible for testing
+  private[network] def maxConnectionsPerIpForIp(ip: InetAddress): Int = {
+    maxConnectionsPerIpOverrides.getOrElse(ip, defaultMaxConnectionsPerIp)
+  }
+  
+  // Visible for testing
+  private[network] def maxConnectionsPerIpOverrideForIp(ip: InetAddress): Option[Int] = {
+    maxConnectionsPerIpOverrides.get(ip)
   }
 
   private[network] def addListener(config: KafkaConfig, listenerName: ListenerName): Unit = {

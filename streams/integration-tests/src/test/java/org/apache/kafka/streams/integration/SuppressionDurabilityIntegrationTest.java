@@ -158,7 +158,7 @@ public class SuppressionDurabilityIntegrationTest {
         try {
             // start by putting some stuff in the buffer
             // note, we send all input records to partition 0
-            // to make sure that supppress doesn't erroneously send records to other partitions.
+            // to make sure that suppress doesn't erroneously send records to other partitions.
             produceSynchronouslyToPartitionZero(
                 input,
                 asList(

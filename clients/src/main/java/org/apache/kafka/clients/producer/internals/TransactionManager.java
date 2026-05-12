@@ -70,8 +70,8 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -1255,7 +1255,7 @@ public class TransactionManager {
             .setProducerId(producerIdAndEpoch.producerId)
             .setProducerEpoch(producerIdAndEpoch.epoch)
             .setMemberId(groupMetadata.memberId())
-            .setGenerationId(groupMetadata.generationId())
+            .setGenerationIdOrMemberEpoch(groupMetadata.generationId())
             .setGroupInstanceId(groupMetadata.groupInstanceId().orElse(null))
             .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits));
         final TxnOffsetCommitRequest.Builder builder =
@@ -1940,7 +1940,13 @@ public class TransactionManager {
                     abortableError(error.exception());
                     break;
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
-                        || error == Errors.ILLEGAL_GENERATION) {
+                        || error == Errors.ILLEGAL_GENERATION
+                        || error == Errors.GROUP_ID_NOT_FOUND
+                        || error == Errors.STALE_MEMBER_EPOCH) {
+                    // GROUP_ID_NOT_FOUND and STALE_MEMBER_EPOCH are returned by
+                    // TxnOffsetCommit v6+. Older versions map them to
+                    // ILLEGAL_GENERATION. All four indicate a consumer group
+                    // metadata mismatch and must abort the transaction.
                     abortableError(new CommitFailedException("Transaction offset Commit failed " +
                         "due to consumer group metadata mismatch: " + error.exception().getMessage()));
                     break;

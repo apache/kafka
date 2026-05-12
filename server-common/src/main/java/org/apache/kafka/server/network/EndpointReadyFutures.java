@@ -19,7 +19,7 @@ package org.apache.kafka.server.network;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.internals.Plugin;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
 

@@ -20,7 +20,7 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
-import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 
 import java.util.ArrayList;
 import java.util.List;
