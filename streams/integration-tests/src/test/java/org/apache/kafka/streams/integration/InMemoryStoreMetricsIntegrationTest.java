@@ -29,8 +29,15 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemorySessionStore;
+import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 
 import org.junit.jupiter.api.AfterEach;
@@ -70,13 +77,11 @@ public class InMemoryStoreMetricsIntegrationTest {
     }
 
     @Test
-    public void metricValueShouldNotThrowIfStoreIsNotInitialized() throws Exception {
+    public void keyValueStoreMetricValueShouldNotThrowIfStoreIsNotInitialized() throws Exception {
         final CountDownLatch initLatch = new CountDownLatch(1);
         final CountDownLatch finishLatch = new CountDownLatch(1);
 
-        final StreamsBuilder builder = new StreamsBuilder();
-        builder.addStateStore(
-            Stores.keyValueStoreBuilder(
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(
                 new KeyValueBytesStoreSupplier() {
                     @Override
                     public String name() {
@@ -107,8 +112,133 @@ public class InMemoryStoreMetricsIntegrationTest {
                 Serdes.String(),
                 Serdes.String())
             .withCachingEnabled()
-            .withLoggingEnabled(Collections.emptyMap()));
+            .withLoggingEnabled(Collections.emptyMap());
 
+        test(storeBuilder, initLatch, finishLatch);
+    }
+
+    @Test
+    public void sessionStoreMetricValueShouldNotThrowIfStoreIsNotInitialized() throws Exception {
+        final CountDownLatch initLatch = new CountDownLatch(1);
+        final CountDownLatch finishLatch = new CountDownLatch(1);
+
+        final long retentionMs = 60_000L;
+
+        final StoreBuilder<SessionStore<String, String>> storeBuilder = Stores.sessionStoreBuilder(
+                new SessionBytesStoreSupplier() {
+                    @Override
+                    public String name() {
+                        return "store";
+                    }
+
+                    @Override
+                    public SessionStore<Bytes, byte[]> get() {
+                        return new InMemorySessionStore(name(), retentionMs, metricsScope()) {
+                            @Override
+                            public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                                initLatch.countDown();
+                                try {
+                                    finishLatch.await();
+                                } catch (final InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                }
+                                super.init(stateStoreContext, root);
+                            }
+                        };
+                    }
+
+                    @Override
+                    public String metricsScope() {
+                        return "in-memory-session";
+                    }
+
+                    @Override
+                    public long segmentIntervalMs() {
+                        return 1L;
+                    }
+
+                    @Override
+                    public long retentionPeriod() {
+                        return retentionMs;
+                    }
+                },
+                Serdes.String(),
+                Serdes.String())
+            .withCachingEnabled()
+            .withLoggingEnabled(Collections.emptyMap());
+
+        test(storeBuilder, initLatch, finishLatch);
+    }
+
+    @Test
+    public void windowStoreMetricValueShouldNotThrowIfStoreIsNotInitialized() throws Exception {
+        final CountDownLatch initLatch = new CountDownLatch(1);
+        final CountDownLatch finishLatch = new CountDownLatch(1);
+
+        final long retentionMs = 60_000L;
+        final long windowMs = 1_000L;
+
+        final StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
+                new WindowBytesStoreSupplier() {
+                    @Override
+                    public String name() {
+                        return "store";
+                    }
+
+                    @Override
+                    public WindowStore<Bytes, byte[]> get() {
+                        return new InMemoryWindowStore(name(), retentionMs, windowMs, false, metricsScope()) {
+                            @Override
+                            public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+                                initLatch.countDown();
+                                try {
+                                    finishLatch.await();
+                                } catch (final InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                }
+                                super.init(stateStoreContext, root);
+                            }
+                        };
+                    }
+
+                    @Override
+                    public String metricsScope() {
+                        return "in-memory-window";
+                    }
+
+                    @Override
+                    public long segmentIntervalMs() {
+                        return 1L;
+                    }
+
+                    @Override
+                    public long windowSize() {
+                        return windowMs;
+                    }
+
+                    @Override
+                    public boolean retainDuplicates() {
+                        return false;
+                    }
+
+                    @Override
+                    public long retentionPeriod() {
+                        return retentionMs;
+                    }
+                },
+                Serdes.String(),
+                Serdes.String())
+            .withCachingEnabled()
+            .withLoggingEnabled(Collections.emptyMap());
+
+        test(storeBuilder, initLatch, finishLatch);
+    }
+
+    private void test(final StoreBuilder<?> storeBuilder,
+                      final CountDownLatch initLatch,
+                      final CountDownLatch finishLatch) throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.addStateStore(storeBuilder);
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
             .process(new MockApiProcessorSupplier<>(), "store");
 

@@ -183,20 +183,10 @@ public class MeteredKeyValueStore<K, V>
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                     (config, now) -> {
-                        final InMemoryKeyValueStore inMemoryStore = findInMemoryKeyValueStore(wrapped());
+                        final InMemoryKeyValueStore inMemoryStore = findInner(InMemoryKeyValueStore.class);
                         return inMemoryStore != null ? inMemoryStore.approximateNumEntries() : -1L;
                     }
             );
-        }
-    }
-
-    private static InMemoryKeyValueStore findInMemoryKeyValueStore(final StateStore store) {
-        if (store instanceof InMemoryKeyValueStore) {
-            return (InMemoryKeyValueStore) store;
-        } else if (store instanceof WrappedStateStore) {
-            return findInMemoryKeyValueStore(((WrappedStateStore<?, ?, ?>) store).wrapped());
-        } else {
-            return null;
         }
     }
 
