@@ -56,6 +56,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
      */
+    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
 
     /**
@@ -64,8 +65,9 @@ public interface Consumer<K, V> extends Closeable {
     void assign(Collection<TopicPartition> partitions);
 
     /**
-    * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
-    */
+     * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
+     */
+    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
 
     /**
@@ -76,6 +78,7 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#subscribe(SubscriptionPattern, ConsumerRebalanceListener)
      */
+    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback);
 
     /**
@@ -87,6 +90,11 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#unsubscribe()
      */
     void unsubscribe();
+
+    /**
+     * @see KafkaConsumer#setConsumerRebalanceListener(ConsumerRebalanceListener)
+     */
+    void setConsumerRebalanceListener(ConsumerRebalanceListener callback);
 
     /**
      * @see KafkaConsumer#poll(Duration)

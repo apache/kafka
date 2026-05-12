@@ -39,7 +39,6 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.internals.LogContext;
-
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -342,7 +341,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private void process(final TopicSubscriptionChangeEvent event) {
         if (requestManagers.consumerHeartbeatRequestManager.isPresent()) {
             try {
-                if (subscriptions.subscribe(event.topics(), event.listener())) {
+                if (subscriptions.subscribe(event.topics())) {
                     this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
                 }
                 // Join the group if not already part of it, or just send the new subscription to the broker on the next poll.
@@ -353,7 +352,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             }
         } else if (requestManagers.streamsGroupHeartbeatRequestManager.isPresent()) {
             try {
-                if (subscriptions.subscribe(event.topics(), event.listener())) {
+                if (subscriptions.subscribe(event.topics())) {
                     this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
                 }
                 requestManagers.streamsGroupHeartbeatRequestManager.get().membershipManager().onSubscriptionUpdated();
@@ -377,7 +376,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      */
     private void process(final TopicPatternSubscriptionChangeEvent event) {
         try {
-            subscriptions.subscribe(event.pattern(), event.listener());
+            subscriptions.subscribe(event.pattern());
             metadata.requestUpdateForNewTopics();
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
                 ConsumerMembershipManager membershipManager = hrm.membershipManager();
@@ -403,7 +402,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
         try {
-            subscriptions.subscribe(event.pattern(), event.listener());
+            subscriptions.subscribe(event.pattern());
             requestManagers.consumerMembershipManager.get().onSubscriptionUpdated();
             event.future().complete(null);
         } catch (Exception e) {

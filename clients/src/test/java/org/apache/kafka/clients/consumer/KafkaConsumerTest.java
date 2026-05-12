@@ -110,7 +110,6 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockDeserializer;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
-
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -121,6 +120,9 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import javax.security.auth.login.LoginException;
 import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -154,10 +156,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
-import javax.security.auth.login.LoginException;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer.DEFAULT_REASON;

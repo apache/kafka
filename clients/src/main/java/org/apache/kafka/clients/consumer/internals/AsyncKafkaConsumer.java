@@ -110,7 +110,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.common.utils.internals.LogContext;
-
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
@@ -2137,7 +2136,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void subscribe(Collection<String> topics) {
-        subscribeInternal(topics, Optional.empty());
+        subscribeInternal(topics, null);
     }
 
     @Override
@@ -2145,7 +2144,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        subscribeInternal(topics, Optional.of(listener));
+        subscribeInternal(topics, listener);
     }
 
     public void subscribe(Collection<String> topics, StreamsRebalanceListener streamsRebalanceListener) {
@@ -2154,24 +2153,24 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             .orElseThrow(() -> new IllegalStateException("Consumer was not created to be used with Streams rebalance protocol events"))
             .setRebalanceListener(streamsRebalanceListener);
 
-        subscribeInternal(topics, Optional.empty());
+        subscribeInternal(topics, null);
     }
 
     @Override
     public void subscribe(Pattern pattern) {
-        subscribeInternal(pattern, Optional.empty());
+        subscribeInternal(pattern, null);
     }
 
     @Override
     public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
-        subscribeToRegex(pattern, Optional.of(listener));
+        subscribeToRegex(pattern, listener);
     }
 
     @Override
     public void subscribe(SubscriptionPattern pattern) {
-        subscribeToRegex(pattern, Optional.empty());
+        subscribeToRegex(pattern, null);
     }
 
     @Override
@@ -2179,7 +2178,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        subscribeInternal(pattern, Optional.of(listener));
+        subscribeInternal(pattern, listener);
+    }
+
+
+    @Override
+    public void setConsumerRebalanceListener(ConsumerRebalanceListener callback) {
+        acquireAndEnsureOpen();
+        subscriptions.setConsumerRebalanceListener(callback, this);
     }
 
     /**
@@ -2221,8 +2227,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             currentThread.set(NO_CURRENT_THREAD);
     }
 
-    private void subscribeInternal(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
+    private void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
         acquireAndEnsureOpen();
+        subscriptions.setConsumerRebalanceListener(listener, this);
         try {
             throwIfGroupIdNotDefined();
             if (pattern == null || pattern.toString().isEmpty())
@@ -2231,7 +2238,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             log.info("Subscribed to pattern: '{}'", pattern);
             applicationEventHandler.addAndGet(new TopicPatternSubscriptionChangeEvent(
                 pattern,
-                listener,
                 defaultApiTimeoutDeadlineMs()
             ));
         } finally {
@@ -2244,16 +2250,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * subscription state, so it's included in the next heartbeat request sent to the broker.
      * No validation of the pattern is performed by the client (other than null/empty checks).
      */
-    private void subscribeToRegex(SubscriptionPattern pattern,
-                                  Optional<ConsumerRebalanceListener> listener) {
+    private void subscribeToRegex(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
             throwIfSubscriptionPatternIsInvalid(pattern);
+            subscriptions.setConsumerRebalanceListener(listener, this);
             log.info("Subscribing to regular expression {}", pattern);
             applicationEventHandler.addAndGet(new TopicRe2JPatternSubscriptionChangeEvent(
                 pattern,
-                listener,
                 calculateDeadlineMs(time.timer(defaultApiTimeoutMs))));
         } finally {
             release();
@@ -2269,7 +2274,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private void subscribeInternal(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
+    private void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
         acquireAndEnsureOpen();
         try {
             throwIfGroupIdNotDefined();
@@ -2287,6 +2292,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
 
+                subscriptions.setConsumerRebalanceListener(listener, this);
                 for (TopicPartition tp : subscriptions.assignedPartitions()) {
                     if (topics.contains(tp.topic()))
                         currentTopicPartitions.add(tp);
@@ -2296,7 +2302,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.info("Subscribed to topic(s): {}", String.join(", ", topics));
                 applicationEventHandler.addAndGet(new TopicSubscriptionChangeEvent(
                     new HashSet<>(topics),
-                    listener,
                     defaultApiTimeoutDeadlineMs()
                 ));
             }
