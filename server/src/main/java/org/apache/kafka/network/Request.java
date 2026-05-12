@@ -318,7 +318,8 @@ public final class Request implements BaseRequest {
      * to the nearest long.
      */
     private static double nanosToMs(long nanos) {
-        return (double) TimeUnit.NANOSECONDS.toMicros(nanos) / 1000;
+        long positiveNanos = Math.max(nanos, 0);
+        return (double) TimeUnit.NANOSECONDS.toMicros(positiveNanos) / 1000;
     }
 
     public void updateRequestMetrics(long networkThreadTimeNanos, Optional<JsonNode> responseLog) {
