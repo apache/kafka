@@ -24,40 +24,29 @@ import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.metadata.authorizer.StandardAclWithIdFixtures;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public final class AclsImageFixtures {
-    public static final AclsImage IMAGE1;
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
-    public static final AclsDelta DELTA1;
-    public static final AclsImage IMAGE2;
 
-    static {
-        Map<Uuid, StandardAcl> map = new HashMap<>();
-        for (int i = 0; i < 4; i++) {
-            StandardAclWithId aclWithId = StandardAclWithIdFixtures.TEST_ACLS.get(i);
-            map.put(aclWithId.id(), aclWithId.acl());
-        }
-        IMAGE1 = new AclsImage(map);
+    public static final AclsImage IMAGE1 = new AclsImage(createAclMap(0, 4));
 
-        DELTA1_RECORDS = new ArrayList<>();
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveAccessControlEntryRecord().
-            setId(Uuid.fromString("QZDDv-R7SyaPgetDPGd0Mw")), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(StandardAclWithIdFixtures.TEST_ACLS.get(4).toRecord(), (short) 0));
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = List.of(
+            new ApiMessageAndVersion(new RemoveAccessControlEntryRecord().
+                    setId(Uuid.fromString("QZDDv-R7SyaPgetDPGd0Mw")), (short) 0),
+            new ApiMessageAndVersion(StandardAclWithIdFixtures.TEST_ACLS.get(4).toRecord(), (short) 0)
+    );
 
-        DELTA1 = new AclsDelta(IMAGE1);
-        RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
+    public static final AclsDelta DELTA1 = RecordTestUtils.replayAll(new AclsDelta(IMAGE1), DELTA1_RECORDS);
 
+    public static final AclsImage IMAGE2 = new AclsImage(createAclMap(1, 5));
 
-        Map<Uuid, StandardAcl> map2 = new HashMap<>();
-        for (int i = 1; i < 5; i++) {
-            StandardAclWithId aclWithId = StandardAclWithIdFixtures.TEST_ACLS.get(i);
-            map2.put(aclWithId.id(), aclWithId.acl());
-        }
-        IMAGE2 = new AclsImage(map2);
+    private static Map<Uuid, StandardAcl> createAclMap(int startInclusive, int endExclusive) {
+        return IntStream.range(startInclusive, endExclusive)
+                .mapToObj(StandardAclWithIdFixtures.TEST_ACLS::get)
+                .collect(Collectors.toUnmodifiableMap(StandardAclWithId::id, StandardAclWithId::acl));
     }
 
     private AclsImageFixtures() {

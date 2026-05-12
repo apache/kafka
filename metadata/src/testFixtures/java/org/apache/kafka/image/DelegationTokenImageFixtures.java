@@ -25,55 +25,50 @@ import org.apache.kafka.metadata.DelegationTokenData;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public final class DelegationTokenImageFixtures {
-    public static final DelegationTokenImage IMAGE1;
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
-    public static final DelegationTokenDelta DELTA1;
-    public static final DelegationTokenImage IMAGE2;
 
     private static DelegationTokenData randomDelegationTokenData(String tokenId, long expireTimestamp) {
         TokenInformation ti = new TokenInformation(
-            tokenId,
-            SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
-            SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
-            new ArrayList<>(),
-            0,
-            1000,
-            expireTimestamp);
+                tokenId,
+                SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
+                SecurityUtils.parseKafkaPrincipal(KafkaPrincipal.USER_TYPE + ":" + "fred"),
+                List.of(),
+                0,
+                1000,
+                expireTimestamp);
         return new DelegationTokenData(ti);
     }
 
-    static {
-        Map<String, DelegationTokenData> image1 = new HashMap<>();
-        image1.put("somerandomuuid1", randomDelegationTokenData("somerandomuuid1", 100));
-        image1.put("somerandomuuid2", randomDelegationTokenData("somerandomuuid2", 100));
-        image1.put("somerandomuuid3", randomDelegationTokenData("somerandomuuid3", 100));
-        IMAGE1 = new DelegationTokenImage(image1);
+    public static final DelegationTokenImage IMAGE1 = new DelegationTokenImage(Map.of(
+            "somerandomuuid1", randomDelegationTokenData("somerandomuuid1", 100),
+            "somerandomuuid2", randomDelegationTokenData("somerandomuuid2", 100),
+            "somerandomuuid3", randomDelegationTokenData("somerandomuuid3", 100)
+    ));
 
-        DELTA1_RECORDS = new ArrayList<>();
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new DelegationTokenRecord().
-            setOwner(KafkaPrincipal.USER_TYPE + ":" + "fred").
-            setRequester(KafkaPrincipal.USER_TYPE + ":" + "fred").
-            setIssueTimestamp(0).
-            setMaxTimestamp(1000).
-            setExpirationTimestamp(200).
-            setTokenId("somerandomuuid1"), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
-            setTokenId("somerandomuuid3"), (short) 0));
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = List.of(
+            new ApiMessageAndVersion(new DelegationTokenRecord().
+                    setOwner(KafkaPrincipal.USER_TYPE + ":" + "fred").
+                    setRequester(KafkaPrincipal.USER_TYPE + ":" + "fred").
+                    setIssueTimestamp(0).
+                    setMaxTimestamp(1000).
+                    setExpirationTimestamp(200).
+                    setTokenId("somerandomuuid1"), (short) 0),
+            new ApiMessageAndVersion(new RemoveDelegationTokenRecord().
+                    setTokenId("somerandomuuid3"), (short) 0)
+    );
 
-        DELTA1 = new DelegationTokenDelta(IMAGE1);
-        RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
+    public static final DelegationTokenDelta DELTA1 = RecordTestUtils.replayAll(
+            new DelegationTokenDelta(IMAGE1),
+            DELTA1_RECORDS
+    );
 
-        Map<String, DelegationTokenData> image2 = new HashMap<>();
-        image2.put("somerandomuuid1", randomDelegationTokenData("somerandomuuid1", 200));
-        image2.put("somerandomuuid2", randomDelegationTokenData("somerandomuuid2", 100));
-        IMAGE2 = new DelegationTokenImage(image2);
-    }
+    public static final DelegationTokenImage IMAGE2 = new DelegationTokenImage(Map.of(
+            "somerandomuuid1", randomDelegationTokenData("somerandomuuid1", 200),
+            "somerandomuuid2", randomDelegationTokenData("somerandomuuid2", 100)
+    ));
 
     private DelegationTokenImageFixtures() {
     }
