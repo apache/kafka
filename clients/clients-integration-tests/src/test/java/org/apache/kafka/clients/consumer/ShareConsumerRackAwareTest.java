@@ -137,6 +137,8 @@ public class ShareConsumerRackAwareTest {
                     NewPartitions.increaseTo(6, List.of(List.of(2), List.of(2), List.of(2)))
                 )
             );
+            clusterInstance.waitTopicCreation(topic, 6);
+
             TestUtils.waitForCondition(() -> {
                 consumer0.poll(Duration.ofMillis(1000));
                 consumer1.poll(Duration.ofMillis(1000));

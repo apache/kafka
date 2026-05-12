@@ -81,7 +81,8 @@ public class RackAwareAssignor implements ConsumerGroupPartitionAssignor, ShareG
                 }
 
                 if (assignedRack == null) {
-                    throw new PartitionAssignorException("No member found for racks " + racks + " for partition " + partitionId + " of topic " + topicId);
+                    // No rack-local member found, which can be transiently true as membership changes. Pick any member for now.
+                    assignedRack = rackIdToMemberId.keySet().iterator().next();
                 }
 
                 Map<Uuid, Set<Integer>> assignment = assignments.computeIfAbsent(
