@@ -1651,7 +1651,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     @Test
-    public void testRackAwareAssignmentTagsMismatchLogsWarning() {
+    public void testMissingClientTagsStatusLogsWarningOnlyOnce() {
         try (
             final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
                 HeartbeatRequestState.class,
@@ -1666,86 +1666,51 @@ class StreamsGroupHeartbeatRequestManagerTest {
             when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
             when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
 
-            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-            assertEquals(1, result.unsentRequests.size());
+            final String statusDetail = "Missing required client tags for rack-aware standby assignment: [zone, cluster]";
 
-            final ClientResponse response = new ClientResponse(
+            // First heartbeat with MISSING_CLIENT_TAGS status
+            final NetworkClientDelegate.PollResult result1 = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result1.unsentRequests.size());
+
+            final ClientResponse response1 = new ClientResponse(
                 new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
                 null, "-1", time.milliseconds(), time.milliseconds(), false, null, null,
                 new StreamsGroupHeartbeatResponse(
                     new StreamsGroupHeartbeatResponseData()
                         .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
-                        .setRackAwareAssignmentTags(List.of("zone", "missing-tag"))
+                        .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                            .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
+                            .setStatusDetail(statusDetail)))
                 )
             );
-            result.unsentRequests.get(0).handler().onComplete(response);
+            result1.unsentRequests.get(0).handler().onComplete(response1);
 
-            assertTrue(logAppender.getMessages("WARN").stream()
-                .anyMatch(m -> m.contains("Broker requires client tag 'zone'")));
-            assertTrue(logAppender.getMessages("WARN").stream()
-                .anyMatch(m -> m.contains("Broker requires client tag 'missing-tag'")));
-        }
-    }
+            long firstWarnCount = logAppender.getMessages("WARN").stream()
+                .filter(m -> m.contains("Missing required client tags"))
+                .count();
+            assertEquals(1, firstWarnCount);
 
-    @Test
-    public void testRackAwareAssignmentTagsMatchDoesNotLogWarning() {
-        try (
-            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
-                HeartbeatRequestState.class,
-                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
-            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
-        ) {
-            logAppender.setClassLogger(StreamsGroupHeartbeatRequestManager.class, Level.WARN);
-            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
-            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-            when(membershipManager.groupId()).thenReturn(GROUP_ID);
-            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
-            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
-            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+            // Second heartbeat with the same status — should NOT log again
+            final NetworkClientDelegate.PollResult result2 = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result2.unsentRequests.size());
 
-            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-            assertEquals(1, result.unsentRequests.size());
-
-            final ClientResponse response = new ClientResponse(
+            final ClientResponse response2 = new ClientResponse(
                 new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
                 null, "-1", time.milliseconds(), time.milliseconds(), false, null, null,
                 new StreamsGroupHeartbeatResponse(
                     new StreamsGroupHeartbeatResponseData()
                         .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
-                        .setRackAwareAssignmentTags(List.of(CLIENT_TAG_1))
+                        .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                            .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
+                            .setStatusDetail(statusDetail)))
                 )
             );
-            result.unsentRequests.get(0).handler().onComplete(response);
+            result2.unsentRequests.get(0).handler().onComplete(response2);
 
-            assertTrue(logAppender.getMessages("WARN").stream()
-                .noneMatch(m -> m.contains("Broker requires client tag")));
-        }
-    }
-
-    @Test
-    public void testRackAwareAssignmentTagsNullIsNoOp() {
-        try (
-            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
-                HeartbeatRequestState.class,
-                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
-            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
-        ) {
-            logAppender.setClassLogger(StreamsGroupHeartbeatRequestManager.class, Level.WARN);
-            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
-            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-            when(membershipManager.groupId()).thenReturn(GROUP_ID);
-            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
-            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
-            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
-
-            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-            assertEquals(1, result.unsentRequests.size());
-
-            final ClientResponse response = buildClientResponse();
-            result.unsentRequests.get(0).handler().onComplete(response);
-
-            assertTrue(logAppender.getMessages("WARN").stream()
-                .noneMatch(m -> m.contains("Broker requires client tag")));
+            long secondWarnCount = logAppender.getMessages("WARN").stream()
+                .filter(m -> m.contains("Missing required client tags"))
+                .count();
+            assertEquals(1, secondWarnCount, "MISSING_CLIENT_TAGS warning should only be logged once");
         }
     }
 

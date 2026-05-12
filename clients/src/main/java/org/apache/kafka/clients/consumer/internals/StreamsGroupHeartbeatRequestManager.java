@@ -292,6 +292,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final StreamsRebalanceData streamsRebalanceData;
 
+    private boolean missingClientTagsWarned = false;
+
     /**
      * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
      * sending heartbeat until the next poll.
@@ -533,18 +535,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
         streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
 
-        if (data.rackAwareAssignmentTags() != null) {
-            Set<String> clientTagKeys = streamsRebalanceData.clientTags().keySet();
-            for (String requiredTag : data.rackAwareAssignmentTags()) {
-                if (!clientTagKeys.contains(requiredTag)) {
-                    logger.warn("Broker requires client tag '{}' for rack-aware standby assignment, " +
-                        "but this client does not have it configured. " +
-                        "Configure it via 'client.tag.{}' in your Streams config.",
-                        requiredTag, requiredTag);
-                }
-            }
-        }
-
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));
         }
@@ -553,10 +543,21 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         if (statuses != null) {
             streamsRebalanceData.setStatuses(statuses);
             if (!statuses.isEmpty()) {
+                for (StreamsGroupHeartbeatResponseData.Status status : statuses) {
+                    if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code()) {
+                        if (!missingClientTagsWarned) {
+                            logger.warn("{}",  status.statusDetail());
+                            missingClientTagsWarned = true;
+                        }
+                    }
+                }
                 String statusDetails = statuses.stream()
+                    .filter(status -> status.statusCode() != StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
                     .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
                     .collect(Collectors.joining(", "));
-                logger.warn("Membership is in the following statuses: {}", statusDetails);
+                if (!statusDetails.isEmpty()) {
+                    logger.warn("Membership is in the following statuses: {}", statusDetails);
+                }
             }
         }
 

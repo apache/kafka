@@ -2141,16 +2141,11 @@ public class GroupMetadataManager {
         }
 
         // Prepare the response.
-        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "");
-        List<String> rackAwareAssignmentTags = rackAwareTagsValue.isEmpty()
-            ? Collections.emptyList()
-            : Arrays.asList(rackAwareTagsValue.split(",", -1));
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
-            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId))
-            .setRackAwareAssignmentTags(rackAwareAssignmentTags);
+            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -2194,6 +2189,25 @@ public class GroupMetadataManager {
                         requestingMemberId)
                 )
         ));
+
+        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "");
+        if (!rackAwareTagsValue.isEmpty()) {
+            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split(",", -1));
+            Set<String> memberTagKeys = updatedMember.clientTags().keySet();
+            List<String> missingTags = requiredTags.stream()
+                .filter(tag -> !memberTagKeys.contains(tag))
+                .collect(Collectors.toList());
+            if (!missingTags.isEmpty()) {
+                returnedStatus.add(
+                    new Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
+                        .setStatusDetail(
+                            String.format("Missing required client tags for rack-aware standby assignment: %s. " +
+                                "Configure them via 'client.tag.<tagKey>' in your Streams config.", missingTags)
+                        )
+                );
+            }
+        }
 
         response.setStatus(returnedStatus);
 
