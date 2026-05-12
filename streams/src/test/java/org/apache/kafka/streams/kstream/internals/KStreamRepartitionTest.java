@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Repartitioned;
+import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -210,5 +212,32 @@ public class KStreamRepartitionTest {
 
             assertEquals((long) expectedCount, driver.getKeyValueStore("test-count-store").get("123:foo"));
         }
+    }
+
+    @Test
+    public void shouldOnlyMarkAsPartitionedOnBranch() {
+        final KStream<String, String> notMarkedLeft = builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .map((k, v) -> KeyValue.pair(k + ":" +  v, v));
+        final KStream<String, String> right = builder.stream("test-right-on-new-key", Consumed.with(Serdes.String(), Serdes.String()));
+
+        // Branch with mark as partitioned to count
+        final String countName = "test-count";
+        notMarkedLeft
+            .markAsPartitioned()
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()).withName(countName))
+            .count(Materialized.as("test-count-store"));
+        
+        // Branch without mark as partitioned to join
+        final String joinName = "test-join";
+        notMarkedLeft.join(
+            right, 
+            (l, r) -> l + "-" + r, 
+            JoinWindows.of(Duration.ofSeconds(10)), 
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(joinName)
+        );
+
+        final String topology = builder.build().describe().toString();
+        assertThat(topology, not(containsString(countName + "-repartition")));
+        assertThat(topology, containsString(joinName + "-left-repartition"));
     }
 }
