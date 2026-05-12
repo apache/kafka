@@ -139,22 +139,22 @@ The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in 
 
   * **`QueryableStoreTypes#keyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
   * **`QueryableStoreTypes#timestampedKeyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
-  * **`QueryableStoreTypes#timestampedKeyValueStoreWithHeaders()`** — see [#header-aware-stores-interactive-queries](#header-aware-stores-interactive-queries).
+  * **`QueryableStoreTypes#timestampedKeyValueStoreWithHeaders()`** — see [Header-aware stores and interactive queries](#header-aware-stores-interactive-queries).
   * **`QueryableStoreTypes#windowStore()`** — see [Querying local window stores](#querying-local-window-stores).
   * **`QueryableStoreTypes#timestampedWindowStore()`** — see [Querying local window stores](#querying-local-window-stores).
-  * **`QueryableStoreTypes#timestampedWindowStoreWithHeaders()`** — see [#header-aware-stores-interactive-queries](#header-aware-stores-interactive-queries).
+  * **`QueryableStoreTypes#timestampedWindowStoreWithHeaders()`** — see [Header-aware stores and interactive queries](#header-aware-stores-interactive-queries).
   * **`QueryableStoreTypes#sessionStore()`** — see [Querying local window stores](#querying-local-window-stores).
-  * **`QueryableStoreTypes#sessionStoreWithHeaders()`** — see [#header-aware-stores-interactive-queries](#header-aware-stores-interactive-queries).
-
-### Header-aware stores and interactive queries {#header-aware-stores-interactive-queries}
-
-For a [header-aware store](processor-api.html#headers-in-state-stores), use the **`*WithHeaders()`** entry that corresponds to your store type when query results must include headers.
+  * **`QueryableStoreTypes#sessionStoreWithHeaders()`** — see [Header-aware stores and interactive queries](#header-aware-stores-interactive-queries).
 
 You can also implement your own QueryableStoreType as described in section Querying local custom state stores.
 
 **Note**
 
 Kafka Streams materializes one state store per stream partition. This means your application will potentially manage many underlying state stores. The API enables you to query all of the underlying stores without having to know which partition the data is in.
+
+<a id="header-aware-stores-interactive-queries"></a>
+
+**Note:** For a [header-aware store](processor-api.html#headers-in-state-stores), use the matching **`*WithHeaders()`** entry from the list above when interactive query results must include headers.
 
 ## Querying local key-value stores
 
