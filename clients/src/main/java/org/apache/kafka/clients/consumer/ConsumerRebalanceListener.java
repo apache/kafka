@@ -302,32 +302,13 @@ public interface ConsumerRebalanceListener {
      * only for the duration of this callback; storing a reference and using it later will throw
      * {@link IllegalStateException}.
      *
-     * <h4>Delegation chain</h4>
+     * <p>The default implementation delegates to {@link #onPartitionsLost(Collection)}, which
+     * itself defaults to {@link #onPartitionsRevoked(Collection)}. The chain always passes through
+     * the one-argument methods, not the two-argument variants. This preserves the existing
+     * delegation behavior so that listeners overriding either one-argument method see consistent
+     * results regardless of which entry point was used.
      *
-     * <p>The default implementation delegates to {@link #onPartitionsLost(Collection)} (the
-     * one-argument form), which in turn defaults to {@link #onPartitionsRevoked(Collection)}.
-     * This means the full default chain is:
-     *
-     * <pre>
-     *   onPartitionsLost(partitions, consumer)
-     *     -> onPartitionsLost(partitions)
-     *       -> onPartitionsRevoked(partitions)
-     * </pre>
-     *
-     * <p>Note that this chain passes through the <em>one-argument</em> methods, not the
-     * two-argument variants. In particular, it does <strong>not</strong> delegate to
-     * {@link #onPartitionsRevoked(Collection, RebalanceConsumer)}. This is an intentional
-     * design choice: the one-argument {@link #onPartitionsLost(Collection)} has always defaulted
-     * to the one-argument {@link #onPartitionsRevoked(Collection)}, and the two-argument variant
-     * preserves that same chain so that existing listeners that override either one-argument
-     * method see consistent behavior regardless of whether the callback was invoked through the
-     * one-argument or two-argument entry point.
-     *
-     * <p>A consequence of this design is that a listener which overrides <em>only</em>
-     * {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} (the two-argument revoked)
-     * without also overriding this method or the one-argument lost/revoked methods will
-     * <strong>not</strong> have its two-argument revoked override called during partition loss.
-     * If you need custom behavior for both revocation and loss, override both two-argument
+     * <p>If you need custom behavior for both revocation and loss, override both two-argument
      * methods explicitly.
      *
      * <h4>Important difference from {@code onPartitionsRevoked}</h4>
