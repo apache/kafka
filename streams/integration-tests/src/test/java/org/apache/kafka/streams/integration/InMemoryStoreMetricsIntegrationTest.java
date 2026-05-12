@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessorSupplier;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -45,6 +46,7 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(120)
 @Tag("integration")
@@ -126,6 +128,8 @@ public class InMemoryStoreMetricsIntegrationTest {
                 for (final Map.Entry<MetricName, ? extends Metric> entry : streams.metrics().entrySet()) {
                     entry.getValue().metricValue();
                 }
+            } catch (final Exception e) {
+                fail("Getting metric values on an uninitialized store shouldn't throw exceptions", e);
             } finally {
                 finishLatch.countDown();
             }
