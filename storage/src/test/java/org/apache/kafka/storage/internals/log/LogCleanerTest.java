@@ -368,9 +368,9 @@ public class LogCleanerTest {
         long pid3 = 3;
         long pid4 = 4;
 
-        appendIdempotentAsLeader(log, pid1, producerEpoch).append(List.of(1, 2, 3));
-        appendIdempotentAsLeader(log, pid2, producerEpoch).append(List.of(3, 1, 4));
-        appendIdempotentAsLeader(log, pid3, producerEpoch).append(List.of(1, 4));
+        appendIdempotentAsLeader(log, pid1, producerEpoch, List.of(1, 2, 3));
+        appendIdempotentAsLeader(log, pid2, producerEpoch, List.of(3, 1, 4));
+        appendIdempotentAsLeader(log, pid3, producerEpoch, List.of(1, 4));
 
         log.roll();
         cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), false));
@@ -384,22 +384,22 @@ public class LogCleanerTest {
         log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
 
         // check duplicate append from producer 1
-        LogAppendInfo logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch).append(List.of(1, 2, 3));
+        LogAppendInfo logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch, List.of(1, 2, 3));
         assertEquals(0L, logAppendInfo.firstOffset());
         assertEquals(2L, logAppendInfo.lastOffset());
 
         // check duplicate append from producer 3
-        logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch).append(List.of(1, 4));
+        logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch, List.of(1, 4));
         assertEquals(6L, logAppendInfo.firstOffset());
         assertEquals(7L, logAppendInfo.lastOffset());
 
         // check duplicate append from producer 2
-        logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch).append(List.of(3, 1, 4));
+        logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch, List.of(3, 1, 4));
         assertEquals(3L, logAppendInfo.firstOffset());
         assertEquals(5L, logAppendInfo.lastOffset());
 
         // do one more append and a round of cleaning to force another deletion from producer 1's batch
-        appendIdempotentAsLeader(log, pid4, producerEpoch).append(List.of(2));
+        appendIdempotentAsLeader(log, pid4, producerEpoch, List.of(2));
         log.roll();
         cleaner.clean(new LogToClean(log, 0L, log.activeSegment().baseOffset(), false));
         assertEquals(Map.of(pid1, 2, pid2, 2, pid3, 1, pid4, 0), lastSequencesInLog(log));
@@ -411,7 +411,7 @@ public class LogCleanerTest {
         log = makeLog(LogConfig.fromProps(logConfig.originals(), logProps));
 
         // duplicate append from producer1 should still be fine
-        logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch).append(List.of(1, 2, 3));
+        logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch, List.of(1, 2, 3));
         assertEquals(0L, logAppendInfo.firstOffset());
         assertEquals(2L, logAppendInfo.lastOffset());
     }
@@ -2614,20 +2614,21 @@ public class LogCleanerTest {
 
     private record LogAndOffsetMap(UnifiedLog log, LogTestUtils.FakeOffsetMap offsetMap) { }
 
+    private LogAppendInfo appendIdempotentAsLeader(UnifiedLog log, long producerId, short producerEpoch,
+                                                   List<Integer> keys) throws IOException {
+        return newProducerAppender(log, producerId, producerEpoch, false, 0, AppendOrigin.CLIENT).append(keys);
+    }
+
     private ProducerAppender appendTransactionalAsLeader(UnifiedLog log, long producerId, short producerEpoch) {
-        return appendIdempotentAsLeader(log, producerId, producerEpoch, true, 0, AppendOrigin.CLIENT);
+        return newProducerAppender(log, producerId, producerEpoch, true, 0, AppendOrigin.CLIENT);
     }
 
     private ProducerAppender appendTransactionalAsLeader(UnifiedLog log, long producerId, short producerEpoch,
                                                     int leaderEpoch, AppendOrigin origin) {
-        return appendIdempotentAsLeader(log, producerId, producerEpoch, true, leaderEpoch, origin);
+        return newProducerAppender(log, producerId, producerEpoch, true, leaderEpoch, origin);
     }
 
-    private ProducerAppender appendIdempotentAsLeader(UnifiedLog log, long producerId, short producerEpoch) {
-        return appendIdempotentAsLeader(log, producerId, producerEpoch, false, 0, AppendOrigin.CLIENT);
-    }
-
-    private ProducerAppender appendIdempotentAsLeader(UnifiedLog log, long producerId, short producerEpoch,
+    private ProducerAppender newProducerAppender(UnifiedLog log, long producerId, short producerEpoch,
                                                  boolean isTransactional, int leaderEpoch, AppendOrigin origin) {
         AtomicInteger sequence = new AtomicInteger(0);
         return keys -> {
