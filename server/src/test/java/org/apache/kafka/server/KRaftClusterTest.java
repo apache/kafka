@@ -44,6 +44,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -127,6 +128,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.server.IntegrationTestUtils.connectAndReceive;
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -672,6 +674,30 @@ public class KRaftClusterTest {
 
             TestUtils.waitForCondition(() -> brokerIsAbsent(clusterImage(cluster, 1), 0),
                 "Timed out waiting for broker 0 to be fenced.");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testUnregisterController(boolean usingBootstrapControllers) throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(3)
+                .setNumControllerNodes(3)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            int controllerIdToUnregister = cluster.controllers().keySet().iterator().next();
+            cluster.controllers().get(controllerIdToUnregister).shutdown();
+
+            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
+                assertDoesNotThrow(() -> admin.unregisterController(controllerIdToUnregister).all().get());
+                assertFutureThrows(
+                    ControllerIdNotRegisteredException.class,
+                    admin.unregisterController(controllerIdToUnregister).all(),
+                    String.format("Controller ID %s is not currently registered", controllerIdToUnregister)
+                );
+            }
         }
     }
 

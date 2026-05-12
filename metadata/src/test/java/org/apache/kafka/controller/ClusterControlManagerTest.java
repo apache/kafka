@@ -20,7 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
@@ -1163,7 +1163,7 @@ public class ClusterControlManagerTest {
         clusterControl.activate();
 
         // Trying to unregister a non-registered controller should throw ApiException
-        assertThrows(BrokerIdNotRegisteredException.class,
+        assertThrows(ControllerIdNotRegisteredException.class,
             () -> clusterControl.unregisterController(1));
 
         // Replaying unregister record for unknown controller should throw RuntimeException

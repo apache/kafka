@@ -20,6 +20,7 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.InvalidRegistrationException;
@@ -508,7 +509,7 @@ public class ClusterControlManager {
                     "support controller unregistration.");
         }
         if (controllerRegistrations.get(controllerId) == null) {
-            throw new BrokerIdNotRegisteredException("Controller ID " + controllerId +
+            throw new ControllerIdNotRegisteredException("Controller ID " + controllerId +
                 " is not currently registered");
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
