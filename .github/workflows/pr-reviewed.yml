@@ -25,6 +25,9 @@ on:
     branches:
       - trunk
 
+permissions:
+  contents: read
+
 jobs:
   save-pr-number:
     name: Save PR Number

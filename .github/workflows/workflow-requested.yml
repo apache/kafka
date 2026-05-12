@@ -21,6 +21,11 @@ on:
     types:
       - requested
 
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
 run-name: Workflow Requested for ${{ github.event.workflow_run.display_title}}
 
 jobs:

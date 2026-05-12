@@ -19,6 +19,10 @@ on:
     # This job will run at 3:30 UTC daily
     - cron: '30 3 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   scan_jvm:
     if: github.repository == 'apache/kafka'

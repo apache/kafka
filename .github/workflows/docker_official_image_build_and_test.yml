@@ -27,6 +27,9 @@ on:
         description: Kafka version for the docker official image. This should be >=3.7.0
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

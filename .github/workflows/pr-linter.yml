@@ -21,6 +21,11 @@ on:
     types:
       - completed
 
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
 jobs:
   lint-pr:
     if: github.event.workflow_run.conclusion == 'success'

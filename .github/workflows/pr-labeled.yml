@@ -20,6 +20,11 @@ on:
     types:
       - labeled
 
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
 jobs:
   approve-workflow-run:
     name: Approve CI

@@ -25,6 +25,9 @@ on:
         description: Docker image name of the promoted image (Example:- apache/kafka:3.8.0 (OR) apache/kafka-native:3.8.0)
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   promote:
     if: github.repository == 'apache/kafka'

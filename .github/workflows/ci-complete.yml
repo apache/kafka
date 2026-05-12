@@ -21,6 +21,11 @@ on:
     types:
       - completed
 
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
 run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 
 # This workflow runs after the completion of the CI workflow triggered on a "pull_request" event.

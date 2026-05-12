@@ -36,6 +36,9 @@ on:
         type: string
         default: '17'
 
+permissions:
+  contents: read
+
 jobs:
   deflake:
     runs-on: ubuntu-latest
