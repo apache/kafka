@@ -2192,7 +2192,9 @@ public class GroupMetadataManager {
 
         String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "");
         if (!rackAwareTagsValue.isEmpty()) {
-            List<String> requiredTags = Arrays.asList(rackAwareTagsValue.split(",", -1));
+            List<String> requiredTags = Arrays.stream(rackAwareTagsValue.split(",", -1))
+                .filter(tag -> !tag.isEmpty())
+                .collect(Collectors.toList());
             Set<String> memberTagKeys = updatedMember.clientTags().keySet();
             List<String> missingTags = requiredTags.stream()
                 .filter(tag -> !memberTagKeys.contains(tag))

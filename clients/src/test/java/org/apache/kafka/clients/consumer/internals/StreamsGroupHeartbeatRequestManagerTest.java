@@ -1710,7 +1710,31 @@ class StreamsGroupHeartbeatRequestManagerTest {
             long secondWarnCount = logAppender.getMessages("WARN").stream()
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
-            assertEquals(1, secondWarnCount, "MISSING_CLIENT_TAGS warning should only be logged once");
+            assertEquals(1, secondWarnCount, "MISSING_CLIENT_TAGS warning should not be logged again for the same detail");
+
+            // Third heartbeat with a DIFFERENT status detail — should log again
+            final String changedStatusDetail = "Missing required client tags for rack-aware standby assignment: [zone]";
+
+            final NetworkClientDelegate.PollResult result3 = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result3.unsentRequests.size());
+
+            final ClientResponse response3 = new ClientResponse(
+                new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+                null, "-1", time.milliseconds(), time.milliseconds(), false, null, null,
+                new StreamsGroupHeartbeatResponse(
+                    new StreamsGroupHeartbeatResponseData()
+                        .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+                        .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                            .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
+                            .setStatusDetail(changedStatusDetail)))
+                )
+            );
+            result3.unsentRequests.get(0).handler().onComplete(response3);
+
+            long thirdWarnCount = logAppender.getMessages("WARN").stream()
+                .filter(m -> m.contains("Missing required client tags"))
+                .count();
+            assertEquals(2, thirdWarnCount, "MISSING_CLIENT_TAGS warning should be logged again when the detail changes");
         }
     }
 

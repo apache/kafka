@@ -292,7 +292,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final StreamsRebalanceData streamsRebalanceData;
 
-    private boolean missingClientTagsWarned = false;
+    private String lastMissingClientTagsDetail = null;
 
     /**
      * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
@@ -545,9 +545,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             if (!statuses.isEmpty()) {
                 for (StreamsGroupHeartbeatResponseData.Status status : statuses) {
                     if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code()) {
-                        if (!missingClientTagsWarned) {
+                        if (!status.statusDetail().equals(lastMissingClientTagsDetail)) {
                             logger.warn("{}",  status.statusDetail());
-                            missingClientTagsWarned = true;
+                            lastMissingClientTagsDetail = status.statusDetail();
                         }
                     }
                 }
