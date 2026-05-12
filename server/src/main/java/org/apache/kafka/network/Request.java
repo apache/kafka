@@ -336,20 +336,24 @@ public final class Request implements BaseRequest {
         double messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos);
         double totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos);
 
-        List<String> overrideMetricNames;
-        if (header().apiKey() == ApiKeys.FETCH) {
-            String specifiedMetricName = body(FetchRequest.class).isFromFollower()
-                ? RequestMetrics.FOLLOW_FETCH_METRIC_NAME
-                : RequestMetrics.CONSUMER_FETCH_METRIC_NAME;
-            overrideMetricNames = List.of(specifiedMetricName, header().apiKey().name);
-        } else if (header().apiKey() == ApiKeys.ADD_PARTITIONS_TO_TXN
-                   && body(AddPartitionsToTxnRequest.class).allVerifyOnlyRequest()) {
-            overrideMetricNames = List.of(RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME);
-        } else if (header().apiKey() == ApiKeys.LIST_CONFIG_RESOURCES && header().apiVersion() == 0) {
-            overrideMetricNames = List.of(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME, header().apiKey().name);
-        } else {
-            overrideMetricNames = List.of(header().apiKey().name);
-        }
+        List<String> overrideMetricNames = switch (header().apiKey()) {
+            case FETCH -> {
+                String specifiedMetricName = body(FetchRequest.class).isFromFollower()
+                        ? RequestMetrics.FOLLOW_FETCH_METRIC_NAME
+                        : RequestMetrics.CONSUMER_FETCH_METRIC_NAME;
+                yield List.of(specifiedMetricName, ApiKeys.FETCH.name);
+            }
+
+            case ADD_PARTITIONS_TO_TXN -> body(AddPartitionsToTxnRequest.class).allVerifyOnlyRequest()
+                    ? List.of(RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME)
+                    : List.of(ApiKeys.ADD_PARTITIONS_TO_TXN.name);
+
+            case LIST_CONFIG_RESOURCES -> header().apiVersion() == 0
+                    ? List.of(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME, ApiKeys.LIST_CONFIG_RESOURCES.name)
+                    : List.of(ApiKeys.LIST_CONFIG_RESOURCES.name);
+
+            default -> List.of(header().apiKey().name);
+        };
 
         for (String metricName : overrideMetricNames) {
             RequestMetrics m = metrics.apply(metricName);
