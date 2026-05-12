@@ -19,12 +19,8 @@ package org.apache.kafka.image;
 import org.apache.kafka.metadata.RecordTestUtils;
 
 public final class MetadataImageFixtures {
-    public static final MetadataImage IMAGE1;
-    public static final MetadataDelta DELTA1;
-    public static final MetadataImage IMAGE2;
 
-    static {
-        IMAGE1 = new MetadataImage(
+    public static final MetadataImage IMAGE1 = new MetadataImage(
             new MetadataProvenance(100, 4, 2000, true),
             FeaturesImageFixtures.IMAGE1,
             ClusterImageFixtures.IMAGE1,
@@ -36,20 +32,9 @@ public final class MetadataImageFixtures {
             ScramImageFixtures.IMAGE1,
             DelegationTokenImageFixtures.IMAGE1);
 
-        DELTA1 = new MetadataDelta.Builder().
-                setImage(IMAGE1).
-                build();
-        RecordTestUtils.replayAll(DELTA1, FeaturesImageFixtures.DELTA1_RECORDS);
-        RecordTestUtils.replayAll(DELTA1, ClusterImageFixtures.DELTA1_RECORDS);
-        RecordTestUtils.replayAll(DELTA1, TopicsImageFixtures.DELTA1_RECORDS);
-        RecordTestUtils.replayAll(DELTA1, ConfigurationsImageFixtures.DELTA1_RECORDS);
-        RecordTestUtils.replayAll(DELTA1, ClientQuotasImageFixtures.DELTA1_RECORDS);
-        RecordTestUtils.replayAll(DELTA1, ProducerIdsImageFixtures.DELTA1_RECORDS);
-        RecordTestUtils.replayAll(DELTA1, AclsImageFixtures.DELTA1_RECORDS);
-        RecordTestUtils.replayAll(DELTA1, ScramImageFixtures.DELTA1_RECORDS);
-        RecordTestUtils.replayAll(DELTA1, DelegationTokenImageFixtures.DELTA1_RECORDS);
+    public static final MetadataDelta DELTA1 = buildDelta1();
 
-        IMAGE2 = new MetadataImage(
+    public static final MetadataImage IMAGE2 = new MetadataImage(
             new MetadataProvenance(200, 5, 4000, true),
             FeaturesImageFixtures.IMAGE2,
             ClusterImageFixtures.IMAGE2,
@@ -60,6 +45,19 @@ public final class MetadataImageFixtures {
             AclsImageFixtures.IMAGE2,
             ScramImageFixtures.IMAGE2,
             DelegationTokenImageFixtures.IMAGE2);
+
+    private static MetadataDelta buildDelta1() {
+        MetadataDelta delta = new MetadataDelta.Builder().setImage(IMAGE1).build();
+        RecordTestUtils.replayAll(delta, FeaturesImageFixtures.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(delta, ClusterImageFixtures.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(delta, TopicsImageFixtures.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(delta, ConfigurationsImageFixtures.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(delta, ClientQuotasImageFixtures.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(delta, ProducerIdsImageFixtures.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(delta, AclsImageFixtures.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(delta, ScramImageFixtures.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(delta, DelegationTokenImageFixtures.DELTA1_RECORDS);
+        return delta;
     }
 
     private MetadataImageFixtures() {

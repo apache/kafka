@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.image;
 
-import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.metadata.RecordTestUtils;
@@ -24,8 +23,6 @@ import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.util.MockRandom;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -34,10 +31,63 @@ import static org.apache.kafka.clients.admin.ScramMechanism.SCRAM_SHA_256;
 import static org.apache.kafka.clients.admin.ScramMechanism.SCRAM_SHA_512;
 
 public final class ScramImageFixtures {
-    public static final ScramImage IMAGE1;
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
-    public static final ScramDelta DELTA1;
-    public static final ScramImage IMAGE2;
+
+    private static final MockRandom RANDOM = new MockRandom();
+
+    private static final ScramCredentialData ALPHA_SHA_256_FIRST = randomScramCredentialData(RANDOM);
+    private static final ScramCredentialData BETA_SHA_256 = randomScramCredentialData(RANDOM);
+    private static final ScramCredentialData ALPHA_SHA_512_FIRST = randomScramCredentialData(RANDOM);
+    private static final ScramCredentialData GAMMA_SHA_512 = randomScramCredentialData(RANDOM);
+    private static final ScramCredentialData ALPHA_SHA_256_SECOND = randomScramCredentialData(RANDOM);
+    private static final ScramCredentialData ALPHA_SHA_512_SECOND = randomScramCredentialData(RANDOM);
+
+    public static final ScramImage IMAGE1 = new ScramImage(Map.of(
+            SCRAM_SHA_256, Map.of(
+                    "alpha", ALPHA_SHA_256_FIRST,
+                    "beta", BETA_SHA_256),
+            SCRAM_SHA_512, Map.of(
+                    "alpha", ALPHA_SHA_512_FIRST,
+                    "gamma", GAMMA_SHA_512)
+    ));
+
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = List.of(
+            // remove all sha512 credentials
+            new ApiMessageAndVersion(new RemoveUserScramCredentialRecord().
+                    setName("alpha").
+                    setMechanism(SCRAM_SHA_512.type()), (short) 0),
+            new ApiMessageAndVersion(new RemoveUserScramCredentialRecord().
+                    setName("gamma").
+                    setMechanism(SCRAM_SHA_512.type()), (short) 0),
+            // add sha256 credential
+            new ApiMessageAndVersion(new UserScramCredentialRecord().
+                    setName("alpha").
+                    setMechanism(SCRAM_SHA_256.type()).
+                    setSalt(ALPHA_SHA_256_SECOND.salt()).
+                    setStoredKey(ALPHA_SHA_256_SECOND.storedKey()).
+                    setServerKey(ALPHA_SHA_256_SECOND.serverKey()).
+                    setIterations(ALPHA_SHA_256_SECOND.iterations()), (short) 0),
+            // add sha512 credential re-using name
+            new ApiMessageAndVersion(new UserScramCredentialRecord().
+                    setName("alpha").
+                    setMechanism(SCRAM_SHA_512.type()).
+                    setSalt(ALPHA_SHA_512_SECOND.salt()).
+                    setStoredKey(ALPHA_SHA_512_SECOND.storedKey()).
+                    setServerKey(ALPHA_SHA_512_SECOND.serverKey()).
+                    setIterations(ALPHA_SHA_512_SECOND.iterations()), (short) 0)
+    );
+
+    public static final ScramDelta DELTA1 = RecordTestUtils.replayAll(
+            new ScramDelta(IMAGE1),
+            DELTA1_RECORDS
+    );
+
+    public static final ScramImage IMAGE2 = new ScramImage(Map.of(
+            SCRAM_SHA_256, Map.of(
+                    "alpha", ALPHA_SHA_256_SECOND,
+                    "beta", BETA_SHA_256),
+            SCRAM_SHA_512, Map.of(
+                    "alpha", ALPHA_SHA_512_SECOND)
+    ));
 
     private static byte[] randomBuffer(Random random, int length) {
         byte[] buf = new byte[length];
@@ -47,70 +97,10 @@ public final class ScramImageFixtures {
 
     private static ScramCredentialData randomScramCredentialData(Random random) {
         return new ScramCredentialData(
-            randomBuffer(random, 1024),
-            randomBuffer(random, 1024),
-            randomBuffer(random, 1024),
-            1024 + random.nextInt(1024));
-    }
-
-    static {
-        MockRandom random = new MockRandom();
-
-        Map<ScramMechanism, Map<String, ScramCredentialData>> image1mechanisms = new HashMap<>();
-
-        Map<String, ScramCredentialData> image1sha256 = new HashMap<>();
-        image1sha256.put("alpha", randomScramCredentialData(random));
-        image1sha256.put("beta", randomScramCredentialData(random));
-        image1mechanisms.put(SCRAM_SHA_256, image1sha256);
-
-        Map<String, ScramCredentialData> image1sha512 = new HashMap<>();
-        image1sha512.put("alpha", randomScramCredentialData(random));
-        image1sha512.put("gamma", randomScramCredentialData(random));
-        image1mechanisms.put(SCRAM_SHA_512, image1sha512);
-
-        IMAGE1 = new ScramImage(image1mechanisms);
-
-        DELTA1_RECORDS = new ArrayList<>();
-        // remove all sha512 credentials
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveUserScramCredentialRecord().
-            setName("alpha").
-            setMechanism(SCRAM_SHA_512.type()), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveUserScramCredentialRecord().
-            setName("gamma").
-            setMechanism(SCRAM_SHA_512.type()), (short) 0));
-        ScramCredentialData secondAlpha256Credential = randomScramCredentialData(random);
-        // add sha256 credential
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new UserScramCredentialRecord().
-                setName("alpha").
-                setMechanism(SCRAM_SHA_256.type()).
-                setSalt(secondAlpha256Credential.salt()).
-                setStoredKey(secondAlpha256Credential.storedKey()).
-                setServerKey(secondAlpha256Credential.serverKey()).
-                setIterations(secondAlpha256Credential.iterations()), (short) 0));
-        // add sha512 credential re-using name
-        ScramCredentialData secondAlpha512Credential = randomScramCredentialData(random);
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new UserScramCredentialRecord().
-            setName("alpha").
-            setMechanism(SCRAM_SHA_512.type()).
-            setSalt(secondAlpha512Credential.salt()).
-            setStoredKey(secondAlpha512Credential.storedKey()).
-            setServerKey(secondAlpha512Credential.serverKey()).
-            setIterations(secondAlpha512Credential.iterations()), (short) 0));
-        DELTA1 = new ScramDelta(IMAGE1);
-        RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
-
-        Map<ScramMechanism, Map<String, ScramCredentialData>> image2mechanisms = new HashMap<>();
-
-        Map<String, ScramCredentialData> image2sha256 = new HashMap<>();
-        image2sha256.put("alpha", secondAlpha256Credential);
-        image2sha256.put("beta", image1sha256.get("beta"));
-        image2mechanisms.put(SCRAM_SHA_256, image2sha256);
-
-        Map<String, ScramCredentialData> image2sha512 = new HashMap<>();
-        image2sha512.put("alpha", secondAlpha512Credential);
-        image2mechanisms.put(SCRAM_SHA_512, image2sha512);
-
-        IMAGE2 = new ScramImage(image2mechanisms);
+                randomBuffer(random, 1024),
+                randomBuffer(random, 1024),
+                randomBuffer(random, 1024),
+                1024 + random.nextInt(1024));
     }
 
     private ScramImageFixtures() {
