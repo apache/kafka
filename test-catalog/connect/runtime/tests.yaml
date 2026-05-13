@@ -1197,8 +1197,10 @@ org.apache.kafka.connect.runtime.rest.resources.RootResourceTest:
 org.apache.kafka.connect.runtime.rest.util.SSLUtilsTest:
 - testCreateClientSideSslContextFactory
 - testCreateClientSideSslContextFactoryDefaultValues
+- testCreateClientSideSslContextFactoryWithListenerPrefixedConfigs
 - testCreateServerSideSslContextFactory
 - testCreateServerSideSslContextFactoryDefaultValues
+- testCreateServerSideSslContextFactoryWithListenerPrefixedConfigs
 - testGetOrDefault
 org.apache.kafka.connect.runtime.standalone.StandaloneConfigTest:
 - testRestServerNonPrefixedSslConfigs
