@@ -127,7 +127,7 @@ Not supported (you must configure)
 
 A Kafka Streams application typically runs on multiple instances. The state that is locally available on any given instance is only a subset of the [application's entire state](../architecture.html#streams-architecture-state). Querying the local stores on an instance will only return data locally available on that particular instance.
 
-The method `KafkaStreams#store(...)` finds an application instance's local state stores by name and type. Note that interactive queries are not supported for [versioned state stores](processor-api.html#streams-developer-guide-state-store-versioned) at this time.
+The method `KafkaStreams#store(...)` finds an application instance's local state stores by name and type. Note that interactive queries are not supported for [versioned state stores](/{version}/streams/developer-guide/processor-api/#versioned-key-value-state-stores) at this time.
 
 ![](/43/images/streams-interactive-queries-api-01.png)
 
@@ -154,7 +154,7 @@ Kafka Streams materializes one state store per stream partition. This means your
 
 <a id="header-aware-stores-interactive-queries"></a>
 
-**Note:** For a [header-aware store](processor-api.html#headers-in-state-stores), use the matching **`*WithHeaders()`** entry from the list above when interactive query results must include headers.
+**Note:** For a [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores), use the matching **`*WithHeaders()`** entry from the list above when interactive query results must include record headers.
 
 ## Querying local key-value stores
 
@@ -261,7 +261,7 @@ After the application has started, you can get access to "CountsWindowStore" and
 
 **Note**
 
-Only the [Processor API](processor-api.html#streams-developer-guide-processor-api) supports custom state stores.
+Only the [Processor API](/{version}/streams/developer-guide/processor-api/#implementing-custom-state-stores) supports custom state stores.
 
 Before querying the custom state stores you must implement these interfaces:
 
