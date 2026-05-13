@@ -1142,7 +1142,7 @@ project(':core') {
     testImplementation testFixtures(project(':group-coordinator'))
     testImplementation testFixtures(project(':share-coordinator'))
     testImplementation testFixtures(project(':metadata'))
-    testImplementation project(':raft').sourceSets.test.output
+    testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation project(':server').sourceSets.test.output
@@ -1422,7 +1422,7 @@ project(':metadata') {
     testImplementation libs.jqwik
     testImplementation libs.mockitoCore
     testImplementation testFixtures(project(':clients'))
-    testImplementation project(':raft').sourceSets.test.output
+    testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':test-common:test-common-util')
 
@@ -2171,6 +2171,8 @@ project(':raft') {
     archivesName = "kafka-raft"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -2181,6 +2183,14 @@ project(':raft') {
     implementation project(':storage')
     implementation libs.jacksonDatabind
     implementation libs.slf4jApi
+
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.jqwik
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation libs.mockitoCore
+    testFixturesImplementation libs.slf4jApi
 
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
@@ -4097,6 +4107,7 @@ gradle.projectsEvaluated {
     'group-coordinator': ':group-coordinator',
     'share-coordinator': ':share-coordinator',
     'metadata': ':metadata',
+    'raft': ':raft',
   ]
   allprojects { proj ->
     proj.configurations.all { config ->
