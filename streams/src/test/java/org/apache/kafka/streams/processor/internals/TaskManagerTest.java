@@ -2994,6 +2994,30 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldSuspendRevokedTasksWhenPrepareCommitThrows() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allInitializedTasks()).thenReturn(Set.of(task00));
+
+        when(task00.commitNeeded()).thenReturn(true);
+        when(task00.prepareCommit(true)).thenThrow(new TaskMigratedException("task migrated"));
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        final StreamsException thrown = assertThrows(StreamsException.class,
+            () -> taskManager.handleRevocation(taskId00Partitions));
+
+        assertInstanceOf(TaskMigratedException.class, thrown);
+
+        verify(task00).suspend();
+        verify(task00, never()).postCommit(anyBoolean());
+    }
+
+    @Test
     public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
         // task being revoked, needs commit
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)

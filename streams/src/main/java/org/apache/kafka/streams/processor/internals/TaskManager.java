@@ -1058,18 +1058,27 @@ public class TaskManager {
                          "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
         }
 
+        // even if prepare or commit failed, we should still continue and complete suspending those tasks,
+        // so we would capture any exception and rethrow it at the end. some exceptions may be handled
+        // immediately and then swallowed, as such we just need to skip those dirty tasks in the checkpoint
+        final Set<Task> dirtyTasks = new TreeSet<>(Comparator.comparing(Task::id));
+        boolean prepareCommitSucceeded = false;
         if (revokedTasksNeedCommit) {
-            prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
-            // if we need to commit any revoking task then we just commit all of those needed committing together
-            prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
+            try {
+                prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
+                // if we need to commit any revoking task then we just commit all of those needed committing together
+                prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
+                prepareCommitSucceeded = true;
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while preparing to commit revoked tasks " + revokedActiveTasks, e);
+                firstException.compareAndSet(null, e);
+                dirtyTasks.addAll(revokedActiveTasks);
+                dirtyTasks.addAll(commitNeededActiveTasks);
+            }
         }
 
-        // even if commit failed, we should still continue and complete suspending those tasks, so we would capture
-        // any exception and rethrow it at the end. some exceptions may be handled immediately and then swallowed,
-        // as such we just need to skip those dirty tasks in the checkpoint
-        final Set<Task> dirtyTasks = new TreeSet<>(Comparator.comparing(Task::id));
         try {
-            if (revokedTasksNeedCommit) {
+            if (revokedTasksNeedCommit && prepareCommitSucceeded) {
                 // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
                 // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
                 // offset commit because we are in a rebalance
