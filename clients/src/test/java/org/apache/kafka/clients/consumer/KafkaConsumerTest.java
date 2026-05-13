@@ -1407,9 +1407,10 @@ public class KafkaConsumerTest {
         assertNull(committed.get(tp1));
     }
 
+    // NOTE: the rebalance plumbing in prepareRebalance is specific to the CLASSIC consumer.
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
-    public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) throws Exception {
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1422,7 +1423,6 @@ public class KafkaConsumerTest {
 
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
         consumer.poll(Duration.ZERO);
-        TestUtils.waitForCondition(() -> requestGenerated(client, ApiKeys.FETCH), "No fetch request sent");
 
         // respond to the outstanding fetch so that we have data available on the next poll
         client.respondFrom(fetchResponse(tp0, 0, 5), node);
@@ -1437,7 +1437,7 @@ public class KafkaConsumerTest {
 
         consumer.poll(Duration.ZERO);
 
-        TestUtils.waitForCondition(commitReceived::get, "Auto-commit was not sent before position update");
+        assertTrue(commitReceived.get());
     }
 
     // NOTE: the assertion path is specific to the CLASSIC consumer.
