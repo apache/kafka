@@ -1560,7 +1560,7 @@ project(':group-coordinator') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
-    testImplementation project(':coordinator-common').sourceSets.test.output
+    testImplementation testFixtures(project(':coordinator-common'))
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -1778,6 +1778,8 @@ project(':coordinator-common') {
     archivesName = "kafka-coordinator-common"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
@@ -1786,6 +1788,10 @@ project(':coordinator-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.hdrHistogram
+
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation libs.junitJupiter
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
@@ -1829,7 +1835,7 @@ project(':share-coordinator') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
-    testImplementation project(':coordinator-common').sourceSets.test.output
+    testImplementation testFixtures(project(':coordinator-common'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -3530,7 +3536,7 @@ project(':jmh-benchmarks') {
     implementation project(':raft')
     implementation project(':clients')
     implementation project(':coordinator-common')
-    implementation project(':coordinator-common').sourceSets.test.output
+    implementation testFixtures(project(':coordinator-common'))
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':metadata')
@@ -4111,6 +4117,7 @@ gradle.projectsEvaluated {
     'clients': ':clients',
     'server-common': ':server-common',
     'storage/api': ':storage:storage-api',
+    'coordinator-common': ':coordinator-common',
     'group-coordinator': ':group-coordinator',
     'share-coordinator': ':share-coordinator',
     'metadata': ':metadata',
