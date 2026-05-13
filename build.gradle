@@ -413,7 +413,14 @@ subprojects {
           }
 
           afterEvaluate {
-            ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
+            // testFixturesJar is automatically included by components.java when the java-test-fixtures
+            // plugin is applied, so it should only be added explicitly when publishing the shadow
+            // component (which does not include the test-fixtures variant).
+            def artifactTaskNames = ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"]
+            if (shouldPublishWithShadow) {
+              artifactTaskNames += "testFixturesJar"
+            }
+            artifactTaskNames.forEach { taskName ->
               def task = tasks.findByName(taskName)
               if (task != null)
                 artifact task
