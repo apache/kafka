@@ -182,34 +182,6 @@ public class TestUtils {
         return newLeaderExists.get().get();
     }
 
-    /**
-     * Wait until a leader is elected for the given partition and return the leader broker id.
-     *
-     * @param brokers The list of brokers
-     * @param tp The topic partition to check
-     * @param timeoutMs The duration in ms to wait for the leader
-     * @return The leader broker id
-     */
-    public static int waitUntilLeaderIsKnown(
-            Collection<KafkaBroker> brokers,
-            TopicPartition tp,
-            long timeoutMs) throws InterruptedException {
-        return awaitLeaderChange(brokers, tp, Optional.empty(), Optional.empty(), timeoutMs);
-    }
-
-    /**
-     * Wait until a leader is elected for the given partition and return the leader broker id,
-     * using the default timeout.
-     *
-     * @param brokers The list of brokers
-     * @param tp The topic partition to check
-     * @return The leader broker id
-     */
-    public static int waitUntilLeaderIsKnown(
-            Collection<KafkaBroker> brokers,
-            TopicPartition tp) throws InterruptedException {
-        return waitUntilLeaderIsKnown(brokers, tp, DEFAULT_MAX_WAIT_MS);
-    }
 
     /**
      * Wait for the leader of the partition to change from {@code oldLeaderOpt} to {@code expectedLeaderOpt},

@@ -16,17 +16,22 @@
  */
 package org.apache.kafka.server.requests;
 
+import kafka.server.KafkaBroker;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchMetadata;
@@ -43,13 +48,14 @@ import org.apache.kafka.server.IntegrationTestUtils;
 import org.apache.kafka.server.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.net.Socket;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -71,6 +77,7 @@ import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_SELECTOR
 import static org.apache.kafka.server.config.ServerConfigs.BROKER_RACK_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.NUM_PARTITIONS_CONFIG;
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -97,48 +104,44 @@ public class FetchRequestTest {
     public static final int FOLLOWER_BROKER_ID = 1;
 
     private ClusterInstance cluster;
-    Map<String, Uuid> topicIds;
+    private Map<String, Uuid> topicIds;
 
     @ClusterTest
-    @Timeout(15)
     public void testFollowerCompleteDelayedFetchesOnReplication(ClusterInstance cluster) throws Exception {
         this.cluster = cluster;
-        try (Admin admin = cluster.admin()) {
-            cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
-            int leaderId = TestUtils.waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
+        cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
+        int leaderId = waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
 
-            var topicPartition = new TopicPartition(TOPIC, 0);
-            assertEquals(LEADER_BROKER_ID, leaderId);
+        var topicPartition = new TopicPartition(TOPIC, 0);
+        assertEquals(LEADER_BROKER_ID, leaderId);
 
-            var fetchData = createPartitionMap(1000, List.of(topicPartition), Map.of(topicPartition, 0L));
-            var fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 20000, 1, fetchData)
-                    .setMaxBytes(1000)
-                    .rackId("")
-                    .build();
+        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = createPartitionMap(1000, List.of(topicPartition), Map.of(topicPartition, 0L));
+        FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 20000, 1, fetchData)
+                .setMaxBytes(1000)
+                .rackId("")
+                .build();
 
-            int followerPort = cluster.brokers().get(FOLLOWER_BROKER_ID).boundPort(cluster.clientListener());
-            try (var socket = IntegrationTestUtils.connect(followerPort)) {
-                IntegrationTestUtils.sendRequest(socket,
-                                        Utils.toArray(fetchRequest.serializeWithHeader(
-                                            IntegrationTestUtils.nextRequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion()))));
+        int followerPort = cluster.brokers().get(FOLLOWER_BROKER_ID).boundPort(cluster.clientListener());
+        try (Socket socket = IntegrationTestUtils.connect(followerPort)) {
+            IntegrationTestUtils.sendRequest(socket,
+                    Utils.toArray(fetchRequest.serializeWithHeader(
+                            IntegrationTestUtils.nextRequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion()))));
 
-                try (Producer<byte[], byte[]> producer = cluster.producer(Map.of())) {
-                    producer.send(new ProducerRecord<>(TOPIC, "key".getBytes(), "value".getBytes())).get();
-                }
-
-                FetchResponse response = IntegrationTestUtils.receive(socket, ApiKeys.FETCH, ApiKeys.FETCH.latestVersion());
-                assertEquals(Errors.NONE, response.error());
-                assertEquals(Map.of(Errors.NONE, 2), response.errorCounts());
+            try (Producer<byte[], byte[]> producer = cluster.producer(Map.of())) {
+                producer.send(new ProducerRecord<>(TOPIC, "key".getBytes(), "value".getBytes())).get();
             }
+
+            FetchResponse response = IntegrationTestUtils.receive(socket, ApiKeys.FETCH, ApiKeys.FETCH.latestVersion());
+            assertEquals(Errors.NONE, response.error());
+            assertEquals(Map.of(Errors.NONE, 2), response.errorCounts());
         }
     }
 
     @ClusterTest
-    @Timeout(15)
     public void testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(ClusterInstance cluster) throws Exception {
         this.cluster = cluster;
         cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
-        TestUtils.waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
+        waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
 
         produceMessages(10);
         assertEquals(1, getPreferredReplica());
@@ -148,8 +151,8 @@ public class FetchRequestTest {
 
         waitForCondition(
                 () -> {
-                    var leaderBroker = cluster.brokers().get(LEADER_BROKER_ID);
-                    var endpoints = leaderBroker.metadataCache()
+                    KafkaBroker leaderBroker = cluster.brokers().get(LEADER_BROKER_ID);
+                    Map<Integer, Node> endpoints = leaderBroker.metadataCache()
                             .getPartitionReplicaEndpoints(topicPartition, cluster.clientListener());
                     return !endpoints.containsKey(FOLLOWER_BROKER_ID);
                 },
@@ -160,20 +163,26 @@ public class FetchRequestTest {
     }
 
     @ClusterTest
-    @Timeout(60)
     public void testFetchFromFollowerWithRoll(ClusterInstance cluster) throws Exception {
         this.cluster = cluster;
         cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
-        TestUtils.waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
+        waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
 
-        var consumerProps = new HashMap<String, Object>();
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        consumerProps.put(ConsumerConfig.CLIENT_RACK_CONFIG, String.valueOf(FOLLOWER_BROKER_ID));
+        var followerConsumerProps = new HashMap<String, Object>();
+        followerConsumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        followerConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-follower");
+        followerConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        followerConsumerProps.put(ConsumerConfig.CLIENT_RACK_CONFIG, String.valueOf(FOLLOWER_BROKER_ID));
 
-        try (var consumer = cluster.consumer(consumerProps)) {
-            consumer.subscribe(List.of(TOPIC));
+        var leaderConsumerProps = new HashMap<String, Object>();
+        leaderConsumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        leaderConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-leader");
+        leaderConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        try (Consumer<byte[], byte[]> followerConsumer = cluster.consumer(followerConsumerProps);
+             Consumer<byte[], byte[]> leaderConsumer = cluster.consumer(leaderConsumerProps)) {
+            followerConsumer.subscribe(List.of(TOPIC));
+            leaderConsumer.subscribe(List.of(TOPIC));
 
             // Wait until preferred replica is set to follower.
             waitForCondition(
@@ -181,14 +190,16 @@ public class FetchRequestTest {
                     "Preferred replica is not set to follower"
             );
 
-            // Produce and consume.
+            // Produce and consume from both consumers.
             produceMessages(1);
-            consumeRecords(consumer, 1);
+            consumeRecords(followerConsumer, 1);
+            consumeRecords(leaderConsumer, 1);
 
-            // Shutdown follower, produce and consume should work.
+            // Shutdown follower, produce and consume should work for both consumers.
             cluster.shutdownBroker(FOLLOWER_BROKER_ID);
             produceMessages(1);
-            consumeRecords(consumer, 1);
+            consumeRecords(followerConsumer, 1);
+            consumeRecords(leaderConsumer, 1);
 
             // Start the follower and wait until preferred replica is set to follower.
             cluster.startBroker(FOLLOWER_BROKER_ID);
@@ -197,17 +208,17 @@ public class FetchRequestTest {
                     "Preferred replica is not set to follower after restart"
             );
 
-            // Produce and consume should still work.
+            // Produce and consume should still work for both consumers.
             produceMessages(1);
-            consumeRecords(consumer, 1);
+            consumeRecords(followerConsumer, 1);
+            consumeRecords(leaderConsumer, 1);
         }
     }
 
     @ClusterTest
-    @Timeout(60)
     public void testRackAwareRangeAssignor(ClusterInstance cluster) throws Exception {
         this.cluster = cluster;
-        var partitionList = cluster.brokers().keySet().stream()
+        List<Integer> partitionList = cluster.brokers().keySet().stream()
                 .sorted()
                 .toList();
 
@@ -224,7 +235,7 @@ public class FetchRequestTest {
         }
         cluster.createTopicWithAssignment(topicWithSingleRackPartitions, replicaAssignment);
 
-        var consumerConfigs = cluster.brokers().keySet().stream()
+        List<HashMap<String, Object>> consumerConfigs = cluster.brokers().keySet().stream()
                 .sorted()
                 .map(brokerId -> {
                     var config = new HashMap<String, Object>();
@@ -240,19 +251,19 @@ public class FetchRequestTest {
                 })
                 .toList();
 
-        var consumers = consumerConfigs.stream()
-                .map(cluster::consumer)
+        List<Consumer<byte[], byte[]>> consumers = consumerConfigs.stream()
+                .map(config -> cluster.<byte[], byte[]>consumer(config))
                 .toList();
 
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of())) {
             ExecutorService executor = Executors.newFixedThreadPool(consumers.size());
             try {
                 // Rack-based assignment results in partitions assigned in reverse order since partition racks are in the reverse order.
-                verifyRackAwareAssignments(executor, consumers, producer, partitionList, topicWithSingleRackPartitions, reverseList(partitionList));
+                verifyRackAwareAssignments(executor, consumers, producer, partitionList, topicWithSingleRackPartitions, reverseList(partitionList), List.of());
                 // Non-rack-aware assignment results in ordered partitions.
-                verifyRackAwareAssignments(executor, consumers, producer, partitionList, topicWithAllPartitionsOnAllRacks, partitionList);
+                verifyRackAwareAssignments(executor, consumers, producer, partitionList, topicWithAllPartitionsOnAllRacks, partitionList, List.of());
                 // Rack-aware assignment with co-partitioning results in reverse assignment for both topics.
-                verifyRackAwareAssignments(executor, consumers, producer, partitionList, topicWithAllPartitionsOnAllRacks, reverseList(partitionList), topicWithSingleRackPartitions);
+                verifyRackAwareAssignments(executor, consumers, producer, partitionList, topicWithAllPartitionsOnAllRacks, reverseList(partitionList), List.of(topicWithSingleRackPartitions));
 
                 // Perform reassignment for topicWithSingleRackPartitions to reverse the replica racks and
                 // verify that change in replica racks results in re-assignment based on new racks.
@@ -265,15 +276,11 @@ public class FetchRequestTest {
                     admin.alterPartitionReassignments(reassignments).all().get(30, TimeUnit.SECONDS);
                 }
 
-                verifyRackAwareAssignments(executor, consumers, producer, partitionList, topicWithAllPartitionsOnAllRacks, partitionList, topicWithSingleRackPartitions);
+                verifyRackAwareAssignments(executor, consumers, producer, partitionList, topicWithAllPartitionsOnAllRacks, partitionList, List.of(topicWithSingleRackPartitions));
 
             } finally {
-                executor.shutdown();
-                for (Object c : consumers) {
-                    @SuppressWarnings("unchecked")
-                    KafkaConsumer<byte[], byte[]> consumer = (KafkaConsumer<byte[], byte[]>) c;
-                    consumer.close();
-                }
+                executor.shutdownNow();
+                consumers.forEach(Consumer::close);
             }
         }
     }
@@ -284,7 +291,7 @@ public class FetchRequestTest {
         }
         this.topicIds = new HashMap<>();
         try (Admin admin = cluster.admin()) {
-            var descriptions = admin.describeTopics(List.of(TOPIC))
+            Map<String, TopicDescription> descriptions = admin.describeTopics(List.of(TOPIC))
                     .allTopicNames()
                     .get();
             descriptions.forEach((name, desc) -> topicIds.put(name, desc.topicId()));
@@ -314,15 +321,15 @@ public class FetchRequestTest {
 
     private int getPreferredReplica() throws Exception {
         var topicPartition = new TopicPartition(TOPIC, 0);
-        var offsetMap = Map.of(topicPartition, 0L);
-        var fetchData = createPartitionMap(1000, List.of(topicPartition), offsetMap);
-        var fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 500, 1, fetchData)
+        Map<TopicPartition, Long> offsetMap = Map.of(topicPartition, 0L);
+        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = createPartitionMap(1000, List.of(topicPartition), offsetMap);
+        FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 500, 1, fetchData)
                 .setMaxBytes(1000)
                 .rackId(String.valueOf(FOLLOWER_BROKER_ID))
                 .build();
 
         int leaderPort = cluster.brokers().get(LEADER_BROKER_ID).boundPort(cluster.clientListener());
-        try (var socket = IntegrationTestUtils.connect(leaderPort)) {
+        try (Socket socket = IntegrationTestUtils.connect(leaderPort)) {
             IntegrationTestUtils.sendRequest(socket,
                     Utils.toArray(
                             fetchRequest.serializeWithHeader(
@@ -332,7 +339,7 @@ public class FetchRequestTest {
             assertEquals(Errors.NONE, response.error());
             assertEquals(Map.of(Errors.NONE, 2), response.errorCounts());
             assertEquals(1, response.data().responses().size());
-            var topicResponse = response.data().responses().get(0);
+            FetchResponseData.FetchableTopicResponse topicResponse = response.data().responses().get(0);
             assertEquals(1, topicResponse.partitions().size());
             return topicResponse.partitions().get(0).preferredReadReplica();
         }
@@ -348,22 +355,18 @@ public class FetchRequestTest {
 
     private void verifyRackAwareAssignments(
             ExecutorService executor,
-            List<?> consumers,
+            List<Consumer<byte[], byte[]>> consumers,
             Producer<byte[], byte[]> producer,
             List<Integer> partitionList,
             String topic,
             List<Integer> expectedPartitionOrder,
-            String... additionalTopics) throws Exception {
+            List<String> additionalTopics) throws Exception {
 
         List<String> topics = new ArrayList<>();
         topics.add(topic);
-        topics.addAll(List.of(additionalTopics));
+        topics.addAll(additionalTopics);
 
-        for (Object c : consumers) {
-            @SuppressWarnings("unchecked")
-            KafkaConsumer<byte[], byte[]> consumer = (KafkaConsumer<byte[], byte[]>) c;
-            consumer.subscribe(topics);
-        }
+        consumers.forEach(consumer -> consumer.subscribe(topics));
 
         awaitConsumerAssignments(executor, consumers, topics, expectedPartitionOrder);
 
@@ -374,11 +377,9 @@ public class FetchRequestTest {
         }
 
         List<Future<?>> recordFutures = new ArrayList<>();
-        for (Object c : consumers) {
+        for (Consumer<byte[], byte[]> consumer : consumers) {
             recordFutures.add(executor.submit(() -> {
                 try {
-                    @SuppressWarnings("unchecked")
-                    KafkaConsumer<byte[], byte[]> consumer = (KafkaConsumer<byte[], byte[]>) c;
                     consumeRecords(consumer, topics.size());
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -390,16 +391,14 @@ public class FetchRequestTest {
             future.get(30, TimeUnit.SECONDS);
         }
 
-        for (Object c : consumers) {
-            @SuppressWarnings("unchecked")
-            KafkaConsumer<byte[], byte[]> consumer = (KafkaConsumer<byte[], byte[]>) c;
+        for (Consumer<byte[], byte[]> consumer : consumers) {
             consumer.commitSync();
         }
     }
 
     private void awaitConsumerAssignments(
             ExecutorService executor,
-            List<?> consumers,
+            List<Consumer<byte[], byte[]>> consumers,
             List<String> topics,
             List<Integer> expectedPartitionOrder) throws Exception {
 
@@ -412,8 +411,7 @@ public class FetchRequestTest {
                 expectedAssignment.add(new TopicPartition(t, partition));
             }
 
-            @SuppressWarnings("unchecked")
-            KafkaConsumer<byte[], byte[]> consumer = (KafkaConsumer<byte[], byte[]>) consumers.get(i);
+            Consumer<byte[], byte[]> consumer = consumers.get(i);
             assignmentFutures.add(executor.submit(() -> {
                 try {
                     waitForCondition(
@@ -434,7 +432,7 @@ public class FetchRequestTest {
         }
     }
 
-    private static List<Integer> reverseList(List<Integer> list) {
+    private static <T> List<T> reverseList(List<T> list) {
         var reversed = new ArrayList<>(list);
         Collections.reverse(reversed);
         return reversed;
@@ -442,6 +440,12 @@ public class FetchRequestTest {
 
     private static Stream<Arguments> fetchVersions() {
         return ApiKeys.FETCH.allVersions().stream().map(Arguments::of);
+    }
+
+    protected static int waitUntilLeaderIsKnown(
+            Collection<KafkaBroker> brokers,
+            TopicPartition tp) throws InterruptedException {
+        return TestUtils.awaitLeaderChange(brokers, tp, Optional.empty(), Optional.empty(), DEFAULT_MAX_WAIT_MS);
     }
 
     @ParameterizedTest
@@ -647,9 +651,9 @@ public class FetchRequestTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
         TopicIdPartition tp = new TopicIdPartition(topicId, partition, "topic");
-        
+
         FetchRequest fetchRequest = createFetchRequestByVersion(version, topicId, tp);
-        
+
         Map<Uuid, String> topicNames = Collections.singletonMap(topicId, tp.topic());
         List<TopicIdPartition> requestsWithTopicsName = fetchRequest.forgottenTopics(topicNames);
         assertEquals(topicNames.size(), requestsWithTopicsName.size());
