@@ -824,6 +824,8 @@ public class ConsumerMembershipManagerTest {
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment1, membershipManager.memberId()));
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         membershipManager.maybeReconcile(false);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        membershipManager.maybeReconcile(true);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(Collections.singletonMap(topic1, mkSortedSet(0)), membershipManager.currentAssignment().partitions);
@@ -962,6 +964,44 @@ public class ConsumerMembershipManagerTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
 
+    /**
+     * When the resolvable subset of the target equals the current assignment but some topic ids
+     * remain unresolved, partial acknowledgement must not be driven solely by the network
+     * poll path ({@code maybeReconcile(false)}), to avoid redundant heartbeats.
+     */
+    @Test
+    public void testPartialAckNotRepeatedOnBackgroundReconcileWhenMetadataMissing() {
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+        final TopicIdPartition topicId1Partition0 = new TopicIdPartition(topicId1, new TopicPartition(topic1, 0));
+
+        Uuid topicId2 = Uuid.randomUuid();
+
+        ConsumerMembershipManager membershipManager =
+            mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Collections.singletonList(0));
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        when(subscriptionState.assignedPartitions()).thenReturn(getTopicPartitions(Collections.singleton(topicId1Partition0)));
+        clearInvocations(membershipManager, subscriptionState);
+
+        Map<Uuid, SortedSet<Integer>> newAssignment = Map.of(topicId1, mkSortedSet(0), topicId2, mkSortedSet(0));
+        receiveAssignment(newAssignment, membershipManager);
+
+        for (int i = 0; i < 5; i++) {
+            membershipManager.maybeReconcile(false);
+            assertEquals(MemberState.RECONCILING, membershipManager.state());
+            assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        }
+
+        membershipManager.maybeReconcile(true);
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
+    }
+
     // Tests the case where topic metadata is not available at the time of the assignment,
     // but is made available later.
     @Test
@@ -992,7 +1032,9 @@ public class ConsumerMembershipManagerTest {
 
         receiveAssignment(newAssignment, membershipManager);
         membershipManager.maybeReconcile(false);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
 
+        membershipManager.maybeReconcile(true);
         // No full reconciliation triggered, but assignment needs to be acknowledged.
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.shouldHeartbeatNow());
@@ -1002,7 +1044,7 @@ public class ConsumerMembershipManagerTest {
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
-        verify(metadata).requestUpdate(anyBoolean());
+        verify(metadata, times(2)).requestUpdate(anyBoolean());
         clearInvocations(membershipManager, commitRequestManager);
 
         // Metadata discovered for topic2. Should trigger reconciliation to complete the assignment,
