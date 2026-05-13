@@ -376,7 +376,7 @@ public class FetchRequestTest {
             }
         }
 
-        List<Future<?>> recordFutures = new ArrayList<>();
+        List<Future<Void>> recordFutures = new ArrayList<>();
         for (Consumer<byte[], byte[]> consumer : consumers) {
             recordFutures.add(executor.submit(() -> {
                 try {
@@ -384,10 +384,11 @@ public class FetchRequestTest {
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
+                return null;
             }));
         }
 
-        for (Future<?> future : recordFutures) {
+        for (Future<Void> future : recordFutures) {
             future.get(30, TimeUnit.SECONDS);
         }
 
@@ -402,7 +403,7 @@ public class FetchRequestTest {
             List<String> topics,
             List<Integer> expectedPartitionOrder) throws Exception {
 
-        List<Future<?>> assignmentFutures = new ArrayList<>();
+        List<Future<Void>> assignmentFutures = new ArrayList<>();
         for (int i = 0; i < consumers.size(); i++) {
             final int consumerIndex = i;
             int partition = expectedPartitionOrder.get(i);
@@ -424,10 +425,11 @@ public class FetchRequestTest {
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
+                return null;
             }));
         }
 
-        for (Future<?> future : assignmentFutures) {
+        for (Future<Void> future : assignmentFutures) {
             future.get(30, TimeUnit.SECONDS);
         }
     }
