@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
         @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
         @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
         @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor")
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareTestAssignor")
     }
 )
 public class ShareConsumerRackAwareTest {
