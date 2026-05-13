@@ -61,8 +61,8 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
 
     private final AbstractKafkaConfig config;
     private final TopicCreator topicCreator;
-    private final Supplier<Properties> groupCoordinator;
-    private final Supplier<Properties> shareCoordinator;
+    private final Supplier<Properties> groupCoordinatorConfigsSupplier;
+    private final Supplier<Properties> shareCoordinatorConfigsSupplier;
     private final Supplier<Properties> transactionTopicConfigsSupplier;
     private final Time time;
     private final Set<String> inflightTopics = ConcurrentHashMap.newKeySet();
@@ -99,8 +99,8 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
             int topicErrorCacheCapacity
     ) {
         this.config = config;
-        this.groupCoordinator = groupCoordinatorConfigsSupplier;
-        this.shareCoordinator = shareCoordinatorConfigsSupplier;
+        this.groupCoordinatorConfigsSupplier = groupCoordinatorConfigsSupplier;
+        this.shareCoordinatorConfigsSupplier = shareCoordinatorConfigsSupplier;
         this.transactionTopicConfigsSupplier = transactionTopicConfigsSupplier;
         this.time = time;
         this.topicCreator = topicCreator;
@@ -117,20 +117,19 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
         var uncreatableTopicResponses = new ArrayList<MetadataResponseTopic>();
         topics.forEach(topic -> {
             // Attempt basic topic validation before sending any requests to the controller.
-            Optional<Errors> validationError = Optional.empty();
             if (!isValidTopicName(topic)) {
-                validationError = Optional.of(Errors.INVALID_TOPIC_EXCEPTION);
+                uncreatableTopicResponses.add(new MetadataResponseTopic()
+                    .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code())
+                    .setName(topic)
+                    .setIsInternal(Topic.isInternal(topic)));
             } else if (!inflightTopics.add(topic)) {
-                validationError = Optional.of(Errors.UNKNOWN_TOPIC_OR_PARTITION);
+                uncreatableTopicResponses.add(new MetadataResponseTopic()
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setName(topic)
+                    .setIsInternal(Topic.isInternal(topic)));
+            } else {
+                creatableTopics.put(topic, creatableTopic(topic));
             }
-
-            validationError.ifPresentOrElse(
-                    error -> uncreatableTopicResponses.add(new MetadataResponseTopic()
-                            .setErrorCode(error.code())
-                            .setName(topic)
-                            .setIsInternal(Topic.isInternal(topic))),
-                    () -> creatableTopics.put(topic, creatableTopic(topic))
-            );
         });
         var creatableTopicResponses = creatableTopics.isEmpty() ?
                 List.<MetadataResponseTopic>of() : sendCreateTopicRequest(creatableTopics, metadataRequestContext);
@@ -244,7 +243,7 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                     .setName(topic)
                     .setNumPartitions(groupCoordinatorConfig.offsetsTopicPartitions())
                     .setReplicationFactor(groupCoordinatorConfig.offsetsTopicReplicationFactor())
-                    .setConfigs(convertToTopicConfigCollections(groupCoordinator.get()));
+                    .setConfigs(convertToTopicConfigCollections(groupCoordinatorConfigsSupplier.get()));
             }
             case Topic.TRANSACTION_STATE_TOPIC_NAME -> {
                 var transactionLogConfig = new TransactionLogConfig(config);
@@ -260,7 +259,7 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                     .setName(topic)
                     .setNumPartitions(shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
                     .setReplicationFactor(shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
-                    .setConfigs(convertToTopicConfigCollections(shareCoordinator.get()));
+                    .setConfigs(convertToTopicConfigCollections(shareCoordinatorConfigsSupplier.get()));
             }
             default -> {
                 int numPartitions = config.originals().containsKey(ServerLogConfigs.NUM_PARTITIONS_CONFIG)
