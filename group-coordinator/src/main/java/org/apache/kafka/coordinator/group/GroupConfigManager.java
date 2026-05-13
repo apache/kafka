@@ -76,7 +76,7 @@ public class GroupConfigManager implements AutoCloseable {
     }
 
     /**
-     * Get the group config if it exists, otherwise return None.
+     * Get the group config if it exists, otherwise return an empty Optional.
      * The returned config has already been evaluated within broker-level bounds.
      *
      * @param groupId  The group id.

@@ -573,7 +573,7 @@ public class StreamsGroup implements Group {
         if (tasks == null) {
             return null;
         } else {
-            return tasks.getOrDefault(taskId, null);
+            return tasks.get(taskId);
         }
     }
 
