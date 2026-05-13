@@ -83,7 +83,7 @@ Kafka Streams adds **header-aware** state stores. Opt in with the new `Stores` s
 - `persistentTimestampedWindowStoreWithHeaders` with `timestampedWindowStoreWithHeadersBuilder`
 - `persistentSessionStoreWithHeaders` with `sessionStoreWithHeadersBuilder`
 
-See the [Processor API state store documentation](developer-guide/processor-api/#headers-in-state-stores).
+See the [Processor API state store documentation](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores).
 
 Existing applications that keep using the same headerless `Stores` suppliers and builders are unaffected: storage format, changelogs, and performance stay as before.
 
@@ -91,7 +91,7 @@ For stores that adopt the header-aware format, KIP-1271 defines a single rolling
 
 Storing headers increases disk and serialization cost versus headerless stores; the KIP discusses lazy header parsing and other performance considerations.
 
-`TopologyTestDriver` and Interactive Queries support the new store types. The existing `store()` facades continue to return values (or `ValueAndTimestamp`) without exposing record headers. See the [interactive queries guide](developer-guide/interactive-queries/#header-aware-stores-interactive-queries).
+`TopologyTestDriver` and Interactive Queries support the new store types. The existing `store()` facades continue to return values (or `ValueAndTimestamp`) without exposing record headers. See the [interactive queries guide](/{version}/streams/developer-guide/interactive-queries/#header-aware-stores-interactive-queries).
 
 ### Deprecation of streams-scala module (KIP-1244)
 
