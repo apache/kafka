@@ -176,4 +176,3 @@ public interface RebalanceConsumer extends AutoCloseable {
     @Override
     void close();
 }
-
