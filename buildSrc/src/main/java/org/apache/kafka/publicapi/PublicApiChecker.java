@@ -20,11 +20,11 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Core logic for checking @PublicApi annotation compliance.
+ * Core logic for checking @InterfaceAudience.Public annotation compliance.
  */
 public class PublicApiChecker {
     public static final Logger logger = LoggerFactory.getLogger(PublicApiChecker.class);
-    private static final String PUBLIC_API = "org.apache.kafka.common.annotation.PublicApi";
+    private static final String PUBLIC_API = "org.apache.kafka.common.annotation.InterfaceAudience$Public";
     private static final String DEPRECATED_ANNOTATION = "java.lang.Deprecated";
 
     private final ClassLoader classLoader;
@@ -35,7 +35,7 @@ public class PublicApiChecker {
 
     /**
      * Check public API violations using dual validation approach.
-     * This method combines HTML-based class discovery from javadoc JAR with @PublicApi annotation scanning.
+     * This method combines HTML-based class discovery from javadoc JAR with @InterfaceAudience.Public annotation scanning.
      */
     public List<PublicApiViolation> checkPublicApiConsistency(File javadocJar, List<File> projectJars) throws IOException {
         List<PublicApiViolation> violations = new ArrayList<>();
@@ -55,18 +55,33 @@ public class PublicApiChecker {
 
 
     /**
-     * Check public API violations in source files (for external usage checking).
+     * Check for internal Kafka API usage by walking compiled bytecode (.class files) under the
+     * supplied roots. Roots may be class directories, individual .class files, or .jar archives.
+     *
+     * <p>Replaces the previous .java-source regex scan, which only caught Java imports. The
+     * bytecode walk catches Java, Scala, Kotlin and any other JVM-language consumer uniformly,
+     * including fully-qualified usages with no import statement.
      */
-    public List<PublicApiViolation> checkSourceFiles(List<File> sourceFiles) throws IOException {
-        List<PublicApiViolation> violations = new ArrayList<>();
+    public ScanResult checkBytecode(List<File> classFileRoots) throws IOException {
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(this::isPublicApi);
+        return scanner.scan(classFileRoots);
+    }
 
-        for (File sourceFile : sourceFiles) {
-            if (sourceFile.getName().endsWith(".java")) {
-                violations.addAll(checkSourceFileForInternalApiUsage(sourceFile));
-            }
+    /**
+     * @return true if the binary class name (e.g. {@code org.apache.kafka.clients.producer.KafkaProducer})
+     *         is annotated with {@code @InterfaceAudience.Public} on the loadable classpath.
+     */
+    public boolean isPublicApi(String binaryClassName) {
+        if (!shouldCheckClass(binaryClassName)) {
+            // Outside org.apache.kafka.* or deprecated -- not a violation.
+            return true;
         }
-
-        return violations;
+        try {
+            return hasPublicApiAnnotation(classLoader.loadClass(binaryClassName));
+        } catch (ClassNotFoundException e) {
+            logger.debug("Could not resolve {} on checker classpath; treating as non-public", binaryClassName);
+            return false;
+        }
     }
 
     /**
@@ -94,7 +109,7 @@ public class PublicApiChecker {
     }
 
     /**
-     * Find all classes with @PublicApi annotations by scanning project JAR files.
+     * Find all classes with @InterfaceAudience.Public annotations by scanning project JAR files.
      */
     private Set<String> findPublicApiAnnotatedClasses(List<File> projectJars) throws IOException {
         Set<String> annotatedClasses = new HashSet<>();
@@ -124,30 +139,30 @@ public class PublicApiChecker {
     }
 
     /**
-     * Cross-validate consistency between HTML classes and @PublicApi annotated classes.
+     * Cross-validate consistency between HTML classes and @InterfaceAudience.Public annotated classes.
      */
     private List<PublicApiViolation> crossValidateClassSets(Set<String> classesWithPublicDoc, Set<String> annotatedClasses) {
         List<PublicApiViolation> violations = new ArrayList<>();
 
-        // Check: @PublicApi classes missing from javadoc
+        // Check: @InterfaceAudience.Public classes missing from javadoc
         for (String className : annotatedClasses) {
             if (!classesWithPublicDoc.contains(className)) {
                 violations.add(new PublicApiViolation(
                     className,
                     "MISSING_JAVADOC",
-                    "Class has @PublicApi annotation but is missing from javadoc",
+                    "Class has @InterfaceAudience.Public annotation but is missing from javadoc",
                     null
                 ));
             }
         }
 
-        // Check: Javadoc classes missing @PublicApi annotation
+        // Check: Javadoc classes missing @InterfaceAudience.Public annotation
         for (String className : classesWithPublicDoc) {
             if (!annotatedClasses.contains(className)) {
                 violations.add(new PublicApiViolation(
                     className,
                     "MISSING_PUBLICAPI_ANNOTATION",
-                    "Class appears in javadoc but lacks @PublicApi annotation",
+                    "Class appears in javadoc but lacks @InterfaceAudience.Public annotation",
                     null
                 ));
             }
@@ -172,46 +187,6 @@ public class PublicApiChecker {
                 "Unable to load class: " + e.getMessage(),
                 null
             ));
-        }
-
-        return violations;
-    }
-
-    private List<PublicApiViolation> checkSourceFileForInternalApiUsage(File sourceFile) throws IOException {
-        List<PublicApiViolation> violations = new ArrayList<>();
-
-        // Parse Java file for imports from org.apache.kafka.**
-        try (java.util.Scanner scanner = new java.util.Scanner(sourceFile)) {
-            int lineNumber = 0;
-            while (scanner.hasNextLine()) {
-                lineNumber++;
-                String line = scanner.nextLine().trim();
-
-                if (line.startsWith("import ") && line.contains("org.apache.kafka.")) {
-                    String importedClass = extractImportedClass(line);
-                    if (importedClass != null && shouldCheckClass(importedClass)) {
-                        try {
-                            Class<?> clazz = classLoader.loadClass(importedClass);
-                            if (!hasPublicApiAnnotation(clazz)) {
-                                violations.add(new PublicApiViolation(
-                                    importedClass,
-                                    "INTERNAL_API_USAGE",
-                                    String.format("Importing internal Kafka API class at %s:%d ", sourceFile, lineNumber),
-                                    null
-                                ));
-                            }
-                        } catch (ClassNotFoundException e) {
-                            // Class not found, might be using older Kafka version
-                            violations.add(new PublicApiViolation(
-                                importedClass,
-                                "CLASS_NOT_FOUND",
-                                "Unable to verify API status, class not found: " + e.getMessage(),
-                                null
-                            ));
-                        }
-                    }
-                }
-            }
         }
 
         return violations;
@@ -273,7 +248,7 @@ public class PublicApiChecker {
                     violations.add(new PublicApiViolation(
                         clazz.getName(),
                         "INVALID_INNER_CLASS",
-                        "Public inner class lacks @PublicApi annotation: " + innerClass.getSimpleName(),
+                        "Public inner class lacks @InterfaceAudience.Public annotation: " + innerClass.getSimpleName(),
                         innerClass.getSimpleName()
                     ));
                 }
@@ -285,7 +260,7 @@ public class PublicApiChecker {
 
     private boolean hasPublicApiAnnotation(Class<?> clazz) {
         if (logger.isDebugEnabled()) {
-            logger.debug("Checking @PublicApi annotation for class: {} with annotations: {}", clazz.getName(),
+            logger.debug("Checking @InterfaceAudience.Public annotation for class: {} with annotations: {}", clazz.getName(),
                     Arrays.stream(clazz.getDeclaredAnnotations())
                             .map(a -> a.annotationType().getName())
                             .reduce((a, b) -> a + ", " + b)
@@ -318,15 +293,6 @@ public class PublicApiChecker {
         }
 
         return true;
-    }
-
-    private String extractImportedClass(String importLine) {
-        // Extract class name from import statement
-        String line = importLine.trim();
-        if (line.startsWith("import ") && line.endsWith(";")) {
-            return line.substring(7, line.length() - 1).trim();
-        }
-        return null;
     }
 
     /**
@@ -363,13 +329,13 @@ public class PublicApiChecker {
     }
 
     /**
-     * Check if a class (by name) has @PublicApi annotation.
+     * Check if a class (by name) has @InterfaceAudience.Public annotation.
      */
     private boolean hasPublicApiAnnotation(String className) {
         try {
             Class<?> clazz = classLoader.loadClass(className);
             boolean hasPublicApiAnnotation = hasPublicApiAnnotation(clazz);
-            logger.trace("Class {} has @PublicApi: {}", className, hasPublicApiAnnotation);
+            logger.trace("Class {} has @InterfaceAudience.Public: {}", className, hasPublicApiAnnotation);
             return hasPublicApiAnnotation;
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);

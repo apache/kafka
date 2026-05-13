@@ -38,7 +38,7 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
 
     public KafkaPublicApiCheckerTask() {
         setGroup("verification");
-        setDescription("Checks consistency between javadoc HTML files and @PublicApi annotations across project JARs");
+        setDescription("Checks consistency between javadoc HTML files and @InterfaceAudience.Public annotations across project JARs");
 
         // Set default values
         enabled.convention(true);

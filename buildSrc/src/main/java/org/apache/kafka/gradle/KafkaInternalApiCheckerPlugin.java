@@ -1,6 +1,5 @@
 package org.apache.kafka.gradle;
 
-import org.gradle.api.DefaultTask;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.tasks.TaskProvider;
@@ -22,14 +21,14 @@ public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
             .register("kafkaInternalApiChecker", KafkaInternalApiCheckerTask.class, task -> {
                 task.getCheckerEnabled().set(extension.getEnabled());
                 task.getFailOnViolation().set(extension.getFailOnViolation());
-                task.getSourceDirs().set(extension.getSourceDirs());
+                task.getClassDirs().set(extension.getClassDirs());
                 task.getReportFile().set(extension.getReportFile());
             });
 
         // Configure task to run as part of verification
         project.afterEvaluate(p -> {
-
-            TaskProvider<DefaultTask> compileJava = project.getTasks().named("compileJava", DefaultTask.class);
+            // Bytecode scan requires compiled output; ensure the project's classes task has run.
+            taskProvider.configure(task -> task.dependsOn(project.getTasks().named("classes")));
 
             // Integrate into the standard build lifecycle - add to 'check' task
             project.getTasks().named("check").configure(checkTask -> {

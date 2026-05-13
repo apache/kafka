@@ -27,18 +27,10 @@ public class PublicApiCheckerTest {
     Path tempDir;
 
     private PublicApiChecker checker;
-    private Set<String> includePackages;
-    private Set<String> excludePackages;
 
     @BeforeEach
     void setUp() {
-        includePackages = new HashSet<>();
-        includePackages.add("org.apache.kafka");
-
-        excludePackages = new HashSet<>();
-        excludePackages.add("org.apache.kafka.common.internals");
-
-        checker = new PublicApiChecker(includePackages, excludePackages, getClass().getClassLoader());
+        checker = new PublicApiChecker(getClass().getClassLoader());
     }
 
     @Test
@@ -125,14 +117,14 @@ public class PublicApiCheckerTest {
         PublicApiViolation violation = violations.get(0);
         assertEquals("MISSING_JAVADOC", violation.getViolationType());
         assertEquals("org.apache.kafka.clients.producer.Producer", violation.getClassName());
-        assertTrue(violation.getDescription().contains("@PublicApi annotation but is missing from javadoc"));
+        assertTrue(violation.getDescription().contains("@InterfaceAudience.Public annotation but is missing from javadoc"));
     }
 
     @Test
     void testCrossValidateClassSets_MissingAnnotation() throws Exception {
         Set<String> htmlClasses = new HashSet<>();
         htmlClasses.add("org.apache.kafka.common.Resource");
-        htmlClasses.add("org.apache.kafka.clients.producer.Producer"); // Missing @PublicApi
+        htmlClasses.add("org.apache.kafka.clients.producer.Producer"); // Missing @InterfaceAudience.Public
 
         Set<String> annotatedClasses = new HashSet<>();
         annotatedClasses.add("org.apache.kafka.common.Resource");
@@ -149,7 +141,7 @@ public class PublicApiCheckerTest {
         PublicApiViolation violation = violations.get(0);
         assertEquals("MISSING_PUBLICAPI_ANNOTATION", violation.getViolationType());
         assertEquals("org.apache.kafka.clients.producer.Producer", violation.getClassName());
-        assertTrue(violation.getDescription().contains("appears in javadoc but lacks @PublicApi annotation"));
+        assertTrue(violation.getDescription().contains("appears in javadoc but lacks @InterfaceAudience.Public annotation"));
     }
 
     @Test
@@ -185,17 +177,6 @@ public class PublicApiCheckerTest {
 
         // Should find violations due to class loading issues (mocked environment)
         // The exact number depends on implementation, but should not crash
-        assertNotNull(violations);
-    }
-
-    @Test
-    void testBackwardCompatibility_FallbackToOldMethod() throws IOException {
-        File javadocJar = createMockJavadocJar();
-
-        // Test that old checkJarFile method still works
-        List<PublicApiViolation> violations = checker.checkJarFile(javadocJar);
-
-        // Should not crash and return some result
         assertNotNull(violations);
     }
 

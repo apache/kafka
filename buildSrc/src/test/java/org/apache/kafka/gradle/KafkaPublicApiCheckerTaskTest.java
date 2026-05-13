@@ -38,8 +38,6 @@ public class KafkaPublicApiCheckerTaskTest {
         assertTrue(task.getCheckerEnabled().get());
         assertTrue(task.getFailOnViolation().get());
         assertTrue(task.getEnforceJavadocConsistency().get());
-        assertTrue(task.getIncludePackages().get().isEmpty());
-        assertFalse(task.getExcludePackages().get().isEmpty());
     }
 
     @Test
@@ -115,7 +113,7 @@ public class KafkaPublicApiCheckerTaskTest {
 
     @Test
     void testTaskDescription() {
-        assertEquals("Checks consistency between javadoc HTML files and @PublicApi annotations across project JARs",
+        assertEquals("Checks consistency between javadoc HTML files and @InterfaceAudience.Public annotations across project JARs",
                     task.getDescription());
     }
 

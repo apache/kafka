@@ -1,0 +1,345 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.publicapi;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.objectweb.asm.AnnotationVisitor;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.Predicate;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class BytecodeApiUsageScannerTest {
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void scan_noRoots_returnsEmpty() throws IOException {
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(true));
+        ScanResult result = scanner.scan(Collections.emptyList());
+        assertTrue(result.getViolations().isEmpty());
+        assertTrue(result.getSuppressions().isEmpty());
+    }
+
+    @Test
+    void scan_consumerReferencesPublicApiClass_returnsNoViolations() throws IOException {
+        File classFile = writeClassFile("com/example/PublicConsumer",
+                generateConsumerReferencing("com/example/PublicConsumer", "org/apache/kafka/clients/producer/KafkaProducer"));
+
+        Predicate<String> isPublic = name -> "org.apache.kafka.clients.producer.KafkaProducer".equals(name);
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(isPublic);
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+
+        assertTrue(violations.isEmpty(),
+                "Reference to an @InterfaceAudience.Public class must not be reported, but got: " + violations);
+    }
+
+    @Test
+    void scan_consumerReferencesInternalApiClass_returnsViolation() throws IOException {
+        File classFile = writeClassFile("com/example/InternalConsumer",
+                generateConsumerReferencing("com/example/InternalConsumer", "org/apache/kafka/internals/SecretCabal"));
+
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+
+        assertFalse(violations.isEmpty(), "Reference to an internal Kafka class must be reported");
+        PublicApiViolation v = violations.get(0);
+        assertEquals("INTERNAL_API_USAGE", v.getViolationType());
+        assertEquals("org.apache.kafka.internals.SecretCabal", v.getClassName());
+        assertTrue(v.getDescription().contains("com.example.InternalConsumer"),
+                "violation must name the consumer class. got: " + v.getDescription());
+    }
+
+    @Test
+    void scan_ignoresNonKafkaReferences() throws IOException {
+        File classFile = writeClassFile("com/example/JdkConsumer",
+                generateConsumerReferencing("com/example/JdkConsumer", "java/util/HashMap"));
+
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+
+        assertTrue(violations.isEmpty(),
+                "References to non-Kafka classes (e.g. JDK) must not be reported, got: " + violations);
+    }
+
+    @Test
+    void scan_classesPackagedInJar_areScanned() throws IOException {
+        byte[] internalBytes = generateConsumerReferencing(
+                "com/example/JarConsumer", "org/apache/kafka/internals/Hidden");
+        File jar = tempDir.resolve("consumer.jar").toFile();
+        try (JarOutputStream jos = new JarOutputStream(new FileOutputStream(jar))) {
+            jos.putNextEntry(new JarEntry("com/example/JarConsumer.class"));
+            jos.write(internalBytes);
+            jos.closeEntry();
+        }
+
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(jar)).getViolations();
+
+        assertFalse(violations.isEmpty(), "scan of jar should find the internal reference");
+        assertEquals("org.apache.kafka.internals.Hidden", violations.get(0).getClassName());
+    }
+
+    @Test
+    void scan_classWithKafkaFieldOfInternalType_returnsViolation() throws IOException {
+        // Different bytecode shape: a field whose type is an internal Kafka class.
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC, "com/example/FieldHolder", null, "java/lang/Object", null);
+        cw.visitField(Opcodes.ACC_PRIVATE, "secret", "Lorg/apache/kafka/internals/Hidden;", null, null).visitEnd();
+        // default ctor
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        mv.visitCode();
+        mv.visitVarInsn(Opcodes.ALOAD, 0);
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+        cw.visitEnd();
+        File classFile = writeClassFile("com/example/FieldHolder", cw.toByteArray());
+
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+
+        assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Hidden".equals(v.getClassName())),
+                "field-type reference must be reported, got: " + violations);
+    }
+
+    @Test
+    void scan_classLevelSuppressionAnnotation_skipsViolations() throws IOException {
+        byte[] bytes = generateConsumerReferencing(
+                "com/example/SuppressedClass", "org/apache/kafka/internals/Hidden",
+                ClassAnnotation.suppress("ports legacy adapter; tracked in JIRA-1234"),
+                MethodAnnotations.none());
+        File classFile = writeClassFile("com/example/SuppressedClass", bytes);
+
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        ScanResult result = scanner.scan(List.of(classFile.getParentFile()));
+
+        assertTrue(result.getViolations().isEmpty(),
+                "Class-level @SuppressKafkaInternalApiUsage must suppress all violations; got: " + result.getViolations());
+        assertFalse(result.getSuppressions().isEmpty(),
+                "suppressions list must record the skipped reference so it shows in the report");
+        PublicApiViolation s = result.getSuppressions().get(0);
+        assertEquals("SUPPRESSED_INTERNAL_API_USAGE", s.getViolationType());
+        assertTrue(s.getDescription().contains("ports legacy adapter; tracked in JIRA-1234"),
+                "suppression description must carry the annotation's reason; got: " + s.getDescription());
+    }
+
+    @Test
+    void scan_methodLevelSuppression_skipsOnlyThatMethod() throws IOException {
+        byte[] bytes = generateConsumerWithTwoMethods(
+                "com/example/PartiallySuppressed",
+                "org/apache/kafka/internals/Hidden",
+                MethodAnnotations.suppressOn("useIt", "intentional fallback"));
+        File classFile = writeClassFile("com/example/PartiallySuppressed", bytes);
+
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+
+        // The other method ("alsoUseIt") is not suppressed -- it must still report.
+        assertEquals(1, violations.size(),
+                "method-level suppression must only affect that method; got: " + violations);
+        assertEquals("alsoUseIt", violations.get(0).getMemberName(),
+                "unsuppressed method should be the one reported");
+    }
+
+    @Test
+    void scan_suppressionWithoutReason_stillSuppresses() throws IOException {
+        byte[] bytes = generateConsumerReferencing(
+                "com/example/SuppressedNoReason", "org/apache/kafka/internals/Hidden",
+                ClassAnnotation.suppress(null),  // annotation present, no value()
+                MethodAnnotations.none());
+        File classFile = writeClassFile("com/example/SuppressedNoReason", bytes);
+
+        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+
+        assertTrue(violations.isEmpty(),
+                "@SuppressKafkaInternalApiUsage with no reason must still suppress; got: " + violations);
+    }
+
+    /** Build a class with a default ctor and a method that loads a class constant of {@code internalNameOfReferenced}. */
+    private static byte[] generateConsumerReferencing(String consumerInternalName, String internalNameOfReferenced) {
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC, consumerInternalName, null, "java/lang/Object", null);
+
+        // default ctor
+        MethodVisitor ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        ctor.visitCode();
+        ctor.visitVarInsn(Opcodes.ALOAD, 0);
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        ctor.visitInsn(Opcodes.RETURN);
+        ctor.visitMaxs(0, 0);
+        ctor.visitEnd();
+
+        // public void useIt() { Class<?> c = <referenced>.class; }
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "useIt", "()V", null, null);
+        mv.visitCode();
+        mv.visitLdcInsn(org.objectweb.asm.Type.getObjectType(internalNameOfReferenced));
+        mv.visitInsn(Opcodes.POP);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+
+        cw.visitEnd();
+        return cw.toByteArray();
+    }
+
+    private File writeClassFile(String internalName, byte[] bytes) throws IOException {
+        File classFile = tempDir.resolve(internalName.replace('/', '_') + ".class").toFile();
+        Files.write(classFile.toPath(), bytes);
+        return classFile;
+    }
+
+    private static Predicate<String> always(boolean value) {
+        return s -> value;
+    }
+
+    // --- suppression-aware test helpers -------------------------------------------------
+
+    private static final String SUPPRESS_DESC =
+            "Lorg/apache/kafka/common/annotation/SuppressKafkaInternalApiUsage;";
+
+    /** Class-level annotation descriptor — empty = no class annotation. */
+    private static final class ClassAnnotation {
+        final String reason; // null reason => annotation present with no value(); empty marker => no annotation
+        final boolean present;
+        private ClassAnnotation(boolean present, String reason) {
+            this.present = present;
+            this.reason = reason;
+        }
+        static ClassAnnotation none() {
+            return new ClassAnnotation(false, null);
+        }
+        static ClassAnnotation suppress(String reason) {
+            return new ClassAnnotation(true, reason);
+        }
+    }
+
+    /** Per-method suppression directives. */
+    private static final class MethodAnnotations {
+        final String suppressedMethod;
+        final String reason;
+        private MethodAnnotations(String suppressedMethod, String reason) {
+            this.suppressedMethod = suppressedMethod;
+            this.reason = reason;
+        }
+        static MethodAnnotations none() {
+            return new MethodAnnotations(null, null);
+        }
+        static MethodAnnotations suppressOn(String methodName, String reason) {
+            return new MethodAnnotations(methodName, reason);
+        }
+    }
+
+    /** Overload that also writes class-level + method-level suppression annotations. */
+    private static byte[] generateConsumerReferencing(String consumerInternalName,
+                                                     String internalNameOfReferenced,
+                                                     ClassAnnotation classAnnotation,
+                                                     MethodAnnotations methodAnnotations) {
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC, consumerInternalName, null, "java/lang/Object", null);
+
+        if (classAnnotation.present) {
+            AnnotationVisitor av = cw.visitAnnotation(SUPPRESS_DESC, true);
+            if (classAnnotation.reason != null) {
+                av.visit("value", classAnnotation.reason);
+            }
+            av.visitEnd();
+        }
+
+        // default ctor
+        MethodVisitor ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        ctor.visitCode();
+        ctor.visitVarInsn(Opcodes.ALOAD, 0);
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        ctor.visitInsn(Opcodes.RETURN);
+        ctor.visitMaxs(0, 0);
+        ctor.visitEnd();
+
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "useIt", "()V", null, null);
+        if ("useIt".equals(methodAnnotations.suppressedMethod)) {
+            AnnotationVisitor mav = mv.visitAnnotation(SUPPRESS_DESC, true);
+            if (methodAnnotations.reason != null) {
+                mav.visit("value", methodAnnotations.reason);
+            }
+            mav.visitEnd();
+        }
+        mv.visitCode();
+        mv.visitLdcInsn(org.objectweb.asm.Type.getObjectType(internalNameOfReferenced));
+        mv.visitInsn(Opcodes.POP);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+
+        cw.visitEnd();
+        return cw.toByteArray();
+    }
+
+    /** Two methods both referencing the same internal class, with a suppression on one. */
+    private static byte[] generateConsumerWithTwoMethods(String consumerInternalName,
+                                                        String internalNameOfReferenced,
+                                                        MethodAnnotations methodAnnotations) {
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC, consumerInternalName, null, "java/lang/Object", null);
+
+        // default ctor
+        MethodVisitor ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        ctor.visitCode();
+        ctor.visitVarInsn(Opcodes.ALOAD, 0);
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        ctor.visitInsn(Opcodes.RETURN);
+        ctor.visitMaxs(0, 0);
+        ctor.visitEnd();
+
+        for (String methodName : List.of("useIt", "alsoUseIt")) {
+            MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, methodName, "()V", null, null);
+            if (methodName.equals(methodAnnotations.suppressedMethod)) {
+                AnnotationVisitor mav = mv.visitAnnotation(SUPPRESS_DESC, true);
+                if (methodAnnotations.reason != null) {
+                    mav.visit("value", methodAnnotations.reason);
+                }
+                mav.visitEnd();
+            }
+            mv.visitCode();
+            mv.visitLdcInsn(org.objectweb.asm.Type.getObjectType(internalNameOfReferenced));
+            mv.visitInsn(Opcodes.POP);
+            mv.visitInsn(Opcodes.RETURN);
+            mv.visitMaxs(0, 0);
+            mv.visitEnd();
+        }
+
+        cw.visitEnd();
+        return cw.toByteArray();
+    }
+}

@@ -737,7 +737,7 @@ subprojects {
 
 kafkaPublicApiChecker {
 
-    // NEW: Add all project JARs for @PublicApi scanning
+    // NEW: Add all project JARs for @InterfaceAudience.Public scanning
     projectJarFiles.from(
         jar.archiveFile,                    // Main JAR
         // Add other relevant JARs if needed

@@ -18,6 +18,9 @@ java {
 }
 
 dependencies {
+    // For bytecode scanning (used by the internal-API-usage checker)
+    implementation 'org.ow2.asm:asm:9.6'
+
     // For Maven plugin functionality
     implementation 'org.apache.maven:maven-plugin-api:3.9.4'
     implementation 'org.apache.maven:maven-core:3.9.4'

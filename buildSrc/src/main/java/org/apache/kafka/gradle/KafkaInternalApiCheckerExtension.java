@@ -3,11 +3,9 @@ package org.apache.kafka.gradle;
 import org.gradle.api.Project;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.RegularFileProperty;
-import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 
 import java.io.File;
-import java.util.Arrays;
 
 /**
  * Configuration extension for the KafkaInternalApiChecker plugin.
@@ -16,7 +14,7 @@ import java.util.Arrays;
 public class KafkaInternalApiCheckerExtension {
     private final Property<Boolean> enabled;
     private final Property<Boolean> failOnViolation;
-    private final ConfigurableFileCollection sourceDirs;
+    private final ConfigurableFileCollection classDirs;
     private final RegularFileProperty reportFile;
 
     public KafkaInternalApiCheckerExtension(Project project) {
@@ -26,9 +24,9 @@ public class KafkaInternalApiCheckerExtension {
         this.failOnViolation = project.getObjects().property(Boolean.class);
         this.failOnViolation.convention(true);
 
-        this.sourceDirs = project.getObjects().fileCollection();
-        // Default to standard Java source directories
-        this.sourceDirs.from(project.file("src/main/java"));
+        this.classDirs = project.getObjects().fileCollection();
+        // Default to standard compiled-class output directory; covers java/scala/kotlin subdirs.
+        this.classDirs.from(project.file("build/classes"));
 
         this.reportFile = project.getObjects().fileProperty();
         this.reportFile.convention(project.getLayout().getBuildDirectory().file("reports/kafka-internal-api-usage.txt"));
@@ -50,12 +48,12 @@ public class KafkaInternalApiCheckerExtension {
         this.failOnViolation.set(failOnViolation);
     }
 
-    public ConfigurableFileCollection getSourceDirs() {
-        return sourceDirs;
+    public ConfigurableFileCollection getClassDirs() {
+        return classDirs;
     }
 
-    public void setSourceDirs(Object... sourceDirs) {
-        this.sourceDirs.setFrom(sourceDirs);
+    public void setClassDirs(Object... classDirs) {
+        this.classDirs.setFrom(classDirs);
     }
 
     public RegularFileProperty getReportFile() {

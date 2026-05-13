@@ -2,6 +2,7 @@ package org.apache.kafka.maven;
 
 import org.apache.kafka.publicapi.PublicApiChecker;
 import org.apache.kafka.publicapi.PublicApiViolation;
+import org.apache.kafka.publicapi.ScanResult;
 import org.apache.kafka.publicapi.ViolationReporter;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
@@ -16,14 +17,14 @@ import org.apache.maven.project.MavenProject;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Maven plugin for checking that external projects don't use internal Kafka APIs.
  *
- * This mojo runs during the validate phase to check source code for internal API usage.
+ * <p>Scans compiled bytecode (.class files) under the project's build output directory, so it
+ * works uniformly for Java, Scala, Kotlin and any other JVM-language consumer. Runs during the
+ * verify phase after compilation has produced the bytecode it inspects.
  */
 @Mojo(name = "verify",
       defaultPhase = LifecyclePhase.VERIFY,
@@ -56,10 +57,12 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
     private String kafkaVersion;
 
     /**
-     * Source directories to scan.
+     * Compiled-class directories to scan. Defaults to the project's main and test build output
+     * directories. Each entry may be a directory of {@code .class} files, an individual
+     * {@code .class} file, or a {@code .jar} archive.
      */
     @Parameter
-    private List<File> sourceDirectories;
+    private List<File> classesDirectories;
 
 
     /**
@@ -76,12 +79,12 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
         }
 
         // Set defaults
-        if (sourceDirectories == null || sourceDirectories.isEmpty()) {
-            sourceDirectories = getDefaultSourceDirectories();
+        if (classesDirectories == null || classesDirectories.isEmpty()) {
+            classesDirectories = getDefaultClassesDirectories();
         }
 
 
-        getLog().info("Checking for internal Kafka API usage in source directories...");
+        getLog().info("Checking for internal Kafka API usage in compiled bytecode...");
 
         try {
 
@@ -98,33 +101,35 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
 
             PublicApiChecker checker = new PublicApiChecker(classLoader);
 
-            // Collect all source files
-            List<File> sourceFiles = new ArrayList<>();
-            for (File sourceDir : sourceDirectories) {
-                if (sourceDir.exists() && sourceDir.isDirectory()) {
-                    collectJavaFiles(sourceDir, sourceFiles);
+            // Collect class file roots (directories and any explicitly-listed jars).
+            List<File> classRoots = new ArrayList<>();
+            for (File root : classesDirectories) {
+                if (root.exists()) {
+                    classRoots.add(root);
                 }
             }
 
-            if (sourceFiles.isEmpty()) {
-                getLog().info("No Java source files found, skipping internal API check");
+            if (classRoots.isEmpty()) {
+                getLog().info("No class files found, skipping internal API check");
                 return;
             }
 
-            getLog().info("Checking " + sourceFiles.size() + " Java source files for internal API usage");
-            List<PublicApiViolation> violations = checker.checkSourceFiles(sourceFiles);
+            getLog().info("Scanning " + classRoots.size() + " class file root(s) for internal API usage");
+            ScanResult result = checker.checkBytecode(classRoots);
+            List<PublicApiViolation> violations = result.getViolations();
+            List<PublicApiViolation> suppressions = result.getSuppressions();
 
             // Generate report
             ViolationReporter reporter = new ViolationReporter();
-            reporter.writeTextReport(violations, reportFile);
+            reporter.writeTextReport(violations, suppressions, reportFile);
 
             // Also write JSON report
             File jsonReport = new File(reportFile.getParentFile(),
                 reportFile.getName().replace(".txt", ".json"));
-            reporter.writeJsonReport(violations, jsonReport);
+            reporter.writeJsonReport(violations, suppressions, jsonReport);
 
             // Print summary to console
-            reporter.printToConsole(violations, true);
+            reporter.printToConsole(violations, suppressions, true);
 
             getLog().info("Internal API usage check completed. Report written to: " + reportFile.getAbsolutePath());
 
@@ -146,19 +151,19 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
         }
     }
 
-    private List<File> getDefaultSourceDirectories() {
+    private List<File> getDefaultClassesDirectories() {
         List<File> dirs = new ArrayList<>();
 
-        // Add main source directory
-        File mainSrc = new File(project.getBasedir(), "src/main/java");
-        if (mainSrc.exists()) {
-            dirs.add(mainSrc);
+        // Main compiled output
+        File mainClasses = new File(project.getBuild().getOutputDirectory());
+        if (mainClasses.exists()) {
+            dirs.add(mainClasses);
         }
 
-        // Add test source directory
-        File testSrc = new File(project.getBasedir(), "src/test/java");
-        if (testSrc.exists()) {
-            dirs.add(testSrc);
+        // Test compiled output
+        File testClasses = new File(project.getBuild().getTestOutputDirectory());
+        if (testClasses.exists()) {
+            dirs.add(testClasses);
         }
 
         return dirs;
@@ -183,19 +188,6 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
         return kafkaJars;
     }
 
-    private void collectJavaFiles(File dir, List<File> javaFiles) {
-        File[] files = dir.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    collectJavaFiles(file, javaFiles);
-                } else if (file.getName().endsWith(".java")) {
-                    javaFiles.add(file);
-                }
-            }
-        }
-    }
-
     // Getters and setters for testing
     public void setProject(MavenProject project) {
         this.project = project;
@@ -213,8 +205,8 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
         this.kafkaVersion = kafkaVersion;
     }
 
-    public void setSourceDirectories(List<File> sourceDirectories) {
-        this.sourceDirectories = sourceDirectories;
+    public void setClassesDirectories(List<File> classesDirectories) {
+        this.classesDirectories = classesDirectories;
     }
 
     public void setReportFile(File reportFile) {
