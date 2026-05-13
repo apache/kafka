@@ -1071,7 +1071,7 @@ public class TaskManager {
                     prepareCommitSucceeded = true;
                 } catch (final RuntimeException e) {
                     log.error("Exception caught while preparing to commit revoked tasks " + revokedActiveTasks, e);
-                    firstException.compareAndSet(null, e);
+                    maybeSetFirstException(false, e, firstException);
                     dirtyTasks.addAll(revokedActiveTasks);
                     dirtyTasks.addAll(commitNeededActiveTasks);
                 }
@@ -1099,7 +1099,7 @@ public class TaskManager {
                 closeDirtyAndRevive(dirtyTasks, false);
             } catch (final RuntimeException e) {
                 log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
-                firstException.compareAndSet(null, e);
+                maybeSetFirstException(false, e, firstException);
                 dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
             }
 
@@ -1395,14 +1395,14 @@ public class TaskManager {
         executeAndMaybeSwallow(
             clean,
             () -> closeAndCleanUpTasks(activeTasks, standbyTasks, clean),
-            e -> firstException.compareAndSet(null, e),
+            e -> maybeSetFirstException(false, e, firstException),
             e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
         );
 
         executeAndMaybeSwallow(
             clean,
             activeTaskCreator::close,
-            e -> firstException.compareAndSet(null, e),
+            e -> maybeSetFirstException(false, e, firstException),
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
 
@@ -1413,7 +1413,7 @@ public class TaskManager {
         executeAndMaybeSwallow(
             clean,
             this::releaseLockedUnassignedTaskDirectories,
-            e -> firstException.compareAndSet(null, e),
+            e -> maybeSetFirstException(false, e, firstException),
             e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
         );
 
@@ -1522,10 +1522,10 @@ public class TaskManager {
                 tasksToCloseDirty.add(task);
             } catch (final StreamsException e) {
                 e.setTaskId(task.id());
-                firstException.compareAndSet(null, e);
+                maybeSetFirstException(false, e, firstException);
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
-                firstException.compareAndSet(null, new StreamsException(e, task.id()));
+                maybeSetFirstException(false, new StreamsException(e, task.id()), firstException);
                 tasksToCloseDirty.add(task);
             }
         }
@@ -2059,7 +2059,9 @@ public class TaskManager {
                                         final RuntimeException exception,
                                         final AtomicReference<RuntimeException> firstException) {
         if (!ignoreTaskMigrated || !(exception instanceof TaskMigratedException)) {
-            firstException.compareAndSet(null, exception);
+            if (!firstException.compareAndSet(null, exception)) {
+                firstException.get().addSuppressed(exception);
+            }
         }
     }
 

@@ -3018,6 +3018,30 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldAttachSuppressedExceptionsWhenMultiplePhasesFailDuringRevocation() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allInitializedTasks()).thenReturn(Set.of(task00));
+
+        when(task00.commitNeeded()).thenReturn(true);
+        when(task00.prepareCommit(true)).thenThrow(new TaskMigratedException("task migrated"));
+        doThrow(new RuntimeException("suspend failed")).when(task00).suspend();
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        final StreamsException thrown = assertThrows(StreamsException.class,
+            () -> taskManager.handleRevocation(taskId00Partitions));
+
+        assertInstanceOf(TaskMigratedException.class, thrown);
+        assertEquals(1, thrown.getSuppressed().length);
+        assertInstanceOf(StreamsException.class, thrown.getSuppressed()[0]);
+    }
+
+    @Test
     public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
         // task being revoked, needs commit
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
