@@ -997,6 +997,8 @@ project(':server') {
     archivesName = "kafka-server"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     compileOnly libs.bndlib
     compileOnly libs.spotbugs
@@ -1026,6 +1028,12 @@ project(':server') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation testFixtures(project(':server-common'))
+
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.junitJupiter
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1145,7 +1153,7 @@ project(':core') {
     testImplementation project(':raft').sourceSets.test.output
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':storage:storage-api'))
-    testImplementation project(':server').sourceSets.test.output
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
@@ -2406,6 +2414,8 @@ project(':storage') {
     archivesName = "kafka-storage"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -2421,6 +2431,12 @@ project(':storage') {
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
     implementation libs.metrics
+
+    testFixturesImplementation project(':storage:storage-api')
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.slf4jApi
 
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
@@ -2618,7 +2634,6 @@ project(':tools') {
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':server')
-    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
@@ -2629,7 +2644,7 @@ project(':tools') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.main.output
-    testImplementation project(':storage').sourceSets.test.output
+    testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':streams:integration-tests').sourceSets.test.output
@@ -3528,7 +3543,6 @@ project(':jmh-benchmarks') {
     implementation testFixtures(project(':clients'))
     implementation testFixtures(project(':server-common'))
     implementation testFixtures(project(':metadata'))
-    implementation project(':server').sourceSets.test.output
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
@@ -4093,7 +4107,9 @@ gradle.projectsEvaluated {
   def protectedModules = [
     'clients': ':clients',
     'server-common': ':server-common',
+    'server': ':server',
     'storage/api': ':storage:storage-api',
+    'storage': ':storage',
     'group-coordinator': ':group-coordinator',
     'share-coordinator': ':share-coordinator',
     'metadata': ':metadata',
