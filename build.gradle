@@ -2440,6 +2440,7 @@ project(':storage') {
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':metadata'))
     testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
     testImplementation libs.jacksonDataformatYaml
