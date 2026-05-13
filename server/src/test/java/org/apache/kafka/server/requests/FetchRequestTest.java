@@ -104,7 +104,6 @@ public class FetchRequestTest {
     public static final int FOLLOWER_BROKER_ID = 1;
 
     private ClusterInstance cluster;
-    private Map<String, Uuid> topicIds;
 
     @ClusterTest
     public void testFollowerCompleteDelayedFetchesOnReplication(ClusterInstance cluster) throws Exception {
@@ -286,10 +285,7 @@ public class FetchRequestTest {
     }
 
     private Map<String, Uuid> getTopicIds() throws Exception {
-        if (topicIds != null) {
-            return topicIds;
-        }
-        this.topicIds = new HashMap<>();
+        Map<String, Uuid> topicIds = new HashMap<>();
         try (Admin admin = cluster.admin()) {
             Map<String, TopicDescription> descriptions = admin.describeTopics(List.of(TOPIC))
                     .allTopicNames()
