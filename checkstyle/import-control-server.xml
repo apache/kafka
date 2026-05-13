@@ -91,6 +91,7 @@
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.storage.internals.log" />
     <allow pkg="org.apache.kafka.storage.internals.checkpoint" />
+    <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.logging.log4j" />
     <subpackage name="metrics">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
