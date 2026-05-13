@@ -1407,7 +1407,7 @@ public class KafkaConsumerTest {
         assertNull(committed.get(tp1));
     }
 
-    // NOTE: the rebalance plumbing in prepareRebalance is specific to the CLASSIC consumer.
+    // NOTE: the rebalance flow in prepareRebalance is specific to the CLASSIC consumer.
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) {
