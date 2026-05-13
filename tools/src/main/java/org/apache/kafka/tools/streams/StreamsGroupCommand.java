@@ -56,7 +56,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.OffsetsUtils;
+import org.apache.kafka.tools.GroupOffsetsResetter;
 import org.apache.kafka.tools.consumer.group.CsvUtils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -187,7 +187,7 @@ public class StreamsGroupCommand {
     static class StreamsGroupService implements AutoCloseable {
         final StreamsGroupCommandOptions opts;
         private final Admin adminClient;
-        private final OffsetsUtils offsetsUtils;
+        private final GroupOffsetsResetter groupOffsetsResetter;
 
         public StreamsGroupService(StreamsGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
@@ -196,18 +196,18 @@ public class StreamsGroupCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
         public StreamsGroupService(StreamsGroupCommandOptions opts, Admin adminClient) {
             this.opts = opts;
             this.adminClient = adminClient;
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
-        private OffsetsUtils.OffsetsUtilsOptions getOffsetsUtilsOptions(StreamsGroupCommandOptions opts) {
+        private GroupOffsetsResetter.GroupOffsetsResetterOptions getGroupOffsetsResetterOptions(StreamsGroupCommandOptions opts) {
             return
-                new OffsetsUtils.OffsetsUtilsOptions(opts.options.valuesOf(opts.groupOpt),
+                new GroupOffsetsResetter.GroupOffsetsResetterOptions(opts.options.valuesOf(opts.groupOpt),
                     opts.options.valuesOf(opts.resetToOffsetOpt),
                     opts.options.valuesOf(opts.resetFromFileOpt),
                     opts.options.valuesOf(opts.resetToDatetimeOpt),
@@ -604,7 +604,7 @@ public class StreamsGroupCommand {
                     topicWithoutPartitions.add(topic);
             }
 
-            List<TopicPartition> specifiedPartitions = topicWithPartitions.stream().flatMap(offsetsUtils::parseTopicsWithPartitions).toList();
+            List<TopicPartition> specifiedPartitions = topicWithPartitions.stream().flatMap(groupOffsetsResetter::parseTopicsWithPartitions).toList();
 
             // Get the partitions of topics that the user did not explicitly specify the partitions
             DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
@@ -951,8 +951,8 @@ public class StreamsGroupCommand {
             } else if (opts.options.has(opts.inputTopicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
 
-                List<TopicPartition> partitions = offsetsUtils.parseTopicPartitionsToReset(topics);
-                offsetsUtils.checkAllTopicPartitionsValid(partitions);
+                List<TopicPartition> partitions = groupOffsetsResetter.parseTopicPartitionsToReset(topics);
+                groupOffsetsResetter.checkAllTopicPartitionsValid(partitions);
                 // if the user specified topics that do not belong to this group, we filter them out
                 partitions = filterExistingGroupTopics(groupId, partitions);
                 return partitions;
@@ -966,23 +966,23 @@ public class StreamsGroupCommand {
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
             if (opts.options.has(opts.resetToOffsetOpt)) {
-                return offsetsUtils.resetToOffset(partitionsToReset);
+                return groupOffsetsResetter.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
-                return offsetsUtils.resetToEarliest(partitionsToReset);
+                return groupOffsetsResetter.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {
-                return offsetsUtils.resetToLatest(partitionsToReset);
+                return groupOffsetsResetter.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetShiftByOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                return offsetsUtils.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
+                return groupOffsetsResetter.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-                return offsetsUtils.resetToDateTime(partitionsToReset);
+                return groupOffsetsResetter.resetToDateTime(partitionsToReset);
             } else if (opts.options.has(opts.resetByDurationOpt)) {
-                return offsetsUtils.resetByDuration(partitionsToReset);
-            } else if (offsetsUtils.resetPlanFromFile().isPresent()) {
-                return offsetsUtils.resetFromFile(groupId);
+                return groupOffsetsResetter.resetByDuration(partitionsToReset);
+            } else if (groupOffsetsResetter.resetPlanFromFile().isPresent()) {
+                return groupOffsetsResetter.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                return offsetsUtils.resetToCurrent(partitionsToReset, currentCommittedOffsets);
+                return groupOffsetsResetter.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
             CommandLineUtils

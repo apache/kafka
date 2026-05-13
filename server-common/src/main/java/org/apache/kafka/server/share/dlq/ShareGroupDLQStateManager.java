@@ -21,16 +21,24 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -47,14 +55,9 @@ public class ShareGroupDLQStateManager {
     private final SendThread sender;
     private final Time time;
     private final Timer timer;
-    private final ShareCoordinatorMetadataCacheHelper cacheHelper;
+    private final ShareGroupDLQMetadataCacheHelper cacheHelper;
 
-    public enum RPCType {
-        PRODUCE,
-        CREATE_TOPIC
-    }
-
-    public ShareGroupDLQStateManager(KafkaClient client, ShareCoordinatorMetadataCacheHelper cacheHelper, Time time, Timer timer) {
+    public ShareGroupDLQStateManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
         if (client == null) {
             throw new IllegalArgumentException("Kafkaclient must not be null.");
         }
@@ -105,21 +108,80 @@ public class ShareGroupDLQStateManager {
      * @return A future completing normally on successful DLQ, exceptionally otherwise.
      */
     public CompletableFuture<Void> dlq(ShareGroupDLQRecordParameter param) {
-        ProduceRequestHandler requestHandler = new ProduceRequestHandler(param);
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future);
         sender.enqueue(requestHandler);
-        return requestHandler.result().thenAccept(response -> {
-        });
+        return future;
     }
 
     private abstract class ShareGroupDLQStateManagerHandler implements RequestCompletionHandler {
+        private final ShareGroupDLQRecordParameter param;
+
+        ShareGroupDLQStateManagerHandler(ShareGroupDLQRecordParameter param) {
+            this.param = param;
+        }
+
         protected abstract AbstractRequest.Builder<? extends AbstractRequest> requestBuilder();
 
         protected abstract CompletableFuture<? extends AbstractResponse> result();
+
+        protected abstract String name();
+
+        protected abstract void createTopicErrorResponse(Exception exception);
+
+        protected AbstractRequest.Builder<CreateTopicsRequest> createTopicBuilder() {
+            return new CreateTopicsRequest.Builder(new CreateTopicsRequestData());
+        }
+
+        public Optional<Throwable> validateDlqTopic() {
+            Optional<String> topicNameOpt = cacheHelper.shareGroupDlqTopic(param.groupId());
+            Optional<String> topicPrefix = cacheHelper.shareGroupDlqTopicPrefix();
+
+            // Verify that DLQ topic for the share group is set and is correctly named.
+            if (topicNameOpt.isEmpty()) {
+                return Optional.of(new ConfigException(String.format("Configured DLQ topic name in share group: %s is empty.", param.groupId())));
+            } else if (!topicNameOpt.get().startsWith("__")) {
+                return Optional.of(new ConfigException(String.format("Configured DLQ topic name in share group: %s cannot start with __, topic: %s.", param.groupId(), topicNameOpt.get())));
+            }
+
+            String topicName = topicNameOpt.get();
+
+            // Verify that DLQ is enabled on a correctly named topic, configured on a share group.
+            if (cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqEnabledOnTopic(topicName)) {
+                return Optional.of(new ConfigException(String.format("DLQ is not enabled on configured DLQ topic for share group: %s, topic: %s.", param.groupId(), topicName)));
+            }
+
+            // Verify that for a non-existent correctly named DLQ topic, auto create should be enabled.
+            if (!cacheHelper.containsTopic(topicName) && !cacheHelper.isDlqAutoTopicCreateEnabled()) {
+                return Optional.of(new ConfigException(String.format("DLQ topic does not exist and auto create is disabled on cluster for share group: %s, topic: %s.", param.groupId(), topicName)));
+            }
+
+            // Verify that if configured, the DLQ topic name prefix aligns with the topic name.
+            return topicPrefix.map(prefix -> {
+                if (!prefix.isEmpty() && !topicName.startsWith(prefix)) {
+                    return new ConfigException(String.format("Configured DLQ topic name does not comply with the DLQ topic prefix in share group: %s, topic: %s, prefix: %s.", param.groupId(), topicName, prefix));
+                }
+                return null;
+            });
+        }
+
+        public ShareGroupDLQRecordParameter recordParam() {
+            return param;
+        }
+
+        public boolean dlqTopicExists() {
+            Optional<String> shareGroupDlqTopic = cacheHelper.shareGroupDlqTopic(param.groupId());
+            return shareGroupDlqTopic.filter(cacheHelper::containsTopic).isPresent();
+        }
     }
 
     private class ProduceRequestHandler extends ShareGroupDLQStateManagerHandler {
+        private final CompletableFuture<Void> result;
+        private static final Logger LOG = LoggerFactory.getLogger(ShareGroupDLQStateManager.ProduceRequestHandler.class);
 
-        ProduceRequestHandler(ShareGroupDLQRecordParameter param) {
+        public ProduceRequestHandler(ShareGroupDLQRecordParameter param, CompletableFuture<Void> result) {
+            super(param);
+            this.result = result;
         }
 
         @Override
@@ -133,12 +195,22 @@ public class ShareGroupDLQStateManager {
         }
 
         @Override
+        protected String name() {
+            return "ProduceRequestHandler";
+        }
+
+        @Override
+        protected void createTopicErrorResponse(Exception exception) {
+            this.result.completeExceptionally(exception);
+        }
+
+        @Override
         public void onComplete(ClientResponse response) {
 
         }
     }
 
-    private static class SendThread extends InterBrokerSendThread {
+    private class SendThread extends InterBrokerSendThread {
         private final ConcurrentLinkedQueue<ShareGroupDLQStateManager.ShareGroupDLQStateManagerHandler> queue = new ConcurrentLinkedQueue<>();
         private final Random random;
 
@@ -149,12 +221,48 @@ public class ShareGroupDLQStateManager {
 
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
+            if (!queue.isEmpty()) {
+                ShareGroupDLQStateManager.ShareGroupDLQStateManagerHandler handler = queue.poll();
+                // At this point either a correctly named and configured DLQ topic exists or
+                // one is configured but does non-exist. We have already validated that the
+                // auto create should be enabled, in that case.
+                if (!handler.dlqTopicExists()) {
+                    // We need to send RPC to create the topic
+                    Node randomNode = randomNode();
+                    if (randomNode == Node.noNode()) {
+                        log.error("Unable to find node to use for coordinator lookup.");
+                        // fatal failure, cannot retry or progress
+                        // fail the RPC
+                        handler.createTopicErrorResponse(Errors.BROKER_NOT_AVAILABLE.exception());
+                        return List.of();
+                    }
+                    return List.of(new RequestAndCompletionHandler(
+                        time.milliseconds(),
+                        randomNode,
+                        handler.createTopicBuilder(),
+                        handler
+                    ));
+                }
+            }
             return List.of();
         }
 
         public void enqueue(ShareGroupDLQStateManager.ShareGroupDLQStateManagerHandler handler) {
+            Optional<Throwable> exp = handler.validateDlqTopic();
+            if (exp.isPresent()) {
+                handler.result().completeExceptionally(exp.get());
+                return;
+            }
             queue.add(handler);
             wakeup();
+        }
+
+        private Node randomNode() {
+            List<Node> nodes = cacheHelper.getClusterNodes();
+            if (nodes == null || nodes.isEmpty()) {
+                return Node.noNode();
+            }
+            return nodes.get(random.nextInt(nodes.size()));
         }
     }
 }

@@ -86,7 +86,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheTest, MockConfigRepository}
+import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheFixtures, MockConfigRepository}
 import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
@@ -1057,8 +1057,8 @@ class KafkaApisTest extends Logging {
       .setMemberId("member")
       .setTopics(util.List.of(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
-          .setName(if (version < 10) topicName else "")
+          .setTopicId(topicId)
+          .setName(topicName)
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
@@ -1118,8 +1118,8 @@ class KafkaApisTest extends Logging {
       .setMemberId("member")
       .setTopics(util.List.of(
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
-          .setName(if (version < 10) topicName else "")
+          .setTopicId(topicId)
+          .setName(topicName)
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
@@ -1167,13 +1167,15 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedOffsetCommitResponse, response.data)
   }
 
-  @Test
-  def testHandleOffsetCommitRequestTopicsAndPartitionsValidationWithTopicIds(): Unit = {
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+  def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(version: Short): Unit = {
     val fooId = Uuid.randomUuid()
     val barId = Uuid.randomUuid()
     val zarId = Uuid.randomUuid()
     val fooName = "foo"
     val barName = "bar"
+    val zarName = "zar"
     addTopicToMetadataCache(fooName, topicId = fooId, numPartitions = 2)
     addTopicToMetadataCache(barName, topicId = barId, numPartitions = 2)
 
@@ -1184,6 +1186,7 @@ class KafkaApisTest extends Logging {
         // foo exists but only has 2 partitions.
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
           .setTopicId(fooId)
+          .setName(fooName)
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
@@ -1197,6 +1200,7 @@ class KafkaApisTest extends Logging {
         // bar exists.
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
           .setTopicId(barId)
+          .setName(barName)
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
@@ -1207,6 +1211,7 @@ class KafkaApisTest extends Logging {
         // zar does not exist.
         new OffsetCommitRequestData.OffsetCommitRequestTopic()
           .setTopicId(zarId)
+          .setName(zarName)
           .setPartitions(util.List.of(
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
@@ -1215,7 +1220,9 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(1)
               .setCommittedOffset(70)))))
 
-    val requestChannelRequest = buildRequest(OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest).build())
+    val requestChannelRequest = buildRequest(
+      OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest).build(version)
+    )
 
     // This is the request expected by the group coordinator.
     val expectedOffsetCommitRequest = new OffsetCommitRequestData()
@@ -1260,8 +1267,8 @@ class KafkaApisTest extends Logging {
     val offsetCommitResponse = new OffsetCommitResponseData()
       .setTopics(util.List.of(
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(fooId)
-          .setName(fooName)
+          .setTopicId(if (version >= 10) fooId else Uuid.ZERO_UUID)
+          .setName(if (version < 10) fooName else "")
           .setPartitions(util.List.of(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(0)
@@ -1270,8 +1277,8 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(1)
               .setErrorCode(Errors.NONE.code))),
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(barId)
-          .setName(barName)
+          .setTopicId(if (version >= 10) barId else Uuid.ZERO_UUID)
+          .setName(if (version < 10) barName else "")
           .setPartitions(util.List.of(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(0)
@@ -1280,10 +1287,13 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(1)
               .setErrorCode(Errors.NONE.code)))))
 
+    // For v10+, the unknown topic returns UNKNOWN_TOPIC_ID; for v0-9 it returns
+    // UNKNOWN_TOPIC_OR_PARTITION.
     val expectedOffsetCommitResponse = new OffsetCommitResponseData()
       .setTopics(util.List.of(
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(fooId)
+          .setTopicId(if (version >= 10) fooId else Uuid.ZERO_UUID)
+          .setName(if (version < 10) fooName else "")
           .setPartitions(util.List.of(
             // foo-2 is first because partitions failing the validation
             // are put in the response first.
@@ -1299,166 +1309,18 @@ class KafkaApisTest extends Logging {
         // zar is before bar because topics failing the validation are
         // put in the response first.
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(zarId)
+          .setTopicId(if (version >= 10) zarId else Uuid.ZERO_UUID)
+          .setName(if (version < 10) zarName else "")
           .setPartitions(util.List.of(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(0)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code),
+              .setErrorCode(if (version >= 10) Errors.UNKNOWN_TOPIC_ID.code else Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(1)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code))),
+              .setErrorCode(if (version >= 10) Errors.UNKNOWN_TOPIC_ID.code else Errors.UNKNOWN_TOPIC_OR_PARTITION.code))),
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setTopicId(barId)
-          .setPartitions(util.List.of(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)))))
-
-    future.complete(offsetCommitResponse)
-    val response = verifyNoThrottling[OffsetCommitResponse](requestChannelRequest)
-    assertEquals(expectedOffsetCommitResponse, response.data)
-  }
-
-  @Test
-  def testHandleOffsetCommitRequestTopicsAndPartitionsValidation(): Unit = {
-    val fooId = Uuid.randomUuid()
-    val barId = Uuid.randomUuid()
-    addTopicToMetadataCache("foo", numPartitions = 2, topicId = fooId)
-    addTopicToMetadataCache("bar", numPartitions = 2, topicId = barId)
-
-    val offsetCommitRequest = new OffsetCommitRequestData()
-      .setGroupId("group")
-      .setMemberId("member")
-      .setTopics(util.List.of(
-        // foo exists but only has 2 partitions.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName("foo")
-          .setPartitions(util.List.of(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(10),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(20),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(2)
-              .setCommittedOffset(30))),
-        // bar exists.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName("bar")
-          .setPartitions(util.List.of(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(40),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(50))),
-        // zar does not exist.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName("zar")
-          .setPartitions(util.List.of(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(60),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(70)))))
-
-    val requestChannelRequest = buildRequest(OffsetCommitRequest.Builder.forTopicNames(offsetCommitRequest).build())
-
-    // This is the request expected by the group coordinator.
-    val expectedOffsetCommitRequest = new OffsetCommitRequestData()
-      .setGroupId("group")
-      .setMemberId("member")
-      .setTopics(util.List.of(
-        // foo exists but only has 2 partitions.
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName("foo")
-          .setTopicId(fooId)
-          .setPartitions(util.List.of(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(10),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(20))),
-        new OffsetCommitRequestData.OffsetCommitRequestTopic()
-          .setName("bar")
-          .setTopicId(barId)
-          .setPartitions(util.List.of(
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(0)
-              .setCommittedOffset(40),
-            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-              .setPartitionIndex(1)
-              .setCommittedOffset(50)))))
-
-    val future = new CompletableFuture[OffsetCommitResponseData]()
-    when(groupCoordinator.commitOffsets(
-      requestChannelRequest.context,
-      expectedOffsetCommitRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
-    kafkaApis = createKafkaApis()
-    kafkaApis.handle(
-      requestChannelRequest,
-      RequestLocal.noCaching
-    )
-
-    // This is the response returned by the group coordinator.
-    val offsetCommitResponse = new OffsetCommitResponseData()
-      .setTopics(util.List.of(
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("foo")
-          .setPartitions(util.List.of(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code))),
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("bar")
-          .setPartitions(util.List.of(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code)))))
-
-    val expectedOffsetCommitResponse = new OffsetCommitResponseData()
-      .setTopics(util.List.of(
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("foo")
-          .setPartitions(util.List.of(
-            // foo-2 is first because partitions failing the validation
-            // are put in the response first.
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(2)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.NONE.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.NONE.code))),
-        // zar is before bar because topics failing the validation are
-        // put in the response first.
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("zar")
-          .setPartitions(util.List.of(
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
-            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code))),
-        new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName("bar")
+          .setTopicId(if (version >= 10) barId else Uuid.ZERO_UUID)
+          .setName(if (version < 10) barName else "")
           .setPartitions(util.List.of(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(0)
@@ -4494,7 +4356,7 @@ class KafkaApisTest extends Logging {
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
         .setName(plaintextListener.value)
     )
-    MetadataCacheTest.updateCache(metadataCache,
+    MetadataCacheFixtures.updateCache(metadataCache,
       util.List.of(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints))
     )
 
@@ -4535,7 +4397,7 @@ class KafkaApisTest extends Logging {
     }
 
     val partitionRecords = Seq(authorizedTopicId, unauthorizedTopicId).map(createDummyPartitionRecord)
-    MetadataCacheTest.updateCache(metadataCache, (partitionRecords : Seq[ApiMessage]).asJava)
+    MetadataCacheFixtures.updateCache(metadataCache, (partitionRecords : Seq[ApiMessage]).asJava)
 
     // 4. Send TopicMetadataReq using topicId
     val metadataReqByTopicId = MetadataRequest.Builder.forTopicIds(util.Set.of(authorizedTopicId, unauthorizedTopicId)).build()
@@ -10249,7 +10111,7 @@ class KafkaApisTest extends Logging {
         .setName(plaintextListener.value)
     )
 
-    MetadataCacheTest.updateCache(metadataCache,
+    MetadataCacheFixtures.updateCache(metadataCache,
       util.List.of(new RegisterBrokerRecord()
         .setBrokerId(brokerId)
         .setRack("rack")
@@ -10303,7 +10165,7 @@ class KafkaApisTest extends Logging {
         .setName(plaintextListener.value)
     )
 
-    MetadataCacheTest.updateCache(metadataCache,
+    MetadataCacheFixtures.updateCache(metadataCache,
       util.List.of(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints0),
       new RegisterBrokerRecord().setBrokerId(1).setRack("rack").setFenced(false).setEndPoints(endpoints1))
     )
@@ -10540,12 +10402,12 @@ class KafkaApisTest extends Logging {
 
   private def setupBasicMetadataCache(topic: String, numPartitions: Int, numBrokers: Int, topicId: Uuid): Unit = {
     val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadata.asJava)
+    MetadataCacheFixtures.updateCache(metadataCache, updateMetadata.asJava)
   }
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
     val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadata.asJava)
+    MetadataCacheFixtures.updateCache(metadataCache, updateMetadata.asJava)
   }
 
   private def createMetadataBroker(brokerId: Int,
