@@ -150,6 +150,8 @@ public class NetworkClient implements KafkaClient {
 
     private CompletableFuture<List<InetSocketAddress>> pendingBootstrapResolution;
 
+    private volatile long bootstrapResolutionRetryMs = -1L;
+
     private final ExecutorService bootstrapExecutor;
 
     private final TelemetrySender telemetrySender;
@@ -791,6 +793,7 @@ public class NetworkClient implements KafkaClient {
             pendingBootstrapResolution.cancel(true);
             pendingBootstrapResolution = null;
         }
+        bootstrapResolutionRetryMs = -1L;
     }
 
     /**
@@ -1283,14 +1286,11 @@ public class NetworkClient implements KafkaClient {
             throw new InterruptException(new InterruptedException());
         }
 
-        // Lazy initialization: create timer on first poll to ensure timeout starts when polling begins
-        if (bootstrapTimer == null) {
-            bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+        if (bootstrapTimer != null) {
+            bootstrapTimer.update(currentTimeMs);
+            checkBootstrapTimeout();
         }
-
-        bootstrapTimer.update(currentTimeMs);
-        checkBootstrapTimeout();
-        handleAsyncBootstrapResolution();
+        handleAsyncBootstrapResolution(currentTimeMs);
     }
 
     /**
@@ -1309,8 +1309,15 @@ public class NetworkClient implements KafkaClient {
      * Handle the async DNS resolution state machine.
      * States: Not Started -> In Progress -> Completed (Success/Failure)
      */
-    private void handleAsyncBootstrapResolution() {
+    private void handleAsyncBootstrapResolution(final long currentTimeMs) {
         if (pendingBootstrapResolution == null) {
+            if (bootstrapResolutionRetryMs >= 0 && currentTimeMs < bootstrapResolutionRetryMs) {
+                return;
+            }
+            bootstrapResolutionRetryMs = -1L;
+            if (bootstrapTimer == null) {
+                bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+            }
             pendingBootstrapResolution = CompletableFuture.supplyAsync(
                 () -> ClientUtils.parseAddresses(
                     bootstrapConfiguration.bootstrapServers,
@@ -1326,13 +1333,13 @@ public class NetworkClient implements KafkaClient {
             return;
         }
 
-        processBootstrapResolutionResult();
+        processBootstrapResolutionResult(currentTimeMs);
     }
 
     /**
      * Process the completed bootstrap DNS resolution result.
      */
-    private void processBootstrapResolutionResult() {
+    private void processBootstrapResolutionResult(final long currentTimeMs) {
         List<InetSocketAddress> servers = List.of();
         try {
             servers = pendingBootstrapResolution.getNow(List.of());
@@ -1347,9 +1354,10 @@ public class NetworkClient implements KafkaClient {
             return;
         }
 
-        // Failed - reset so next poll retries
-        log.warn("Failed to resolve bootstrap servers, will retry on next poll. Remaining time: {}ms", bootstrapTimer.remainingMs());
+        log.debug("Failed to resolve bootstrap servers, will retry after {}ms. Remaining time: {}ms",
+            bootstrapConfiguration.retryBackoffMs, bootstrapTimer.remainingMs());
         pendingBootstrapResolution = null;
+        bootstrapResolutionRetryMs = currentTimeMs + bootstrapConfiguration.retryBackoffMs;
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {
