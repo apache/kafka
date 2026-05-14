@@ -62,10 +62,12 @@ import java.util.Collection;
  * whenever partition assignment changes.
  * <p>
  * Under normal conditions, if a partition is reassigned from one consumer to another, then the old consumer will
- * always invoke {@link #onPartitionsRevoked(Collection, RebalanceConsumer) onPartitionsRevoked} for that partition prior to the new consumer
- * invoking {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned} for the same partition. So if offsets or other state is saved in the
- * {@link #onPartitionsRevoked(Collection, RebalanceConsumer) onPartitionsRevoked} call by one consumer member, it will always be accessible by the time the
- * other consumer member taking over that partition and triggering its {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned} callback to load the state.
+ * always invoke {@link #onPartitionsRevoked(Collection, RebalanceConsumer) onPartitionsRevoked} for that partition
+ * prior to the new consumer invoking {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned}
+ * for the same partition. So if offsets or other state is saved durably in the
+ * {@link #onPartitionsRevoked(Collection, RebalanceConsumer) onPartitionsRevoked} callback by one consumer member,
+ * it will always be accessible by the time the other consumer member taking over that partition triggers its
+ * {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned} callback to load the state.
  * <p>
  * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, the consumer may not have an opportunity to do so.
  * For example, if the session times out, then the partitions may be reassigned before we have a chance to revoke them gracefully.
@@ -103,16 +105,15 @@ import java.util.Collection;
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
  * {@code
- *   consumer.subscribe(List.of("topic-1", "topic-2"));
  *   consumer.setConsumerRebalanceListener(new ConsumerRebalanceListener() {
  *       @Override
  *       public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
  *
  *       @Override
- *       public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+ *       public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // save the offsets in an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
- *              saveOffsetInExternalStore(consumer.position(partition));
+ *              saveOffsetInExternalStore(rebalanceConsumer.position(partition));
  *       }
  *
  *       @Override
@@ -124,12 +125,13 @@ import java.util.Collection;
  *       public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
  *
  *       @Override
- *       public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
+ *       public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // read the offsets from an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
- *              consumer.seek(partition, readOffsetFromExternalStore(partition));
+ *              rebalanceConsumer.seek(partition, readOffsetFromExternalStore(partition));
  *       }
  *   });
+ *   consumer.subscribe(List.of("topic-1", "topic-2"));
  * }
  * </pre>
  *
