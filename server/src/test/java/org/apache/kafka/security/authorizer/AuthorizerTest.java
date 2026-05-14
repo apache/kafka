@@ -173,26 +173,26 @@ public class AuthorizerTest {
         RequestContext u1h1Context = newRequestContext(user1, host1);
 
         for (int i = 0; i < 10; i++) {
-            assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+            assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                     "User1 from host1 should not have READ access to any topic when no ACL exists");
 
             addAcls(authorizer, Set.of(allowRead), resource1);
-            assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+            assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                     "User1 from host1 now should have READ access to at least one topic");
 
             for (int j = 0; j < 10; j++) {
                 addAcls(authorizer, Set.of(denyRead), resource1);
-                assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+                assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                         "User1 from host1 now should not have READ access to any topic");
 
                 removeAcls(authorizer, Set.of(denyRead), resource1);
                 addAcls(authorizer, Set.of(allowRead), resource1);
-                assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+                assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                         "User1 from host1 now should have READ access to at least one topic");
             }
 
             removeAcls(authorizer, Set.of(allowRead), resource1);
-            assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+            assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                     "User1 from host1 now should not have READ access to any topic");
         }
     }
@@ -222,7 +222,7 @@ public class AuthorizerTest {
         RequestContext u1h1Context = newRequestContext(user1, host1);
         RequestContext u1h2Context = newRequestContext(user1, host2);
 
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 should not have READ access to any topic");
         assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, GROUP),
                 "User1 from host1 should not have READ access to any consumer group");
@@ -230,7 +230,7 @@ public class AuthorizerTest {
                 "User1 from host1 should not have READ access to any transactional id");
         assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, CLUSTER),
                 "User1 from host1 should not have READ access to the cluster");
-        assertTrue(authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC),
+        assertTrue(authorizeByResourceType(authorizer, u1h2Context, READ, TOPIC),
                 "User1 from host2 should have READ access to at least one topic");
     }
 
@@ -245,11 +245,11 @@ public class AuthorizerTest {
         AccessControlEntry acl2 = new AccessControlEntry(user1.toString(), host1.getHostAddress(), WRITE, DENY);
 
         addAcls(authorizer, Set.of(acl1), resource1);
-        assertTrue(authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC),
+        assertTrue(authorizeByResourceType(authorizer, u1h1Context, WRITE, TOPIC),
                 "User1 from host1 should have WRITE access to at least one topic");
 
         addAcls(authorizer, Set.of(acl2), resource1);
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, WRITE, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, WRITE, TOPIC),
                 "User1 from host1 should not have WRITE access to any topic");
     }
 
@@ -327,15 +327,15 @@ public class AuthorizerTest {
         AccessControlEntry denyWrite = new AccessControlEntry(user1.toString(), host1.getHostAddress(), WRITE, DENY);
         RequestContext u1h1Context = newRequestContext(user1, host1);
 
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 should not have READ access to any topic when no ACL exists");
 
         addAcls(authorizer, Set.of(denyWrite, allowAll), resource1);
-        assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 now should have READ access to at least one topic");
 
         addAcls(authorizer, Set.of(denyAll), resource1);
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 now should not have READ access to any topic");
     }
 
@@ -354,29 +354,29 @@ public class AuthorizerTest {
         RequestContext u1h1Context = newRequestContext(user1, host1);
         RequestContext u1h2Context = newRequestContext(user1, host2);
 
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 should not have READ access to any topic when no ACL exists");
 
         addAcls(authorizer, Set.of(allowHost1), resource1);
-        assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 should now have READ access to at least one topic");
 
         addAcls(authorizer, Set.of(denyAllHost), resource1);
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 now shouldn't have READ access to any topic");
 
         addAcls(authorizer, Set.of(denyHost1), resource2);
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 still should not have READ access to any topic");
-        assertFalse(authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h2Context, READ, TOPIC),
                 "User1 from host2 should not have READ access to any topic");
 
         addAcls(authorizer, Set.of(allowAllHost), resource2);
-        assertTrue(authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC),
+        assertTrue(authorizeByResourceType(authorizer, u1h2Context, READ, TOPIC),
                 "User1 from host2 should now have READ access to at least one topic");
 
         addAcls(authorizer, Set.of(denyAllHost), resource2);
-        assertFalse(authorizeByResourceType(authorizer, u1h2Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h2Context, READ, TOPIC),
                 "User1 from host2 now shouldn't have READ access to any topic");
     }
 
@@ -395,29 +395,29 @@ public class AuthorizerTest {
         RequestContext u1h1Context = newRequestContext(user1, host1);
         RequestContext u2h1Context = newRequestContext(user2, host1);
 
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 should not have READ access to any topic when no ACL exists");
 
         addAcls(authorizer, Set.of(allowUser1), resource1);
-        assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertTrue(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 should now have READ access to at least one topic");
 
         addAcls(authorizer, Set.of(denyAllUser), resource1);
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 now shouldn't have READ access to any topic");
 
         addAcls(authorizer, Set.of(denyUser1), resource2);
-        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u1h1Context, READ, TOPIC),
                 "User1 from host1 still should not have READ access to any topic");
-        assertFalse(authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u2h1Context, READ, TOPIC),
                 "User2 from host1 should not have READ access to any topic");
 
         addAcls(authorizer, Set.of(allowAllUser), resource2);
-        assertTrue(authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC),
+        assertTrue(authorizeByResourceType(authorizer, u2h1Context, READ, TOPIC),
                 "User2 from host1 should now have READ access to at least one topic");
 
         addAcls(authorizer, Set.of(denyAllUser), resource2);
-        assertFalse(authorizeByResourceType(authorizer, u2h1Context, READ, ResourceType.TOPIC),
+        assertFalse(authorizeByResourceType(authorizer, u2h1Context, READ, TOPIC),
                 "User2 from host1 now shouldn't have READ access to any topic");
     }
 
@@ -439,7 +439,7 @@ public class AuthorizerTest {
 
         RequestContext superUserContext = newRequestContext(superUser1, host1);
 
-        assertTrue(authorizeByResourceType(authorizer, superUserContext, READ, ResourceType.TOPIC),
+        assertTrue(authorizeByResourceType(authorizer, superUserContext, READ, TOPIC),
                 "superuser always has access, no matter what acls.");
         assertTrue(authorizeByResourceType(authorizer, superUserContext, READ, CLUSTER),
                 "superuser always has access, no matter what acls.");
@@ -720,7 +720,7 @@ public class AuthorizerTest {
     }
 
     /**
-     * Test ACL inheritance, as described in #{org.apache.kafka.common.acl.AclOperation}
+     * Test ACL inheritance, as described in {@link org.apache.kafka.common.acl.AclOperation}
      */
     @Test
     public void testAclInheritance() throws Exception {
