@@ -35,7 +35,7 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultShareGroupDLQManager.class);
 
-    public DefaultShareGroupDLQManager instance(ShareGroupDLQStateManager stateManager) {
+    public static ShareGroupDLQManager instance(ShareGroupDLQStateManager stateManager) {
         DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(stateManager);
         instance.start();
         return instance;
