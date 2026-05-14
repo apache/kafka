@@ -28,6 +28,7 @@ import java.util.Map;
 public class SampleSourceConnector extends SourceConnector {
 
     public static final String VERSION = "some great version";
+    public static final String INTERNAL_ONLY_CONFIG_KEY = "internal.only.config";
 
     @Override
     public String version() {
@@ -58,7 +59,8 @@ public class SampleSourceConnector extends SourceConnector {
     public ConfigDef config() {
         return new ConfigDef()
                 .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
-                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
+                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs")
+                .defineInternal(INTERNAL_ONLY_CONFIG_KEY, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW);
     }
 
     public ConfigDef configWithCommon() {

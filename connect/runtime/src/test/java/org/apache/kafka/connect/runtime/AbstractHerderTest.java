@@ -1173,23 +1173,6 @@ public class AbstractHerderTest {
         );
     }
 
-    @Test
-    public void testConnectorPluginConfigOmitsInternalKeys() throws Exception {
-        String pluginName = "source-with-internal";
-        Class<?> pluginClass = Class.forName("org.apache.kafka.connect.runtime.SourceConnectorWithInternalConfig");
-        AbstractHerder herder = testHerder();
-
-        when(plugins.pluginClass(pluginName, null)).then(invocation -> pluginClass);
-        when(plugins.newPlugin(anyString(), any())).then(invocation -> pluginClass.getDeclaredConstructor().newInstance());
-        when(herder.plugins()).thenReturn(plugins);
-
-        List<ConfigKeyInfo> configs = herder.connectorPluginConfig(pluginName);
-        assertTrue(configs.stream().anyMatch(c -> c.name().equals("required")));
-        // any internal config keys should not be exposed
-        assertFalse(configs.stream().anyMatch(c -> c.name().equals("internal.only.config")));
-        verify(plugins).withClassLoader(pluginClass.getClassLoader());
-    }
-
     private <T> void testConnectorPluginConfig(
             String pluginName,
             Supplier<T> newPluginInstance,
@@ -1207,7 +1190,9 @@ public class AbstractHerderTest {
 
         ConfigDef expectedConfig = pluginConfig.apply(newPluginInstance.get());
         int expectedConfigSize = baseConfig.map(config -> config.names().size()).orElse(0)
-                + expectedConfig.names().size();
+                + (int) expectedConfig.configKeys().values().stream()
+                        .filter(configKey -> !configKey.internalConfig)
+                        .count();
         assertEquals(expectedConfigSize, configs.size());
         // Make sure that we used the correct class loader when interacting with the plugin
         verify(plugins).withClassLoader(newPluginInstance.get().getClass().getClassLoader());
