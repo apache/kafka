@@ -241,17 +241,15 @@ public class ShareGroupDLQStateManager {
             return shareGroupDlqTopic.filter(cacheHelper::containsTopic).isPresent();
         }
 
-        public String dlqTopicName() {
-            return cacheHelper.shareGroupDlqTopic(param.groupId()).orElse("UNKNOWN");
-        }
-
         // Visibility for testing
         Optional<Errors> checkResponseError(ClientResponse response) {
             if (response.hasResponse()) {
                 return Optional.empty();
             }
 
-            LOG.debug("Response for RPC {} with DLQ topic {} is invalid - {}", name(), dlqTopicName(), response);
+            String dlqTopicName = cacheHelper.shareGroupDlqTopic(param.groupId()).orElse("UNKNOWN");
+
+            LOG.debug("Response for RPC {} with DLQ topic {} is invalid - {}", name(), dlqTopicName, response);
 
             if (response.authenticationException() != null) {
                 LOG.error("Authentication exception", response.authenticationException());
@@ -264,7 +262,7 @@ public class ShareGroupDLQStateManager {
             } else if (response.wasDisconnected()) {    // Retriable
                 return Optional.of(Errors.NETWORK_EXCEPTION);
             } else if (response.wasTimedOut()) {    // Retriable
-                LOG.debug("Response for RPC {} with DLQ topic {} timed out - {}.", name(), dlqTopicName(), response);
+                LOG.debug("Response for RPC {} with DLQ topic {} timed out - {}.", name(), dlqTopicName, response);
                 return Optional.of(Errors.REQUEST_TIMED_OUT);
             } else {
                 return Optional.of(Errors.UNKNOWN_SERVER_ERROR);
@@ -276,14 +274,14 @@ public class ShareGroupDLQStateManager {
             createTopicsBackoff.incrementAttempt();
             Errors clientResponseError = checkResponseError(response).orElse(Errors.NONE);
             String clientResponseErrorMessage = clientResponseError.message();
-            String dlqTopicName = dlqTopicName();
+            String dlqTopicName = cacheHelper.shareGroupDlqTopic(param.groupId()).orElse("UNKNOWN");
 
             switch (clientResponseError) {
                 case NONE:
                     // Topic has been created
                     CreateTopicsResponse createTopicsResponse = ((CreateTopicsResponse) response.responseBody());
                     Optional<CreateTopicsResponseData.CreatableTopicResult> topicResultOpt = createTopicsResponse.data().topics().stream().findFirst();
-                    if (topicResultOpt.isEmpty() || !topicResultOpt.get().name().equals(dlqTopicName)) {
+                    if (topicResultOpt.isEmpty()) {
                         LOG.error("DLQ topic not found in create topic response {}.", dlqTopicName);
                         requestErrorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception());
                         break;
@@ -299,7 +297,7 @@ public class ShareGroupDLQStateManager {
                             break;
 
                         case THROTTLING_QUOTA_EXCEEDED:
-                            LOG.debug("Received retriable error in create DLQ topic response for {} using dlq topic {}: {}", name(), dlqTopicName, errorMessage);
+                            LOG.debug("Received retriable error in create DLQ topic response for {} using DLQ topic {}: {}", name(), dlqTopicName, errorMessage);
                             if (!createTopicsBackoff.canAttempt()) {
                                 LOG.error("Exhausted max retries to create DLQ topic for {} using DLQ topic {} without success.", name(), dlqTopicName);
                                 requestErrorResponse(new Exception("Exhausted max retries to create DLQ topic without success."));
