@@ -84,6 +84,8 @@
 
   <subpackage name="server">
     <allow class="kafka.server.KafkaBroker" />
+    <allow class="kafka.server.BrokerServer" />
+    <allow class="kafka.server.ControllerServer" />
     <allow pkg="javax.crypto" />
     <allow class="org.apache.kafka.controller.ReplicationControlManager" />
     <allow pkg="org.apache.kafka.server" />
