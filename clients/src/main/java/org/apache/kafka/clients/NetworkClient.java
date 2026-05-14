@@ -1344,7 +1344,7 @@ public class NetworkClient implements KafkaClient {
         try {
             servers = pendingBootstrapResolution.getNow(List.of());
         } catch (CompletionException e) {
-            log.debug("DNS resolution failed: {}", e.getCause().getMessage());
+            log.debug("DNS resolution failed", e);
         }
 
         if (!servers.isEmpty()) {
