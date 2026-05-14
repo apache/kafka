@@ -200,7 +200,6 @@ public class FetchRequestManagerTest {
     private MemoryRecords nextRecords;
     private MemoryRecords emptyRecords;
     private MemoryRecords partialRecords;
-    private NetworkClient.BootstrapConfiguration bootstrapConfiguration;
 
     @BeforeEach
     public void setup() {
@@ -209,7 +208,6 @@ public class FetchRequestManagerTest {
         emptyRecords = buildRecords(0L, 0, 0);
         partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
-        bootstrapConfiguration = NetworkClient.BootstrapConfiguration.DISABLED;
     }
 
     private void assignFromUser(Set<TopicPartition> partitions) {

@@ -197,7 +197,6 @@ public class FetcherTest {
     private MemoryRecords emptyRecords;
     private MemoryRecords partialRecords;
     private ExecutorService executorService;
-    private NetworkClient.BootstrapConfiguration mockBootstrapConfig;
 
     @BeforeEach
     public void setup() {
@@ -207,7 +206,6 @@ public class FetcherTest {
         emptyRecords = buildRecords(0L, 0, 0);
         partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
-        mockBootstrapConfig = NetworkClient.BootstrapConfiguration.DISABLED;
     }
 
     private void assignFromUser(Set<TopicPartition> partitions) {

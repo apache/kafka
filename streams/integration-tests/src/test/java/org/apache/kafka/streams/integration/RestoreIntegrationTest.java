@@ -139,15 +139,6 @@ public class RestoreIntegrationTest {
         final Properties adminConfig = new Properties();
         adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         admin = Admin.create(adminConfig);
-
-        // Trigger initial bootstrap to ensure AdminClient thread doesn't exit prematurely
-        // With KIP-909 deferred DNS resolution, AdminClient thread may exit before first use
-        // if no operations have been performed. This dummy call ensures the thread stays alive.
-        try {
-            admin.describeCluster().clusterId().get();
-        } catch (final Exception e) {
-            // Ignore - we just want to trigger bootstrap
-        }
     }
 
     @AfterAll

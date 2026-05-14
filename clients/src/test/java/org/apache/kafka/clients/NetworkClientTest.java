@@ -99,12 +99,6 @@ public class NetworkClientTest {
             "127.0.0.2:8000"));
     private static List<InetAddress> initialAddresses;
     private static List<InetAddress> newAddresses;
-    private static NetworkClient.BootstrapConfiguration bootstrapConfiguration =
-            NetworkClient.BootstrapConfiguration.enabled(
-                    BOOTSTRAP_ADDRESSES,
-                    ClientDnsLookup.USE_ALL_DNS_IPS,
-                    10 * 1000,
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
 
     protected final int defaultRequestTimeoutMs = 1000;
     protected final MockSelector selector = new MockSelector(time);
@@ -118,6 +112,12 @@ public class NetworkClientTest {
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
+    private NetworkClient.BootstrapConfiguration bootstrapConfiguration =
+        NetworkClient.BootstrapConfiguration.enabled(
+            BOOTSTRAP_ADDRESSES,
+            ClientDnsLookup.USE_ALL_DNS_IPS,
+            10 * 1000,
+            CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS);
 
     static {
         try {
@@ -1619,7 +1619,6 @@ public class NetworkClientTest {
             new InetSocketAddress("localhost1", 8000)
         ));
         metadataUpdater.bootstrap(serverAddresses);
-        System.out.println("Bootstraping metadata------:" + metadataUpdater.isBootstrapped());
     }
 
     @Test

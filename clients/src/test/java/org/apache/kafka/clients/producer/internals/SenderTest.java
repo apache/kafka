@@ -179,7 +179,6 @@ public class SenderTest {
     private Sender sender = null;
     private SenderMetricsRegistry senderMetricsRegistry = null;
     private final LogContext logContext = new LogContext();
-    private final NetworkClient.BootstrapConfiguration bootstrapConfig = NetworkClient.BootstrapConfiguration.DISABLED;
 
     @BeforeEach
     public void setup() {
