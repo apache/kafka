@@ -55,7 +55,7 @@ public class BootstrapMetadataTest {
     static class BootstrapTestDirectory implements AutoCloseable {
         private final Path directory;
 
-        static synchronized BootstrapTestDirectory createDirectory() {
+        static BootstrapTestDirectory createDirectory() {
             return new BootstrapTestDirectory();
         }
 
@@ -63,16 +63,16 @@ public class BootstrapMetadataTest {
             this.directory = TestUtils.tempDirectory().toPath();
         }
 
-        synchronized Path path() {
+        Path path() {
             return directory;
         }
 
-        synchronized Path binaryBootstrapPath() {
+        Path binaryBootstrapPath() {
             return directory.resolve(BootstrapMetadata.BINARY_BOOTSTRAP_FILENAME);
         }
 
         @Override
-        public synchronized void close() throws Exception {
+        public void close() throws Exception {
             Utils.delete(directory.toFile());
         }
     }
@@ -217,8 +217,9 @@ public class BootstrapMetadataTest {
                 .setFeatureLevel((short) 1), (short) 0),
             new ApiMessageAndVersion(new FeatureLevelRecord()
                 .setName("foo")
-                .setFeatureLevel((short) 2), (short) 0)
-        ), bm.records());
+                .setFeatureLevel((short) 2), (short) 0)),
+            bm.records()
+        );
     }
 
     @Test
@@ -228,8 +229,9 @@ public class BootstrapMetadataTest {
         assertEquals(List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord()
                 .setName(FEATURE_NAME)
-                .setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0)
-        ), bm.records());
+                .setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0)),
+            bm.records()
+        );
     }
 
 }

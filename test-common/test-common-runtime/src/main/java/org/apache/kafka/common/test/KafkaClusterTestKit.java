@@ -30,9 +30,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -490,7 +490,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 } else if (!(record.message() instanceof UserScramCredentialRecord)) {
                     additionalRecords.add(record);
                 } else {
-                    throw new RuntimeException("UserScramCredentialRecord is not supported in " +
+                    throw new IllegalStateException("UserScramCredentialRecord is not supported in " +
                         "bootstrap metadata. Use Formatter.setScramArguments() instead.");
                 }
             }
