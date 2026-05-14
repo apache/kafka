@@ -18,6 +18,7 @@
 package org.apache.kafka.server;
 
 import kafka.server.BrokerServer;
+
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -30,10 +31,13 @@ import org.apache.kafka.raft.RaftManager;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Timeout;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import static org.apache.kafka.raft.MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.raft.MetadataLogConfig.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
