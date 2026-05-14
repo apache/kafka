@@ -291,9 +291,9 @@ public class MockConsumerTest {
         consumer.subscribe(List.of("test"));
         consumer.rebalance(List.of(tp0, tp1));
         consumer.updateBeginningOffsets(new HashMap<>() {{
-            put(tp0, 0L);
-            put(tp1, 0L);
-        }});
+                put(tp0, 0L);
+                put(tp1, 0L);
+            }});
         consumer.seek(tp0, 0);
         consumer.seek(tp1, 0);
 
