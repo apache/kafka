@@ -146,9 +146,9 @@ public final class DefaultTaskManager implements TaskManager {
                 } else {
                     log.debug("Not awaiting since shutdown was requested");
                 }
-            } catch (final InterruptedException ignored) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("Await unblocked: Interrupted while waiting for processable tasks");
+                log.warn("Await unblocked: Interrupted while waiting for processable tasks", e);
                 return true;
             }
             log.debug("Await unblocked: Woken up to check for processable tasks");

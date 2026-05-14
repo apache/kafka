@@ -268,9 +268,9 @@ public class DefaultTaskExecutor implements TaskExecutor {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");
                 }
                 taskExecutorThread = null;
-            } catch (final InterruptedException ignored) {
+            } catch (final InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("Interrupted while waiting for task executor thread to shut down");
+                log.warn("Interrupted while waiting for task executor thread to shut down", e);
             }
         }
     }
