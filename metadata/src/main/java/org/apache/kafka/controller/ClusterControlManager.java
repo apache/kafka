@@ -507,7 +507,7 @@ public class ClusterControlManager {
         }
         if (controllerRegistrations.get(controllerId) == null) {
             throw new ControllerIdNotRegisteredException("Controller ID " + controllerId +
-                " is not currently registered");
+                " is not currently registered.");
         }
         List<ApiMessageAndVersion> records = new ArrayList<>();
         records.add(new ApiMessageAndVersion(new UnregisterControllerRecord().

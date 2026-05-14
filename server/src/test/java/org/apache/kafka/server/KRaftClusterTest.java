@@ -46,6 +46,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.errors.ControllerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
@@ -692,10 +693,33 @@ public class KRaftClusterTest {
 
             try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertDoesNotThrow(() -> admin.unregisterController(controllerIdToUnregister).all().get());
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testUnregisterControllerError(boolean usingBootstrapControllers) throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(3)
+                .setNumControllerNodes(1)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            int leaderId = cluster.controllers().keySet().iterator().next();
+            int unknownId = 9999;
+
+            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 assertFutureThrows(
                     ControllerIdNotRegisteredException.class,
-                    admin.unregisterController(controllerIdToUnregister).all(),
-                    String.format("Controller ID %s is not currently registered", controllerIdToUnregister)
+                    admin.unregisterController(unknownId).all(),
+                    String.format("Controller ID %s is not currently registered.", unknownId)
+                );
+                assertFutureThrows(
+                    InvalidRequestException.class,
+                    admin.unregisterController(leaderId).all(),
+                    "Controller cannot unregister itself while it is active."
                 );
             }
         }
