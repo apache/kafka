@@ -2178,8 +2178,6 @@ kafka.server.OffsetsForLeaderEpochRequestTest:
 - testOffsetsForLeaderEpochErrorCodes
 kafka.server.PermissiveControllerMutationQuotaTest:
 - testControllerMutationQuotaViolation
-kafka.server.RaftClusterSnapshotTest:
-- testSnapshotsGenerated
 kafka.server.RemoteLeaderEndPointTest:
 - testBrokerEpochSupplier
 - testFetchEarliestLocalOffset

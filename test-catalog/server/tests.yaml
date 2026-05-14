@@ -244,6 +244,8 @@ org.apache.kafka.server.NodeToControllerRequestThreadTest:
 - testRetryTimeoutWhileControllerNotAvailable
 - testThreadNotStarted
 - testUnsupportedVersionHandling
+org.apache.kafka.server.RaftClusterSnapshotTest:
+- testSnapshotsGenerated
 org.apache.kafka.server.ReconfigurableQuorumIntegrationTest:
 - testControllersAutoJoinStandaloneVoter
 - testCreateAndDestroyNonReconfigurableCluster
