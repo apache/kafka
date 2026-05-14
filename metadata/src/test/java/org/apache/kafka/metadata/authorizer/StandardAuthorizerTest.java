@@ -46,7 +46,6 @@ import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.Iterator;
 import java.util.List;
@@ -729,6 +728,37 @@ public class StandardAuthorizerTest {
         // Test /128 - single host
         assertTrue(StandardAuthorizerData.hostMatchesCidr("::1", "::1/128"));
         assertFalse(StandardAuthorizerData.hostMatchesCidr("::2", "::1/128"));
+    }
+
+    @Test
+    public void testHostMatchesCidrIpv4MappedAddress() throws Exception {
+        // The JVM normalizes IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) to plain IPv4.
+        // InetAddress.getByName("::ffff:192.168.1.5") returns an Inet4Address with host "192.168.1.5",
+        // so the authorizer sees a plain IPv4 string and matches it against IPv4 CIDRs correctly.
+        String normalizedHost = InetAddress.getByName("::ffff:192.168.1.5").getHostAddress();
+        assertEquals("192.168.1.5", normalizedHost);
+        assertTrue(StandardAuthorizerData.hostMatchesCidr(normalizedHost, "192.168.1.0/24"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr(normalizedHost, "10.0.0.0/8"));
+    }
+
+    @Test
+    public void testHostMatchesIPv4MappedAddressWithSubnet() {
+        // ::ffff:x.x.x.x/N — JVM normalizes ::ffff:x.x.x.x to Inet4Address, isIpv6() returns false,
+        // SubnetUtils rejects the ::ffff: prefix. No client (IPv4 or IPv6) can ever match.
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.5", "::ffff:192.168.1.0/24"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("::1", "::ffff:192.168.1.0/24"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("2001:db8::1", "::ffff:192.168.1.0/24"));
+
+        // ::x.x.x.x/N (deprecated IPv4-compatible form) — JVM keeps it as Inet6Address
+        // (0:0:0:0:0:0:c0a8:100), so it passes as a valid IPv6 CIDR. A /24 on a 128-bit address
+        // masks the top 24 bits, covering 0:: through 0:ff:ffff:ffff:ffff:ffff:ffff:ffff.
+        // Plain IPv4 clients will not match (they go through SubnetUtils, not SubnetUtils6).
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.5", "::192.168.1.0/24"));
+        // IPv6 clients within the /24 range do match.
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("::1", "::192.168.1.0/24"));
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("0:0:0:0:0:0:c0a8:105", "::192.168.1.0/24"));
+        // IPv6 clients outside the /24 range do not match.
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("2001:db8::1", "::192.168.1.0/24"));
     }
 
     @Test

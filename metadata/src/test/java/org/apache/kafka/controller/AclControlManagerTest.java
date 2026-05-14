@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -29,11 +28,8 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -95,30 +91,30 @@ public class AclControlManagerTest {
         AclControlManager manager = new AclControlManager.Builder().build();
         manager.validateNewAcl(new AclBinding(
             new ResourcePattern(TOPIC, "*", LITERAL),
-            new AccessControlEntry("User:*", "*", ALTER, ALLOW)));
+            new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0);
         assertEquals("Invalid patternType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", PatternType.UNKNOWN),
-                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)))).
+                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
         assertEquals("Invalid resourceType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(ResourceType.UNKNOWN, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)))).
+                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
         assertEquals("Invalid operation UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", AclOperation.UNKNOWN, ALLOW)))).
+                    new AccessControlEntry("User:*", "*", AclOperation.UNKNOWN, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
         assertEquals("Invalid permissionType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", ALTER, AclPermissionType.UNKNOWN)))).
+                    new AccessControlEntry("User:*", "*", ALTER, AclPermissionType.UNKNOWN)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
     }
 
@@ -133,7 +129,7 @@ public class AclControlManagerTest {
             assertThrows(InvalidRequestException.class, () ->
                 manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("invalid", "*", ALTER, ALLOW)))).
+                    new AccessControlEntry("invalid", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
     }
 
@@ -148,7 +144,7 @@ public class AclControlManagerTest {
             assertThrows(InvalidRequestException.class, () ->
                 manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("", "*", ALTER, ALLOW)))).
+                    new AccessControlEntry("", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                         getMessage());
     }
 
@@ -300,7 +296,7 @@ public class AclControlManagerTest {
             new ResourcePattern(TOPIC, "*", PatternType.UNKNOWN),
             new AccessControlEntry("User:*", "*", ALTER, ALLOW)));
 
-        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(toCreate);
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(toCreate, MetadataVersion.IBP_4_0_IV0);
 
         List<AclCreateResult> expectedResults = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
@@ -355,12 +351,12 @@ public class AclControlManagerTest {
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding, aclBinding));
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding, aclBinding), MetadataVersion.IBP_4_0_IV0);
         RecordTestUtils.replayAll(manager, createResult.records());
         assertEquals(1, createResult.records().size());
         assertEquals(1, manager.idToAcl().size());
 
-        createResult = manager.createAcls(List.of(aclBinding));
+        createResult = manager.createAcls(List.of(aclBinding), MetadataVersion.IBP_4_0_IV0);
         assertEquals(0, createResult.records().size());
         assertEquals(1, manager.idToAcl().size());
     }
@@ -372,7 +368,7 @@ public class AclControlManagerTest {
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding));
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding), MetadataVersion.IBP_4_0_IV0);
         RecordTestUtils.replayAll(manager, createResult.records());
         Uuid id = ((AccessControlEntryRecord) createResult.records().get(0).message()).id();
         assertEquals(1, createResult.records().size());
@@ -422,13 +418,13 @@ public class AclControlManagerTest {
                 secondCreate.add(acl.toBinding());
             }
         }
-        ControllerResult<List<AclCreateResult>> firstCreateResult = manager.createAcls(firstCreate);
+        ControllerResult<List<AclCreateResult>> firstCreateResult = manager.createAcls(firstCreate, MetadataVersion.IBP_4_0_IV0);
         assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, firstCreateResult.response().size());
         for (AclCreateResult result : firstCreateResult.response()) {
             assertTrue(result.exception().isEmpty());
         }
 
-        ControllerResult<List<AclCreateResult>> secondCreateResult = manager.createAcls(secondCreate);
+        ControllerResult<List<AclCreateResult>> secondCreateResult = manager.createAcls(secondCreate, MetadataVersion.IBP_4_0_IV0);
         assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, secondCreateResult.response().size());
         for (AclCreateResult result : secondCreateResult.response()) {
             assertTrue(result.exception().isEmpty());
@@ -546,6 +542,11 @@ public class AclControlManagerTest {
             AclControlManager.validateCidrNotation("not.an.ip/24"));
         assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateCidrNotation("192.168.0.256/24"));
+
+        // ::ffff:x.x.x.x/N is rejected: the JVM normalizes ::ffff:x.x.x.x to Inet4Address,
+        // so isIpv6() returns false and SubnetUtils rejects the ::ffff: prefix.
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateCidrNotation("::ffff:192.168.1.0/24"));
     }
 
     @Test
@@ -564,58 +565,36 @@ public class AclControlManagerTest {
             AclControlManager.validateCidrNotation("not:valid:ipv6::/32"));
     }
 
-    private static AclControlManager createManagerWithMetadataVersion(MetadataVersion version) {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        FeatureControlManager featureControl = new FeatureControlManager.Builder()
-            .setSnapshotRegistry(snapshotRegistry)
-            .setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of()))
-            .build();
-        featureControl.replay(new FeatureLevelRecord()
-            .setName(MetadataVersion.FEATURE_NAME)
-            .setFeatureLevel(version.featureLevel()));
-        return new AclControlManager.Builder()
-            .setSnapshotRegistry(snapshotRegistry)
-            .setFeatureControl(featureControl)
-            .build();
-    }
-
     @Test
     public void testCreateAclWithValidCidrHost() {
-        // Use a metadata version that supports CIDR ACLs
-        AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_3_IV0);
+        AclControlManager manager = new AclControlManager.Builder().build();
 
-        // Create ACL with valid IPv4 CIDR
         AclBinding ipv4CidrAcl = new AclBinding(
             new ResourcePattern(TOPIC, "test-topic", LITERAL),
             new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(ipv4CidrAcl));
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(ipv4CidrAcl), MetadataVersion.IBP_4_3_IV0);
         assertEquals(1, result.response().size());
         assertFalse(result.response().get(0).exception().isPresent());
 
-        // Create ACL with valid IPv6 CIDR
         AclBinding ipv6CidrAcl = new AclBinding(
             new ResourcePattern(TOPIC, "test-topic-2", LITERAL),
             new AccessControlEntry("User:test", "2001:db8::/32", ALTER, ALLOW));
 
-        result = manager.createAcls(List.of(ipv6CidrAcl));
+        result = manager.createAcls(List.of(ipv6CidrAcl), MetadataVersion.IBP_4_3_IV0);
         assertEquals(1, result.response().size());
         assertFalse(result.response().get(0).exception().isPresent());
     }
 
     @Test
     public void testCreateAclWithInvalidCidrHost() {
-        // Use a metadata version that supports CIDR ACLs
-        AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_3_IV0);
+        AclControlManager manager = new AclControlManager.Builder().build();
 
-        // Create ACL with invalid IPv4 CIDR (prefix too large)
         AclBinding invalidCidrAcl = new AclBinding(
             new ResourcePattern(TOPIC, "test-topic", LITERAL),
             new AccessControlEntry("User:test", "192.168.0.0/33", ALTER, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(invalidCidrAcl));
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(invalidCidrAcl), MetadataVersion.IBP_4_3_IV0);
         assertEquals(1, result.response().size());
         assertTrue(result.response().get(0).exception().isPresent());
         assertTrue(result.response().get(0).exception().get().getMessage().contains("Invalid CIDR notation"));
@@ -623,15 +602,13 @@ public class AclControlManagerTest {
 
     @Test
     public void testCreateAclWithCidrHostUnsupportedVersion() {
-        // Use a metadata version that does not support CIDR ACLs
-        AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_0_IV0);
+        AclControlManager manager = new AclControlManager.Builder().build();
 
-        // Create ACL with valid CIDR but unsupported metadata version
         AclBinding cidrAcl = new AclBinding(
             new ResourcePattern(TOPIC, "test-topic", LITERAL),
             new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(cidrAcl));
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(cidrAcl), MetadataVersion.IBP_4_0_IV0);
         assertEquals(1, result.response().size());
         assertTrue(result.response().get(0).exception().isPresent());
         assertTrue(result.response().get(0).exception().get() instanceof UnsupportedVersionException);
@@ -640,87 +617,22 @@ public class AclControlManagerTest {
 
     @Test
     public void testCreateAclWithRegularHostOlderVersion() {
-        // Use a metadata version that doesn't support CIDR ACLs
-        AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_0_IV0);
+        AclControlManager manager = new AclControlManager.Builder().build();
 
-        // Create ACL with regular IP address should still work
         AclBinding regularAcl = new AclBinding(
             new ResourcePattern(TOPIC, "test-topic", LITERAL),
             new AccessControlEntry("User:test", "192.168.0.1", ALTER, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(regularAcl));
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(regularAcl), MetadataVersion.IBP_4_0_IV0);
         assertEquals(1, result.response().size());
         assertFalse(result.response().get(0).exception().isPresent());
 
-        // Create ACL with wildcard should also work
         AclBinding wildcardAcl = new AclBinding(
             new ResourcePattern(TOPIC, "test-topic-2", LITERAL),
             new AccessControlEntry("User:test", "*", ALTER, ALLOW));
 
-        result = manager.createAcls(List.of(wildcardAcl));
+        result = manager.createAcls(List.of(wildcardAcl), MetadataVersion.IBP_4_0_IV0);
         assertEquals(1, result.response().size());
         assertFalse(result.response().get(0).exception().isPresent());
-    }
-
-    @Test
-    public void testDowngradeBelowCidrVersionWithExistingCidrAcls() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        FeatureControlManager featureControl = new FeatureControlManager.Builder()
-            .setSnapshotRegistry(snapshotRegistry)
-            .setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of()))
-            .build();
-        featureControl.replay(new FeatureLevelRecord()
-            .setName(MetadataVersion.FEATURE_NAME)
-            .setFeatureLevel(MetadataVersion.IBP_4_3_IV0.featureLevel()));
-        AclControlManager aclManager = new AclControlManager.Builder()
-            .setSnapshotRegistry(snapshotRegistry)
-            .setFeatureControl(featureControl)
-            .build();
-
-        featureControl.setPreDowngradeValidator(newVersion -> {
-            if (!newVersion.isCidrAclSupported() && aclManager.hasCidrAcls()) {
-                return Optional.of("Cannot downgrade below " + MetadataVersion.IBP_4_3_IV0 +
-                    " while CIDR-based ACL host patterns exist. Remove all CIDR ACLs first.");
-            }
-            return Optional.empty();
-        });
-
-        AclBinding cidrAcl = new AclBinding(
-            new ResourcePattern(TOPIC, "test-topic", LITERAL),
-            new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
-        ControllerResult<List<AclCreateResult>> createResult = aclManager.createAcls(List.of(cidrAcl));
-        assertEquals(1, createResult.response().size());
-        assertFalse(createResult.response().get(0).exception().isPresent(),
-            "CIDR ACL creation should succeed on IBP_4_3_IV0");
-
-        for (ApiMessageAndVersion record : createResult.records()) {
-            aclManager.replay((AccessControlEntryRecord) record.message());
-        }
-
-        assertTrue(aclManager.hasCidrAcls(), "hasCidrAcls() should detect CIDR ACL");
-
-        ControllerResult<ApiError> downgradeResult = featureControl.updateFeatures(
-            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_2_IV1.featureLevel()),
-            Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
-            false, 0);
-        assertEquals(Errors.INVALID_UPDATE_VERSION, downgradeResult.response().error());
-        assertTrue(downgradeResult.response().message().contains("CIDR-based ACL host patterns exist"),
-            "Downgrade should be blocked with CIDR ACL error message");
-
-        ControllerResult<List<AclDeleteResult>> deleteResult = aclManager.deleteAcls(
-            List.of(cidrAcl.toFilter()));
-        for (ApiMessageAndVersion record : deleteResult.records()) {
-            aclManager.replay((RemoveAccessControlEntryRecord) record.message());
-        }
-        assertFalse(aclManager.hasCidrAcls(), "hasCidrAcls() should return false after removal");
-
-        downgradeResult = featureControl.updateFeatures(
-            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_2_IV1.featureLevel()),
-            Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
-            false, 0);
-        assertEquals(Errors.NONE, downgradeResult.response().error(),
-            "Downgrade should succeed after CIDR ACLs are removed");
     }
 }

@@ -47,7 +47,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
@@ -162,13 +161,6 @@ public class FeatureControlManager {
      */
     private final KRaftVersionAccessor kraftVersionAccessor;
 
-    /**
-     * Optional validator invoked before allowing a metadata version downgrade that does not
-     * change the metadata format. Returns a non-empty Optional with an error message to
-     * block the downgrade.
-     */
-    private Function<MetadataVersion, Optional<String>> preDowngradeValidator = v -> Optional.empty();
-
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
@@ -182,10 +174,6 @@ public class FeatureControlManager {
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.clusterSupportDescriber = clusterSupportDescriber;
         this.kraftVersionAccessor = kraftVersionAccessor;
-    }
-
-    void setPreDowngradeValidator(Function<MetadataVersion, Optional<String>> validator) {
-        this.preDowngradeValidator = validator;
     }
 
     ControllerResult<ApiError> updateFeatures(
@@ -412,10 +400,6 @@ public class FeatureControlManager {
             // This is a downgrade
             boolean metadataChanged = MetadataVersion.checkIfMetadataChanged(currentVersion, newVersion);
             if (!metadataChanged) {
-                Optional<String> preDowngradeError = preDowngradeValidator.apply(newVersion);
-                if (preDowngradeError.isPresent()) {
-                    return unsupportedMetadataDowngrade(currentVersion, newVersion, preDowngradeError.get());
-                }
                 log.warn("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
             } else if (allowUnsafeDowngrade) {
                 return unsupportedMetadataDowngrade(currentVersion, newVersion, 

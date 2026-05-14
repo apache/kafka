@@ -169,9 +169,6 @@ allprojects {
 
   repositories {
     mavenLocal()
-    maven {
-      url "https://repository.apache.org/content/repositories/orgapachecommons-1924/"
-    }
     mavenCentral()
   }
 

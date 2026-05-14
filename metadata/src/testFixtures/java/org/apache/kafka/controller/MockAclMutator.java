@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.metadata.authorizer.AclMutator;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
@@ -72,7 +73,7 @@ public class MockAclMutator implements AclMutator {
         List<AclBinding> aclBindings
     ) {
         Map<Uuid, StandardAcl> prevIdToAcl = new HashMap<>(aclControl.idToAcl());
-        ControllerResult<List<AclCreateResult>> result = aclControl.createAcls(aclBindings);
+        ControllerResult<List<AclCreateResult>> result = aclControl.createAcls(aclBindings, MetadataVersion.latestTesting());
         RecordTestUtils.replayAll(aclControl, result.records());
         syncIdToAcl(prevIdToAcl, aclControl.idToAcl());
         return CompletableFuture.completedFuture(result.response());

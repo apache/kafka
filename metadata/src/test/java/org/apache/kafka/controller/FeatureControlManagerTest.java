@@ -482,46 +482,6 @@ public class FeatureControlManagerTest {
 
 
     @Test
-    public void testPreDowngradeValidatorBlocksDowngrade() {
-        FeatureControlManager manager = new FeatureControlManager.Builder().
-                setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
-                        MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.latestTesting().featureLevel())).
-                build();
-        manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.IBP_3_5_IV0.featureLevel()));
-
-        // Set a validator that blocks downgrade
-        manager.setPreDowngradeValidator(newVersion ->
-            Optional.of("Cannot downgrade: test reason"));
-
-        // Attempt a safe downgrade from IBP_3_5_IV0 to IBP_3_4_IV0 (no metadata change)
-        ControllerResult<ApiError> result = manager.updateFeatures(
-            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_4_IV0.featureLevel()),
-            Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
-            false, 0);
-        assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().error());
-        assertTrue(result.response().message().contains("Cannot downgrade: test reason"));
-    }
-
-    @Test
-    public void testPreDowngradeValidatorAllowsDowngrade() {
-        FeatureControlManager manager = new FeatureControlManager.Builder().
-                setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
-                        MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.latestTesting().featureLevel())).
-                build();
-        manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.IBP_3_5_IV0.featureLevel()));
-
-        // Set a validator that allows downgrade
-        manager.setPreDowngradeValidator(newVersion -> Optional.empty());
-
-        // Attempt a safe downgrade from IBP_3_5_IV0 to IBP_3_4_IV0 (no metadata change)
-        ControllerResult<ApiError> result = manager.updateFeatures(
-            Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_4_IV0.featureLevel()),
-            Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
-            false, 0);
-        assertEquals(Errors.NONE, result.response().error());
-    }
-
-    @Test
     public void testMetadataVersion() {
         FeatureControlManager manager = new FeatureControlManager.Builder().build();
         assertTrue(manager.metadataVersion().isEmpty());

@@ -54,7 +54,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
@@ -68,7 +67,6 @@ public class AclControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
-        private FeatureControlManager featureControl = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -80,45 +78,34 @@ public class AclControlManager {
             return this;
         }
 
-        Builder setFeatureControl(FeatureControlManager featureControl) {
-            this.featureControl = featureControl;
-            return this;
-        }
-
         AclControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            if (featureControl == null) {
-                featureControl = new FeatureControlManager.Builder().build();
-            }
-            return new AclControlManager(logContext, snapshotRegistry, featureControl);
+            return new AclControlManager(logContext, snapshotRegistry);
         }
     }
 
     private final Logger log;
     private final TimelineHashMap<Uuid, StandardAcl> idToAcl;
     private final TimelineHashSet<StandardAcl> existingAcls;
-    private final FeatureControlManager featureControl;
 
     private AclControlManager(
         LogContext logContext,
-        SnapshotRegistry snapshotRegistry,
-        FeatureControlManager featureControl
+        SnapshotRegistry snapshotRegistry
     ) {
         this.log = logContext.logger(AclControlManager.class);
         this.idToAcl = new TimelineHashMap<>(snapshotRegistry, 0);
         this.existingAcls = new TimelineHashSet<>(snapshotRegistry, 0);
-        this.featureControl = featureControl;
     }
 
-    ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls) {
+    ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls, MetadataVersion metadataVersion) {
         Set<StandardAcl> aclsToCreate = new HashSet<>(acls.size());
         List<AclCreateResult> results = new ArrayList<>(acls.size());
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (AclBinding acl : acls) {
             try {
-                validateNewAcl(acl);
+                validateNewAcl(acl, metadataVersion);
             } catch (Throwable t) {
                 ApiException e = (t instanceof ApiException) ? (ApiException) t :
                     new UnknownServerException("Unknown error while trying to create ACL", t);
@@ -151,7 +138,7 @@ public class AclControlManager {
         return uuid;
     }
 
-    void validateNewAcl(AclBinding binding) {
+    void validateNewAcl(AclBinding binding, MetadataVersion metadataVersion) {
         switch (binding.pattern().resourceType()) {
             case UNKNOWN:
             case ANY:
@@ -193,10 +180,7 @@ public class AclControlManager {
                 binding.entry().principal() + "` " + "(no colon is present separating the " +
                 "principal type from the principal name)");
         }
-        boolean cidrSupported = featureControl.metadataVersion()
-            .map(MetadataVersion::isCidrAclSupported)
-            .orElse(false);
-        validateHostPattern(binding.entry().host(), cidrSupported);
+        validateHostPattern(binding.entry().host(), metadataVersion.isCidrAclSupported());
     }
 
     /**
@@ -321,14 +305,6 @@ public class AclControlManager {
                 ": acl not found " + "in existingAcls.");
         }
         log.info("Replayed RemoveAccessControlEntryRecord for {}, removing {}", record.id(), acl);
-    }
-
-    List<String> cidrAclHosts() {
-        return idToAcl.values().stream()
-            .map(StandardAcl::host)
-            .filter(host -> host.contains("/"))
-            .distinct()
-            .collect(Collectors.toList());
     }
 
     Map<Uuid, StandardAcl> idToAcl() {
