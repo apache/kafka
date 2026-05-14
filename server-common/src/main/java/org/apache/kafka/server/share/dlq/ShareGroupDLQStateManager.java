@@ -197,7 +197,7 @@ public class ShareGroupDLQStateManager {
             topicCollection.add(new CreateTopicsRequestData.CreatableTopic()
                 .setName(dlqTopic.get())
                 .setReplicationFactor((short) -1)
-                .setNumPartitions(6)
+                .setNumPartitions((short) -1)
                 .setConfigs(topicConfigs));
 
             return new CreateTopicsRequest.Builder(new CreateTopicsRequestData()
