@@ -77,7 +77,7 @@ public final class FailedQueryResult<R>
      * Returns the result of executing the query on one partition. The result type is determined by
      * the query. Note: queries may choose to return {@code null} for a successful query, so {@link
      * this#isSuccess()} and {@link this#isFailure()} must be used to determine whether the query
-     * was successful of failed on this partition.
+     * was successful or failed on this partition.
      *
      * @throws IllegalArgumentException if this is not a successful query.
      */
