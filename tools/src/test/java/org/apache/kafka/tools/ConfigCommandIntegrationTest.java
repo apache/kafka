@@ -392,7 +392,7 @@ public class ConfigCommandIntegrationTest {
         message = captureStandardOut(run(command));
         assertTrue(message.contains("streams.num.standby.replicas=1"));
 
-        // Should fail to set above max timeout
+        // Should fail to set above max standby replicas
         command = Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "groups",
             "--entity-name", "group",
@@ -402,7 +402,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest
-    public void testAlterStreamsGroupTaskOffsetInterval() {
+    public void testAlterStreamsGroupTaskOffsetInterval() throws Exception {
         // Verify the initial config
         Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
             "--entity-type", "groups",
@@ -420,11 +420,12 @@ public class ConfigCommandIntegrationTest {
         assertEquals("Completed updating config for group group.", message);
 
         // Verify the updated config
-        command = Stream.concat(quorumArgs(), Stream.of(
-            "--entity-type", "groups",
-            "--describe"));
-        message = captureStandardOut(run(command));
-        assertTrue(message.contains("streams.task.offset.interval.ms=45000"));
+        TestUtils.waitForCondition(() -> {
+            final Stream<String> cmd = Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", "groups",
+                "--describe"));
+            return captureStandardOut(run(cmd)).contains("streams.task.offset.interval.ms=45000");
+        },  "Expected streams.task.offset.interval.ms=45000 for group group");
 
         // Should fail to set below min interval
         command = Stream.concat(quorumArgs(), Stream.of(
