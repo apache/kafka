@@ -84,6 +84,7 @@
 
   <subpackage name="server">
     <allow class="kafka.server.KafkaBroker" />
+    <allow class="kafka.server.BrokerServer" />
     <allow pkg="javax.crypto" />
     <allow class="org.apache.kafka.controller.ReplicationControlManager" />
     <allow pkg="org.apache.kafka.server" />
@@ -91,6 +92,7 @@
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.storage.internals.log" />
     <allow pkg="org.apache.kafka.storage.internals.checkpoint" />
+    <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.logging.log4j" />
     <subpackage name="metrics">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />

@@ -23,7 +23,7 @@ import java.util.function.IntFunction;
 /**
  * A Random instance that makes it easy to modify the behavior of certain methods for test purposes.
  */
-class MockableRandom extends Random {
+public class MockableRandom extends Random {
 
     private IntFunction<OptionalInt> nextIntFunction = __ -> OptionalInt.empty();
 

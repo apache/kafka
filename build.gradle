@@ -413,7 +413,14 @@ subprojects {
           }
 
           afterEvaluate {
-            ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"].forEach { taskName ->
+            // testFixturesJar is automatically included by components.java when the java-test-fixtures
+            // plugin is applied, so it should only be added explicitly when publishing the shadow
+            // component (which does not include the test-fixtures variant).
+            def artifactTaskNames = ["srcJar", "javadocJar", "scaladocJar", "testJar", "testSrcJar"]
+            if (shouldPublishWithShadow) {
+              artifactTaskNames += "testFixturesJar"
+            }
+            artifactTaskNames.forEach { taskName ->
               def task = tasks.findByName(taskName)
               if (task != null)
                 artifact task
@@ -1150,7 +1157,7 @@ project(':core') {
     testImplementation testFixtures(project(':group-coordinator'))
     testImplementation testFixtures(project(':share-coordinator'))
     testImplementation testFixtures(project(':metadata'))
-    testImplementation project(':raft').sourceSets.test.output
+    testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation testFixtures(project(':server'))
@@ -1430,7 +1437,7 @@ project(':metadata') {
     testImplementation libs.jqwik
     testImplementation libs.mockitoCore
     testImplementation testFixtures(project(':clients'))
-    testImplementation project(':raft').sourceSets.test.output
+    testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':test-common:test-common-util')
 
@@ -1561,7 +1568,7 @@ project(':group-coordinator') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
-    testImplementation project(':coordinator-common').sourceSets.test.output
+    testImplementation testFixtures(project(':coordinator-common'))
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -1779,6 +1786,8 @@ project(':coordinator-common') {
     archivesName = "kafka-coordinator-common"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
@@ -1787,6 +1796,10 @@ project(':coordinator-common') {
     implementation libs.slf4jApi
     implementation libs.metrics
     implementation libs.hdrHistogram
+
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation libs.junitJupiter
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
@@ -1830,7 +1843,7 @@ project(':share-coordinator') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':server-common'))
-    testImplementation project(':coordinator-common').sourceSets.test.output
+    testImplementation testFixtures(project(':coordinator-common'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2179,6 +2192,8 @@ project(':raft') {
     archivesName = "kafka-raft"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -2189,6 +2204,14 @@ project(':raft') {
     implementation project(':storage')
     implementation libs.jacksonDatabind
     implementation libs.slf4jApi
+
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.jqwik
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation libs.mockitoCore
+    testFixturesImplementation libs.slf4jApi
 
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
@@ -4109,10 +4132,12 @@ gradle.projectsEvaluated {
     'server-common': ':server-common',
     'server': ':server',
     'storage/api': ':storage:storage-api',
+    'coordinator-common': ':coordinator-common',
     'storage': ':storage',
     'group-coordinator': ':group-coordinator',
     'share-coordinator': ':share-coordinator',
     'metadata': ':metadata',
+    'raft': ':raft',
   ]
   allprojects { proj ->
     proj.configurations.all { config ->

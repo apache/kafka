@@ -300,7 +300,7 @@ We added a new Serde type `Boolean` in [KIP-907](https://cwiki.apache.org/conflu
 
 [KIP-770](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=186878390) deprecates config `cache.max.bytes.buffering` in favor of the newly introduced config `statestore.cache.max.bytes`. To improve monitoring, two new metrics `input-buffer-bytes-total` and `cache-size-bytes-total` were added at the DEBUG level. Note, that the KIP is only partially implemented in the 3.4.0 release, and config `input.buffer.max.bytes` is not available yet. 
 
-[KIP-873](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211883356) enables you to multicast result records to multiple partition of downstream sink topics and adds functionality for choosing to drop result records without sending. The `Integer StreamPartitioner.partition()` method is deprecated and replaced by the newly added `Optiona≶Set<Integer>>StreamPartitioner.partitions()` method, which enables returning a set of partitions to send the record to. 
+[KIP-873](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211883356) enables you to multicast result records to multiple partition of downstream sink topics and adds functionality for choosing to drop result records without sending. The `Integer StreamPartitioner.partition()` method is deprecated and replaced by the newly added `Optional<Set<Integer>> StreamPartitioner.partitions()` method, which enables returning a set of partitions to send the record to. 
 
 [KIP-862](https://cwiki.apache.org/confluence/x/WSf1D) adds a DSL optimization for stream-stream self-joins. The optimization is enabled via a new option `single.store.self.join` which can be set via existing config `topology.optimization`. If enabled, the DSL will use a different join processor implementation that uses a single RocksDB store instead of two, to avoid unnecessary data duplication for the self-join case. 
 
@@ -591,5 +591,4 @@ compatible
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
-
 
