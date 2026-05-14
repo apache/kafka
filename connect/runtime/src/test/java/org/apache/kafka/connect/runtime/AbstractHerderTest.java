@@ -1118,7 +1118,7 @@ public class AbstractHerderTest {
         testConnectorPluginConfig(
                 "source",
                 SampleSourceConnector::new,
-                SampleSourceConnector::config,
+                SampleSourceConnector::configWithInternalKey,
                 Optional.of(SourceConnectorConfig.configDef())
         );
     }

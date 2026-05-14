@@ -55,12 +55,25 @@ public class SampleSourceConnector extends SourceConnector {
 
     }
 
-    @Override
-    public ConfigDef config() {
+    private static ConfigDef sampleConnectorKeys() {
         return new ConfigDef()
                 .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
-                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs")
-                .defineInternal(INTERNAL_ONLY_CONFIG_KEY, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW);
+                .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
+    }
+
+    @Override
+    public ConfigDef config() {
+        return sampleConnectorKeys();
+    }
+
+    /**
+     * Same keys as {@link #config()} plus one internal key. Used for plugin-config tests only; internal keys use an
+     * empty group in {@link ConfigDef}, which would change validation group lists if declared on {@link #config()}.
+     */
+    public ConfigDef configWithInternalKey() {
+        ConfigDef def = sampleConnectorKeys();
+        def.defineInternal(INTERNAL_ONLY_CONFIG_KEY, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW);
+        return def;
     }
 
     public ConfigDef configWithCommon() {
