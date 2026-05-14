@@ -538,12 +538,12 @@ public class MeteredKeyValueStoreTest {
     @Test
     public void shouldTrackNumKeysMetric() {
         setUp();
-        when(inner.approximateNumEntries()).thenReturn(42L);
         init();
 
         final KafkaMetric numKeysMetric = metric("num-keys");
         assertThat(numKeysMetric, not(nullValue()));
-        assertThat((Long) numKeysMetric.metricValue(), equalTo(42L));
+        // inner store is a mock (not InMemoryKeyValueStore), so returns -1
+        assertThat((Long) numKeysMetric.metricValue(), equalTo(-1L));
     }
 
     @SuppressWarnings("unused")

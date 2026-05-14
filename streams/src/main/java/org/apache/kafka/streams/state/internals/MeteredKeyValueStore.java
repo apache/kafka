@@ -182,7 +182,11 @@ public class MeteredKeyValueStore<K, V>
         );
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                    (config, now) -> wrapped().approximateNumEntries());
+                    (config, now) -> {
+                        final InMemoryKeyValueStore inMemoryStore = findInner(InMemoryKeyValueStore.class);
+                        return inMemoryStore != null ? inMemoryStore.approximateNumEntries() : -1L;
+                    }
+            );
         }
     }
 

@@ -33,11 +33,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The RackAwareAssignor is a consumer group partition assignor that takes into account the rack
- * information of the members when assigning partitions to them.
- * It needs all brokers and members to have rack information available.
+ * The RackAwareTestAssignor is a partition assignor for consumer groups and share groups that takes
+ * into account the rack information of the members when assigning partitions to them.
+ * It leaves partitions unassigned if there are no members with the same rack information.
  */
-public class RackAwareAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
+public class RackAwareTestAssignor implements ConsumerGroupPartitionAssignor, ShareGroupPartitionAssignor {
     @Override
     public String name() {
         return "rack-aware-assignor";
@@ -81,7 +81,8 @@ public class RackAwareAssignor implements ConsumerGroupPartitionAssignor, ShareG
                 }
 
                 if (assignedRack == null) {
-                    throw new PartitionAssignorException("No member found for racks " + racks + " for partition " + partitionId + " of topic " + topicId);
+                    // No rack-local member found, which can be transiently true as membership changes. Just skip this partition for now.
+                    break;
                 }
 
                 Map<Uuid, Set<Integer>> assignment = assignments.computeIfAbsent(

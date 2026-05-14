@@ -86,7 +86,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheTest, MockConfigRepository}
+import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheFixtures, MockConfigRepository}
 import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
@@ -4351,7 +4351,7 @@ class KafkaApisTest extends Logging {
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
         .setName(plaintextListener.value)
     )
-    MetadataCacheTest.updateCache(metadataCache,
+    MetadataCacheFixtures.updateCache(metadataCache,
       util.List.of(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints))
     )
 
@@ -4392,7 +4392,7 @@ class KafkaApisTest extends Logging {
     }
 
     val partitionRecords = Seq(authorizedTopicId, unauthorizedTopicId).map(createDummyPartitionRecord)
-    MetadataCacheTest.updateCache(metadataCache, (partitionRecords : Seq[ApiMessage]).asJava)
+    MetadataCacheFixtures.updateCache(metadataCache, (partitionRecords : Seq[ApiMessage]).asJava)
 
     // 4. Send TopicMetadataReq using topicId
     val metadataReqByTopicId = MetadataRequest.Builder.forTopicIds(util.Set.of(authorizedTopicId, unauthorizedTopicId)).build()
@@ -10106,7 +10106,7 @@ class KafkaApisTest extends Logging {
         .setName(plaintextListener.value)
     )
 
-    MetadataCacheTest.updateCache(metadataCache,
+    MetadataCacheFixtures.updateCache(metadataCache,
       util.List.of(new RegisterBrokerRecord()
         .setBrokerId(brokerId)
         .setRack("rack")
@@ -10160,7 +10160,7 @@ class KafkaApisTest extends Logging {
         .setName(plaintextListener.value)
     )
 
-    MetadataCacheTest.updateCache(metadataCache,
+    MetadataCacheFixtures.updateCache(metadataCache,
       util.List.of(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints0),
       new RegisterBrokerRecord().setBrokerId(1).setRack("rack").setFenced(false).setEndPoints(endpoints1))
     )
@@ -10397,12 +10397,12 @@ class KafkaApisTest extends Logging {
 
   private def setupBasicMetadataCache(topic: String, numPartitions: Int, numBrokers: Int, topicId: Uuid): Unit = {
     val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadata.asJava)
+    MetadataCacheFixtures.updateCache(metadataCache, updateMetadata.asJava)
   }
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
     val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadata.asJava)
+    MetadataCacheFixtures.updateCache(metadataCache, updateMetadata.asJava)
   }
 
   private def createMetadataBroker(brokerId: Int,
