@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -35,9 +34,7 @@ import org.rocksdb.WriteBatchInterface;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -339,16 +336,6 @@ public class DualColumnFamilyAccessorTest extends AbstractColumnFamilyAccessorTe
         final long result = accessor.approximateNumEntries(dbAccessor);
 
         assertEquals(150L, result);
-    }
-
-    @Test
-    public void shouldFlushBothColumnFamiliesOnCommit() throws RocksDBException {
-        final Map<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("topic", 0), 100L);
-
-        accessor.commit(dbAccessor, offsets);
-
-        verify(dbAccessor).flush(oldCF, newCF, offsetsCF);
     }
 
     @Test

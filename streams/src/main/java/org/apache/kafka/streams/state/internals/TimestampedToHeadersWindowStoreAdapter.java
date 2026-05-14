@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -37,11 +36,11 @@ import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Map;
 
 import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
+import static org.apache.kafka.streams.state.internals.Utils.rawTimestampedValue;
 
 /**
  * Adapter for backward compatibility between {@link TimestampedWindowStoreWithHeaders}
@@ -58,7 +57,7 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
  * </ul>
  */
 public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
-    private final WindowStore<Bytes, byte[]> store;
+    final WindowStore<Bytes, byte[]> store;
 
     public TimestampedToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
@@ -68,30 +67,6 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
             throw new IllegalArgumentException("Provided store must be a timestamped store, but it is not.");
         }
         this.store = store;
-    }
-
-    /**
-     * Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
-     * This strips the headers portion but keeps timestamp and value intact.
-     *
-     * Format conversion:
-     * Input:  [headersSize(varint)][headers][timestamp(8)][value]
-     * Output: [timestamp(8)][value]
-     */
-    // TODO: should be extract to util class, tracked by KAFKA-20205
-    static byte[] rawTimestampedValue(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders == null) {
-            return null;
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        // Skip headers, keep timestamp + value
-        buffer.position(buffer.position() + headersSize);
-
-        final byte[] result = new byte[buffer.remaining()];
-        buffer.get(result);
-        return result;
     }
 
     @Override

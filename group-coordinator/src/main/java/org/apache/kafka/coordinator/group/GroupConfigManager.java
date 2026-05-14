@@ -32,8 +32,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class GroupConfigManager implements AutoCloseable {
 
-    private final GroupConfig defaultConfig;
-
     private final Map<String, GroupConfig> configMap;
 
     private final GroupCoordinatorConfig groupCoordinatorConfig;
@@ -41,12 +39,10 @@ public class GroupConfigManager implements AutoCloseable {
     private final ShareGroupConfig shareGroupConfig;
 
     public GroupConfigManager(
-        Map<?, ?> defaultConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
         this.configMap = new ConcurrentHashMap<>();
-        this.defaultConfig = new GroupConfig(defaultConfig);
         this.groupCoordinatorConfig = Objects.requireNonNull(groupCoordinatorConfig);
         this.shareGroupConfig = Objects.requireNonNull(shareGroupConfig);
     }
@@ -75,10 +71,7 @@ public class GroupConfigManager implements AutoCloseable {
         Properties evaluatedProps = GroupConfig.evaluate(
             newGroupConfig, groupId, groupCoordinatorConfig, shareGroupConfig);
 
-        final GroupConfig newConfig = GroupConfig.fromProps(
-            defaultConfig.originals(),
-            evaluatedProps
-        );
+        final GroupConfig newConfig = new GroupConfig(evaluatedProps);
         configMap.put(groupId, newConfig);
     }
 
@@ -95,6 +88,14 @@ public class GroupConfigManager implements AutoCloseable {
 
     public List<String> groupIds() {
         return List.copyOf(configMap.keySet());
+    }
+
+    public Optional<String> shareGroupDlqTopicPrefix() {
+        return Optional.ofNullable(groupCoordinatorConfig.errorsDLQTopicNamePrefix());
+    }
+
+    public boolean isDlqAutoTopicCreateEnabled() {
+        return groupCoordinatorConfig.errorsDLQAutoCreateTopicsEnable();
     }
 
     /**

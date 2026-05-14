@@ -18,8 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.FixedOrderMap;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.FixedOrderMap;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -36,6 +36,8 @@ import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.WithRetentionPeriod;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
 
@@ -54,6 +56,7 @@ import java.util.stream.Collectors;
 import static java.lang.String.format;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
+import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_UNKNOWN;
 
 /**
  * ProcessorStateManager is the source of truth for the current offset for each state store,
@@ -102,6 +105,8 @@ public class ProcessorStateManager implements StateManager {
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
+        private final long retentionPeriod;
+
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
@@ -112,6 +117,7 @@ public class ProcessorStateManager implements StateManager {
             this.changelogPartition = null;
             this.corrupted = false;
             this.offset = null;
+            this.retentionPeriod = -1L;
         }
 
         private StateStoreMetadata(final StateStore stateStore,
@@ -129,10 +135,22 @@ public class ProcessorStateManager implements StateManager {
             this.commitCallback = commitCallback;
             this.recordConverter = recordConverter;
             this.offset = null;
+            this.retentionPeriod = extractRetentionPeriod(stateStore);
         }
 
         private void setOffset(final Long offset) {
             this.offset = offset;
+        }
+
+        private static long extractRetentionPeriod(final StateStore stateStore) {
+            StateStore current = stateStore;
+            while (current instanceof WrappedStateStore) {
+                current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
+            }
+            if (current instanceof WithRetentionPeriod) {
+                return ((WithRetentionPeriod) current).retentionPeriod();
+            }
+            return -1L;
         }
 
         // the offset is exposed to the changelog reader to determine if restoration is completed
@@ -142,6 +160,11 @@ public class ProcessorStateManager implements StateManager {
 
         Long endOffset() {
             return this.endOffset;
+        }
+
+        // the retentionPeriod is exposed to the changelog reader for window restoration
+        long retentionPeriod() {
+            return retentionPeriod;
         }
 
         public void setEndOffset(final Long endOffset) {
@@ -307,7 +330,7 @@ public class ProcessorStateManager implements StateManager {
                 final Long offset = store.stateStore.committedOffset(store.changelogPartition);
 
                 if (offset != null) {
-                    store.setOffset(offset);
+                    store.setOffset(changelogOffsetFromCommittedOffset(offset));
                     log.info("State store {} initialized from checkpoint with offset {} at changelog {}",
                             store.stateStore.name(), store.offset, store.changelogPartition);
                 } else {
@@ -509,10 +532,11 @@ public class ProcessorStateManager implements StateManager {
                 final StateStore store = metadata.stateStore;
                 log.trace("Committing store {}", store.name());
                 try {
-                    if (metadata.changelogPartition == null || metadata.offset == null || metadata.corrupted || !store.persistent()) {
+                    if (metadata.changelogPartition == null || metadata.corrupted || !store.persistent()) {
                         store.commit(Map.of());
                     } else {
-                        store.commit(Map.of(metadata.changelogPartition, metadata.offset));
+                        // logged store, persistent and valid end offset
+                        store.commit(Map.of(metadata.changelogPartition, committableOffsetFromChangelogOffset(metadata.offset)));
                     }
 
                     if (!metadata.corrupted && metadata.commitCallback != null) {
@@ -699,6 +723,16 @@ public class ProcessorStateManager implements StateManager {
         }
 
         stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+    }
+
+    // Commit a sentinel value when the changelog offset is not yet initialized/known
+    private long committableOffsetFromChangelogOffset(final Long offset) {
+        return offset != null ? offset : OFFSET_UNKNOWN;
+    }
+
+    // Convert the written offsets in the checkpoint file back to the changelog offset
+    private Long changelogOffsetFromCommittedOffset(final long offset) {
+        return offset != OFFSET_UNKNOWN ? offset : null;
     }
 
     private  TopicPartition getStorePartition(final String storeName) {

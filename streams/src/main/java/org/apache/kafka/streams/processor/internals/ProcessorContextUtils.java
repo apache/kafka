@@ -52,6 +52,7 @@ public final class ProcessorContextUtils {
         return ProcessorStateManager.storeChangelogTopic(prefix, storeName, context.taskId().topologyName());
     }
 
+    @Deprecated
     public static String topicNamePrefix(final Map<String, Object> configs, final String applicationId) {
         if (configs == null) {
             return applicationId;

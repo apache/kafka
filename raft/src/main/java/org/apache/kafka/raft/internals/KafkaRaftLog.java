@@ -24,9 +24,9 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Records;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogAppendInfo;
 import org.apache.kafka.raft.LogFetchInfo;
@@ -117,14 +117,19 @@ public class KafkaRaftLog implements RaftLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, Isolation readIsolation) {
+    public LogFetchInfo read(long startOffset, Isolation readIsolation, int maxTotalBatchBytes) {
         FetchIsolation isolation = switch (readIsolation) {
             case COMMITTED -> FetchIsolation.HIGH_WATERMARK;
             case UNCOMMITTED -> FetchIsolation.LOG_END;
         };
 
         try {
-            FetchDataInfo fetchInfo = log.read(startOffset, config.internalMaxFetchSizeInBytes(), isolation, true);
+            FetchDataInfo fetchInfo = log.read(
+                startOffset,
+                maxTotalBatchBytes,
+                isolation,
+                true
+            );
             return new LogFetchInfo(
                     fetchInfo.records,
                     new LogOffsetMetadata(
@@ -358,7 +363,12 @@ public class KafkaRaftLog implements RaftLog {
           fetches from this offset, the returned batch will start at offset (X - M), and the
           follower will be unable to append it since (X - M) < (X).
          */
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        long baseOffset = read(
+            snapshotId.offset(),
+            Isolation.COMMITTED,
+            1 // maxTotalBatchBytes - ensures that we only fetch one batch.
+        ).startOffsetMetadata.offset();
+
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                     "Cannot create snapshot at offset (" + snapshotId.offset() + ") because it is not batch aligned. " +
@@ -553,10 +563,10 @@ public class KafkaRaftLog implements RaftLog {
         }
 
         boolean didClean = false;
-        List<OffsetAndEpoch> epoches = new ArrayList<>(snapshots.keySet());
-        for (int i = 0; i < epoches.size() - 1; i++) {
-            OffsetAndEpoch epoch = epoches.get(i);
-            OffsetAndEpoch nextEpoch = epoches.get(i + 1);
+        List<OffsetAndEpoch> epochs = new ArrayList<>(snapshots.keySet());
+        for (int i = 0; i < epochs.size() - 1; i++) {
+            OffsetAndEpoch epoch = epochs.get(i);
+            OffsetAndEpoch nextEpoch = epochs.get(i + 1);
             Optional<SnapshotDeletionReason> reason = predicate.apply(epoch);
             if (reason.isPresent()) {
                 boolean deleted = deleteBeforeSnapshot(nextEpoch, reason.get());

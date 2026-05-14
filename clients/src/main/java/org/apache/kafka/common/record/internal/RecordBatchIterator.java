@@ -18,7 +18,7 @@ package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
 
 import java.io.EOFException;
 import java.io.IOException;

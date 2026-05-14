@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import org.junit.jupiter.api.Test;

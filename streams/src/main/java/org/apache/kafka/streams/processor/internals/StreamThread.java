@@ -48,10 +48,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
@@ -384,6 +384,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final WindowedSum punctuateLatencyWindowedSum = new WindowedSum();
     private final WindowedSum runOnceLatencyWindowedSum = new WindowedSum();
     private final MetricConfig metricsConfig;
+    private final StreamsThreadMetricsDelegatingReporter metricsReporter;
 
     private boolean latencyWindowsInitialized = false;
 
@@ -514,8 +515,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
         referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
 
-        final StreamsThreadMetricsDelegatingReporter reporter = new StreamsThreadMetricsDelegatingReporter(mainConsumerSetup.mainConsumer, threadId, Optional.of(stateUpdaterId));
-        streamsMetrics.metricsRegistry().addReporter(reporter);
+        final StreamsThreadMetricsDelegatingReporter metricsReporter = new StreamsThreadMetricsDelegatingReporter(mainConsumerSetup.mainConsumer, threadId, Optional.of(stateUpdaterId));
+        streamsMetrics.metricsRegistry().addReporter(metricsReporter);
 
         final StreamThread streamThread = new StreamThread(
             time,
@@ -539,7 +540,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler,
             cache::resize,
             mainConsumerSetup.streamsRebalanceData,
-            streamsMetadataState
+            streamsMetadataState,
+            metricsReporter
         );
 
         return streamThread.updateThreadMetadata(adminClientId(clientId));
@@ -786,7 +788,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer,
                         final Optional<StreamsRebalanceData> streamsRebalanceData,
-                        final StreamsMetadataState streamsMetadataState
+                        final StreamsMetadataState streamsMetadataState,
+                        final StreamsThreadMetricsDelegatingReporter metricsReporter
                         ) {
         super(threadId);
         this.stateLock = new Object();
@@ -809,6 +812,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
         this.metricsConfig = streamsMetrics.metricsRegistry().config();
+        this.metricsReporter = metricsReporter;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -1611,7 +1615,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
             // TODO
             // This may be null if the task we are currently processing was part of a named topology that was just removed.
-            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrateg()` so it
+            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrategy()` so it
             // will not return null any longer, and we can remove this check
             if (offsetResetStrategy != null) {
                 if (offsetResetStrategy.isPresent()) {
@@ -1905,6 +1909,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         streamsMetrics.removeAllThreadLevelSensors(getName());
         streamsMetrics.removeAllThreadLevelMetrics(getName());
+        streamsMetrics.metricsRegistry().removeReporter(metricsReporter);
 
         setState(State.DEAD);
 
@@ -2078,6 +2083,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         return taskManager;
     }
 
+    // VisibleForTesting
+    public boolean hasAnyTaskForTopology(final String topologyName) {
+        return taskManager.hasAnyTaskForTopology(topologyName);
+    }
+
+
+    // VisibleForTesting
+    public boolean areAllTasksRunningForTopology(final String topologyName) {
+        return taskManager.areAllTasksRunningForTopology(topologyName);
+    }
+    
     int currentNumIterations() {
         return numIterations;
     }
@@ -2100,6 +2116,10 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     Optional<StreamsRebalanceData> streamsRebalanceData() {
         return streamsRebalanceData;
+    }
+
+    StreamsMetricsImpl streamsMetrics() {
+        return streamsMetrics;
     }
 
     /**

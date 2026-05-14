@@ -30,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -41,10 +42,13 @@ import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,6 +58,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.DELETE;
@@ -62,8 +67,11 @@ import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SUBTRACT;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
-import static org.apache.kafka.controller.ConfigurationControlManager.DISALLOWED_CORDONED_LOG_DIRS_ERROR;
+import static org.apache.kafka.controller.ConfigurationControlManager.DISABLED_CORDONED_LOG_DIRS_ERROR;
+import static org.apache.kafka.controller.ConfigurationControlManager.INVALID_CORDONED_LOG_DIRS_ERROR;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
+import static org.apache.kafka.server.config.ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -167,7 +175,8 @@ public class ConfigurationControlManagerTest {
                 entry("baz", entry(SUBTRACT, "abc")),
                 entry("quux", entry(SET, "abc")))),
                 entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
-                true);
+                true,
+                false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -184,7 +193,7 @@ public class ConfigurationControlManagerTest {
                 toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("abc", entry(DELETE, "xyz"))))),
-                true));
+                true, false));
     }
 
     @Test
@@ -196,7 +205,7 @@ public class ConfigurationControlManagerTest {
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
 
         ControllerResult<ApiError> result = manager.
-            incrementalAlterConfig(MYTOPIC, keyToOps, true);
+            incrementalAlterConfig(MYTOPIC, keyToOps, true, false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -209,13 +218,13 @@ public class ConfigurationControlManagerTest {
                     new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                         setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 ApiError.NONE),
-            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true));
+            manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true, false));
 
         // The configuration value exceeding the maximum size is not allowed to be added.
         String largeValue = new String(new char[Short.MAX_VALUE - APPEND.id() - 1]);
         Map<String, Entry<AlterConfigOp.OpType, String>> largeValueOfOps = toMap(entry("abc", entry(APPEND, largeValue)));
 
-        ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true);
+        ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true, false);
         assertEquals(Errors.INVALID_CONFIG, invalidConfigValueResult.response().error());
         assertEquals("The configuration value cannot be added because it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.",
                 invalidConfigValueResult.response().message());
@@ -229,7 +238,7 @@ public class ConfigurationControlManagerTest {
             build();
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
-            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true);
+            incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true, false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
@@ -240,7 +249,7 @@ public class ConfigurationControlManagerTest {
 
         // It's ok for the appended value to be already present
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true, false);
         assertEquals(
             ControllerResult.atomicOf(List.of(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
@@ -248,7 +257,7 @@ public class ConfigurationControlManagerTest {
         RecordTestUtils.replayAll(manager, result.records());
 
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true, false);
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
@@ -258,7 +267,7 @@ public class ConfigurationControlManagerTest {
 
         // It's ok for the deleted value not to be present
         result = manager
-            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true);
+            .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true, false);
         assertEquals(
             ControllerResult.atomicOf(List.of(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
@@ -281,6 +290,7 @@ public class ConfigurationControlManagerTest {
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
                 entry("quux", entry(SET, "1")))),
                 entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
+                false,
                 false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
@@ -365,7 +375,8 @@ public class ConfigurationControlManagerTest {
                         entry("quux", entry(SET, "456")),
                         entry("broker.config.to.remove", entry(DELETE, null))
                 ))),
-                true));
+                true,
+                false));
     }
 
     private static class CheckForNullValuesPolicy implements AlterConfigPolicy {
@@ -407,7 +418,7 @@ public class ConfigurationControlManagerTest {
                 expectedRecords1, toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(
                 toMap(entry(MYTOPIC, toMap(entry("abc", "456"), entry("def", "901")))),
-                true));
+                true, false));
         for (ApiMessageAndVersion message : expectedRecords1) {
             manager.replay((ConfigRecord) message.message());
         }
@@ -421,7 +432,7 @@ public class ConfigurationControlManagerTest {
                 CONFIG_RECORD.highestSupportedVersion())),
             toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
-                true));
+                true, false));
     }
 
     @ParameterizedTest
@@ -437,7 +448,7 @@ public class ConfigurationControlManagerTest {
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps =
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "3")));
         ConfigResource brokerConfigResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
-        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true);
+        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true, false);
         assertEquals(Set.of(), manager.brokersWithConfigs());
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
@@ -502,7 +513,7 @@ public class ConfigurationControlManagerTest {
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                 removal ? entry(DELETE, null) : entry(SET, "3"))),
-            true);
+            true, false);
         assertEquals(Errors.INVALID_CONFIG, result.response().error());
         assertEquals("Broker-level min.insync.replicas cannot be altered while ELR is enabled.",
             result.response().message());
@@ -511,7 +522,7 @@ public class ConfigurationControlManagerTest {
         result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, ""),
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
                 removal ? entry(DELETE, null) : entry(SET, "3"))),
-            true);
+            true, false);
         if (removal) {
             assertEquals(Errors.INVALID_CONFIG, result.response().error());
             assertEquals("Cluster-level min.insync.replicas cannot be removed while ELR is enabled.",
@@ -573,17 +584,150 @@ public class ConfigurationControlManagerTest {
                 build();
 
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
-                toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
-                true);
+                toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, ""))),
+                true, false);
+        assertEquals(enabled ? ApiError.NONE : DISABLED_CORDONED_LOG_DIRS_ERROR, result.response());
 
-        assertEquals(enabled ? ApiError.NONE : DISALLOWED_CORDONED_LOG_DIRS_ERROR, result.response());
+        result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
+                toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
+                true, false);
+        assertEquals(enabled ? INVALID_CORDONED_LOG_DIRS_ERROR : DISABLED_CORDONED_LOG_DIRS_ERROR, result.response());
+    }
+
+    private FeatureControlManager createFeatureControlManager(short level) {
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        featureControlManager.replay(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(level));
+        return featureControlManager;
     }
 
     private FeatureControlManager createFeatureControlManager() {
-        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
-        featureControlManager.replay(new FeatureLevelRecord().
-            setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
-        return featureControlManager;
+        return createFeatureControlManager(MetadataVersion.LATEST_PRODUCTION.featureLevel());
+    }
+
+    @Test
+    public void testValidateAlterConfigWithInvalidExistingConfigs() {
+        Set<String> validConfigs = Set.of("abc", "def");
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
+
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
+            setKafkaConfigSchema(SCHEMA).
+            setSupportedConfigChecker(supportedConfigChecker).
+            build();
+
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("abc").setValue("value1"));  // valid
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("invalid.config").setValue("should-be-filtered"));  // invalid, filtered in replay()
+
+        Map<String, String> configs = manager.getConfigs(MYTOPIC);
+        assertTrue(configs.containsKey("abc"), "Valid config should be in configData");
+        assertFalse(configs.containsKey("invalid.config"), "Invalid config should be filtered out in replay()");
+
+        ControllerResult<ApiError> result = manager.incrementalAlterConfig(
+            MYTOPIC,
+            toMap(entry("def", entry(SET, "newValue"))),
+            false,
+            false);
+
+        assertEquals(ApiError.NONE, result.response());
+    }
+
+    @Test
+    public void testReplayFiltersInvalidConfigs() {
+        Set<String> validConfigs = Set.of("abc", "def", "ghi");
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
+
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA).
+            setSupportedConfigChecker(supportedConfigChecker).
+            build();
+
+        // Replay valid configs
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("abc").setValue("value1"));
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("def").setValue("value2"));
+
+        manager.replay(new ConfigRecord().
+            setResourceType(TOPIC.id()).setResourceName("mytopic").
+            setName("invalid.config").setValue("should-be-filtered"));
+
+        Map<String, String> configs = manager.getConfigs(MYTOPIC);
+        assertEquals(2, configs.size(), "Should only have valid configs");
+        assertTrue(configs.containsKey("abc"));
+        assertTrue(configs.containsKey("def"));
+        assertFalse(configs.containsKey("invalid.config"), "Invalid config should not be in configData");
+    }
+
+    @ParameterizedTest
+    @MethodSource("arguments")
+    public void testIsCordonedLogDirsDisabled(boolean expected, short level) {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+                setKafkaConfigSchema(SCHEMA).
+                setFeatureControl(createFeatureControlManager(level)).
+                build();
+
+        ConfigRecord cordonedConfig = new ConfigRecord().
+                setResourceType(BROKER.id()).setResourceName("0").
+                setName(CORDONED_LOG_DIRS_CONFIG);
+        ConfigRecord otherConfigConfig = new ConfigRecord().
+                setResourceType(BROKER.id()).setResourceName("0").
+                setName(LOG_DIRS_CONFIG);
+
+        assertEquals(expected, manager.isCordonedLogDirsDisabled(cordonedConfig));
+        assertFalse(manager.isCordonedLogDirsDisabled(otherConfigConfig));
+    }
+
+    public static Stream<Arguments> arguments() {
+        return Stream.of(
+                Arguments.of(false, MetadataVersion.latestProduction().featureLevel()),
+                Arguments.of(true, MetadataVersion.IBP_4_2_IV1.featureLevel())
+        );
+    }
+
+    @Test
+    public void testIsCordonedLogDirsInvalid() {
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+                setKafkaConfigSchema(SCHEMA).
+                setFeatureControl(createFeatureControlManager()).
+                build();
+
+        ConfigRecord cr = new ConfigRecord().
+                setResourceType(BROKER.id()).setResourceName("0").
+                setName(CORDONED_LOG_DIRS_CONFIG);
+
+        // If the new value is null or empty string, the update is always allowed
+        for (String value : Arrays.asList("", "   ", null)) {
+            cr.setValue(value);
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, null, false));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, null, true));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, "some/value", false));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, "some/value", true));
+        }
+
+        // If the new value is equal or a subset of the current value, the update is always allowed
+        cr.setValue("dir1");
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir1", false));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir1", true));
+        for (String value : Arrays.asList("dir1", "dir2", "dir1,dir2", "dir2,dir1")) {
+            cr.setValue(value);
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir1,dir2", false));
+            assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir1,dir2", true));
+        }
+
+        // If the new value is different, the update is only allowed if the request is forwarded
+        assertTrue(manager.isCordonedLogDirsInvalid(cr, "dir2", false));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, "dir2", true));
+        assertTrue(manager.isCordonedLogDirsInvalid(cr, "", false));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, "", true));
+        assertTrue(manager.isCordonedLogDirsInvalid(cr, null, false));
+        assertFalse(manager.isCordonedLogDirsInvalid(cr, null, true));
     }
 }

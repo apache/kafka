@@ -40,9 +40,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,7 +124,7 @@ public class ConsumerMembershipManagerTest {
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
         time = new MockTime(0);
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+        backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class)));
         metrics = new Metrics(time);
         rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
@@ -269,6 +269,72 @@ public class ConsumerMembershipManagerTest {
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         testFencedMemberReleasesAssignmentAndTransitionsToJoining(membershipManager);
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+    }
+
+    @Test
+    public void testTransitionToFencedMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        membershipManager.transitionToFenced();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
+    }
+
+    @Test
+    public void testTransitionToFatalMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        membershipManager.transitionToFatal();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
+    }
+
+    @Test
+    public void testTransitionToStaleMarksPendingRevocationBeforeSignalingPartitionsLost() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
+
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        // First transition to LEAVING (required before transitioning to STALE)
+        membershipManager.transitionToSendingLeaveGroup(true);
+        clearInvocations(subscriptionState, backgroundEventHandler);
+        when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        membershipManager.transitionToStale();
+
+        // Verify markPendingRevocation is called before enqueueing the callback event
+        InOrder inOrder = inOrder(subscriptionState, backgroundEventHandler);
+        inOrder.verify(subscriptionState).markPendingRevocation(ownedPartitions);
+        inOrder.verify(backgroundEventHandler).add(any(PartitionsRemovedEvent.class));
     }
 
     @Test
@@ -1180,6 +1246,45 @@ public class ConsumerMembershipManagerTest {
         verify(subscriptionState).unsubscribe();
         assertTrue(leaveResult1.isDone());
         assertEquals(MemberState.STALE, membershipManager.state());
+    }
+
+    /**
+     * Test that when unsubscribe/leaveGroup is called during an ongoing reconciliation and the pending
+     * assignment event is completed exceptionally, the member can still rejoin and start
+     * a new reconciliation.
+     */
+    @Test
+    public void testLeaveGroupDuringReconciliationThenRejoin() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic1";
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+
+        // Start reconciliation - assignment event is pending
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.maybeReconcile(true);
+        PartitionsAssignedEvent pendingAssignmentEvent = (PartitionsAssignedEvent) backgroundEventQueue.poll();
+        assertNotNull(pendingAssignmentEvent);
+
+        // Call leaveGroup while reconciliation is in progress
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+
+        // Complete the pending assignment event exceptionally (simulating unsubscribe skipping it)
+        pendingAssignmentEvent.future().completeExceptionally(
+            new KafkaException("Assignment event skipped because consumer is unsubscribing"));
+
+        // Complete leave and rejoin
+        membershipManager.onHeartbeatRequestGenerated();
+        clearInvocations(membershipManager);
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+        membershipManager.transitionToJoining();
+
+        // Receive assignment - verify new reconciliation starts
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.maybeReconcile(true);
+        verifyReconciliationTriggered(membershipManager);
     }
 
     @Test
@@ -2841,7 +2946,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.STABLE, membershipManager.state());
 
-        clearInvocations(subscriptionState, membershipManager, commitRequestManager);
+        clearInvocations(subscriptionState, membershipManager, commitRequestManager, backgroundEventHandler);
         return membershipManager;
     }
 

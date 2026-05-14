@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -221,7 +222,7 @@ public class DeleteTopicTest {
             cluster.waitTopicDeletion(topic);
 
             waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic test not created.");
-            cluster.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, DEFAULT_TOPIC, 0, 1000);
+            AdminUtils.fetchOrWaitForLeader(admin, DEFAULT_TOPIC, 0, 1000);
         }
     }
 
@@ -236,7 +237,7 @@ public class DeleteTopicTest {
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             // for simplicity, we are validating cleaner offsets on a single broker
             KafkaBroker server = cluster.brokers().values().stream().findFirst().orElseThrow();
-            TestUtils.waitForCondition(() -> server.logManager().getLog(topicPartition, false).isDefined(),
+            TestUtils.waitForCondition(() -> server.logManager().getLog(topicPartition, false).isPresent(),
                 "Replicas for topic test not created.");
             UnifiedLog log = server.logManager().getLog(topicPartition, false).get();
             writeDups(100, 3, log);
@@ -301,7 +302,7 @@ public class DeleteTopicTest {
                                        TopicPartition topicPartition,
                                        String failMessage) throws InterruptedException {
         TestUtils.waitForCondition(() -> clusters.values().stream().allMatch(broker ->
-                broker.logManager().getLog(topicPartition, false).isDefined()),
+                broker.logManager().getLog(topicPartition, false).isPresent()),
             failMessage);
     }
 

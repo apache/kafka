@@ -25,7 +25,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -54,6 +54,9 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     private boolean closed;
     private Uuid clientInstanceId;
 
+    /**
+     * Constructs a new MockShareConsumer for testing.
+     */
     public MockShareConsumer() {
         this.subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         this.records = new HashMap<>();

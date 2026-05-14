@@ -17,8 +17,8 @@
 package org.apache.kafka.common.test;
 
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,16 +49,6 @@ class TestUtils {
 
     private static final long DEFAULT_POLL_INTERVAL_MS = 100;
     private static final long DEFAULT_MAX_WAIT_MS = 15_000;
-
-    /**
-     * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
-     * suffix to generate its name.
-     */
-    public static File tempFile() throws IOException {
-        final File file = Files.createTempFile("kafka", ".tmp").toFile();
-        file.deleteOnExit();
-        return file;
-    }
 
     /**
      * Generate a random string of letters and digits of the given length

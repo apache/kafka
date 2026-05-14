@@ -67,6 +67,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -362,7 +363,14 @@ public class IQv2StoreIntegrationTest {
                 for (final StoresToTest toTest : StoresToTest.values()) {
                     for (final String kind : Arrays.asList("DSL", "PAPI")) {
                         for (final String groupProtocol : Arrays.asList("classic", "streams")) {
-                            values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol));
+                            for (final boolean withHeaders : Arrays.asList(true, false)) {
+                                // DSL_STORE_FORMAT_CONFIG only affects DSL stores built without an
+                                // explicit supplier; for PAPI and global stores it is a no-op, so
+                                // skip the redundant withHeaders=true duplicates.
+                                if (withHeaders && (!"DSL".equals(kind) || toTest.global()))
+                                    continue;
+                                values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol, withHeaders));
+                            }
                         }
                     }
                 }
@@ -429,14 +437,15 @@ public class IQv2StoreIntegrationTest {
         ));
     }
 
-    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
+    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol, final boolean withHeaders) {
         final StoreSupplier<?> supplier = storeToTest.supplier();
         final Properties streamsConfig = streamsConfiguration(
             cache,
             log,
             storeToTest.name(),
             kind,
-            groupProtocol
+            groupProtocol,
+            withHeaders
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -769,8 +778,8 @@ public class IQv2StoreIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
-        setup(cache, log, storeToTest, kind, groupProtocol);
+    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol, final boolean withHeaders) {
+        setup(cache, log, storeToTest, kind, groupProtocol, withHeaders);
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
@@ -798,7 +807,7 @@ public class IQv2StoreIntegrationTest {
                                 shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
                             }
                         } else {
-                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
+                            shouldHandleFailedTimestampedKeyQuery(2);
                             assertThrows(AssertionError.class, () -> shouldHandleTimestampedRangeQueries(false));
                         }
 
@@ -1701,6 +1710,27 @@ public class IQv2StoreIntegrationTest {
         assertThat(queryResult.getPosition(), is(POSITION_0));
     }
 
+    public <V> void shouldHandleFailedTimestampedKeyQuery(final Integer key) {
+        final TimestampedKeyQuery<Integer, V> query = TimestampedKeyQuery.withKey(key);
+        final StateQueryRequest<ValueAndTimestamp<V>> request =
+                inStore(STORE_NAME)
+                        .withQuery(query)
+                        .withPartitions(Set.of(0))
+                        .withPositionBound(PositionBound.at(INPUT_POSITION));
+
+        final StateQueryResult<ValueAndTimestamp<V>> result =
+                IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+
+        final QueryResult<ValueAndTimestamp<V>> queryResult =
+                result.getOnlyPartitionResult();
+
+        assertThat(queryResult.isFailure(), is(true));
+        assertThat(queryResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
+        assertThat(queryResult.getFailureMessage(), containsString("TimestampedKeyQuery"));
+
+        assertThrows(IllegalArgumentException.class, queryResult::getResult);
+    }
+
     public <V> void shouldHandleRangeQuery(
         final Optional<Integer> lower,
         final Optional<Integer> upper,
@@ -1814,7 +1844,7 @@ public class IQv2StoreIntegrationTest {
         final Integer key,
         final Instant timeFrom,
         final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
+        final Function<V, Integer> valueExtractor,
         final Set<Integer> expectedValues) {
 
         final WindowKeyQuery<Integer, V> query = WindowKeyQuery.withKeyAndWindowStartRange(
@@ -1855,7 +1885,7 @@ public class IQv2StoreIntegrationTest {
 
                 try (final WindowStoreIterator<V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
@@ -1868,7 +1898,7 @@ public class IQv2StoreIntegrationTest {
     public <V> void shouldHandleWindowRangeQuery(
         final Instant timeFrom,
         final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
+        final Function<V, Integer> valueExtractor,
         final Set<Integer> expectedValues) {
 
         final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withWindowStartRange(timeFrom, timeTo);
@@ -1905,7 +1935,7 @@ public class IQv2StoreIntegrationTest {
 
                 try (final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
@@ -2026,10 +2056,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
-                                                   final String supplier, final String kind, final String groupProtocol) {
+                                                   final String supplier, final String kind, final String groupProtocol, final boolean withHeaders) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
-                + "-" + kind + "-" + groupProtocol + "-" + RANDOM.nextInt();
+                + "-" + kind + "-" + groupProtocol + "-" + withHeaders + "-" + RANDOM.nextInt();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -2045,6 +2075,7 @@ public class IQv2StoreIntegrationTest {
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
         return config;
     }
 }

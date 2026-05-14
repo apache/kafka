@@ -1657,10 +1657,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2
             if not requested_partition_line:
                 raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
-            leader_idx = int(requested_partition_line.split()[5]) # 6th column from above
+            leader_idx_str = requested_partition_line.split()[5] # 6th column from above
+            leader_idx = int(leader_idx_str) if leader_idx_str != "none" else None
 
-        self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
-        return self.get_node(leader_idx)
+        self.logger.info("Leader for topic %s and partition %d is now: %s" % (topic, partition, leader_idx))
+        return self.get_node(leader_idx) if leader_idx is not None and leader_idx != -1 else None
 
     def cluster_id(self):
         """ Get the current cluster id

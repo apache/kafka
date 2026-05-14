@@ -32,12 +32,12 @@ import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.{SecurityUtils => JSecurityUtils}
+import org.apache.kafka.common.utils.internals.{SecurityUtils => JSecurityUtils}
 import org.apache.kafka.controller.MockAclMutator
-import org.apache.kafka.metadata.authorizer.StandardAuthorizer
-import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
+import org.apache.kafka.metadata.authorizer.{AuthorizerTestServerInfo, StandardAuthorizer}
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.util.ServerTestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Test
@@ -97,7 +97,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   override def tearDown(): Unit = {
     authorizer1.close()
     authorizer2.close()
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
     super.tearDown()
   }
 

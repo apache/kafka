@@ -38,9 +38,9 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
@@ -1510,15 +1510,15 @@ class ShareCoordinatorServiceTest {
             .thenReturn(List.of(tp1, tp2));
 
         when(writer.deleteRecords(
-            any(),
-            eq(10L)
+            eq(tp1),
+            anyLong()
         )).thenReturn(
             CompletableFuture.completedFuture(null)
         );
 
         when(writer.deleteRecords(
-            any(),
-            eq(20L)
+            eq(tp2),
+            anyLong()
         )).thenReturn(
             CompletableFuture.failedFuture(new Exception("bad stuff"))
         );
@@ -2125,7 +2125,9 @@ class ShareCoordinatorServiceTest {
             .build();
 
         // Create a delta that deletes the topic.
-        MetadataDelta delta = new MetadataDelta(initialImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(initialImage)
+            .build();
         delta.replay(new RemoveTopicRecord().setTopicId(topicId));
         MetadataImage newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
 
@@ -2172,7 +2174,9 @@ class ShareCoordinatorServiceTest {
         MetadataImage image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
-        MetadataDelta delta = new MetadataDelta(image);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
 
         assertDoesNotThrow(() -> service.onMetadataUpdate(delta, image));
 
@@ -2245,7 +2249,9 @@ class ShareCoordinatorServiceTest {
             .build();
 
         // Create a delta that deletes the topic.
-        MetadataDelta delta = new MetadataDelta(initialImage);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(initialImage)
+            .build();
         delta.replay(new RemoveTopicRecord().setTopicId(topicId));
         MetadataImage newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
 

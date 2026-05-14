@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
@@ -1275,11 +1275,11 @@ public class StreamsGroup implements Group {
 
             // Search for the partition in assigned tasks, then in tasks pending revocation
             Integer assignmentEpoch = assignedTasks.activeTasksWithEpochs()
-                .getOrDefault(subtopologyId, Collections.emptyMap())
+                .getOrDefault(subtopologyId, Map.of())
                 .get(partitionId);
             if (assignmentEpoch == null) {
                 assignmentEpoch = tasksPendingRevocation.activeTasksWithEpochs()
-                    .getOrDefault(subtopologyId, Collections.emptyMap())
+                    .getOrDefault(subtopologyId, Map.of())
                     .get(partitionId);
             }
 

@@ -66,7 +66,6 @@ import java.util.stream.Collectors;
 
 import scala.Function0;
 import scala.Function1;
-import scala.Option;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
@@ -335,8 +334,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public Optional<UnifiedLog> log(Integer brokerId, TopicPartition partition) {
-        Option<UnifiedLog> log = harness.brokers().apply(brokerId).logManager().getLog(partition, false);
-        return log.isDefined() ? Optional.of(log.get()) : Optional.empty();
+        return harness.brokers().apply(brokerId).logManager().getLog(partition, false);
     }
 
     public void succeed(TieredStorageTestAction action) {

@@ -102,21 +102,23 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
             return new TimeOrderedCachingWindowStore(
                 inner,
                 storeSupplier.windowSize(),
-                storeSupplier.segmentIntervalMs());
+                storeSupplier.segmentIntervalMs()
+            );
         }
 
         return new CachingWindowStore(
             inner,
             storeSupplier.windowSize(),
-            storeSupplier.segmentIntervalMs());
+            storeSupplier.segmentIntervalMs()
+        );
     }
 
     private boolean isTimeOrderedStore(final StateStore stateStore) {
         if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
             return true;
         }
-        if (stateStore instanceof RocksDBTimeOrderedWindowStoreWithHeaders) {
-            return true;
+        if (stateStore instanceof TimestampedToHeadersWindowStoreAdapter) {
+            return isTimeOrderedStore(((TimestampedToHeadersWindowStoreAdapter) stateStore).store);
         }
         if (stateStore instanceof WrappedStateStore) {
             return isTimeOrderedStore(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());

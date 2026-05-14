@@ -569,6 +569,35 @@ public class GroupCoordinatorConfigTest {
         configs.clear();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT);
         createConfig(configs);
+
+
+        // group.streams.num.warmup.replicas
+
+        // cannot be negative
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, -1);
+        assertEquals("Invalid value -1 for configuration group.streams.num.warmup.replicas: Value must be at least 0",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        // can be MAX
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT);
+        createConfig(configs);
+
+        // cannot be larger than MAX
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT + 1);
+        assertEquals("group.streams.num.warmup.replicas must be less than or equal to group.streams.max.warmup.replicas",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+
+        // group.streams.max.warmup.replicas
+
+        // cannot be negative
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, -1);
+        assertEquals("Invalid value -1 for configuration group.streams.max.warmup.replicas: Value must be at least 0",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test
@@ -627,6 +656,20 @@ public class GroupCoordinatorConfigTest {
         long offsetsRetentionCheckIntervalMs,
         int offsetsRetentionMinutes
     ) {
+        return createGroupCoordinatorConfig(
+            offsetMetadataMaxSize,
+            offsetsRetentionCheckIntervalMs,
+            offsetsRetentionMinutes,
+            Map.of()
+        );
+    }
+
+    public static GroupCoordinatorConfig createGroupCoordinatorConfig(
+        int offsetMetadataMaxSize,
+        long offsetsRetentionCheckIntervalMs,
+        int offsetsRetentionMinutes,
+        Map<String, Object> additionalConfigs
+    ) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG, 1);
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, 10);
@@ -653,6 +696,8 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 1000);
         configs.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, 1024 * 1024);
+
+        configs.putAll(additionalConfigs);
 
         return createConfig(configs);
     }
@@ -706,6 +751,74 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, 20000);
         GroupCoordinatorConfig config = createConfig(configs);
         assertEquals(20000, config.streamsGroupMinTaskOffsetIntervalMs());
+    }
+
+    @Test
+    public void testStreamsGroupNumWarmupReplicasDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(2, config.streamsGroupNumWarmupReplicas());
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT,
+            config.streamsGroupNumWarmupReplicas());
+    }
+
+    @Test
+    public void testStreamsGroupNumWarmupReplicasCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, 5);
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(5, config.streamsGroupNumWarmupReplicas());
+    }
+
+    @Test
+    public void testStreamsGroupMaxWarmupReplicasDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(20, config.streamsGroupMaxWarmupReplicas());
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT,
+            config.streamsGroupMaxWarmupReplicas());
+    }
+
+    @Test
+    public void testStreamsGroupMaxWarmupReplicasCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, 30);
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(30, config.streamsGroupMaxWarmupReplicas());
+    }
+
+    @Test
+    public void testDLQAutoCreateTopicsEnableDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(false, config.errorsDLQAutoCreateTopicsEnable());
+        assertEquals(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_DEFAULT,
+            config.errorsDLQAutoCreateTopicsEnable());
+    }
+
+    @Test
+    public void testDLQAutoCreateTopicsEnableCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals(true, config.errorsDLQAutoCreateTopicsEnable());
+    }
+
+    @Test
+    public void testDLQTopicNamePrefixDefaultValue() {
+        Map<String, Object> configs = new HashMap<>();
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals("dlq.", config.errorsDLQTopicNamePrefix());
+        assertEquals(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_DEFAULT,
+            config.errorsDLQTopicNamePrefix());
+    }
+
+    @Test
+    public void testDLQTopicNamePrefixCustomValue() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
+        GroupCoordinatorConfig config = createConfig(configs);
+        assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
