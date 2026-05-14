@@ -219,8 +219,7 @@ public class LogOffsetTest {
         log.updateHighWatermark(log.logEndOffset());
 
         assertEquals(0L, log.logEndOffset());
-        assertEquals(new OffsetResultHolder(Optional.empty()),
-            log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
+        assertEquals(new OffsetResultHolder(), log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty()));
     }
 
     @ClusterTest
