@@ -1423,6 +1423,7 @@ project(':metadata') {
 
     testImplementation testLog4j2Libs
     testFixturesImplementation testFixtures(project(':server-common'))
+    testFixturesImplementation project(':raft')
     testFixturesImplementation libs.junitJupiter
 
     testImplementation libs.junitJupiter
