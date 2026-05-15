@@ -51,6 +51,8 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -114,6 +116,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
@@ -1494,7 +1497,7 @@ public class GroupCoordinatorShardTest {
         MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
         GroupCoordinatorConfig config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(
             4096, 1000L, 1,
-            Map.of(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, "stub.Plugin")
+            Map.of(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, StubPlugin.class)
         );
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
@@ -2630,5 +2633,24 @@ public class GroupCoordinatorShardTest {
 
         assertThrows(org.apache.kafka.common.errors.UnknownMemberIdException.class, () ->
             coordinator.validateStreamsGroupMember("test-group", "dropped-member", 0L));
+    }
+
+    public static class StubPlugin implements StreamsGroupTopologyDescriptionPlugin {
+        @Override
+        public void configure(Map<String, ?> configs) { }
+        @Override
+        public CompletableFuture<Void> setTopology(String groupId, int topologyEpoch, StreamsGroupTopologyDescription description) {
+            return CompletableFuture.completedFuture(null);
+        }
+        @Override
+        public CompletableFuture<Void> deleteTopology(String groupId) {
+            return CompletableFuture.completedFuture(null);
+        }
+        @Override
+        public CompletableFuture<StreamsGroupTopologyDescription> getTopology(String groupId, int topologyEpoch) {
+            return CompletableFuture.completedFuture(null);
+        }
+        @Override
+        public void close() { }
     }
 }

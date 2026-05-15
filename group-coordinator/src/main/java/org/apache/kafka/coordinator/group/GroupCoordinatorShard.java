@@ -1043,8 +1043,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      */
     public CoordinatorResult<Void, CoordinatorRecord> cleanupGroupMetadata() {
         long startMs = time.milliseconds();
-        String pluginClass = config.streamsGroupTopologyDescriptionPluginClass();
-        boolean topologyPluginConfigured = pluginClass != null && !pluginClass.isEmpty();
+        boolean topologyPluginConfigured = config.streamsGroupTopologyDescriptionPluginClass() != null;
         List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
             Group group = groupMetadataManager.group(groupId);

@@ -48,6 +48,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
+import static org.apache.kafka.common.config.ConfigDef.Type.CLASS;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
@@ -385,9 +386,10 @@ public class GroupCoordinatorConfig {
     public static final boolean STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT = true;
 
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG = "group.streams.topology.description.plugin.class";
-    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT = "";
-    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC = "The fully qualified class name of the topology description plugin to use for streams groups. " +
-        "The plugin must implement the StreamsGroupTopologyDescriptionPlugin interface. If empty, topology description storage is disabled.";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC = "A class that implements the " +
+        "<code>org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin</code> interface, " +
+        "used by the broker to store and retrieve topology descriptions pushed by streams group clients. " +
+        "If unset, topology description storage is disabled.";
 
     public static final String STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG = "group.streams.task.offset.interval.ms";
     public static final int STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT = 60000;
@@ -498,7 +500,7 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
         .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC)
-        .define(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, STRING, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT, MEDIUM, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC);
+        .define(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, CLASS, null, MEDIUM, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC);
 
 
     /**
@@ -566,7 +568,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMinTaskOffsetIntervalMs;
     private final int streamsGroupNumWarmupReplicas;
     private final int streamsGroupMaxWarmupReplicas;
-    private final String streamsGroupTopologyDescriptionPluginClass;
+    private final Class<?> streamsGroupTopologyDescriptionPluginClass;
 
     private final AbstractConfig config;
 
@@ -636,7 +638,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMinTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsGroupNumWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
-        this.streamsGroupTopologyDescriptionPluginClass = config.getString(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG);
+        this.streamsGroupTopologyDescriptionPluginClass = config.getClass(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG);
         this.config = config;
         // New group coordinator configs validation.
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -1372,9 +1374,9 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * The fully qualified class name of the topology description plugin.
+     * The class of the topology description plugin, or {@code null} if no plugin is configured.
      */
-    public String streamsGroupTopologyDescriptionPluginClass() {
+    public Class<?> streamsGroupTopologyDescriptionPluginClass() {
         return streamsGroupTopologyDescriptionPluginClass;
     }
 }

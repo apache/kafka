@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
+import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorRecordSerde, GroupCoordinatorService}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
@@ -683,18 +683,11 @@ class BrokerServer(
     val writer = new CoordinatorPartitionWriter(
       replicaManager
     )
-    // Initialize the topology description plugin if configured
-    val topologyDescriptionPluginClassName = config.groupCoordinatorConfig.streamsGroupTopologyDescriptionPluginClass
-    val topologyDescriptionPlugin: java.util.Optional[org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin] = {
-      if (topologyDescriptionPluginClassName.nonEmpty) {
-        val plugin = Utils.newInstance(topologyDescriptionPluginClassName,
-          classOf[org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin])
-        plugin.configure(config.originals)
-        java.util.Optional.of(plugin)
-      } else {
-        java.util.Optional.empty()
-      }
-    }
+    // Initialize the topology description plugin if configured. getConfiguredInstance
+    // returns null when the class config is unset.
+    val topologyDescriptionPlugin = Optional.ofNullable(config.getConfiguredInstance(
+      GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+      classOf[org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin]))
 
     new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
       .withTime(time)
