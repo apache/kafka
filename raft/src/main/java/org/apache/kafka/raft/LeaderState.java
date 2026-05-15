@@ -73,6 +73,9 @@ public final class LeaderState<T> implements EpochState {
     private final OptionalLong offsetOfVotersAtEpochStart;
     private final KRaftVersion kraftVersionAtEpochStart;
     private final ChangeVoterHandlerState changeVoterState;
+    /**
+     * The vote recorded in this epoch, retained after a candidate becomes leader.
+     */
     private final Optional<ReplicaKey> votedKey;
 
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
