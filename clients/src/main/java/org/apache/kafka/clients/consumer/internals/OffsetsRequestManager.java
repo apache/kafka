@@ -57,8 +57,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.isErrorProvablyUnrelated;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.maybeWrapAsKafkaException;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 import static org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils.hasUsableOffsetForLeaderEpochVersion;
@@ -265,7 +267,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
     private boolean maybeCompleteWithPreviousException(CompletableFuture<Void> result) {
         Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
-        if (cachedException != null) {
+        Set<String> topics = Stream.concat(
+                subscriptionState.subscription().stream(),
+                subscriptionState.assignedPartitions().stream().map(TopicPartition::topic)
+        ).collect(Collectors.toUnmodifiableSet());
+        if (cachedException != null && !isErrorProvablyUnrelated(cachedException, topics)) {
             result.completeExceptionally(cachedException);
             return true;
         }

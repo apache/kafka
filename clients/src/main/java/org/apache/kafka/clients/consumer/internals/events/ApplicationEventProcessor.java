@@ -54,6 +54,7 @@ import java.util.concurrent.CompletionException;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * An {@link EventProcessor} that is created and executes in the {@link ConsumerNetworkThread network thread}
@@ -850,6 +851,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 );
             }
         };
+    }
+
+    public Set<String> currentlyRelevantTopics() {
+        return Stream.concat(
+                subscriptions.subscription().stream(),
+                subscriptions.assignedPartitions().stream().map(TopicPartition::topic)
+        ).collect(Collectors.toUnmodifiableSet());
     }
 
     private void maybeUpdatePatternSubscription(MembershipManagerShim membershipManager) {

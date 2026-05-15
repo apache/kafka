@@ -40,7 +40,6 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -51,10 +50,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import javax.security.auth.spi.LoginModule;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.isErrorProvablyUnrelated;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
@@ -436,25 +437,24 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * If there is a metadata error, complete all uncompleted events that require subscription metadata.
      */
     private boolean maybeFailOnMetadataError(List<?> events) {
-        List<MetadataErrorNotifiableEvent> filteredEvents = new ArrayList<>();
-
-        for (Object obj : events) {
-            if (obj instanceof MetadataErrorNotifiableEvent) {
-                filteredEvents.add((MetadataErrorNotifiableEvent) obj);
-            }
-        }
+        List<MetadataErrorNotifiableEvent> filteredEvents = events.stream()
+                .filter(MetadataErrorNotifiableEvent.class::isInstance)
+                .map(e -> (MetadataErrorNotifiableEvent) e)
+                .collect(Collectors.toList());
 
         // Don't get-and-clear the metadata error if there are no events that will be notified.
         if (filteredEvents.isEmpty())
             return false;
 
         Optional<Exception> metadataError = networkClientDelegate.getAndClearMetadataError();
-
-        if (metadataError.isPresent()) {
-            filteredEvents.forEach(e -> e.onMetadataError(metadataError.get()));
-            return true;
-        } else {
+        if (metadataError.isEmpty())
             return false;
-        }
+
+        if (isErrorProvablyUnrelated(metadataError.get(), applicationEventProcessor.currentlyRelevantTopics()))
+            return false;
+
+        filteredEvents.forEach(e -> e.onMetadataError(metadataError.get()));
+        return true;
     }
+
 }
