@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -1036,6 +1037,40 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HeAdErS");
         config = new StreamsConfig(props);
         assertEquals("HeAdErS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldUseDefaultInteractiveQueryIsolationLevelWhenNotSpecified() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, config.defaultInteractiveQueryIsolationLevel());
+    }
+
+    @Test
+    public void shouldAcceptValidInteractiveQueryIsolationLevels() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "READ_UNCOMMITTED");
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "READ_COMMITTED");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionForInvalidInteractiveQueryIsolationLevel() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "FOO");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("Invalid value FOO for configuration default.interactive.query.isolation.level"));
+    }
+
+    @Test
+    public void shouldAcceptInteractiveQueryIsolationLevelCaseInsensitively() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "read_committed");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "Read_Committed");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
     }
 
     @Test
