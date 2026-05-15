@@ -430,8 +430,8 @@ public class TaskManager {
                     if (exception instanceof TaskMigratedException) {
                         lastTaskMigrated = (TaskMigratedException) exception;
                     } else if (exception instanceof TaskCorruptedException) {
-                        log.warn("Encounter corrupted task " + taskId + ", will group it with other corrupted tasks " +
-                            "and handle together", exception);
+                        log.warn("Encounter corrupted task {}, will group it with other corrupted tasks " +
+                            "and handle together", taskId, exception);
                         aggregatedCorruptedTaskIds.add(taskId);
                     } else {
                         ((StreamsException) exception).setTaskId(taskId);
@@ -1070,7 +1070,7 @@ public class TaskManager {
                     prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
                     prepareCommitSucceeded = true;
                 } catch (final RuntimeException e) {
-                    log.error("Exception caught while preparing to commit revoked tasks " + revokedActiveTasks, e);
+                    log.error("Exception caught while preparing to commit revoked tasks {}", revokedActiveTasks, e);
                     maybeSetFirstException(false, e, firstException);
                     dirtyTasks.addAll(revokedActiveTasks);
                     dirtyTasks.addAll(commitNeededActiveTasks);
@@ -1098,7 +1098,7 @@ public class TaskManager {
                 dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
                 closeDirtyAndRevive(dirtyTasks, false);
             } catch (final RuntimeException e) {
-                log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
+                log.error("Exception caught while committing those revoked tasks {}", revokedActiveTasks, e);
                 maybeSetFirstException(false, e, firstException);
                 dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
             }
@@ -1110,7 +1110,7 @@ public class TaskManager {
                     try {
                         task.postCommit(true);
                     } catch (final RuntimeException e) {
-                        log.error("Exception caught while post-committing task " + task.id(), e);
+                        log.error("Exception caught while post-committing task {}", task.id(), e);
                         maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
                     }
                 }
@@ -1125,7 +1125,7 @@ public class TaskManager {
                             // the task is in RUNNING tate
                             task.postCommit(false);
                         } catch (final RuntimeException e) {
-                            log.error("Exception caught while post-committing task " + task.id(), e);
+                            log.error("Exception caught while post-committing task {}", task.id(), e);
                             maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
                         }
                     }
@@ -1136,7 +1136,7 @@ public class TaskManager {
                 try {
                     task.suspend();
                 } catch (final RuntimeException e) {
-                    log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
+                    log.error("Caught the following exception while trying to suspend revoked task {}", task.id(), e);
                     maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
                 }
             }
@@ -1538,7 +1538,7 @@ public class TaskManager {
             try {
                 taskExecutor.commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
             } catch (final RuntimeException e) {
-                log.error("Exception caught while committing tasks " + consumedOffsetsAndMetadataPerTask.keySet(), e);
+                log.error("Exception caught while committing tasks {}", consumedOffsetsAndMetadataPerTask.keySet(), e);
                 // TODO: should record the task ids when handling this exception
                 maybeSetFirstException(false, e, firstException);
 
@@ -1562,7 +1562,7 @@ public class TaskManager {
                 try {
                     task.postCommit(true);
                 } catch (final RuntimeException e) {
-                    log.error("Exception caught while post-committing task " + task.id(), e);
+                    log.error("Exception caught while post-committing task {}", task.id(), e);
                     maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
                     tasksToCloseDirty.add(task);
                     tasksToCloseClean.remove(task);
