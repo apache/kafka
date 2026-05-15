@@ -232,8 +232,10 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldAcceptAtLeastOnce
 - shouldAcceptBuiltInMetricsLatestVersion
 - shouldAcceptDslStoreFormatCaseInsensitively
+- shouldAcceptInteractiveQueryIsolationLevelCaseInsensitively
 - shouldAcceptValidDslStoreFormatDefault
 - shouldAcceptValidDslStoreFormatHeaders
+- shouldAcceptValidInteractiveQueryIsolationLevels
 - shouldAllowConfiguringProcessorWrapperWithClass
 - shouldAllowConfiguringProcessorWrapperWithClassName
 - shouldAllowMultipleOptimizations
@@ -336,6 +338,7 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldThrowConfigExceptionConsumerMetricsEnabledButMainConsumerAndAdminMetricsDisabled
 - shouldThrowConfigExceptionConsumerMetricsEnabledButMainConsumerMetricsDisabled
 - shouldThrowConfigExceptionForInvalidDslStoreFormat
+- shouldThrowConfigExceptionForInvalidInteractiveQueryIsolationLevel
 - shouldThrowConfigExceptionIfAcceptableRecoveryLagIsOutsideBounds
 - shouldThrowConfigExceptionIfMaxInFlightRequestsPerConnectionIsInvalidStringIfEosV2Enabled
 - shouldThrowConfigExceptionIfMaxWarmupReplicasIsOutsideBounds
@@ -371,6 +374,7 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldThrowStreamsExceptionIfValueSerdeConfigFails
 - shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet
 - shouldUseCorrectDefaultsWhenNoneSpecified
+- shouldUseDefaultInteractiveQueryIsolationLevelWhenNotSpecified
 - shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet
 - shouldUseDefaultStoreFormatWhenNotSpecified
 - shouldUseNewConfigsWhenPresent
@@ -4253,6 +4257,10 @@ org.apache.kafka.streams.state.internals.ChangeLoggingWindowBytesStoreTest:
 - shouldLogPutsWithPosition
 - shouldRetainDuplicatesWhenSet
 org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStoreTest:
+- readOnlyOverrideShouldBeatProviderDefault
+- readOnlyShouldPropagateLevelToUnderlyingStore
+- readOnlyShouldRejectNullLevel
+- readOnlyShouldReturnNewInstanceWithOverride
 - shouldFindValueForKeyWhenMultiStores
 - shouldGetApproximateEntriesAcrossAllStores
 - shouldNotGetValuesFromOtherStores
@@ -4292,6 +4300,10 @@ org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStoreTest:
 - shouldThrowUnsupportedOperationExceptionWhileRemove
 - shouldThrowUnsupportedOperationExceptionWhileReverseRange
 org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStoreTest:
+- readOnlyOverrideShouldBeatProviderDefault
+- readOnlyShouldPropagateLevelToUnderlyingStore
+- readOnlyShouldRejectNullLevel
+- readOnlyShouldReturnNewInstanceWithOverride
 - shouldFetchKeyRangeAcrossStores
 - shouldFetchKeyRangeAcrossStoresWithNullKeyFrom
 - shouldFetchKeyRangeAcrossStoresWithNullKeyFromKeyTo
@@ -4311,6 +4323,10 @@ org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStoreTest:
 - emptyIteratorAlwaysReturnsFalse
 - emptyIteratorNextShouldThrowNoSuchElementException
 - emptyIteratorPeekNextKeyShouldThrowNoSuchElementException
+- readOnlyOverrideShouldBeatProviderDefault
+- readOnlyShouldPropagateLevelToUnderlyingStore
+- readOnlyShouldRejectNullLevel
+- readOnlyShouldReturnNewInstanceWithOverride
 - shouldBackwardFetchAllAcrossStores
 - shouldBackwardFetchKeyRangeAcrossStores
 - shouldBackwardFetchKeyRangeAcrossStoresWithNullKeyFrom
@@ -5205,6 +5221,7 @@ org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapterTest:
 - shouldNotCollectExecutionInfoWhenNotRequested
 org.apache.kafka.streams.state.internals.QueryableStoreProviderTest:
 - shouldFindGlobalStores
+- shouldResolveDefaultIsolationLevelAtQueryTime
 - shouldReturnKVStoreWhenItExists
 - shouldReturnKVStoreWithPartitionWhenItExists
 - shouldReturnWindowStoreWhenItExists
@@ -6252,6 +6269,11 @@ org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterTest:
 - shouldWrapFindSessionsIterator
 - shouldWrapFindSessionsWithKeyRangeIterator
 org.apache.kafka.streams.state.internals.StoreQueryUtilsTest:
+- shouldPassIsolationLevelToReadOnlyForKeyQuery
+- shouldPassIsolationLevelToReadOnlyForRangeQuery
+- shouldPassIsolationLevelToReadOnlyForSessionWindowRangeQuery
+- shouldPassIsolationLevelToReadOnlyForWindowKeyQuery
+- shouldPassIsolationLevelToReadOnlyForWindowRangeQuery
 - shouldReturnErrorOnBoundViolation
 - shouldReturnErrorOnNullContext
 org.apache.kafka.streams.state.internals.StoreSerdeInitializerTest:
@@ -6692,8 +6714,10 @@ org.apache.kafka.streams.state.internals.WindowStoreBuilderTest:
 org.apache.kafka.streams.state.internals.WindowStoreFetchTest:
 - testStoreConfig
 org.apache.kafka.streams.state.internals.WrappingStoreProviderTest:
+- shouldDefaultToReadUncommittedWhenIsolationLevelNotSpecified
 - shouldFindKeyValueStores
 - shouldFindWindowStores
+- shouldPropagateConfiguredDefaultIsolationLevel
 - shouldReturnAllStoreWhenQueryWithoutPartition
 - shouldReturnSingleStoreWhenQueryWithPartition
 - shouldThrowInvalidStoreExceptionIfNoPartitionFound
