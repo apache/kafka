@@ -2262,6 +2262,15 @@ public class QuorumStateTest {
             ElectionState.withElectedLeader(
                 1,
                 localId,
+                Optional.of(localVoterKey),
+                voters.voterIds()
+            ),
+            leaderState.election()
+        );
+        assertEquals(
+            ElectionState.withElectedLeader(
+                1,
+                localId,
                 Optional.of(persistedVotedKey(localVoterKey, kraftVersion)),
                 persistedVoters(voters.voterIds(), kraftVersion)
             ),
