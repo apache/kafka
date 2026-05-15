@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -65,19 +66,15 @@ public class TopologyDescriptionManager implements AutoCloseable {
     private static final byte TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE = 3;
 
     /**
-     * Initial back-off after an unsuccessful solicitation — either a transient
+     * Per-group back-off after an unsuccessful solicitation — either a transient
      * {@code setTopology} failure (anything other than {@code TopologyDescriptionTooLargeException}
      * or {@code InvalidRequestException}) or a heartbeat-side solicitation that never produced
      * a successful push within the previous back-off window (e.g. a client with
      * {@code topology.description.push.enabled=false}, or one that is unreachable).
-     * Doubles per consecutive solicitation up to {@link #RETRY_BACKOFF_MAX_MS}.
+     * Doubles per consecutive solicitation from 30 s up to 1 h.
      */
-    static final long RETRY_BACKOFF_INITIAL_MS = 30_000L;
-
-    /**
-     * Cap for the exponential back-off after consecutive transient {@code setTopology} failures.
-     */
-    static final long RETRY_BACKOFF_MAX_MS = 3_600_000L;
+    private static final ExponentialBackoff RETRY_BACKOFF =
+        new ExponentialBackoff(30_000L, 2, 3_600_000L, 0.0);
 
     /**
      * Per-group back-off state for transient {@code setTopology} failures. The entry is keyed by
@@ -272,11 +269,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
             int attempts = (existing != null && existing.topologyEpoch == pushedEpoch)
                 ? existing.attempts + 1
                 : 1;
-            long delay = Math.min(
-                RETRY_BACKOFF_INITIAL_MS * (1L << Math.min(attempts - 1, 30)),
-                RETRY_BACKOFF_MAX_MS
-            );
-            return new Backoff(pushedEpoch, attempts, now + delay);
+            return new Backoff(pushedEpoch, attempts, now + RETRY_BACKOFF.backoff(attempts - 1));
         });
     }
 
