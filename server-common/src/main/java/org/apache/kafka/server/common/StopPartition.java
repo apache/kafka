@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.common;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.Objects;
 
@@ -25,13 +25,13 @@ import java.util.Objects;
  */
 public class StopPartition {
 
-    public final TopicPartition topicPartition;
+    public final TopicIdPartition topicIdPartition;
     public final boolean deleteLocalLog;
     public final boolean deleteRemoteLog;
     public final boolean stopRemoteLogMetadataManager;
 
-    public StopPartition(TopicPartition topicPartition, boolean deleteLocalLog, boolean deleteRemoteLog, boolean stopRemoteLogMetadataManager) {
-        this.topicPartition = topicPartition;
+    public StopPartition(TopicIdPartition topicIdPartition, boolean deleteLocalLog, boolean deleteRemoteLog, boolean stopRemoteLogMetadataManager) {
+        this.topicIdPartition = topicIdPartition;
         this.deleteLocalLog = deleteLocalLog;
         this.deleteRemoteLog = deleteRemoteLog;
         this.stopRemoteLogMetadataManager = stopRemoteLogMetadataManager;
@@ -40,7 +40,7 @@ public class StopPartition {
     @Override
     public String toString() {
         return "StopPartition(" +
-                "topicPartition=" + topicPartition +
+                "topicIdPartition=" + topicIdPartition +
                 ", deleteLocalLog=" + deleteLocalLog +
                 ", deleteRemoteLog=" + deleteRemoteLog +
                 ", stopRemoteLogMetadataManager=" + stopRemoteLogMetadataManager +
@@ -55,11 +55,11 @@ public class StopPartition {
         return deleteLocalLog == that.deleteLocalLog &&
                deleteRemoteLog == that.deleteRemoteLog &&
                stopRemoteLogMetadataManager == that.stopRemoteLogMetadataManager &&
-               Objects.equals(topicPartition, that.topicPartition);
+               Objects.equals(topicIdPartition, that.topicIdPartition);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicPartition, deleteLocalLog, deleteRemoteLog, stopRemoteLogMetadataManager);
+        return Objects.hash(topicIdPartition, deleteLocalLog, deleteRemoteLog, stopRemoteLogMetadataManager);
     }
 }
