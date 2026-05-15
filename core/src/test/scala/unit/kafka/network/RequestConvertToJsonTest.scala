@@ -19,7 +19,7 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
+import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, NullNode, ObjectNode, TextNode}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
@@ -58,7 +58,7 @@ class RequestConvertToJsonTest {
     val expectedNode = new ObjectNode(JsonNodeFactory.instance)
     expectedNode.set("isForwarded", if (req.isForwarded) BooleanNode.TRUE else BooleanNode.FALSE)
     expectedNode.set("requestHeader", RequestConvertToJson.requestHeaderNode(req.header))
-    expectedNode.set("request", req.requestLog.orElse(new TextNode("")))
+    expectedNode.set("request", req.requestLog.orElse(NullNode.getInstance()))
 
     val actualNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded)
 
@@ -84,7 +84,7 @@ class RequestConvertToJsonTest {
     val messageConversionsTimeMs = 9
 
     val expectedNode = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded).asInstanceOf[ObjectNode]
-    expectedNode.set("response", res.responseLog.getOrElse(new TextNode("")))
+    expectedNode.set("response", res.responseLog.getOrElse(NullNode.getInstance()))
     expectedNode.set("connection", new TextNode(req.context.connectionId))
     expectedNode.set("totalTimeMs", new DoubleNode(totalTimeMs))
     expectedNode.set("requestQueueTimeMs", new DoubleNode(requestQueueTimeMs))
