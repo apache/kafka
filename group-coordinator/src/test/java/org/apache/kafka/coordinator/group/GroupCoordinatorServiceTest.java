@@ -6270,7 +6270,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testHeartbeatTransientFailureArmsBackOffAndSuppressesResolicit() throws Exception {
+    public void testHeartbeatDoesNotSetFlagInTheBackOffWindowAfterTransientFailure() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         MockTime time = new MockTime();
@@ -6314,7 +6314,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testHeartbeatBackOffDoublesPerConsecutiveTransientFailure() throws Exception {
+    public void testHeartbeatDelaysFlagLongerAfterConsecutiveTransientFailures() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         MockTime time = new MockTime();
@@ -6363,7 +6363,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testHeartbeatBackOffClearedOnTopologyEpochAdvance() throws Exception {
+    public void testHeartbeatSetsFlagAtNewTopologyEpochIgnoringPriorBackOff() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         MockTime time = new MockTime();
@@ -6398,7 +6398,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testHeartbeatBackOffClearedOnSuccessfulPush() throws Exception {
+    public void testHeartbeatSetsFlagImmediatelyAfterSuccessfulPushFollowingAFailure() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         MockTime time = new MockTime();
@@ -6444,7 +6444,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testHeartbeatInFlightTrackingSuppressesDuplicateRequests() throws Exception {
+    public void testHeartbeatOnlySetsFlagOnFirstOfConcurrentHeartbeatsForSameGroup() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()

@@ -468,7 +468,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
         for (String groupId : storedEpochs.keySet()) {
             backoff.remove(groupId);
             pluginFutures.add(
-                p.deleteTopology(groupId).handle((__, throwable) -> {
+                callDeleteTopology(p, groupId).handle((__, throwable) -> {
                     if (throwable != null) {
                         log.warn("Failed to delete topology for group {} ahead of DeleteGroups; orphan may remain in the plugin.",
                             groupId, throwable);
@@ -481,6 +481,16 @@ public class TopologyDescriptionManager implements AutoCloseable {
             );
         }
         return CompletableFuture.allOf(pluginFutures.toArray(new CompletableFuture<?>[0]));
+    }
+
+    // The plugin SPI mandates exceptions-via-future, but a misbehaving plugin may throw synchronously;
+    // wrap the call so we always get back a future even in that case.
+    private static CompletableFuture<Void> callDeleteTopology(StreamsGroupTopologyDescriptionPlugin p, String groupId) {
+        try {
+            return p.deleteTopology(groupId);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     // -----------------------------------------------------------------------------------------
@@ -529,7 +539,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
                 metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME, groupIds.size());
                 for (String groupId : groupIds) {
                     backoff.remove(groupId);
-                    perGroupFutures.add(p.deleteTopology(groupId).handle((__, pluginEx) -> {
+                    perGroupFutures.add(callDeleteTopology(p, groupId).handle((__, pluginEx) -> {
                         if (pluginEx != null) {
                             log.warn("Plugin deleteTopology failed for group {} during topology cleanup; will retry next cycle.",
                                 groupId, pluginEx);

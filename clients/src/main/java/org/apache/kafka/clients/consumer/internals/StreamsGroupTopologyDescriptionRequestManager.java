@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequ
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionRequest;
 import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionResponse;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
@@ -42,6 +43,7 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
 public class StreamsGroupTopologyDescriptionRequestManager implements RequestManager {
 
     private final Logger log;
+    private final Time time;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final StreamsMembershipManager membershipManager;
     private final StreamsRebalanceData streamsRebalanceData;
@@ -55,11 +57,13 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
 
     public StreamsGroupTopologyDescriptionRequestManager(
             final LogContext logContext,
+            final Time time,
             final CoordinatorRequestManager coordinatorRequestManager,
             final StreamsMembershipManager membershipManager,
             final StreamsRebalanceData streamsRebalanceData,
             final String groupId) {
         this.log = logContext.logger(StreamsGroupTopologyDescriptionRequestManager.class);
+        this.time = Objects.requireNonNull(time, "Time cannot be null");
         this.coordinatorRequestManager = Objects.requireNonNull(coordinatorRequestManager,
             "Coordinator request manager cannot be null");
         this.membershipManager = Objects.requireNonNull(membershipManager,
@@ -110,7 +114,7 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
                 log.warn("Failed to send topology description to coordinator, will retry on next heartbeat", exception);
                 // Flag stays — retry driven by broker re-requesting on next heartbeat.
             } else {
-                onResponse((UpdateStreamsGroupTopologyDescriptionResponse) response.responseBody(), currentTimeMs);
+                onResponse((UpdateStreamsGroupTopologyDescriptionResponse) response.responseBody(), time.milliseconds());
             }
         });
 
@@ -133,12 +137,14 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
                 break;
 
             case TOPOLOGY_DESCRIPTION_TOO_LARGE:
-                log.warn("Topology description is too large for the plugin, not retrying");
+                log.warn("Topology description is too large for the plugin");
                 streamsRebalanceData.setTopologyDescriptionRequired(false);
                 break;
 
             case TOPOLOGY_DESCRIPTION_UPDATE_FAILED:
-                log.warn("Topology description plugin failed to process the request, not retrying: {}",
+                // The broker treats this as transient and will re-solicit via a future heartbeat
+                // once its back-off elapses. Clearing the flag here just stops the local retry loop.
+                log.warn("Topology description push failed transiently; broker will re-request on a later heartbeat: {}",
                     response.data().errorMessage());
                 streamsRebalanceData.setTopologyDescriptionRequired(false);
                 break;

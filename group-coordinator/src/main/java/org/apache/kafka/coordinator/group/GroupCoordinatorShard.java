@@ -119,6 +119,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -914,14 +915,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     /**
      * Validates that a streams group exists and that the given {@code memberId} is currently a
-     * member of it. The {@code true} return is a placeholder — callers use the read only as a
-     * gate, with the runtime surfacing NOT_COORDINATOR / COORDINATOR_LOAD_IN_PROGRESS for free.
-     *
-     * <p>A missing group surfaces as {@link GroupIdNotFoundException}; a member that is no longer
-     * in the group surfaces as {@link UnknownMemberIdException}. The
-     * {@code UpdateStreamsGroupTopologyDescription} path uses this to fence pushes whose group has
-     * been deleted (the broker maps to {@code GROUP_ID_NOT_FOUND}) or whose member has been
-     * dropped (the broker maps to {@code UNKNOWN_MEMBER_ID}).
+     * member of it.
      *
      * @param groupId         The group id.
      * @param memberId        The member id of the streams client sending the push.
@@ -934,7 +928,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         String memberId,
         long committedOffset
     ) throws GroupIdNotFoundException, UnknownMemberIdException {
-        org.apache.kafka.coordinator.group.streams.StreamsGroup group =
+        StreamsGroup group =
             groupMetadataManager.streamsGroup(groupId, committedOffset);
         if (!group.hasMember(memberId)) {
             throw new UnknownMemberIdException("Member " + memberId
@@ -1031,13 +1025,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * For each group, remove all expired offsets. If all offsets for the group are removed and the group is eligible
      * for deletion, delete the group.
      *
-     * <p>When a topology description plugin is configured, streams groups with a non-{@code -1}
-     * {@code storedTopologyEpoch} are <b>not</b> tombstoned by this call: the service-driven
-     * topology-cleanup timer runs in parallel and must first call {@code plugin.deleteTopology} and
-     * clear {@code StoredTopologyEpoch} before this sweep can tombstone the group on a subsequent
-     * cycle. When no plugin is configured, that gating is bypassed: the service-side cleanup never
-     * runs, so the field would never be cleared, and streams groups are tombstoned normally
-     * regardless of {@code storedTopologyEpoch}.
+     * <p>When a topology description plugin is configured, streams groups with
+     * {@code storedTopologyEpoch != -1} are deferred — a later cycle tombstones them once
+     * {@code storedTopologyEpoch} is cleared. With no plugin configured, this sweep tombstones
+     * streams groups regardless of {@code storedTopologyEpoch}.
      *
      * @return The list of tombstones (offset commit and group metadata) to append.
      */
@@ -1052,8 +1043,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             if (!allOffsetsExpired) return;
 
             if (topologyPluginConfigured && group.type() == Group.GroupType.STREAMS) {
-                org.apache.kafka.coordinator.group.streams.StreamsGroup sg =
-                    (org.apache.kafka.coordinator.group.streams.StreamsGroup) group;
+                StreamsGroup sg =
+                    (StreamsGroup) group;
                 if (sg.storedTopologyEpoch() != -1) {
                     // Deferred: the service-side topology-cleanup timer must clear the flag first.
                     return;
@@ -1084,8 +1075,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             try {
                 Group group = groupMetadataManager.group(groupId, committedOffset);
                 if (group.type() != Group.GroupType.STREAMS) continue;
-                org.apache.kafka.coordinator.group.streams.StreamsGroup sg =
-                    (org.apache.kafka.coordinator.group.streams.StreamsGroup) group;
+                StreamsGroup sg =
+                    (StreamsGroup) group;
                 if (sg.storedTopologyEpoch() != -1) {
                     result.put(groupId, sg.storedTopologyEpoch());
                 }
@@ -1113,8 +1104,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 continue;
             }
             if (group.type() != Group.GroupType.STREAMS) continue;
-            org.apache.kafka.coordinator.group.streams.StreamsGroup sg =
-                (org.apache.kafka.coordinator.group.streams.StreamsGroup) group;
+            StreamsGroup sg =
+                (StreamsGroup) group;
             if (!sg.isEmpty()) continue;
             if (sg.storedTopologyEpoch() == -1) continue;
             if (!offsetMetadataManager.allOffsetsExpired(groupId, now)) continue;

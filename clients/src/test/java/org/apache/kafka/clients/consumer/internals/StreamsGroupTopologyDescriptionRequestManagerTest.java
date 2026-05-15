@@ -25,6 +25,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionRequest;
 import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionResponse;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +71,7 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
     private StreamsGroupTopologyDescriptionRequestManager manager;
 
     private final Node coordinatorNode = new Node(1, "localhost", 9092);
+    private final Time time = new MockTime(0, CURRENT_TIME_MS, 0);
     private static final String MEMBER_ID = "test-member-id";
 
     @BeforeEach
@@ -84,6 +87,7 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
         org.mockito.Mockito.lenient().when(membershipManager.memberId()).thenReturn(MEMBER_ID);
         manager = new StreamsGroupTopologyDescriptionRequestManager(
             new LogContext("test"),
+            time,
             coordinatorRequestManager,
             membershipManager,
             streamsRebalanceData,
@@ -123,6 +127,7 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
         final StreamsGroupTopologyDescriptionRequestManager managerWithoutTopology =
             new StreamsGroupTopologyDescriptionRequestManager(
                 new LogContext("test"),
+                time,
                 coordinatorRequestManager,
                 membershipManager,
                 dataWithoutTopology,
