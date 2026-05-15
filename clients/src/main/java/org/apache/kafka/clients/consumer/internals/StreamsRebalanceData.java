@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -347,16 +348,22 @@ public class StreamsRebalanceData {
 
     private final AtomicInteger taskOffsetIntervalMs = new AtomicInteger(-1);
 
+    private final AtomicBoolean topologyDescriptionRequired = new AtomicBoolean(false);
+
+    private final Optional<UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription> topologyDescription;
+
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Optional<String> rackId,
                                 final Map<String, Subtopology> subtopologies,
-                                final Map<String, String> clientTags) {
+                                final Map<String, String> clientTags,
+                                final Optional<UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription> topologyDescription) {
         this.processId = Objects.requireNonNull(processId, "Process ID cannot be null");
         this.endpoint = Objects.requireNonNull(endpoint, "Endpoint cannot be null");
         this.rackId = Objects.requireNonNull(rackId, "Rack ID cannot be null");
         this.subtopologies = Map.copyOf(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null"));
         this.clientTags = Map.copyOf(Objects.requireNonNull(clientTags, "Client tags cannot be null"));
+        this.topologyDescription = Objects.requireNonNull(topologyDescription, "Topology description cannot be null");
     }
 
     public UUID processId() {
@@ -437,6 +444,21 @@ public class StreamsRebalanceData {
     /** Returns the task offset interval in milliseconds, or -1 if not yet set. */
     public int taskOffsetIntervalMs() {
         return taskOffsetIntervalMs.get();
+    }
+
+    /** Updated when a heartbeat response sets TopologyDescriptionRequired. */
+    public void setTopologyDescriptionRequired(final boolean required) {
+        this.topologyDescriptionRequired.set(required);
+    }
+
+    /** Returns whether the broker is currently requesting a topology description push. */
+    public boolean topologyDescriptionRequired() {
+        return topologyDescriptionRequired.get();
+    }
+
+    /** The wire-format topology description to send to the broker when requested. Empty if topology description push is not enabled. */
+    public Optional<UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription> topologyDescription() {
+        return topologyDescription;
     }
 
 }

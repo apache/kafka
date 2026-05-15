@@ -164,7 +164,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
         Optional.of(ENDPOINT),
         Optional.of(RACK_ID),
         SUBTOPOLOGIES,
-        CLIENT_TAGS
+        CLIENT_TAGS,
+        Optional.empty()
     );
 
     private final Time time = new MockTime();

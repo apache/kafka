@@ -27,7 +27,13 @@
     { "name": "ValidatedTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 0, "default": -1, "type": "int32",
       "about": "The topology epoch whose topics are validated to be present in a valid configuration in the metadata." },
     { "name": "LastAssignmentConfigs","taggedVersions": "0+", "nullableVersions": "0+","tag": 1, "default": null,
-      "type": "[]LastAssignmentConfig", "about": "The last used configuration parameters as key-value pairs." }
+      "type": "[]LastAssignmentConfig", "about": "The last used configuration parameters as key-value pairs." },
+    { "name": "GroupCreationTimeMs", "versions": "0+", "taggedVersions": "0+", "tag": 2, "default": 0, "type": "int64",
+      "about": "The timestamp in milliseconds when this group was first created. Used to distinguish different incarnations of a group with the same name." },
+    { "name": "StoredTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 3, "default": -1, "type": "int32",
+      "about": "The topology epoch whose description is currently stored in the topology description plugin, or -1 if none is stored." },
+    { "name": "LastFailedTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 4, "default": -1, "type": "int32",
+      "about": "The topology epoch whose description push the plugin permanently rejected (TooLarge / InvalidRequest), or -1 if none. Heartbeat-path solicitation is suppressed while this equals the current topology epoch to avoid hot-looping." }
   ],
   "commonStructs": [
     { "name": "LastAssignmentConfig", "versions": "0+", "fields": [

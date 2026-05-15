@@ -113,6 +113,7 @@ public class ApplicationEventProcessorTest {
                 withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
                 withGroupId ? Optional.of(membershipManager) : Optional.empty(),
                 Optional.empty(),
+                Optional.empty(),
                 Optional.empty()
         );
         processor = new ApplicationEventProcessor(
@@ -134,6 +135,7 @@ public class ApplicationEventProcessorTest {
             withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
             Optional.empty(),
             withGroupId ? Optional.of(streamsGroupHeartbeatRequestManager) : Optional.empty(),
+            Optional.empty(),
             withGroupId ? Optional.of(streamsMembershipManager) : Optional.empty()
         );
         processor = new ApplicationEventProcessor(

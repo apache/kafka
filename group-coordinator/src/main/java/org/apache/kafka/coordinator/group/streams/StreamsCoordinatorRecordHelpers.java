@@ -96,12 +96,42 @@ public class StreamsCoordinatorRecordHelpers {
         );
     }
 
+    /**
+     * Convenience overload that defaults the topology-plugin tracking fields
+     * ({@code storedTopologyEpoch} and {@code lastFailedTopologyEpoch}) to {@code -1}.
+     * Production code paths that mutate group metadata must use the 8-argument variant
+     * and explicitly pass the current values; otherwise the rebalance write would silently
+     * reset the plugin-state fields.
+     */
     public static CoordinatorRecord newStreamsGroupMetadataRecord(
         String groupId,
         int newGroupEpoch,
         long metadataHash,
         int validatedTopologyEpoch,
-        Map<String, String> assignmentConfigs
+        Map<String, String> assignmentConfigs,
+        long groupCreationTimeMs
+    ) {
+        return newStreamsGroupMetadataRecord(
+            groupId,
+            newGroupEpoch,
+            metadataHash,
+            validatedTopologyEpoch,
+            assignmentConfigs,
+            groupCreationTimeMs,
+            -1,
+            -1
+        );
+    }
+
+    public static CoordinatorRecord newStreamsGroupMetadataRecord(
+        String groupId,
+        int newGroupEpoch,
+        long metadataHash,
+        int validatedTopologyEpoch,
+        Map<String, String> assignmentConfigs,
+        long groupCreationTimeMs,
+        int storedTopologyEpoch,
+        int lastFailedTopologyEpoch
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
         Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
@@ -120,7 +150,10 @@ public class StreamsCoordinatorRecordHelpers {
                     .setEpoch(newGroupEpoch)
                     .setMetadataHash(metadataHash)
                     .setValidatedTopologyEpoch(validatedTopologyEpoch)
-                    .setLastAssignmentConfigs(assignmentConfigList),
+                    .setLastAssignmentConfigs(assignmentConfigList)
+                    .setGroupCreationTimeMs(groupCreationTimeMs)
+                    .setStoredTopologyEpoch(storedTopologyEpoch)
+                    .setLastFailedTopologyEpoch(lastFailedTopologyEpoch),
                 (short) 0
             )
         );

@@ -1017,6 +1017,7 @@ project(':server') {
     implementation project(':server-common')
     implementation project(':storage')
     implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
@@ -3046,6 +3047,7 @@ project(':streams:integration-tests') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':group-coordinator')
+    testImplementation project(':group-coordinator:group-coordinator-api')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))

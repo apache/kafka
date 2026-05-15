@@ -1,0 +1,571 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.coordinator.group.streams;
+
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.TopologyDescriptionTooLargeException;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
+
+import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+/**
+ * Owns the broker-side logic for the streams-group topology description plugin path.
+ * The service layer ({@code GroupCoordinatorService}) delegates here for the four user-visible
+ * code paths that touch the plugin — heartbeat solicitation, {@code setTopology} on push,
+ * {@code getTopology} on describe, and {@code deleteTopology} on explicit DeleteGroups —
+ * plus the periodic natural-expiration cleanup timer. State that used to live on the service
+ * (in-flight tracker, transient-failure back-off, cleanup-cycle single-flight guard,
+ * the cleanup {@link TimerTask}) lives here instead.
+ *
+ * <p>When no plugin is configured, every public method becomes a fast no-op.
+ *
+ * <p>The plugin SPI is exposed only to this class; callers above don't need to import it.
+ */
+public class TopologyDescriptionManager implements AutoCloseable {
+
+    private static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED = 1;
+    private static final byte TOPOLOGY_DESCRIPTION_STATUS_ERROR = 2;
+    private static final byte TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE = 3;
+
+    /**
+     * Timeout for in-flight topology push tracking, in milliseconds.
+     */
+    static final long IN_FLIGHT_TIMEOUT_MS = 30_000L;
+
+    /**
+     * Initial back-off after a transient {@code setTopology} failure (anything other than
+     * {@code TopologyDescriptionTooLargeException} or {@code InvalidRequestException}).
+     * Doubles per consecutive failure up to {@link #RETRY_BACKOFF_MAX_MS}.
+     */
+    static final long RETRY_BACKOFF_INITIAL_MS = 30_000L;
+
+    /**
+     * Cap for the exponential back-off after consecutive transient {@code setTopology} failures.
+     */
+    static final long RETRY_BACKOFF_MAX_MS = 3_600_000L;
+
+    /**
+     * Per-group back-off state for transient {@code setTopology} failures. The entry is keyed by
+     * the topology epoch the failure was observed at; an epoch advance implicitly invalidates the
+     * back-off. In-memory only — coordinator failover loses the state, in which case the new
+     * leader re-solicits once and the back-off re-arms on the next failure.
+     */
+    private static final class Backoff {
+        final int topologyEpoch;
+        final int attempts;
+        final long nextAttemptMs;
+
+        Backoff(int topologyEpoch, int attempts, long nextAttemptMs) {
+            this.topologyEpoch = topologyEpoch;
+            this.attempts = attempts;
+            this.nextAttemptMs = nextAttemptMs;
+        }
+    }
+
+    private final Logger log;
+    private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
+    private final CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime;
+    private final Timer timer;
+    private final Time time;
+    private final long cleanupCheckIntervalMs;
+    private final GroupCoordinatorMetrics metrics;
+    private final Function<String, TopicPartition> topicPartitionFor;
+    private final Supplier<Boolean> isActive;
+
+    private final ConcurrentHashMap<String, Long> inFlight = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Backoff> backoff = new ConcurrentHashMap<>();
+    private final AtomicBoolean cleanupCycleInFlight = new AtomicBoolean(false);
+    private volatile TimerTask cleanupTask;
+
+    public TopologyDescriptionManager(
+        LogContext logContext,
+        Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
+        Timer timer,
+        Time time,
+        long cleanupCheckIntervalMs,
+        GroupCoordinatorMetrics metrics,
+        Function<String, TopicPartition> topicPartitionFor,
+        Supplier<Boolean> isActive
+    ) {
+        this.log = logContext.logger(TopologyDescriptionManager.class);
+        this.plugin = plugin;
+        this.runtime = runtime;
+        this.timer = timer;
+        this.time = time;
+        this.cleanupCheckIntervalMs = cleanupCheckIntervalMs;
+        this.metrics = metrics;
+        this.topicPartitionFor = topicPartitionFor;
+        this.isActive = isActive;
+    }
+
+    /**
+     * @return whether a plugin is configured (and therefore this manager has any work to do).
+     */
+    public boolean isPresent() {
+        return plugin.isPresent();
+    }
+
+    /**
+     * Starts the periodic topology-description cleanup timer. Called from the service's
+     * {@code startup()}; idempotent under multiple calls.
+     */
+    public void start() {
+        if (plugin.isEmpty()) return;
+        scheduleCleanupCycle();
+    }
+
+    @Override
+    public void close() {
+        TimerTask snapshot = cleanupTask;
+        if (snapshot != null) {
+            snapshot.cancel();
+        }
+        plugin.ifPresent(p -> Utils.closeQuietly(p, "topology description plugin"));
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Heartbeat path
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * Decides whether to set {@code TopologyDescriptionRequired=true} on the heartbeat response
+     * and applies the decision in place. Pure broker-side: no plugin RPC.
+     */
+    public void maybeMarkTopologyDescriptionRequired(
+        StreamsGroupHeartbeatResponseData responseData,
+        String groupId,
+        StreamsGroupHeartbeatResult result
+    ) {
+        if (plugin.isEmpty() || responseData.errorCode() != Errors.NONE.code()) return;
+        if (responseData.status() != null && responseData.status().stream().anyMatch(
+                s -> s.statusCode() == org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code())) {
+            return;
+        }
+        int topologyEpoch = result.topologyEpoch();
+        if (!shouldSolicitTopologyPush(groupId, topologyEpoch, result)) return;
+        long now = time.milliseconds();
+        inFlight.compute(groupId, (k, existing) -> {
+            if (existing != null && now < existing) {
+                // Another heartbeat already set this; don't ask again.
+                return existing;
+            }
+            responseData.setTopologyDescriptionRequired(true);
+            return now + IN_FLIGHT_TIMEOUT_MS;
+        });
+    }
+
+    /**
+     * Pure broker-side check for whether a heartbeat should request a topology push. The four
+     * suppression rules: topology not initialised yet (epoch &lt; 0), stored epoch already matches
+     * current, permanent failure already recorded at this epoch, or transient-failure back-off
+     * still in its window for this {@code (groupId, epoch)} pair.
+     */
+    private boolean shouldSolicitTopologyPush(String groupId, int topologyEpoch, StreamsGroupHeartbeatResult result) {
+        if (topologyEpoch < 0) return false;
+        if (result.storedTopologyEpoch() == topologyEpoch) return false;
+        if (result.lastFailedTopologyEpoch() == topologyEpoch) return false;
+        Backoff b = backoff.get(groupId);
+        return b == null || b.topologyEpoch != topologyEpoch || time.milliseconds() >= b.nextAttemptMs;
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // setTopology path
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * Invokes {@code plugin.setTopology} and persists the result via the appropriate broker-side
+     * tagged field. On success: {@code StoredTopologyEpoch = pushedEpoch}, in-flight tracker and
+     * back-off cleared. On {@code InvalidRequestException} / {@code TopologyDescriptionTooLargeException}:
+     * {@code LastFailedTopologyEpoch = pushedEpoch}, back-off cleared (the ratchet takes over).
+     * On any other exception: arm/extend the transient-failure back-off; no metadata write.
+     */
+    public CompletableFuture<UpdateStreamsGroupTopologyDescriptionResponseData> handleSetTopology(
+        String groupId,
+        int pushedEpoch,
+        StreamsGroupTopologyDescription description
+    ) {
+        // Caller has already validated the plugin is configured.
+        StreamsGroupTopologyDescriptionPlugin p = plugin.orElseThrow(IllegalStateException::new);
+        return p.setTopology(groupId, pushedEpoch, description)
+            .handle((__, throwable) -> {
+                UpdateStreamsGroupTopologyDescriptionResponseData responseData =
+                    new UpdateStreamsGroupTopologyDescriptionResponseData();
+                if (throwable != null) {
+                    Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
+                        ? throwable.getCause() : throwable;
+                    log.warn("Plugin operation failed for group {}", groupId, cause);
+                    metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_SET_ERROR_SENSOR_NAME);
+                    Errors error;
+                    boolean permanentFailure = false;
+                    if (cause instanceof InvalidRequestException) {
+                        error = Errors.INVALID_REQUEST;
+                        permanentFailure = true;
+                    } else if (cause instanceof TopologyDescriptionTooLargeException) {
+                        error = Errors.TOPOLOGY_DESCRIPTION_TOO_LARGE;
+                        permanentFailure = true;
+                    } else {
+                        error = Errors.TOPOLOGY_DESCRIPTION_UPDATE_FAILED;
+                    }
+                    responseData.setErrorCode(error.code());
+                    responseData.setErrorMessage(cause.getMessage());
+                    if (permanentFailure) {
+                        backoff.remove(groupId);
+                        recordTopologyDescriptionFailedAsync(groupId, pushedEpoch);
+                    } else {
+                        armTransientBackoff(groupId, pushedEpoch);
+                    }
+                } else {
+                    log.info("Plugin operation succeeded for group {}", groupId);
+                    metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME);
+                    responseData.setErrorCode(Errors.NONE.code());
+                    inFlight.remove(groupId);
+                    backoff.remove(groupId);
+                    recordTopologyDescriptionStoredAsync(groupId, pushedEpoch);
+                }
+                return responseData;
+            });
+    }
+
+    private void armTransientBackoff(String groupId, int pushedEpoch) {
+        long now = time.milliseconds();
+        backoff.compute(groupId, (k, existing) -> {
+            int attempts = (existing != null && existing.topologyEpoch == pushedEpoch)
+                ? existing.attempts + 1
+                : 1;
+            // Capped exponential: 30s, 60s, 120s, ..., 3600s. attempts-1 because the first
+            // failure should land at RETRY_BACKOFF_INITIAL_MS, not double of it.
+            long delay = Math.min(
+                RETRY_BACKOFF_INITIAL_MS * (1L << Math.min(attempts - 1, 30)),
+                RETRY_BACKOFF_MAX_MS
+            );
+            return new Backoff(pushedEpoch, attempts, now + delay);
+        });
+    }
+
+    private void recordTopologyDescriptionStoredAsync(String groupId, int pushedEpoch) {
+        runtime.<Void>scheduleWriteOperation(
+            "record-topology-description-stored",
+            topicPartitionFor.apply(groupId),
+            coordinator -> coordinator.updateStreamsGroupTopologyFields(groupId, pushedEpoch, null)
+        ).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                log.warn("Failed to persist StoredTopologyEpoch={} for group {}; the next heartbeat will re-solicit.",
+                    pushedEpoch, groupId, throwable);
+            }
+        });
+    }
+
+    private void recordTopologyDescriptionFailedAsync(String groupId, int pushedEpoch) {
+        runtime.<Void>scheduleWriteOperation(
+            "record-topology-description-failed",
+            topicPartitionFor.apply(groupId),
+            coordinator -> coordinator.updateStreamsGroupTopologyFields(groupId, null, pushedEpoch)
+        ).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                log.warn("Failed to persist LastFailedTopologyEpoch={} for group {}; the next heartbeat may re-solicit and hit the same failure.",
+                    pushedEpoch, groupId, throwable);
+            }
+        });
+    }
+
+    private void clearStoredTopologyEpochAsync(String groupId) {
+        runtime.<Void>scheduleWriteOperation(
+            "clear-stored-topology-epoch",
+            topicPartitionFor.apply(groupId),
+            coordinator -> coordinator.updateStreamsGroupTopologyFields(groupId, -1, null)
+        ).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                log.warn("Failed to clear StoredTopologyEpoch for group {}; the next cleanup cycle will retry.",
+                    groupId, throwable);
+            }
+        });
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Describe path
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * For each described group with {@code IncludeTopologyDescription=true}, decides whether to
+     * call {@code plugin.getTopology} (only when {@code StoredTopologyEpoch == currentEpoch}) and
+     * populates the response. Returns a future that completes when all plugin calls have settled.
+     */
+    public CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> attachTopologyDescriptions(
+        StreamsGroupDescribeResult result
+    ) {
+        if (plugin.isEmpty()) {
+            for (StreamsGroupDescribeResponseData.DescribedGroup g : result.describedGroups()) {
+                if (g.errorCode() == Errors.NONE.code()) {
+                    g.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+                }
+            }
+            return CompletableFuture.completedFuture(result.describedGroups());
+        }
+        StreamsGroupTopologyDescriptionPlugin p = plugin.get();
+        List<CompletableFuture<Void>> pluginFutures = new ArrayList<>();
+        for (StreamsGroupDescribeResponseData.DescribedGroup describedGroup : result.describedGroups()) {
+            CompletableFuture<Void> f = maybeAttachTopologyDescription(p, describedGroup, result);
+            if (f != null) pluginFutures.add(f);
+        }
+        if (pluginFutures.isEmpty()) return CompletableFuture.completedFuture(result.describedGroups());
+        return CompletableFuture.allOf(pluginFutures.toArray(new CompletableFuture<?>[0]))
+            .thenApply(__ -> result.describedGroups());
+    }
+
+    private CompletableFuture<Void> maybeAttachTopologyDescription(
+        StreamsGroupTopologyDescriptionPlugin p,
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup,
+        StreamsGroupDescribeResult result
+    ) {
+        if (describedGroup.errorCode() != Errors.NONE.code()) return null;
+        if (describedGroup.topology() == null) {
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+            return null;
+        }
+        Integer storedTopologyEpoch = result.storedTopologyEpochs().get(describedGroup.groupId());
+        if (storedTopologyEpoch == null) {
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+            return null;
+        }
+        int topologyEpoch = describedGroup.topology().epoch();
+        if (storedTopologyEpoch != topologyEpoch) {
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+            return null;
+        }
+        String groupIdForCallback = describedGroup.groupId();
+        return p.getTopology(groupIdForCallback, topologyEpoch)
+            .handle((topology, throwable) -> {
+                applyGetTopologyResult(describedGroup, groupIdForCallback, topologyEpoch, topology, throwable);
+                return null;
+            });
+    }
+
+    private void applyGetTopologyResult(
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup,
+        String groupId,
+        int topologyEpoch,
+        StreamsGroupTopologyDescription topology,
+        Throwable throwable
+    ) {
+        if (throwable != null) {
+            log.warn("Plugin getTopology failed for group {}", groupId, throwable);
+            metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME);
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
+            return;
+        }
+        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_GET_SUCCESS_SENSOR_NAME);
+        if (topology != null) {
+            describedGroup.setTopologyDescription(pojoToDescribeResponse(topology));
+            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
+            return;
+        }
+        log.warn("Plugin getTopology returned null for group {} while StoredTopologyEpoch={} matched the current topology epoch.",
+            groupId, topologyEpoch);
+        describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+    }
+
+    /**
+     * Converts the broker-side POJO returned by {@code plugin.getTopology} into the wire schema
+     * carried on the describe response. The two share field names but live in different packages.
+     */
+    private static StreamsGroupDescribeResponseData.TopologyDescription pojoToDescribeResponse(
+        StreamsGroupTopologyDescription topology
+    ) {
+        StreamsGroupDescribeResponseData.TopologyDescription out = new StreamsGroupDescribeResponseData.TopologyDescription();
+        List<StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology> subs = new ArrayList<>();
+        for (StreamsGroupTopologyDescription.Subtopology st : topology.subtopologies()) {
+            StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology s =
+                new StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology()
+                    .setSubtopologyId(st.id());
+            List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> nodes = new ArrayList<>();
+            for (StreamsGroupTopologyDescription.Node n : st.nodes()) {
+                nodes.add(pojoNodeToWire(n));
+            }
+            s.setNodes(nodes);
+            subs.add(s);
+        }
+        out.setSubtopologies(subs);
+        List<StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore> globals = new ArrayList<>();
+        for (StreamsGroupTopologyDescription.GlobalStore g : topology.globalStores()) {
+            StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore w =
+                new StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore()
+                    .setSource(pojoNodeToWire(g.source()))
+                    .setProcessor(pojoNodeToWire(g.processor()));
+            globals.add(w);
+        }
+        out.setGlobalStores(globals);
+        return out;
+    }
+
+    private static StreamsGroupDescribeResponseData.TopologyDescriptionNode pojoNodeToWire(
+        StreamsGroupTopologyDescription.Node node
+    ) {
+        StreamsGroupDescribeResponseData.TopologyDescriptionNode w =
+            new StreamsGroupDescribeResponseData.TopologyDescriptionNode()
+                .setName(node.name())
+                .setSuccessors(new ArrayList<>(node.successors()));
+        if (node instanceof StreamsGroupTopologyDescription.Source source) {
+            w.setNodeType((byte) 1);
+            w.setSourceTopics(new ArrayList<>(source.topics()));
+        } else if (node instanceof StreamsGroupTopologyDescription.Processor processor) {
+            w.setNodeType((byte) 2);
+            w.setStores(new ArrayList<>(processor.stores()));
+        } else if (node instanceof StreamsGroupTopologyDescription.Sink sink) {
+            w.setNodeType((byte) 3);
+            sink.topic().ifPresent(w::setSinkTopic);
+        }
+        return w;
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Explicit DeleteGroups path
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * Fires {@code plugin.deleteTopology} for each streams group ID with a stored topology, before
+     * the actual group tombstone is written. Returns a future that completes once every per-group
+     * plugin call has settled (success or failure). Per-group failures are logged at WARN; they do
+     * not affect the user-visible DeleteGroups response, matching the existing KIP semantics.
+     */
+    public CompletableFuture<Void> deleteBeforeGroupDelete(
+        Map<String, Integer> storedEpochs
+    ) {
+        if (storedEpochs.isEmpty() || plugin.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        StreamsGroupTopologyDescriptionPlugin p = plugin.get();
+        List<CompletableFuture<Void>> pluginFutures = new ArrayList<>(storedEpochs.size());
+        for (String groupId : storedEpochs.keySet()) {
+            pluginFutures.add(
+                p.deleteTopology(groupId).handle((__, throwable) -> {
+                    if (throwable != null) {
+                        log.warn("Failed to delete topology for group {} ahead of DeleteGroups; orphan may remain in the plugin.",
+                            groupId, throwable);
+                        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME);
+                    } else {
+                        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME);
+                    }
+                    return null;
+                })
+            );
+        }
+        return CompletableFuture.allOf(pluginFutures.toArray(new CompletableFuture<?>[0]));
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Periodic cleanup cycle
+    // -----------------------------------------------------------------------------------------
+
+    private void scheduleCleanupCycle() {
+        TimerTask task = new TimerTask(cleanupCheckIntervalMs) {
+            @Override
+            public void run() {
+                if (!isActive.get()) return;
+                try {
+                    runCleanupCycle();
+                } catch (Throwable t) {
+                    log.warn("Unexpected error scheduling topology-description cleanup.", t);
+                }
+                if (isActive.get()) scheduleCleanupCycle();
+            }
+        };
+        cleanupTask = task;
+        timer.add(task);
+    }
+
+    private void runCleanupCycle() {
+        if (plugin.isEmpty()) return;
+        if (!cleanupCycleInFlight.compareAndSet(false, true)) {
+            log.warn("Topology-description cleanup cycle skipped: previous cycle is still in flight.");
+            return;
+        }
+        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
+        StreamsGroupTopologyDescriptionPlugin p = plugin.get();
+        List<CompletableFuture<Set<String>>> partitionFutures = runtime.scheduleReadAllOperation(
+            "list-streams-groups-needing-topology-cleanup",
+            (coordinator, lastCommittedOffset) ->
+                coordinator.listStreamsGroupsNeedingTopologyCleanup(lastCommittedOffset)
+        );
+        List<CompletableFuture<?>> perGroupFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> partitionDoneFutures = new ArrayList<>(partitionFutures.size());
+        for (CompletableFuture<Set<String>> partitionFuture : partitionFutures) {
+            CompletableFuture<Void> partitionDone = partitionFuture.handle((groupIds, throwable) -> {
+                if (throwable != null) {
+                    log.warn("Topology-description cleanup read failed for one partition.", throwable);
+                    return null;
+                }
+                if (groupIds == null || groupIds.isEmpty()) return null;
+                metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME, groupIds.size());
+                for (String groupId : groupIds) {
+                    CompletableFuture<Void> done = p.deleteTopology(groupId).handle((__, pluginEx) -> {
+                        if (pluginEx != null) {
+                            log.warn("Plugin deleteTopology failed for group {} during topology cleanup; will retry next cycle.",
+                                groupId, pluginEx);
+                            metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME);
+                            return null;
+                        }
+                        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME);
+                        clearStoredTopologyEpochAsync(groupId);
+                        return null;
+                    });
+                    synchronized (perGroupFutures) {
+                        perGroupFutures.add(done);
+                    }
+                }
+                return null;
+            });
+            partitionDoneFutures.add(partitionDone);
+        }
+        CompletableFuture.allOf(partitionDoneFutures.toArray(new CompletableFuture<?>[0]))
+            .thenCompose(__ -> {
+                CompletableFuture<?>[] snapshot;
+                synchronized (perGroupFutures) {
+                    snapshot = perGroupFutures.toArray(new CompletableFuture<?>[0]);
+                }
+                return CompletableFuture.allOf(snapshot);
+            })
+            .whenComplete((__, ___) -> cleanupCycleInFlight.set(false));
+    }
+}

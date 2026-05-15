@@ -26,14 +26,42 @@ import java.util.Objects;
 /**
  * A simple record to hold the result of a StreamsGroupHeartbeat request.
  *
- * @param data            The data to be returned to the client.
- * @param creatableTopics The internal topics to be created.
+ * @param data                     The data to be returned to the client.
+ * @param creatableTopics          The internal topics to be created.
+ * @param topologyEpoch            The group's current topology epoch.
+ * @param storedTopologyEpoch      The topology epoch currently stored in the topology
+ *                                 description plugin (or {@code -1} if none). Compared
+ *                                 against {@code topologyEpoch} on the heartbeat path to
+ *                                 decide whether to solicit a fresh push.
+ * @param lastFailedTopologyEpoch  The most recent topology epoch the plugin permanently
+ *                                 rejected (or {@code -1} if none). Suppresses solicitation
+ *                                 at that exact epoch to avoid hot-looping.
  */
-public record StreamsGroupHeartbeatResult(StreamsGroupHeartbeatResponseData data, Map<String, CreatableTopic> creatableTopics) {
+public record StreamsGroupHeartbeatResult(
+    StreamsGroupHeartbeatResponseData data,
+    Map<String, CreatableTopic> creatableTopics,
+    int topologyEpoch,
+    int storedTopologyEpoch,
+    int lastFailedTopologyEpoch
+) {
 
     public StreamsGroupHeartbeatResult {
         Objects.requireNonNull(data);
         creatableTopics = Collections.unmodifiableMap(Objects.requireNonNull(creatableTopics));
+    }
+
+    /**
+     * Convenience constructor for callers (mostly tests) that don't supply plugin-tracking
+     * fields. Defaults {@code storedTopologyEpoch} and {@code lastFailedTopologyEpoch} to
+     * {@code -1} — treated by the service as "nothing stored / no permanent failure," which
+     * means a heartbeat-path solicitation will be issued if {@code topologyEpoch >= 0}.
+     */
+    public StreamsGroupHeartbeatResult(
+        StreamsGroupHeartbeatResponseData data,
+        Map<String, CreatableTopic> creatableTopics,
+        int topologyEpoch
+    ) {
+        this(data, creatableTopics, topologyEpoch, -1, -1);
     }
 
 }

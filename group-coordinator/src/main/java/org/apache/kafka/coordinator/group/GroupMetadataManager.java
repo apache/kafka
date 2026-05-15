@@ -151,6 +151,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStat
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
@@ -737,17 +738,22 @@ public class GroupMetadataManager {
      * @param groupIds          The IDs of the groups to describe.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
-     * @return A list containing the StreamsGroupDescribeResponseData.DescribedGroup.
-     *         If a group is not found, the DescribedGroup will contain the error code and message.
+     * @return A {@link StreamsGroupDescribeResult} bundling the described groups with the
+     *         per-group creation timestamps. If a group is not found, the DescribedGroup
+     *         will contain the error code and message and no entry is added to the
+     *         creation-time map.
      */
-    public List<StreamsGroupDescribeResponseData.DescribedGroup> streamsGroupDescribe(
+    public StreamsGroupDescribeResult streamsGroupDescribe(
         List<String> groupIds,
         long committedOffset
     ) {
         final List<StreamsGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        final Map<String, Integer> storedTopologyEpochs = new HashMap<>();
         groupIds.forEach(groupId -> {
             try {
-                describedGroups.add(streamsGroup(groupId, committedOffset).asDescribedGroup(committedOffset));
+                StreamsGroup group = streamsGroup(groupId, committedOffset);
+                describedGroups.add(group.asDescribedGroup(committedOffset));
+                storedTopologyEpochs.put(groupId, group.storedTopologyEpoch());
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
@@ -757,7 +763,7 @@ public class GroupMetadataManager {
             }
         });
 
-        return describedGroups;
+        return new StreamsGroupDescribeResult(describedGroups, storedTopologyEpochs);
     }
 
     /**
@@ -890,10 +896,14 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null) {
-            return new StreamsGroup(logContext, snapshotRegistry, groupId);
+            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
+            streamsGroup.setGroupCreationTimeMs(time.milliseconds());
+            return streamsGroup;
         } else if (maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a streams group.", groupId);
-            return new StreamsGroup(logContext, snapshotRegistry, groupId);
+            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
+            streamsGroup.setGroupCreationTimeMs(time.milliseconds());
+            return streamsGroup;
         } else {
             return castToStreamsGroup(group);
         }
@@ -939,7 +949,7 @@ public class GroupMetadataManager {
      * @return A StreamsGroup.
      * @throws GroupIdNotFoundException if the group does not exist or is not a streams group.
      */
-    private StreamsGroup streamsGroup(
+    StreamsGroup streamsGroup(
         String groupId,
         long committedOffset
     ) throws GroupIdNotFoundException {
@@ -2084,7 +2094,7 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, currentAssignmentConfigs));
+            records.add(newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, currentAssignmentConfigs, group.groupCreationTimeMs(), group.storedTopologyEpoch(), group.lastFailedTopologyEpoch()));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -2191,7 +2201,8 @@ public class GroupMetadataManager {
 
         response.setStatus(returnedStatus);
 
-        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
+        final int currentTopologyEpoch = group.topology().map(StreamsTopology::topologyEpoch).orElse(-1);
+        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated, currentTopologyEpoch, group.storedTopologyEpoch(), group.lastFailedTopologyEpoch()));
     }
 
     /**
@@ -2258,6 +2269,34 @@ public class GroupMetadataManager {
         } else {
             throw new IllegalStateException("The topology is null and the group topology is also null.");
         }
+    }
+
+    /**
+     * Builds a {@link CoordinatorResult} that updates the topology-description plugin
+     * tracking fields ({@code StoredTopologyEpoch}, {@code LastFailedTopologyEpoch}) on
+     * a streams group's metadata record. Any {@code null} parameter preserves the current
+     * field value. The emitted record carries the group's existing epoch, hash,
+     * validated-topology epoch, assignment configs, and creation time unchanged.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> updateStreamsGroupTopologyFields(
+        String groupId,
+        Integer newStoredEpoch,
+        Integer newLastFailedEpoch
+    ) throws GroupIdNotFoundException {
+        StreamsGroup group = streamsGroup(groupId);
+        int storedEpoch = newStoredEpoch == null ? group.storedTopologyEpoch() : newStoredEpoch;
+        int lastFailedEpoch = newLastFailedEpoch == null ? group.lastFailedTopologyEpoch() : newLastFailedEpoch;
+        List<CoordinatorRecord> records = List.of(newStreamsGroupMetadataRecord(
+            groupId,
+            group.groupEpoch(),
+            group.metadataHash(),
+            group.validatedTopologyEpoch(),
+            group.lastAssignmentConfigs(),
+            group.groupCreationTimeMs(),
+            storedEpoch,
+            lastFailedEpoch
+        ));
+        return new CoordinatorResult<>(records);
     }
 
     private static List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
@@ -4237,7 +4276,7 @@ public class GroupMetadataManager {
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
             log.info("[GroupId {}][MemberId {}] Member {} left the streams group.", groupId, memberId, memberId);
-            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of()));
+            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.topology().map(StreamsTopology::topologyEpoch).orElse(-1), group.storedTopologyEpoch(), group.lastFailedTopologyEpoch()));
         } else {
             throw new UnsupportedOperationException("Static members are not supported in streams groups.");
         }
@@ -4504,7 +4543,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newStreamsGroupMetadataRecord(group.groupId(), groupEpoch, group.metadataHash(), group.validatedTopologyEpoch(), group.lastAssignmentConfigs()));
+        records.add(newStreamsGroupMetadataRecord(group.groupId(), groupEpoch, group.metadataHash(), group.validatedTopologyEpoch(), group.lastAssignmentConfigs(), group.groupCreationTimeMs(), group.storedTopologyEpoch(), group.lastFailedTopologyEpoch()));
 
         // If this is the last member, the group becomes empty so we must
         // also update the assignment epoch to match the group epoch. We
@@ -5635,6 +5674,9 @@ public class GroupMetadataManager {
             streamsGroup.setGroupEpoch(value.epoch());
             streamsGroup.setMetadataHash(value.metadataHash());
             streamsGroup.setValidatedTopologyEpoch(value.validatedTopologyEpoch());
+            streamsGroup.setGroupCreationTimeMs(value.groupCreationTimeMs());
+            streamsGroup.setStoredTopologyEpoch(value.storedTopologyEpoch());
+            streamsGroup.setLastFailedTopologyEpoch(value.lastFailedTopologyEpoch());
 
             if (value.lastAssignmentConfigs() != null) {
                 streamsGroup.setLastAssignmentConfigs(

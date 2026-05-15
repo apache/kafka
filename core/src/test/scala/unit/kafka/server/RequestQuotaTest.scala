@@ -758,6 +758,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.STREAMS_GROUP_DESCRIBE =>
           new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData())
 
+        case ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION =>
+          new UpdateStreamsGroupTopologyDescriptionRequest.Builder(new UpdateStreamsGroupTopologyDescriptionRequestData())
+
         case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS =>
           new DescribeShareGroupOffsetsRequest.Builder(new DescribeShareGroupOffsetsRequestData())
 

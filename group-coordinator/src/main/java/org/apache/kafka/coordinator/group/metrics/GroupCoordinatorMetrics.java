@@ -85,6 +85,15 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String SHARE_GROUP_REBALANCES_SENSOR_NAME = "ShareGroupRebalances";
     public static final String STREAMS_GROUP_REBALANCES_SENSOR_NAME = "StreamsGroupRebalances";
 
+    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME = "TopologyDescriptionPluginSetSuccess";
+    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_SET_ERROR_SENSOR_NAME = "TopologyDescriptionPluginSetError";
+    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME = "TopologyDescriptionPluginDeleteSuccess";
+    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME = "TopologyDescriptionPluginDeleteError";
+    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_GET_SUCCESS_SENSOR_NAME = "TopologyDescriptionPluginGetSuccess";
+    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME = "TopologyDescriptionPluginGetError";
+    public static final String TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME = "TopologyDescriptionCleanupCycleRuns";
+    public static final String TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME = "TopologyDescriptionCleanupEligibleGroups";
+
     private final MetricName classicGroupCountMetricName;
     private final MetricName consumerGroupCountMetricName;
     private final MetricName consumerGroupCountEmptyMetricName;
@@ -313,6 +322,62 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 METRICS_GROUP,
                 "The total number of streams group rebalances")));
 
+        Sensor tdSetSuccess = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME);
+        tdSetSuccess.add(new Meter(
+            metrics.metricName("topology-description-plugin-set-success-rate", METRICS_GROUP,
+                "The rate of successful topology description plugin setTopology calls"),
+            metrics.metricName("topology-description-plugin-set-success-count", METRICS_GROUP,
+                "The total number of successful topology description plugin setTopology calls")));
+
+        Sensor tdSetError = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_SET_ERROR_SENSOR_NAME);
+        tdSetError.add(new Meter(
+            metrics.metricName("topology-description-plugin-set-error-rate", METRICS_GROUP,
+                "The rate of failed topology description plugin setTopology calls"),
+            metrics.metricName("topology-description-plugin-set-error-count", METRICS_GROUP,
+                "The total number of failed topology description plugin setTopology calls")));
+
+        Sensor tdDeleteSuccess = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME);
+        tdDeleteSuccess.add(new Meter(
+            metrics.metricName("topology-description-plugin-delete-success-rate", METRICS_GROUP,
+                "The rate of successful topology description plugin deleteTopology calls"),
+            metrics.metricName("topology-description-plugin-delete-success-count", METRICS_GROUP,
+                "The total number of successful topology description plugin deleteTopology calls")));
+
+        Sensor tdDeleteError = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME);
+        tdDeleteError.add(new Meter(
+            metrics.metricName("topology-description-plugin-delete-error-rate", METRICS_GROUP,
+                "The rate of failed topology description plugin deleteTopology calls"),
+            metrics.metricName("topology-description-plugin-delete-error-count", METRICS_GROUP,
+                "The total number of failed topology description plugin deleteTopology calls")));
+
+        Sensor tdGetSuccess = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_GET_SUCCESS_SENSOR_NAME);
+        tdGetSuccess.add(new Meter(
+            metrics.metricName("topology-description-plugin-get-success-rate", METRICS_GROUP,
+                "The rate of successful topology description plugin getTopology calls"),
+            metrics.metricName("topology-description-plugin-get-success-count", METRICS_GROUP,
+                "The total number of successful topology description plugin getTopology calls")));
+
+        Sensor tdGetError = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME);
+        tdGetError.add(new Meter(
+            metrics.metricName("topology-description-plugin-get-error-rate", METRICS_GROUP,
+                "The rate of failed topology description plugin getTopology calls"),
+            metrics.metricName("topology-description-plugin-get-error-count", METRICS_GROUP,
+                "The total number of failed topology description plugin getTopology calls")));
+
+        Sensor tdCleanupRuns = metrics.sensor(TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
+        tdCleanupRuns.add(new Meter(
+            metrics.metricName("topology-description-cleanup-cycle-rate", METRICS_GROUP,
+                "The rate at which the topology-description cleanup cycle fires"),
+            metrics.metricName("topology-description-cleanup-cycle-count", METRICS_GROUP,
+                "The total number of topology-description cleanup cycles that ran")));
+
+        Sensor tdCleanupEligible = metrics.sensor(TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME);
+        tdCleanupEligible.add(new Meter(
+            metrics.metricName("topology-description-cleanup-eligible-rate", METRICS_GROUP,
+                "The rate of streams groups identified as eligible for topology-description cleanup"),
+            metrics.metricName("topology-description-cleanup-eligible-count", METRICS_GROUP,
+                "The total number of streams groups identified as eligible for topology-description cleanup")));
+
         globalSensors = Collections.unmodifiableMap(Utils.mkMap(
             Utils.mkEntry(OFFSET_COMMITS_SENSOR_NAME, offsetCommitsSensor),
             Utils.mkEntry(OFFSET_EXPIRED_SENSOR_NAME, offsetExpiredSensor),
@@ -320,7 +385,15 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Utils.mkEntry(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, classicGroupCompletedRebalancesSensor),
             Utils.mkEntry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor),
             Utils.mkEntry(SHARE_GROUP_REBALANCES_SENSOR_NAME, shareGroupRebalanceSensor),
-            Utils.mkEntry(STREAMS_GROUP_REBALANCES_SENSOR_NAME, streamsGroupRebalanceSensor)
+            Utils.mkEntry(STREAMS_GROUP_REBALANCES_SENSOR_NAME, streamsGroupRebalanceSensor),
+            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME, tdSetSuccess),
+            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_SET_ERROR_SENSOR_NAME, tdSetError),
+            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME, tdDeleteSuccess),
+            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME, tdDeleteError),
+            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_GET_SUCCESS_SENSOR_NAME, tdGetSuccess),
+            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME, tdGetError),
+            Utils.mkEntry(TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME, tdCleanupRuns),
+            Utils.mkEntry(TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME, tdCleanupEligible)
         ));
     }
 
@@ -358,6 +431,28 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     private long numShareGroups(ShareGroup.ShareGroupState state) {
         return shards.values().stream().mapToLong(shard -> shard.numShareGroups(state)).sum();
+    }
+
+    /**
+     * Records a single observation on a global sensor by name. No-op when the sensor is unknown.
+     * Used by service-layer call sites that don't otherwise reach into the per-shard metrics.
+     */
+    public void recordSensor(String sensorName) {
+        Sensor sensor = globalSensors.get(sensorName);
+        if (sensor != null) {
+            sensor.record();
+        }
+    }
+
+    /**
+     * Records {@code value} on a global sensor by name (e.g. count of items processed in one
+     * batch). No-op when the sensor is unknown.
+     */
+    public void recordSensor(String sensorName, double value) {
+        Sensor sensor = globalSensors.get(sensorName);
+        if (sensor != null) {
+            sensor.record(value);
+        }
     }
 
     @Override

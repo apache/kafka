@@ -298,7 +298,8 @@ public class StreamsRebalanceDataTest {
             endpoint,
             Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Optional.empty()
         );
 
         assertThrows(
@@ -330,7 +331,8 @@ public class StreamsRebalanceDataTest {
                 endpoint,
                 Optional.empty(),
                 subtopologies,
-                clientTags
+                clientTags,
+                Optional.empty()
             )
         );
         assertEquals("Process ID cannot be null", exception.getMessage());
@@ -349,7 +351,8 @@ public class StreamsRebalanceDataTest {
                 null,
                 Optional.empty(),
                 subtopologies,
-                clientTags
+                clientTags,
+                Optional.empty()
             )
         );
         assertEquals("Endpoint cannot be null", exception.getMessage());
@@ -368,7 +371,8 @@ public class StreamsRebalanceDataTest {
                 endpoint,
                 Optional.empty(),
                 null,
-                clientTags
+                clientTags,
+                Optional.empty()
             )
         );
         assertEquals("Subtopologies cannot be null", exception.getMessage());
@@ -388,7 +392,8 @@ public class StreamsRebalanceDataTest {
                 endpoint,
                 null,
                 subtopologies,
-                clientTags
+                clientTags,
+                Optional.empty()
             )
         );
         assertEquals("Rack ID cannot be null", exception.getMessage());
@@ -407,7 +412,8 @@ public class StreamsRebalanceDataTest {
                 endpoint,
                 Optional.empty(),
                 subtopologies,
-                null
+                null,
+                Optional.empty()
             )
         );
         assertEquals("Client tags cannot be null", exception.getMessage());
@@ -424,7 +430,8 @@ public class StreamsRebalanceDataTest {
             endpoint,
             Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Optional.empty()
         );
 
         assertEquals(StreamsRebalanceData.Assignment.EMPTY, streamsRebalanceData.reconciledAssignment());
@@ -441,7 +448,8 @@ public class StreamsRebalanceDataTest {
             endpoint,
             Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Optional.empty()
         );
 
         assertTrue(streamsRebalanceData.partitionsByHost().isEmpty());
@@ -458,7 +466,8 @@ public class StreamsRebalanceDataTest {
             endpoint,
             Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Optional.empty()
         );
 
         assertFalse(streamsRebalanceData.shutdownRequested());
@@ -475,7 +484,8 @@ public class StreamsRebalanceDataTest {
             endpoint,
             Optional.empty(),
             subtopologies,
-            clientTags
+            clientTags,
+            Optional.empty()
         );
 
         assertTrue(streamsRebalanceData.statuses().isEmpty());
@@ -494,7 +504,8 @@ public class StreamsRebalanceDataTest {
                 endpoint,
                 Optional.empty(),
                 subtopologies,
-                clientTags
+                clientTags,
+                Optional.empty()
         );
 
         assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
@@ -513,7 +524,8 @@ public class StreamsRebalanceDataTest {
                 endpoint,
                 Optional.empty(),
                 subtopologies,
-                clientTags
+                clientTags,
+                Optional.empty()
         );
 
         streamsRebalanceData.setHeartbeatIntervalMs(1000);

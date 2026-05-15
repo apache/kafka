@@ -89,6 +89,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
@@ -191,7 +192,7 @@ public class GroupCoordinatorShardTest {
         StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData();
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = new CoordinatorResult<>(
             List.of(),
-            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of())
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), -1)
         );
 
         when(groupMetadataManager.streamsGroupHeartbeat(
@@ -1486,6 +1487,106 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
+    public void testCleanupGroupMetadataSkipsStreamsGroupWithStoredTopologyEpoch() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorConfig config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(
+            4096, 1000L, 1,
+            Map.of(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, "stub.Plugin")
+        );
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup streamsGroup = new StreamsGroup(new LogContext(), snapshotRegistry, "streams-group");
+        streamsGroup.setStoredTopologyEpoch(2);
+
+        when(groupMetadataManager.groupIds()).thenReturn(Set.of("streams-group"));
+        when(groupMetadataManager.group("streams-group")).thenReturn(streamsGroup);
+        when(offsetMetadataManager.cleanupExpiredOffsets(eq("streams-group"), any())).thenReturn(true);
+
+        coordinator.cleanupGroupMetadata();
+
+        // Skipped because the topology-cleanup phase hasn't cleared the field yet.
+        verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("streams-group"), any());
+    }
+
+    @Test
+    public void testCleanupGroupMetadataTombstonesStreamsGroupWithStoredEpochWhenNoPluginConfigured() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorConfig config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 1);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup streamsGroup = new StreamsGroup(new LogContext(), snapshotRegistry, "streams-group");
+        streamsGroup.setStoredTopologyEpoch(2);
+
+        when(groupMetadataManager.groupIds()).thenReturn(Set.of("streams-group"));
+        when(groupMetadataManager.group("streams-group")).thenReturn(streamsGroup);
+        when(offsetMetadataManager.cleanupExpiredOffsets(eq("streams-group"), any())).thenReturn(true);
+
+        coordinator.cleanupGroupMetadata();
+
+        // No plugin configured: the service-side cleanup never runs, so the shard must
+        // tombstone the group directly rather than waiting for a non-existent timer to
+        // clear StoredTopologyEpoch.
+        verify(groupMetadataManager, times(1)).maybeDeleteGroup(eq("streams-group"), any());
+    }
+
+    @Test
+    public void testCleanupGroupMetadataDeletesStreamsGroupWhenFlagCleared() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorConfig config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 1);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        StreamsGroup streamsGroup = new StreamsGroup(new LogContext(), snapshotRegistry, "streams-group");
+        // StoredTopologyEpoch already cleared (-1) — same eligibility as consumer/share groups.
+
+        when(groupMetadataManager.groupIds()).thenReturn(Set.of("streams-group"));
+        when(groupMetadataManager.group("streams-group")).thenReturn(streamsGroup);
+        when(offsetMetadataManager.cleanupExpiredOffsets(eq("streams-group"), any())).thenReturn(true);
+
+        coordinator.cleanupGroupMetadata();
+
+        verify(groupMetadataManager, times(1)).maybeDeleteGroup(eq("streams-group"), any());
+    }
+
+    @Test
     public void testScheduleGroupSizeCounter() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
@@ -2456,5 +2557,78 @@ public class GroupCoordinatorShardTest {
         }
 
         assertEquals(result, coordinator.fetchOffsets(request, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testValidateStreamsGroupMemberSuccess() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        StreamsGroup streamsGroup = mock(StreamsGroup.class);
+        when(streamsGroup.hasMember("member-1")).thenReturn(true);
+        when(groupMetadataManager.streamsGroup("test-group", 0L)).thenReturn(streamsGroup);
+
+        assertTrue(coordinator.validateStreamsGroupMember("test-group", "member-1", 0L));
+    }
+
+    @Test
+    public void testValidateStreamsGroupMemberMissingGroupFences() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        when(groupMetadataManager.streamsGroup("unknown-group", 0L))
+            .thenThrow(new GroupIdNotFoundException("Group unknown-group not found."));
+
+        assertThrows(GroupIdNotFoundException.class, () ->
+            coordinator.validateStreamsGroupMember("unknown-group", "member-1", 0L));
+    }
+
+    @Test
+    public void testValidateStreamsGroupMemberMissingMemberFences() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        StreamsGroup streamsGroup = mock(StreamsGroup.class);
+        when(streamsGroup.hasMember("dropped-member")).thenReturn(false);
+        when(groupMetadataManager.streamsGroup("test-group", 0L)).thenReturn(streamsGroup);
+
+        assertThrows(org.apache.kafka.common.errors.UnknownMemberIdException.class, () ->
+            coordinator.validateStreamsGroupMember("test-group", "dropped-member", 0L));
     }
 }

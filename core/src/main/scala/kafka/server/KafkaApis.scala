@@ -248,6 +248,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS => handleDeleteShareGroupOffsetsRequest(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_DESCRIBE => handleStreamsGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsGroupHeartbeat(request).exceptionally(handleError)
+        case ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION => handleUpdateStreamsGroupTopologyDescription(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -2897,6 +2898,27 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  def handleUpdateStreamsGroupTopologyDescription(request: Request): CompletableFuture[Unit] = {
+    val updateRequest = request.body(classOf[UpdateStreamsGroupTopologyDescriptionRequest])
+    val groupId = updateRequest.data.groupId
+
+    if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
+      val responseData = new UpdateStreamsGroupTopologyDescriptionResponseData()
+        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
+      requestHelper.sendMaybeThrottle(request, new UpdateStreamsGroupTopologyDescriptionResponse(responseData))
+      return CompletableFuture.completedFuture[Unit](())
+    }
+
+    groupCoordinator.updateStreamsGroupTopologyDescription(request.context, updateRequest.data)
+      .handle[Unit] { (responseData, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new UpdateStreamsGroupTopologyDescriptionResponse(responseData))
+        }
+      }
+  }
+
   def handleStreamsGroupDescribe(request: Request): CompletableFuture[Unit] = {
     val streamsGroupDescribeRequest = request.body(classOf[StreamsGroupDescribeRequest])
     val includeAuthorizedOperations = streamsGroupDescribeRequest.data.includeAuthorizedOperations
@@ -2922,7 +2944,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.streamsGroupDescribe(
         request.context,
-        authorizedGroups.asJava
+        authorizedGroups.asJava,
+        streamsGroupDescribeRequest.data.includeTopologyDescription
       ).handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, streamsGroupDescribeRequest.getErrorResponse(exception))

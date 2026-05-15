@@ -29,6 +29,7 @@ import java.util.Collection;
 @InterfaceStability.Evolving
 public class DescribeStreamsGroupsOptions extends AbstractOptions<DescribeStreamsGroupsOptions> {
     private boolean includeAuthorizedOperations;
+    private boolean includeTopologyDescription;
 
     public DescribeStreamsGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
         this.includeAuthorizedOperations = includeAuthorizedOperations;
@@ -37,5 +38,18 @@ public class DescribeStreamsGroupsOptions extends AbstractOptions<DescribeStream
 
     public boolean includeAuthorizedOperations() {
         return includeAuthorizedOperations;
+    }
+
+    /**
+     * Whether to include the full topology description retrieved from the broker's
+     * topology description plugin.
+     */
+    public DescribeStreamsGroupsOptions includeTopologyDescription(boolean includeTopologyDescription) {
+        this.includeTopologyDescription = includeTopologyDescription;
+        return this;
+    }
+
+    public boolean includeTopologyDescription() {
+        return includeTopologyDescription;
     }
 }

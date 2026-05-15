@@ -683,6 +683,19 @@ class BrokerServer(
     val writer = new CoordinatorPartitionWriter(
       replicaManager
     )
+    // Initialize the topology description plugin if configured
+    val topologyDescriptionPluginClassName = config.groupCoordinatorConfig.streamsGroupTopologyDescriptionPluginClass
+    val topologyDescriptionPlugin: java.util.Optional[org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin] = {
+      if (topologyDescriptionPluginClassName.nonEmpty) {
+        val plugin = Utils.newInstance(topologyDescriptionPluginClassName,
+          classOf[org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin])
+        plugin.configure(config.originals)
+        java.util.Optional.of(plugin)
+      } else {
+        java.util.Optional.empty()
+      }
+    }
+
     new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
       .withTime(time)
       .withTimer(timer)
@@ -694,6 +707,7 @@ class BrokerServer(
       .withPersister(persister)
       .withAuthorizerPlugin(authorizerPlugin.toJava)
       .withPartitionMetadataClient(partitionMetadataClient)
+      .withTopologyDescriptionPlugin(topologyDescriptionPlugin)
       .build()
   }
 

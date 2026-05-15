@@ -59,6 +59,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
+import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -99,12 +101,16 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.coordinator.group.streams.TopologyDescriptionManager;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
@@ -128,9 +134,11 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -174,6 +182,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private Persister persister;
         private Optional<Plugin<Authorizer>> authorizerPlugin;
         private PartitionMetadataClient partitionMetadataClient;
+        private Optional<StreamsGroupTopologyDescriptionPlugin> topologyDescriptionPlugin = Optional.empty();
 
         public Builder(
             int nodeId,
@@ -230,6 +239,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         public Builder withPartitionMetadataClient(PartitionMetadataClient partitionMetadataClient) {
             this.partitionMetadataClient = partitionMetadataClient;
+            return this;
+        }
+
+        public Builder withTopologyDescriptionPlugin(Optional<StreamsGroupTopologyDescriptionPlugin> topologyDescriptionPlugin) {
+            this.topologyDescriptionPlugin = topologyDescriptionPlugin;
             return this;
         }
 
@@ -296,7 +310,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 groupConfigManager,
                 persister,
                 timer,
-                partitionMetadataClient
+                time,
+                partitionMetadataClient,
+                topologyDescriptionPlugin
             );
         }
     }
@@ -337,6 +353,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final Timer timer;
 
     /**
+     * The time source.
+     */
+    private final Time time;
+
+    /**
      * Boolean indicating whether the coordinator is active or not.
      */
     private final AtomicBoolean isActive = new AtomicBoolean(false);
@@ -350,6 +371,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * The client used for getting partition end offsets
      */
     private final PartitionMetadataClient partitionMetadataClient;
+
+    /**
+     * Owns all broker-side topology-description plugin logic: heartbeat solicitation gating,
+     * setTopology / getTopology / deleteTopology dispatch, the in-flight tracker, the
+     * transient-failure back-off, and the periodic cleanup timer.
+     */
+    private final TopologyDescriptionManager topologyDescriptionManager;
 
     /**
      * The number of partitions of the __consumer_offsets topics. This is provided
@@ -372,6 +400,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param groupConfigManager        The group config manager.
      * @param persister                 The persister.
      * @param timer                     The timer.
+     * @param partitionMetadataClient   The partition metadata client.
+     * @param topologyDescriptionPlugin The optional topology description plugin.
      */
     GroupCoordinatorService(
         LogContext logContext,
@@ -381,7 +411,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         GroupConfigManager groupConfigManager,
         Persister persister,
         Timer timer,
-        PartitionMetadataClient partitionMetadataClient
+        Time time,
+        PartitionMetadataClient partitionMetadataClient,
+        Optional<StreamsGroupTopologyDescriptionPlugin> topologyDescriptionPlugin
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
@@ -390,12 +422,24 @@ public class GroupCoordinatorService implements GroupCoordinator {
         this.groupConfigManager = groupConfigManager;
         this.persister = persister;
         this.timer = timer;
+        this.time = time;
         this.consumerGroupAssignors = config
             .consumerGroupAssignors()
             .stream()
             .map(ConsumerGroupPartitionAssignor::name)
             .collect(Collectors.toSet());
         this.partitionMetadataClient = partitionMetadataClient;
+        this.topologyDescriptionManager = new TopologyDescriptionManager(
+            logContext,
+            topologyDescriptionPlugin,
+            runtime,
+            timer,
+            time,
+            config.offsetsRetentionCheckIntervalMs(),
+            groupCoordinatorMetrics,
+            this::topicPartitionFor,
+            isActive::get
+        );
     }
 
     /**
@@ -607,7 +651,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return CompletableFuture.completedFuture(
                 new StreamsGroupHeartbeatResult(
                     new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
-                    Map.of()
+                    Map.of(),
+                    -1
                 )
             );
         }
@@ -622,7 +667,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(apiError.error().code())
                         .setErrorMessage(apiError.message()),
-                    Map.of()
+                    Map.of(),
+                    -1
                 )
             );
         }
@@ -631,7 +677,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "streams-group-heartbeat",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.streamsGroupHeartbeat(context, request)
-        ).exceptionally(exception -> handleOperationException(
+        ).thenApply(result -> {
+            topologyDescriptionManager.maybeMarkTopologyDescriptionRequired(result.data(), request.groupId(), result);
+            return result;
+        }).exceptionally(exception -> handleOperationException(
             "streams-group-heartbeat",
             request,
             exception,
@@ -640,7 +689,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(error.code())
                         .setErrorMessage(message),
-                    Map.of()
+                    Map.of(),
+                    -1
                 ),
             log
         ));
@@ -1190,12 +1240,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List)}.
+     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List, boolean)}.
      */
     @Override
     public CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        boolean includeTopologyDescription
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(StreamsGroupDescribeRequest.getErrorDescribedGroupList(
@@ -1223,11 +1274,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-                runtime.scheduleReadOperation(
+                runtime.<StreamsGroupDescribeResult>scheduleReadOperation(
                     "streams-group-describe",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset)
-                ).exceptionally(exception -> handleOperationException(
+                ).thenCompose(result -> {
+                    if (includeTopologyDescription) {
+                        return topologyDescriptionManager.attachTopologyDescriptions(result);
+                    }
+                    return CompletableFuture.completedFuture(result.describedGroups());
+                }).exceptionally(exception -> handleOperationException(
                     "streams-group-describe",
                     groupList,
                     exception,
@@ -1240,7 +1296,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
-    
+
     /**
      * See {@link GroupCoordinator#shareGroupDescribe(AuthorizableRequestContext, List)}.
      */
@@ -1384,6 +1440,71 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#updateStreamsGroupTopologyDescription(AuthorizableRequestContext, UpdateStreamsGroupTopologyDescriptionRequestData)}.
+     */
+    @Override
+    public CompletableFuture<UpdateStreamsGroupTopologyDescriptionResponseData> updateStreamsGroupTopologyDescription(
+        AuthorizableRequestContext context,
+        UpdateStreamsGroupTopologyDescriptionRequestData request
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(
+                new UpdateStreamsGroupTopologyDescriptionResponseData()
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        if (!topologyDescriptionManager.isPresent()) {
+            return CompletableFuture.completedFuture(
+                new UpdateStreamsGroupTopologyDescriptionResponseData()
+                    .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
+                    .setErrorMessage("No topology description plugin is configured on this broker.")
+            );
+        }
+
+        String groupId = request.groupId();
+        String memberId = request.memberId();
+        UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription topoDesc = request.topologyDescription();
+
+        if (topoDesc == null) {
+            return CompletableFuture.completedFuture(
+                new UpdateStreamsGroupTopologyDescriptionResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("TopologyDescription must not be null.")
+            );
+        }
+        if (memberId == null || memberId.isEmpty()) {
+            return CompletableFuture.completedFuture(
+                new UpdateStreamsGroupTopologyDescriptionResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("MemberId must be set.")
+            );
+        }
+
+        // Validate the streams group exists and the member is still in it. This also gives
+        // us proper NOT_COORDINATOR / COORDINATOR_LOAD_IN_PROGRESS handling. A missing group
+        // or a dropped member surfaces as UNKNOWN_MEMBER_ID so the client treats itself as
+        // fenced and rejoins.
+        int pushedEpoch = request.topologyEpoch();
+        return runtime.<Boolean>scheduleReadOperation(
+            "validate-streams-group-member",
+            topicPartitionFor(groupId),
+            (coordinator, lastCommittedOffset) ->
+                coordinator.validateStreamsGroupMember(groupId, memberId, lastCommittedOffset)
+        ).thenCompose(__ ->
+            topologyDescriptionManager.handleSetTopology(groupId, pushedEpoch, updateRequestToPojo(topoDesc))
+        ).exceptionally(exception -> handleOperationException(
+            "update-streams-group-topology-description",
+            request,
+            exception,
+            (error, message) -> new UpdateStreamsGroupTopologyDescriptionResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(message),
+            log
+        ));
+    }
+
+    /**
      * See {@link GroupCoordinator#deleteGroups(AuthorizableRequestContext, List, BufferSupplier)}.
      */
     @Override
@@ -1496,10 +1617,27 @@ public class GroupCoordinatorService implements GroupCoordinator {
         TopicPartition topicPartition,
         List<String> groupIds
     ) {
-        return runtime.scheduleWriteOperation(
-            "delete-groups",
+        // Step 1: read which IDs in this partition are streams groups with a stored topology.
+        // Step 2: for each such ID, call plugin.deleteTopology with the user's request context
+        //         (per-group failures are logged but do not block the delete).
+        // Step 3: only after the plugin calls have all settled, issue the actual delete-groups write.
+        return runtime.<Map<String, Integer>>scheduleReadOperation(
+            "list-streams-stored-topology-epochs",
             topicPartition,
-            coordinator -> coordinator.deleteGroups(context, groupIds)
+            (coordinator, lastCommittedOffset) ->
+                coordinator.getStreamsGroupStoredTopologyEpochs(groupIds, lastCommittedOffset)
+        ).exceptionally(throwable -> {
+            log.warn("Failed to read stored topology epochs ahead of DeleteGroups; proceeding without plugin pre-delete.",
+                throwable);
+            return Map.of();
+        }).thenCompose(storedEpochs ->
+            topologyDescriptionManager.deleteBeforeGroupDelete(storedEpochs)
+        ).thenCompose(__ ->
+            runtime.scheduleWriteOperation(
+                "delete-groups",
+                topicPartition,
+                coordinator -> coordinator.deleteGroups(context, groupIds)
+            )
         ).exceptionally(exception -> handleOperationException(
             "delete-groups",
             groupIds,
@@ -2360,6 +2498,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         log.info("Starting up.");
         numPartitions = groupMetadataTopicPartitionCount.getAsInt();
         isActive.set(true);
+        topologyDescriptionManager.start();
         log.info("Startup complete.");
     }
 
@@ -2375,6 +2514,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         log.info("Shutting down.");
         isActive.set(false);
+        Utils.closeQuietly(topologyDescriptionManager, "topology description manager");
         Utils.closeQuietly(runtime, "coordinator runtime");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
         Utils.closeQuietly(groupConfigManager, "group config manager");
@@ -2437,5 +2577,114 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (obj == null) {
             throw new IllegalArgumentException(msg);
         }
+    }
+
+    private static final byte NODE_TYPE_SOURCE = 1;
+    private static final byte NODE_TYPE_PROCESSOR = 2;
+    private static final byte NODE_TYPE_SINK = 3;
+
+    static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_REQUESTED = 0;
+    static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED = 1;
+    static final byte TOPOLOGY_DESCRIPTION_STATUS_ERROR = 2;
+    static final byte TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE = 3;
+
+    private static StreamsGroupTopologyDescription updateRequestToPojo(
+            final UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription wire) {
+        final List<StreamsGroupTopologyDescription.Subtopology> subtopologies = new ArrayList<>(wire.subtopologies().size());
+        for (UpdateStreamsGroupTopologyDescriptionRequestData.Subtopology sub : wire.subtopologies()) {
+            final List<StreamsGroupTopologyDescription.Node> nodes = new ArrayList<>(sub.nodes().size());
+            for (UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode node : sub.nodes()) {
+                nodes.add(updateRequestNode(node));
+            }
+            subtopologies.add(new StreamsGroupTopologyDescription.Subtopology(sub.subtopologyId(), nodes));
+        }
+        final List<StreamsGroupTopologyDescription.GlobalStore> globalStores = new ArrayList<>(wire.globalStores().size());
+        for (UpdateStreamsGroupTopologyDescriptionRequestData.GlobalStore gs : wire.globalStores()) {
+            globalStores.add(new StreamsGroupTopologyDescription.GlobalStore(
+                (StreamsGroupTopologyDescription.Source) updateRequestNode(gs.source()),
+                (StreamsGroupTopologyDescription.Processor) updateRequestNode(gs.processor())
+            ));
+        }
+        return new StreamsGroupTopologyDescription(subtopologies, globalStores);
+    }
+
+    private static StreamsGroupTopologyDescription.Node updateRequestNode(
+            final UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode node) {
+        final Set<String> successors = new LinkedHashSet<>(node.successors());
+        switch (node.nodeType()) {
+            case NODE_TYPE_SOURCE:
+                return new StreamsGroupTopologyDescription.Source(
+                    node.name(),
+                    new LinkedHashSet<>(node.sourceTopics()),
+                    successors
+                );
+            case NODE_TYPE_PROCESSOR:
+                return new StreamsGroupTopologyDescription.Processor(
+                    node.name(),
+                    new LinkedHashSet<>(node.stores()),
+                    successors
+                );
+            case NODE_TYPE_SINK:
+                return new StreamsGroupTopologyDescription.Sink(
+                    node.name(),
+                    Optional.ofNullable(node.sinkTopic()),
+                    successors
+                );
+            default:
+                throw new IllegalArgumentException("Unknown node type: " + node.nodeType());
+        }
+    }
+
+    private static StreamsGroupDescribeResponseData.TopologyDescription pojoToDescribeResponse(
+            final StreamsGroupTopologyDescription pojo) {
+        final List<StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology> subtopologies = new ArrayList<>(pojo.subtopologies().size());
+        for (StreamsGroupTopologyDescription.Subtopology sub : pojo.subtopologies()) {
+            subtopologies.add(new StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology()
+                .setSubtopologyId(sub.id())
+                .setNodes(pojoNodesToWire(sub.nodes())));
+        }
+        final List<StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore> globalStores = new ArrayList<>(pojo.globalStores().size());
+        for (StreamsGroupTopologyDescription.GlobalStore gs : pojo.globalStores()) {
+            globalStores.add(new StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore()
+                .setSource(pojoNodeToWire(gs.source()))
+                .setProcessor(pojoNodeToWire(gs.processor())));
+        }
+        return new StreamsGroupDescribeResponseData.TopologyDescription()
+            .setSubtopologies(subtopologies)
+            .setGlobalStores(globalStores);
+    }
+
+    private static List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> pojoNodesToWire(
+            final Collection<StreamsGroupTopologyDescription.Node> nodes) {
+        final List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> result = new ArrayList<>(nodes.size());
+        for (StreamsGroupTopologyDescription.Node node : nodes) {
+            result.add(pojoNodeToWire(node));
+        }
+        return result;
+    }
+
+    private static StreamsGroupDescribeResponseData.TopologyDescriptionNode pojoNodeToWire(
+            final StreamsGroupTopologyDescription.Node node) {
+        final StreamsGroupDescribeResponseData.TopologyDescriptionNode wire =
+            new StreamsGroupDescribeResponseData.TopologyDescriptionNode()
+                .setName(node.name())
+                .setSuccessors(new ArrayList<>(node.successors()));
+        if (node instanceof StreamsGroupTopologyDescription.Source source) {
+            wire.setNodeType(NODE_TYPE_SOURCE)
+                .setSourceTopics(new ArrayList<>(source.topics()))
+                .setStores(List.of());
+        } else if (node instanceof StreamsGroupTopologyDescription.Processor processor) {
+            wire.setNodeType(NODE_TYPE_PROCESSOR)
+                .setSourceTopics(List.of())
+                .setStores(new ArrayList<>(processor.stores()));
+        } else if (node instanceof StreamsGroupTopologyDescription.Sink sink) {
+            wire.setNodeType(NODE_TYPE_SINK)
+                .setSourceTopics(List.of())
+                .setStores(List.of())
+                .setSinkTopic(sink.topic().orElse(null));
+        } else {
+            throw new IllegalArgumentException("Unknown node type: " + node.getClass().getName());
+        }
+        return wire;
     }
 }

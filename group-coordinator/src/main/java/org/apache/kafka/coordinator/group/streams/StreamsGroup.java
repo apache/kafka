@@ -163,6 +163,26 @@ public class StreamsGroup implements Group {
     protected final TimelineLong metadataHash;
 
     /**
+     * The timestamp when this group was first created. Used to distinguish
+     * different incarnations of a group with the same name.
+     */
+    private final TimelineLong groupCreationTimeMs;
+
+    /**
+     * The topology epoch whose description is currently stored in the topology description plugin,
+     * or {@code -1} if none is stored.
+     */
+    private final TimelineInteger storedTopologyEpoch;
+
+    /**
+     * The topology epoch whose description push the plugin permanently rejected
+     * ({@code TopologyDescriptionTooLargeException} / {@code InvalidRequestException}),
+     * or {@code -1} if none. Heartbeat-path solicitation is suppressed while this equals the
+     * current topology epoch.
+     */
+    private final TimelineInteger lastFailedTopologyEpoch;
+
+    /**
      * The target assignment metadata.
      */
     private final TimelineObject<TargetAssignmentMetadata> targetAssignmentMetadata;
@@ -243,6 +263,11 @@ public class StreamsGroup implements Group {
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.metadataHash = new TimelineLong(snapshotRegistry);
+        this.groupCreationTimeMs = new TimelineLong(snapshotRegistry);
+        this.storedTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        this.storedTopologyEpoch.set(-1);
+        this.lastFailedTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        this.lastFailedTopologyEpoch.set(-1);
         this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -630,6 +655,22 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * @return The group creation time in milliseconds.
+     */
+    public long groupCreationTimeMs() {
+        return groupCreationTimeMs.get();
+    }
+
+    /**
+     * Updates the group creation time.
+     *
+     * @param groupCreationTimeMs The group creation time in milliseconds.
+     */
+    public void setGroupCreationTimeMs(long groupCreationTimeMs) {
+        this.groupCreationTimeMs.set(groupCreationTimeMs);
+    }
+
+    /**
      * @return The validated topology epoch.
      */
     public int validatedTopologyEpoch() {
@@ -644,6 +685,38 @@ public class StreamsGroup implements Group {
     public void setValidatedTopologyEpoch(int validatedTopologyEpoch) {
         this.validatedTopologyEpoch.set(validatedTopologyEpoch);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * @return The topology epoch whose description is currently stored in the plugin, or -1.
+     */
+    public int storedTopologyEpoch() {
+        return storedTopologyEpoch.get();
+    }
+
+    /**
+     * Updates the stored-topology epoch.
+     *
+     * @param storedTopologyEpoch The topology epoch whose description is stored in the plugin, or -1.
+     */
+    public void setStoredTopologyEpoch(int storedTopologyEpoch) {
+        this.storedTopologyEpoch.set(storedTopologyEpoch);
+    }
+
+    /**
+     * @return The topology epoch whose description push was permanently rejected, or -1.
+     */
+    public int lastFailedTopologyEpoch() {
+        return lastFailedTopologyEpoch.get();
+    }
+
+    /**
+     * Updates the last-failed-topology epoch.
+     *
+     * @param lastFailedTopologyEpoch The topology epoch whose description push was rejected, or -1.
+     */
+    public void setLastFailedTopologyEpoch(int lastFailedTopologyEpoch) {
+        this.lastFailedTopologyEpoch.set(lastFailedTopologyEpoch);
     }
 
     /**

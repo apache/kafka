@@ -548,6 +548,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             }
         }
 
+        streamsRebalanceData.setTopologyDescriptionRequired(data.topologyDescriptionRequired());
+
         membershipManager.onHeartbeatSuccess(response);
     }
 

@@ -384,6 +384,11 @@ public class GroupCoordinatorConfig {
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";
     public static final boolean STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT = true;
 
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG = "group.streams.topology.description.plugin.class";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT = "";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC = "The fully qualified class name of the topology description plugin to use for streams groups. " +
+        "The plugin must implement the StreamsGroupTopologyDescriptionPlugin interface. If empty, topology description storage is disabled.";
+
     public static final String STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG = "group.streams.task.offset.interval.ms";
     public static final int STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT = 60000;
     public static final String STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC = "The interval in which the warmup task changelog offsets on a client are updated on the broker. The offsets are sent with the next heartbeat after this time has passed.";
@@ -492,7 +497,8 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
-        .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC);
+        .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC)
+        .define(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG, STRING, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DEFAULT, MEDIUM, STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_DOC);
 
 
     /**
@@ -560,6 +566,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMinTaskOffsetIntervalMs;
     private final int streamsGroupNumWarmupReplicas;
     private final int streamsGroupMaxWarmupReplicas;
+    private final String streamsGroupTopologyDescriptionPluginClass;
 
     private final AbstractConfig config;
 
@@ -629,6 +636,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMinTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsGroupNumWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
+        this.streamsGroupTopologyDescriptionPluginClass = config.getString(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG);
         this.config = config;
 
         // New group coordinator configs validation.
@@ -1362,5 +1370,12 @@ public class GroupCoordinatorConfig {
      */
     public int streamsGroupMaxWarmupReplicas() {
         return streamsGroupMaxWarmupReplicas;
+    }
+
+    /**
+     * The fully qualified class name of the topology description plugin.
+     */
+    public String streamsGroupTopologyDescriptionPluginClass() {
+        return streamsGroupTopologyDescriptionPluginClass;
     }
 }

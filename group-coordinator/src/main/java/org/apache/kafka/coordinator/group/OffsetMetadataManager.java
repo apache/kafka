@@ -57,6 +57,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1035,6 +1036,56 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * Returns whether the offset for {@code (groupId, topic, partition)} is currently expirable:
+     * the offset's age exceeds {@code offsets.retention.ms} per the group's
+     * {@link OffsetExpirationCondition}, and there is no pending transactional offset on the
+     * partition. Used by both {@link #cleanupExpiredOffsets} (to decide which offsets to
+     * tombstone) and {@link #allOffsetsExpired} (to decide whether the group is fully
+     * expirable) so the two cannot drift.
+     */
+    private boolean isOffsetExpirable(
+        String groupId,
+        String topic,
+        int partition,
+        OffsetAndMetadata offsetAndMetadata,
+        OffsetExpirationCondition condition,
+        long currentTimestampMs
+    ) {
+        return condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
+            && !hasPendingTransactionalOffsets(groupId, topic, partition);
+    }
+
+    /**
+     * Read-only counterpart to {@link #cleanupExpiredOffsets(String, List)}: returns whether all
+     * committed offsets for the given group are eligible for expiration at {@code currentTimestampMs}
+     * and there are no pending transactional offsets. Used by the topology-description plugin
+     * cleanup path on the read side.
+     */
+    public boolean allOffsetsExpired(String groupId, long currentTimestampMs) {
+        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
+            offsets.offsetsByGroup.get(groupId);
+        if (offsetsByTopic == null) {
+            return !openTransactions.contains(groupId);
+        }
+        Group group = groupMetadataManager.group(groupId);
+        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
+        if (offsetExpirationCondition.isEmpty()) return false;
+        OffsetExpirationCondition condition = offsetExpirationCondition.get();
+        for (Map.Entry<String, TimelineHashMap<Integer, OffsetAndMetadata>> topicEntry : offsetsByTopic.entrySet()) {
+            String topic = topicEntry.getKey();
+            if (group.isSubscribedToTopic(topic)) return false;
+            for (Map.Entry<Integer, OffsetAndMetadata> partitionEntry : topicEntry.getValue().entrySet()) {
+                int partition = partitionEntry.getKey();
+                OffsetAndMetadata oam = partitionEntry.getValue();
+                if (!isOffsetExpirable(groupId, topic, partition, oam, condition, currentTimestampMs)) {
+                    return false;
+                }
+            }
+        }
+        return !openTransactions.contains(groupId);
+    }
+
+    /**
      * Remove expired offsets for the given group.
      *
      * @param groupId The group id.
@@ -1065,9 +1116,7 @@ public class OffsetMetadataManager {
         offsetsByTopic.forEach((topic, partitions) -> {
             if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
-                    // We don't expire the offset yet if there is a pending transactional offset for the partition.
-                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
-                        !hasPendingTransactionalOffsets(groupId, topic, partition)) {
+                    if (isOffsetExpirable(groupId, topic, partition, offsetAndMetadata, condition, currentTimestampMs)) {
                         appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {

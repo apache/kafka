@@ -3443,6 +3443,7 @@ public class StreamThreadTest {
         final InternalTopologyBuilder topologyBuilder = mock(InternalTopologyBuilder.class);
         when(topologyBuilder.subtopologyToTopicsInfo()).thenReturn(Map.of());
         when(topologyBuilder.copartitionGroups()).thenReturn(Set.of(Set.of("source1")));
+        lenient().when(topologyBuilder.describe()).thenReturn(new InternalTopologyBuilder.TopologyDescription());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -3509,6 +3510,7 @@ public class StreamThreadTest {
             )
         ));
         when(topologyBuilder.copartitionGroups()).thenReturn(Set.of(Set.of("source1")));
+        when(topologyBuilder.describe()).thenReturn(new InternalTopologyBuilder.TopologyDescription());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -3588,7 +3590,8 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             Map.of(),
-            Map.of()
+            Map.of(),
+            Optional.empty()
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -3649,7 +3652,8 @@ public class StreamThreadTest {
                 Optional.empty(),
                 Optional.empty(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Optional.empty()
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -3720,7 +3724,8 @@ public class StreamThreadTest {
                 Optional.empty(),
                 Optional.empty(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Optional.empty()
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -3783,7 +3788,8 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             Map.of(),
-            Map.of()
+            Map.of(),
+            Optional.empty()
         );
 
         final Properties props = configProps(false, false);
@@ -3844,7 +3850,8 @@ public class StreamThreadTest {
                 Optional.empty(),
                 Optional.empty(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Optional.empty()
         );
 
         final Properties props = configProps(false, false);
@@ -3915,7 +3922,8 @@ public class StreamThreadTest {
                 Optional.empty(),
                 Optional.empty(),
                 Map.of(),
-                Map.of()
+                Map.of(),
+                Optional.empty()
         );
 
         final Properties props = configProps(false, false);

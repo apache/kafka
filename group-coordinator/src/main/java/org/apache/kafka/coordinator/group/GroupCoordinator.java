@@ -48,6 +48,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
+import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
+import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
@@ -216,14 +218,17 @@ public interface GroupCoordinator {
     /**
      * Describe streams groups.
      *
-     * @param context           The coordinator request context.
-     * @param groupIds          The group ids.
+     * @param context                      The coordinator request context.
+     * @param groupIds                     The group ids.
+     * @param includeTopologyDescription   Whether to include the full topology description
+     *                                     from the topology description plugin in the response.
      *
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        boolean includeTopologyDescription
     );
 
     /**
@@ -251,6 +256,19 @@ public interface GroupCoordinator {
         AuthorizableRequestContext context,
         String groupId,
         AlterShareGroupOffsetsRequestData requestData
+    );
+
+    /**
+     * Update the topology description for a streams group.
+     *
+     * @param context           The coordinator request context.
+     * @param request           The UpdateStreamsGroupTopologyDescriptionRequest data.
+     *
+     * @return  A future yielding the response.
+     */
+    CompletableFuture<UpdateStreamsGroupTopologyDescriptionResponseData> updateStreamsGroupTopologyDescription(
+        AuthorizableRequestContext context,
+        UpdateStreamsGroupTopologyDescriptionRequestData request
     );
 
     /**
