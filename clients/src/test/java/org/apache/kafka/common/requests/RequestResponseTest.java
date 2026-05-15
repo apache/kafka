@@ -3895,9 +3895,8 @@ public class RequestResponseTest {
         // corrupt the length of the sasl mechanism string
         serializedBytes.buffer().putShort(0, Short.MAX_VALUE);
 
-        String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
-            parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
-        assertEquals("Error reading byte array of 32767 byte(s): only 5 byte(s) available", msg);
+        assertThrows(BufferUnderflowException.class, () -> AbstractRequest.
+            parseRequest(request.apiKey(), request.version(), serializedBytes));
     }
 
     @Test
@@ -3917,9 +3916,8 @@ public class RequestResponseTest {
         // corrupt the length of the bytes array
         serializedBytes.buffer().putInt(0, Integer.MAX_VALUE);
 
-        String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
-                parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
-        assertEquals("Error reading byte array of 2147483647 byte(s): only 20 byte(s) available", msg);
+        assertThrows(BufferUnderflowException.class, () -> AbstractRequest.
+                parseRequest(request.apiKey(), request.version(), serializedBytes));
     }
 
     @Test
@@ -3971,9 +3969,8 @@ public class RequestResponseTest {
 
         accessor.flip();
 
-        String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
-                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor)).getMessage();
-        assertEquals("Error reading byte array of 32767 byte(s): only 3 byte(s) available", msg);
+        assertThrows(BufferUnderflowException.class, () -> AbstractRequest.
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor));
     }
 
     @Test

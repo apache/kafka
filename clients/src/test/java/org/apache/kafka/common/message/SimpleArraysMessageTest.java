@@ -17,13 +17,15 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.types.SchemaException;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SimpleArraysMessageTest {
     @Test
@@ -35,8 +37,7 @@ public class SimpleArraysMessageTest {
         });
         final SimpleArraysMessageData out = new SimpleArraysMessageData();
         ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
-        assertEquals("Tried to allocate a collection of size 126, but there are only 7 bytes remaining.",
-                assertThrows(RuntimeException.class, () -> out.read(accessor, (short) 2)).getMessage());
+        assertThrows(BufferUnderflowException.class, () -> out.read(accessor, (short) 2));
     }
 
     @Test
@@ -49,7 +50,39 @@ public class SimpleArraysMessageTest {
         });
         final SimpleArraysMessageData out = new SimpleArraysMessageData();
         ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
-        assertEquals("Tried to allocate a collection of size 125, but there are only 6 bytes remaining.",
-                assertThrows(RuntimeException.class, () -> out.read(accessor, (short) 2)).getMessage());
+        assertThrows(BufferUnderflowException.class, () -> out.read(accessor, (short) 2));
+    }
+
+    @Test
+    public void testNonNullableStringSerializedAsNullThrowsSchemaException() {
+        // SimpleArraysMessage v2 (flexible). Goats[0].Name is a non-nullable string,
+        // but the wire encodes its length as -1 (null), which should trigger a SchemaException.
+        ByteBuffer buf = ByteBuffer.wrap(new byte[]{
+            0x02, // Goats array length+1 varint -> 1 element
+            0x00, // Goats[0].Color (int8) = 0
+            0x00, // Goats[0].Name length+1 varint -> length = -1 (null) <-- triggers SchemaException
+            0x00, // Goats[0] tagged-field count varint = 0
+            0x01, // Sheep array length+1 varint -> 0 elements
+            0x00  // Message-level tagged-field count varint = 0
+        });
+        SimpleArraysMessageData out = new SimpleArraysMessageData();
+        SchemaException ex = assertThrows(SchemaException.class,
+            () -> out.read(new ByteBufferAccessor(buf), (short) 2));
+        assertTrue(ex.getMessage().contains("non-nullable field"), ex.getMessage());
+    }
+
+    @Test
+    public void testStringFieldWithInvalidLengthThrowsSchemaException() {
+        // SimpleArraysMessage v2 (flexible). The Name field's varint decodes to length 0x8000
+        // (> 0x7fff), which the schema's length guard should reject before any byte is read.
+        ByteBuffer buf = ByteBuffer.wrap(new byte[]{
+            0x02,                           // Goats array length+1 varint -> 1 element
+            0x00,                           // Goats[0].Color (int8) = 0
+            (byte) 0x81, (byte) 0x80, 0x02  // Goats[0].Name length+1 varint = 0x8001 -> length 0x8000
+        });
+        SimpleArraysMessageData out = new SimpleArraysMessageData();
+        SchemaException ex = assertThrows(SchemaException.class,
+            () -> out.read(new ByteBufferAccessor(buf), (short) 2));
+        assertTrue(ex.getMessage().contains("invalid length"), ex.getMessage());
     }
 }

@@ -1420,19 +1420,19 @@ public class GroupMetadataManager {
                 topicHashCache,
                 metadataImage
             );
+        } catch (SchemaException e) {
+            log.warn("Cannot upgrade classic group {} to consumer group because the embedded consumer protocol is malformed: {}.",
+                classicGroup.groupId(), e.getMessage(), e);
+
+            throw new GroupIdNotFoundException(
+                String.format("Cannot upgrade classic group %s to consumer group because the embedded consumer protocol is malformed.", classicGroup.groupId())
+            );
         } catch (UnsupportedVersionException e) {
             log.warn("Cannot upgrade classic group {} to consumer group: {}.", classicGroup.groupId(), e.getMessage(), e);
 
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because an unsupported custom assignor is in use. " +
                     "Please refer to the documentation or switch to a default assignor before re-attempting the upgrade.", classicGroup.groupId())
-            );
-        } catch (RuntimeException e) {
-            log.warn("Cannot upgrade classic group {} to consumer group because the embedded consumer protocol is malformed: {}.",
-                classicGroup.groupId(), e.getMessage(), e);
-
-            throw new GroupIdNotFoundException(
-                String.format("Cannot upgrade classic group %s to consumer group because the embedded consumer protocol is malformed.", classicGroup.groupId())
             );
         }
         consumerGroup.createConsumerGroupRecords(records);
@@ -1920,7 +1920,7 @@ public class GroupMetadataManager {
             return ConsumerProtocol.deserializeConsumerProtocolSubscription(
                 ByteBuffer.wrap(protocols.iterator().next().metadata())
             );
-        } catch (RuntimeException e) {
+        } catch (SchemaException e) {
             throw new IllegalStateException("Malformed embedded consumer protocol in subscription deserialization.");
         }
     }

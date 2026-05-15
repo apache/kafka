@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.utils.internals.ByteUtils;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 public class ByteBufferAccessor implements Readable, Writable {
@@ -55,10 +56,8 @@ public class ByteBufferAccessor implements Readable, Writable {
 
     @Override
     public byte[] readArray(int size) {
-        int remaining = buf.remaining();
-        if (size > remaining) {
-            throw new RuntimeException("Error reading byte array of " + size + " byte(s): only " + remaining +
-                    " byte(s) available");
+        if (size > buf.remaining()) {
+            throw new BufferUnderflowException();
         }
         byte[] arr = new byte[size];
         buf.get(arr);
@@ -72,6 +71,9 @@ public class ByteBufferAccessor implements Readable, Writable {
 
     @Override
     public ByteBuffer readByteBuffer(int length) {
+        if (length > buf.remaining()) {
+            throw new BufferUnderflowException();
+        }
         ByteBuffer res = buf.slice();
         res.limit(length);
 
