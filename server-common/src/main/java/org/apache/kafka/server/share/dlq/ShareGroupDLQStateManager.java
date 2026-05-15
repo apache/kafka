@@ -296,6 +296,10 @@ public class ShareGroupDLQStateManager {
                             this.result.complete(null);
                             break;
 
+                        case TOPIC_ALREADY_EXISTS:
+                            // When topic creation request was sent, it could be that it a previous request
+                            // was in-flight. As such this request might get TOPIC_ALREADY_EXISTS error, which is acceptable
+                            // let it try again and sender logic will take care of it.
                         case THROTTLING_QUOTA_EXCEEDED:
                             LOG.debug("Received retriable error in create DLQ topic response for {} using DLQ topic {}: {}", name(), dlqTopicName, errorMessage);
                             if (!createTopicsBackoff.canAttempt()) {
