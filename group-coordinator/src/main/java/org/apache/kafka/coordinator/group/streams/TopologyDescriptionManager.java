@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -55,8 +55,8 @@ import java.util.function.Supplier;
  * code paths that touch the plugin — heartbeat solicitation, {@code setTopology} on push,
  * {@code getTopology} on describe, and {@code deleteTopology} on explicit DeleteGroups —
  * plus the periodic natural-expiration cleanup timer. State that used to live on the service
- * (in-flight tracker, transient-failure back-off, cleanup-cycle single-flight guard,
- * the cleanup {@link TimerTask}) lives here instead.
+ * (per-group exponential back-off, cleanup-cycle single-flight guard, the cleanup
+ * {@link TimerTask}) lives here instead.
  *
  * <p>When no plugin is configured, every public method becomes a fast no-op.
  *
@@ -69,14 +69,12 @@ public class TopologyDescriptionManager implements AutoCloseable {
     private static final byte TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE = 3;
 
     /**
-     * Timeout for in-flight topology push tracking, in milliseconds.
-     */
-    static final long IN_FLIGHT_TIMEOUT_MS = 30_000L;
-
-    /**
-     * Initial back-off after a transient {@code setTopology} failure (anything other than
-     * {@code TopologyDescriptionTooLargeException} or {@code InvalidRequestException}).
-     * Doubles per consecutive failure up to {@link #RETRY_BACKOFF_MAX_MS}.
+     * Initial back-off after an unsuccessful solicitation — either a transient
+     * {@code setTopology} failure (anything other than {@code TopologyDescriptionTooLargeException}
+     * or {@code InvalidRequestException}) or a heartbeat-side solicitation that never produced
+     * a successful push within the previous back-off window (e.g. a client with
+     * {@code topology.description.push.enabled=false}, or one that is unreachable).
+     * Doubles per consecutive solicitation up to {@link #RETRY_BACKOFF_MAX_MS}.
      */
     static final long RETRY_BACKOFF_INITIAL_MS = 30_000L;
 
@@ -113,7 +111,6 @@ public class TopologyDescriptionManager implements AutoCloseable {
     private final Function<String, TopicPartition> topicPartitionFor;
     private final Supplier<Boolean> isActive;
 
-    private final ConcurrentHashMap<String, Long> inFlight = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Backoff> backoff = new ConcurrentHashMap<>();
     private final AtomicBoolean cleanupCycleInFlight = new AtomicBoolean(false);
     private volatile TimerTask cleanupTask;
@@ -172,6 +169,12 @@ public class TopologyDescriptionManager implements AutoCloseable {
     /**
      * Decides whether to set {@code TopologyDescriptionRequired=true} on the heartbeat response
      * and applies the decision in place. Pure broker-side: no plugin RPC.
+     *
+     * <p>When the broker sets the flag, the back-off is armed (or extended) at the same time:
+     * the next heartbeat for the same group + topology epoch is suppressed until the back-off
+     * window expires. This handles both unresponsive plugins (transient failure re-arms the
+     * same back-off) and clients that ignore the flag (the next heartbeat after the window
+     * lapses simply re-solicits, advancing the back-off by one step).
      */
     public void maybeMarkTopologyDescriptionRequired(
         StreamsGroupHeartbeatResponseData responseData,
@@ -185,21 +188,14 @@ public class TopologyDescriptionManager implements AutoCloseable {
         }
         int topologyEpoch = result.topologyEpoch();
         if (!shouldSolicitTopologyPush(groupId, topologyEpoch, result)) return;
-        long now = time.milliseconds();
-        inFlight.compute(groupId, (k, existing) -> {
-            if (existing != null && now < existing) {
-                // Another heartbeat already set this; don't ask again.
-                return existing;
-            }
-            responseData.setTopologyDescriptionRequired(true);
-            return now + IN_FLIGHT_TIMEOUT_MS;
-        });
+        responseData.setTopologyDescriptionRequired(true);
+        armBackoff(groupId, topologyEpoch);
     }
 
     /**
      * Pure broker-side check for whether a heartbeat should request a topology push. The four
      * suppression rules: topology not initialised yet (epoch &lt; 0), stored epoch already matches
-     * current, permanent failure already recorded at this epoch, or transient-failure back-off
+     * current, permanent failure already recorded at this epoch, or the back-off
      * still in its window for this {@code (groupId, epoch)} pair.
      */
     private boolean shouldSolicitTopologyPush(String groupId, int topologyEpoch, StreamsGroupHeartbeatResult result) {
@@ -216,10 +212,10 @@ public class TopologyDescriptionManager implements AutoCloseable {
 
     /**
      * Invokes {@code plugin.setTopology} and persists the result via the appropriate broker-side
-     * tagged field. On success: {@code StoredTopologyEpoch = pushedEpoch}, in-flight tracker and
-     * back-off cleared. On {@code InvalidRequestException} / {@code TopologyDescriptionTooLargeException}:
+     * tagged field. On success: {@code StoredTopologyEpoch = pushedEpoch}, back-off cleared.
+     * On {@code InvalidRequestException} / {@code TopologyDescriptionTooLargeException}:
      * {@code LastFailedTopologyEpoch = pushedEpoch}, back-off cleared (the ratchet takes over).
-     * On any other exception: arm/extend the transient-failure back-off; no metadata write.
+     * On any other exception: arm/extend the per-group back-off; no metadata write.
      */
     public CompletableFuture<UpdateStreamsGroupTopologyDescriptionResponseData> handleSetTopology(
         String groupId,
@@ -254,13 +250,12 @@ public class TopologyDescriptionManager implements AutoCloseable {
                         backoff.remove(groupId);
                         recordTopologyDescriptionFailedAsync(groupId, pushedEpoch);
                     } else {
-                        armTransientBackoff(groupId, pushedEpoch);
+                        armBackoff(groupId, pushedEpoch);
                     }
                 } else {
                     log.info("Plugin operation succeeded for group {}", groupId);
                     metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME);
                     responseData.setErrorCode(Errors.NONE.code());
-                    inFlight.remove(groupId);
                     backoff.remove(groupId);
                     recordTopologyDescriptionStoredAsync(groupId, pushedEpoch);
                 }
@@ -268,14 +263,14 @@ public class TopologyDescriptionManager implements AutoCloseable {
             });
     }
 
-    private void armTransientBackoff(String groupId, int pushedEpoch) {
+    private void armBackoff(String groupId, int pushedEpoch) {
         long now = time.milliseconds();
         backoff.compute(groupId, (k, existing) -> {
             int attempts = (existing != null && existing.topologyEpoch == pushedEpoch)
                 ? existing.attempts + 1
                 : 1;
             // Capped exponential: 30s, 60s, 120s, ..., 3600s. attempts-1 because the first
-            // failure should land at RETRY_BACKOFF_INITIAL_MS, not double of it.
+            // arm should land at RETRY_BACKOFF_INITIAL_MS, not double of it.
             long delay = Math.min(
                 RETRY_BACKOFF_INITIAL_MS * (1L << Math.min(attempts - 1, 30)),
                 RETRY_BACKOFF_MAX_MS

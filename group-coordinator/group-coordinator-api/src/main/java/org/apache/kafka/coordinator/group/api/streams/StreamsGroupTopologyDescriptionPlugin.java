@@ -62,11 +62,12 @@ public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, Aut
      *       is larger than the plugin is willing to store. Same permanent-failure
      *       treatment as above.</li>
      *   <li>Any other exception maps to {@code TOPOLOGY_DESCRIPTION_UPDATE_FAILED} and is
-     *       logged at WARN. The broker treats it as transient and arms an in-memory back-off
-     *       for this group: the heartbeat path will not re-solicit a fresh push at the same
-     *       topology epoch until the back-off window has elapsed. Consecutive transient failures
-     *       double the back-off, starting at 30 s and capped at 1 h; a successful push or a
-     *       topology-epoch advance clears the state.</li>
+     *       logged at WARN. The broker treats it as transient and extends the in-memory back-off
+     *       it already armed when the heartbeat solicited this push, so the heartbeat path will
+     *       not re-solicit a fresh push at the same topology epoch until the next back-off
+     *       window has elapsed. Consecutive unsuccessful solicitations (transient plugin failures
+     *       or clients that ignore the flag) double the window, starting at 30 s and capped at
+     *       1 h; a successful push or a topology-epoch advance clears the state.</li>
      * </ul>
      *
      * @param groupId the streams group ID

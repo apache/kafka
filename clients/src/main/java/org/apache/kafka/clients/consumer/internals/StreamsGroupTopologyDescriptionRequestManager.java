@@ -20,7 +20,7 @@ import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequ
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionRequest;
 import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
