@@ -250,4 +250,35 @@ public class StateManagerUtilTest {
         verify(stateDirectory, never()).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }
+
+    @Test
+    public void testCloseStateManagerTransactionalDoesNotWipeWhenNoCorruptedStores() {
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+        when(stateManager.hasCorruptedStores()).thenReturn(false);
+
+        StateManagerUtil.closeStateManager(logger,
+            "logPrefix:", false, true, true, stateManager, stateDirectory, TaskType.ACTIVE);
+
+        inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).unlock(taskId);
+        verify(stateDirectory, never()).removeTaskOffsets(taskId);
+    }
+
+    @Test
+    public void testCloseStateManagerTransactionalWipesWhenStoresAreCorrupted() {
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+        when(stateManager.hasCorruptedStores()).thenReturn(true);
+        when(stateManager.baseDir()).thenReturn(TestUtils.tempDirectory("state_store"));
+
+        StateManagerUtil.closeStateManager(logger,
+            "logPrefix:", false, true, true, stateManager, stateDirectory, TaskType.ACTIVE);
+
+        inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
+        inOrder.verify(stateDirectory).unlock(taskId);
+    }
 }
