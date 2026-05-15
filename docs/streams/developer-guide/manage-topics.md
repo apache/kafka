@@ -46,7 +46,7 @@ Note
 You should not use the auto-create topic feature on the brokers to create user topics, because:
 
   * Auto-creation of topics may be disabled in your Kafka cluster.
-  * Auto-creation automatically applies the default topic settings such as the replicaton factor. These default settings might not be what you want for certain output topics (e.g., `auto.create.topics.enable=true` in the [Kafka broker configuration](http://kafka.apache.org/0100/documentation.html#brokerconfigs)).
+  * Auto-creation automatically applies the default topic settings such as the replication factor. These default settings might not be what you want for certain output topics (e.g., `auto.create.topics.enable=true` in the [Kafka broker configuration](http://kafka.apache.org/0100/documentation.html#brokerconfigs)).
 
 
 

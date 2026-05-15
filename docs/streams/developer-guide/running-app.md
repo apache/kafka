@@ -42,7 +42,7 @@ You can package your Java application as a fat JAR file and then start the appli
 
 When you start your application you are launching a Kafka Streams instance of your application. You can run multiple instances of your application. A common scenario is that there are multiple instances of your application running in parallel. For more information, see [Parallelism Model](../architecture.html#streams_architecture_tasks).
 
-When the application instance starts running, the defined processor topology will be initialized as one or more stream tasks. If the processor topology defines any state stores, these are also constructed during the initialization period. For more information, see the State restoration during workload rebalance section).
+When the application instance starts running, the defined processor topology will be initialized as one or more stream tasks. If the processor topology defines any state stores, these are also constructed during the initialization period. (For more information, see the State restoration during workload rebalance section).
 
 # Elastic scaling of your application
 

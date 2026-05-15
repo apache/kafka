@@ -33,7 +33,7 @@ type: docs
 
 # Importing the test utilities
 
-To test a Kafka Streams application, Kafka provides a test-utils artifact that can be added as regular dependency to your test code base. Example `pom.xml` snippet when using Maven: 
+To test a Kafka Streams application, Kafka provides a test-utils artifact that can be added as a regular dependency to your test code base. Example `pom.xml` snippet when using Maven: 
     
     
     <dependency>

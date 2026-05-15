@@ -175,7 +175,7 @@ None
 
 ## Recommended configuration parameters for resiliency
 
-There are several Kafka and Kafka Streams configuration options that need to be configured explicitly for resiliency in face of broker failures:  
+There are several Kafka and Kafka Streams configuration options that need to be configured explicitly for resiliency in the face of broker failures:  
   
 <table>  
 <tr>  
