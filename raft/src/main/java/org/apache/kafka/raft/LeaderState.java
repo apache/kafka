@@ -1064,10 +1064,11 @@ public final class LeaderState<T> implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "Leader(localVoterNode=%s, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
+            "Leader(localVoterNode=%s, epoch=%d, epochStartOffset=%d, votedKey=%s, highWatermark=%s, voterStates=%s)",
             localVoterNode,
             epoch,
             epochStartOffset,
+            votedKey,
             highWatermark,
             voterStates
         );
