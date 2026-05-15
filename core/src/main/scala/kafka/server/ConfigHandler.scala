@@ -17,13 +17,14 @@
 
 package kafka.server
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.server.common.StopPartition
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.quota.ReplicationQuotaManager
@@ -74,9 +75,8 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
     // When remote log is enabled, or remote copy is enabled, we should create RLM tasks accordingly via `onLeadershipChange`.
     if (isRemoteLogEnabled && (!wasRemoteLogEnabled || (wasCopyDisabled && !isCopyDisabled))) {
-      val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
-        rlm.onLeadershipChange((leaderPartitions.toSet: Set[TopicPartitionLog]).asJava, (followerPartitions.toSet: Set[TopicPartitionLog]).asJava, topicIds))
+        rlm.onLeadershipChange((leaderPartitions.toSet: Set[TopicPartitionLog]).asJava, (followerPartitions.toSet: Set[TopicPartitionLog]).asJava))
     }
 
     // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask
@@ -91,12 +91,12 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
       leaderPartitions.foreach(partition => {
         // delete remote logs and stop RemoteLogMetadataManager
-        stopPartitions.add(new StopPartition(partition.topicPartition, false, true, true))
+        stopPartitions.add(new StopPartition(new TopicIdPartition(replicaManager.metadataCache.getTopicId(partition.topic), partition.topicPartition), false, true, true))
       })
 
       followerPartitions.foreach(partition => {
         // we need to cancel follower tasks and stop RemoteLogMetadataManager
-        stopPartitions.add(new StopPartition(partition.topicPartition, false, false, true))
+        stopPartitions.add(new StopPartition(new TopicIdPartition(replicaManager.metadataCache.getTopicId(partition.topic), partition.topicPartition), false, false, true))
       })
 
       // update the log start offset to local log start offset for the leader replicas
