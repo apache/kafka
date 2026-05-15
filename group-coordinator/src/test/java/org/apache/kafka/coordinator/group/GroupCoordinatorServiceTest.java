@@ -6535,8 +6535,17 @@ public class GroupCoordinatorServiceTest {
         verify(plugin, times(0)).deleteTopology(any());
     }
 
-    @Test
-    public void testUpdateTopologyDescriptionPluginError() throws Exception {
+    private static Stream<Arguments> setTopologyPluginFailures() {
+        return Stream.of(
+            Arguments.of(new RuntimeException("Storage failure"), Errors.TOPOLOGY_DESCRIPTION_UPDATE_FAILED),
+            Arguments.of(new org.apache.kafka.common.errors.InvalidRequestException("bad payload"), Errors.INVALID_REQUEST),
+            Arguments.of(new org.apache.kafka.common.errors.TopologyDescriptionTooLargeException("too big"), Errors.TOPOLOGY_DESCRIPTION_TOO_LARGE)
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("setTopologyPluginFailures")
+    public void testUpdateTopologyDescriptionMapsPluginFailure(Throwable pluginFailure, Errors expected) throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -6556,7 +6565,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(), ArgumentMatchers.any()))
             .thenReturn(CompletableFuture.completedFuture(null));
         when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("Storage failure")));
+            .thenReturn(CompletableFuture.failedFuture(pluginFailure));
 
         UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
             requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
@@ -6565,55 +6574,21 @@ public class GroupCoordinatorServiceTest {
                 .setMemberId("member-1")
                 .setTopologyEpoch(1)
                 .setTopologyDescription(topoDesc)).get(5, TimeUnit.SECONDS);
-        assertEquals(Errors.TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), response.errorCode());
+        assertEquals(expected.code(), response.errorCode());
     }
 
-    @Test
-    public void testUpdateTopologyDescriptionMapsExceptionTypes() throws Exception {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
-        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
-            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
-
-        var topoDesc = new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of());
-        when(runtime.<Boolean>scheduleReadOperation(
-            ArgumentMatchers.eq("validate-streams-group-member"),
-            ArgumentMatchers.any(), ArgumentMatchers.any()))
-            .thenReturn(CompletableFuture.completedFuture(true));
-        when(runtime.<Void>scheduleWriteOperation(
-            ArgumentMatchers.eq("record-topology-description-stored"),
-            ArgumentMatchers.any(), ArgumentMatchers.any()))
-            .thenReturn(CompletableFuture.completedFuture(null));
-        when(runtime.<Void>scheduleWriteOperation(
-            ArgumentMatchers.eq("record-topology-description-failed"),
-            ArgumentMatchers.any(), ArgumentMatchers.any()))
-            .thenReturn(CompletableFuture.completedFuture(null));
-
-        when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
-            .thenReturn(CompletableFuture.failedFuture(new org.apache.kafka.common.errors.InvalidRequestException("bad payload")));
-        UpdateStreamsGroupTopologyDescriptionResponseData invalidResp = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
-                .setGroupId("foo")
-                .setMemberId("member-1")
-                .setTopologyEpoch(1)
-                .setTopologyDescription(topoDesc)).get(5, TimeUnit.SECONDS);
-        assertEquals(Errors.INVALID_REQUEST.code(), invalidResp.errorCode());
-
-        when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
-            .thenReturn(CompletableFuture.failedFuture(new org.apache.kafka.common.errors.TopologyDescriptionTooLargeException("too big")));
-        UpdateStreamsGroupTopologyDescriptionResponseData tooLargeResp = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
-                .setGroupId("foo")
-                .setMemberId("member-1")
-                .setTopologyEpoch(1)
-                .setTopologyDescription(topoDesc)).get(5, TimeUnit.SECONDS);
-        assertEquals(Errors.TOPOLOGY_DESCRIPTION_TOO_LARGE.code(), tooLargeResp.errorCode());
+    private static Stream<Arguments> validateMemberFailures() {
+        return Stream.of(
+            Arguments.of(new org.apache.kafka.common.errors.UnknownMemberIdException("Member dropped from group."),
+                Errors.UNKNOWN_MEMBER_ID),
+            Arguments.of(new org.apache.kafka.common.errors.GroupIdNotFoundException("Group not found."),
+                Errors.GROUP_ID_NOT_FOUND)
+        );
     }
 
-    @Test
-    public void testUpdateTopologyDescriptionFencesWhenMemberMissing() throws Exception {
+    @ParameterizedTest
+    @MethodSource("validateMemberFailures")
+    public void testUpdateTopologyDescriptionMapsValidateMemberFailure(Throwable validateError, Errors expected) throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -6622,32 +6597,12 @@ public class GroupCoordinatorServiceTest {
         when(runtime.<Boolean>scheduleReadOperation(
             ArgumentMatchers.eq("validate-streams-group-member"),
             ArgumentMatchers.any(), ArgumentMatchers.any()))
-            .thenReturn(CompletableFuture.failedFuture(
-                new org.apache.kafka.common.errors.UnknownMemberIdException("Member dropped from group.")));
+            .thenReturn(CompletableFuture.failedFuture(validateError));
 
         UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
             requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
             updateRequest("x", 1)).get(5, TimeUnit.SECONDS);
-        assertEquals(Errors.UNKNOWN_MEMBER_ID.code(), response.errorCode());
-    }
-
-    @Test
-    public void testUpdateTopologyDescriptionReturnsGroupNotFoundWhenGroupMissing() throws Exception {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
-        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
-            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
-
-        when(runtime.<Boolean>scheduleReadOperation(
-            ArgumentMatchers.eq("validate-streams-group-member"),
-            ArgumentMatchers.any(), ArgumentMatchers.any()))
-            .thenReturn(CompletableFuture.failedFuture(
-                new org.apache.kafka.common.errors.GroupIdNotFoundException("Group not found.")));
-
-        UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            updateRequest("x", 1)).get(5, TimeUnit.SECONDS);
-        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), response.errorCode());
+        assertEquals(expected.code(), response.errorCode());
     }
 
     @Test

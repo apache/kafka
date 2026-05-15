@@ -181,13 +181,19 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
         assertEquals(1, retryResult.unsentRequests.size());
     }
 
-    @Test
-    void testTopologyDescriptionTooLarge_clearsFlag_noRetry() {
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {
+        "TOPOLOGY_DESCRIPTION_TOO_LARGE",
+        "TOPOLOGY_DESCRIPTION_UPDATE_FAILED",
+        "UNKNOWN_MEMBER_ID",
+        "INVALID_GROUP_ID"
+    })
+    void testNonRetryableErrors_clearFlag(final Errors error) {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
         streamsRebalanceData.setTopologyDescriptionRequired(true);
 
         final NetworkClientDelegate.UnsentRequest request = manager.poll(CURRENT_TIME_MS).unsentRequests.get(0);
-        request.handler().onComplete(buildResponse(Errors.TOPOLOGY_DESCRIPTION_TOO_LARGE, "too large"));
+        request.handler().onComplete(buildResponse(error, "error message"));
 
         assertFalse(streamsRebalanceData.topologyDescriptionRequired());
     }
@@ -240,30 +246,6 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
         // Should be able to retry
         final NetworkClientDelegate.PollResult retryResult = manager.poll(CURRENT_TIME_MS);
         assertEquals(1, retryResult.unsentRequests.size());
-    }
-
-    @Test
-    void testUnexpectedError_clearsFlag() {
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-        streamsRebalanceData.setTopologyDescriptionRequired(true);
-
-        final NetworkClientDelegate.UnsentRequest request = manager.poll(CURRENT_TIME_MS).unsentRequests.get(0);
-        request.handler().onComplete(buildResponse(Errors.INVALID_GROUP_ID, "bad group"));
-
-        assertFalse(streamsRebalanceData.topologyDescriptionRequired());
-    }
-
-    @Test
-    void testUnknownMemberId_clearsFlagForFencedRejoin() {
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-        streamsRebalanceData.setTopologyDescriptionRequired(true);
-
-        final NetworkClientDelegate.UnsentRequest request = manager.poll(CURRENT_TIME_MS).unsentRequests.get(0);
-        request.handler().onComplete(buildResponse(Errors.UNKNOWN_MEMBER_ID, "Group was deleted."));
-
-        // The membership manager handles the actual rejoin via the heartbeat path; this manager
-        // only needs to stop trying to push at the (now-fenced) member id.
-        assertFalse(streamsRebalanceData.topologyDescriptionRequired());
     }
 
     @Test
