@@ -287,6 +287,8 @@ public class MirrorConnectorsIntegrationBaseTest {
             } finally {
                 Exit.resetExitProcedure();
                 Exit.resetHaltProcedure();
+                // Shared by all CollectAllMetricsReporter instances; avoid cross-test accumulation.
+                CollectAllMetricsReporter.METRICS.clear();
             }
         }
     }
@@ -1034,6 +1036,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     private void testConnectorMetrics(String format, Supplier<Boolean> assertions) throws InterruptedException, ExecutionException {
+        CollectAllMetricsReporter.METRICS.clear();
         // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         if (format != null) {
@@ -1627,6 +1630,11 @@ public class MirrorConnectorsIntegrationBaseTest {
         @Override
         public void metricChange(KafkaMetric metric) {
             METRICS.put(metric.metricName(), metric);
+        }
+
+        @Override
+        public void metricRemoval(KafkaMetric metric) {
+            METRICS.remove(metric.metricName());
         }
     }
 }
