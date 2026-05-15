@@ -16,6 +16,46 @@ org.apache.kafka.network.SocketServerConfigsTest:
 - testListenerListToEndPointsWithOneEndpoint
 - testListenerListToEndPointsWithUnderscores
 - testListenerListToEndPointsWithWildcard
+org.apache.kafka.security.authorizer.AuthorizerTest:
+- testAccessAllowedIfAllowAclExistsOnPrefixedResource
+- testAccessAllowedIfAllowAclExistsOnWildcardResource
+- testAclConfigWithWhitespace
+- testAclInheritance
+- testAclManagementAPIs
+- testAclsFilter
+- testAddAclsOnLiteralResource
+- testAddAclsOnPrefixedResource
+- testAddAclsOnWildcardResource
+- testAllowAccessWithCustomPrincipal
+- testAllowAllAccess
+- testAuthorizeByResourceTypeDenyTakesPrecedence
+- testAuthorizeByResourceTypeIsolationUnrelatedDenyWontDominateAllow
+- testAuthorizeByResourceTypeMultipleAddAndRemove
+- testAuthorizeByResourceTypeNoAclFoundOverride
+- testAuthorizeByResourceTypePrefixedResourceDenyDominate
+- testAuthorizeByResourceTypeSuperUserHasAccess
+- testAuthorizeByResourceTypeWildcardResourceDenyDominate
+- testAuthorizeByResourceTypeWithAllHostAce
+- testAuthorizeByResourceTypeWithAllOperationAce
+- testAuthorizeByResourceTypeWithAllPrincipalAce
+- testAuthorizeThrowsOnNonLiteralResource
+- testAuthorizeWithEmptyResourceName
+- testAuthorizeWithPrefixedResource
+- testDeleteAclOnPrefixedResource
+- testDeleteAclOnWildcardResource
+- testDeleteAllAclOnPrefixedResource
+- testDeleteAllAclOnWildcardResource
+- testDenyTakesPrecedence
+- testEmptyAclThrowsException
+- testGetAclsPrincipal
+- testLocalConcurrentModificationOfResourceAcls
+- testNoAclFound
+- testNoAclFoundOverride
+- testSingleCharacterResourceAcls
+- testSuperUserHasAccess
+- testSuperUserWithCustomPrincipalHasAccess
+- testTopicAcl
+- testWildCardAcls
 org.apache.kafka.security.authorizer.AuthorizerUtilsTest:
 - testCreateAuthorizer
 org.apache.kafka.server.AssignmentTest:
