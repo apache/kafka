@@ -100,7 +100,7 @@ public class RaftClusterSnapshotTest {
         for (var raftManager : raftManagers.values()) {
             try (var snapshot = RecordsSnapshotReader.of(
                     raftManager.raftLog().latestSnapshot().get(),
-                    new MetadataRecordSerde(),
+                    MetadataRecordSerde.INSTANCE,
                     BufferSupplier.create(),
                     1,
                     true,
