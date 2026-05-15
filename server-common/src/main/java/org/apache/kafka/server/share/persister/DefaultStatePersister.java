@@ -45,8 +45,17 @@ public class DefaultStatePersister implements Persister {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
 
-    public DefaultStatePersister(PersisterStateManager stateManager) {
+    public static DefaultStatePersister instance(PersisterStateManager stateManager) {
+        DefaultStatePersister instance = new DefaultStatePersister(stateManager);
+        instance.start();
+        return instance;
+    }
+
+    private DefaultStatePersister(PersisterStateManager stateManager) {
         this.stateManager = stateManager;
+    }
+
+    private void start() {
         this.stateManager.start();
     }
 

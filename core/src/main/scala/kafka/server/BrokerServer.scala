@@ -724,17 +724,14 @@ class BrokerServer(
   private def createShareStatePersister(): Persister = {
     if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
-
       if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
-        klass.getConstructor(classOf[PersisterStateManager])
-          .newInstance(
-            new PersisterStateManager(
-              NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
-              new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
-              Time.SYSTEM,
-              shareGroupTimer
-            )
-          )
+        klass.getDeclaredMethod("instance", classOf[PersisterStateManager])
+          .invoke(null, new PersisterStateManager(
+            NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
+            new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+            Time.SYSTEM,
+            shareGroupTimer
+          )).asInstanceOf[Persister]
       } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
         info("Using no-op persister")
         new NoOpStatePersister()
