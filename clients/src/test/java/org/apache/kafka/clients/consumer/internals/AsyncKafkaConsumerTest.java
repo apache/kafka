@@ -2582,7 +2582,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testStreamsTasksAssignedEventSendsErrorWhenApplyAssignmentFails() {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Optional.empty());
         final InterruptException applyAssignmentError = new InterruptException("Thread was interrupted");
 
         consumer = newConsumerWithStreamRebalanceData(

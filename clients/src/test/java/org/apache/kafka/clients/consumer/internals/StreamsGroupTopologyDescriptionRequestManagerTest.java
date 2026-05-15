@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionRequest;
 import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,9 +103,8 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
 
     @Test
     void testNoRequestWhenTopologyDescriptionNotRequired() {
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-        // topologyDescriptionRequired defaults to false
-
+        // topologyDescriptionRequired defaults to false; no other stubs needed because we bail
+        // before consulting the coordinator.
         final NetworkClientDelegate.PollResult result = manager.poll(CURRENT_TIME_MS);
 
         assertTrue(result.unsentRequests.isEmpty());
@@ -129,7 +128,6 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
                 dataWithoutTopology,
                 GROUP_ID
             );
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
         dataWithoutTopology.setTopologyDescriptionRequired(true);
 
         final NetworkClientDelegate.PollResult result = managerWithoutTopology.poll(CURRENT_TIME_MS);

@@ -71,9 +71,6 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
 
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (coordinatorRequestManager.coordinator().isEmpty()) {
-            return EMPTY;
-        }
         if (!streamsRebalanceData.topologyDescriptionRequired()) {
             return EMPTY;
         }
@@ -81,15 +78,18 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
             // Topology description push not enabled (no description provided at startup).
             return EMPTY;
         }
-        final String memberId = membershipManager.memberId();
-        if (memberId == null || memberId.isEmpty()) {
-            // No memberId yet — first heartbeat hasn't returned. Wait.
-            return EMPTY;
-        }
         if (requestInFlight) {
             return EMPTY;
         }
         if (currentTimeMs < nextSendTimeMs) {
+            return EMPTY;
+        }
+        if (coordinatorRequestManager.coordinator().isEmpty()) {
+            return EMPTY;
+        }
+        final String memberId = membershipManager.memberId();
+        if (memberId == null || memberId.isEmpty()) {
+            // No memberId yet — first heartbeat hasn't returned. Wait.
             return EMPTY;
         }
 

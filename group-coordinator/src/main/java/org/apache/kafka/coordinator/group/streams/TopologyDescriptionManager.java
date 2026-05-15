@@ -41,26 +41,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Owns the broker-side logic for the streams-group topology description plugin path.
- * The service layer ({@code GroupCoordinatorService}) delegates here for the four user-visible
- * code paths that touch the plugin — heartbeat solicitation, {@code setTopology} on push,
- * {@code getTopology} on describe, and {@code deleteTopology} on explicit DeleteGroups —
- * plus the periodic natural-expiration cleanup timer. State that used to live on the service
- * (per-group exponential back-off, cleanup-cycle single-flight guard, the cleanup
- * {@link TimerTask}) lives here instead.
+ * Owns broker-side orchestration of the streams-group topology description plugin: heartbeat
+ * solicitation, {@code setTopology} / {@code getTopology} / {@code deleteTopology} dispatch,
+ * the per-group exponential back-off, and the periodic natural-expiration cleanup cycle.
  *
  * <p>When no plugin is configured, every public method becomes a fast no-op.
- *
- * <p>The plugin SPI is exposed only to this class; callers above don't need to import it.
  */
 public class TopologyDescriptionManager implements AutoCloseable {
 
@@ -182,14 +178,21 @@ public class TopologyDescriptionManager implements AutoCloseable {
         StreamsGroupHeartbeatResult result
     ) {
         if (plugin.isEmpty() || responseData.errorCode() != Errors.NONE.code()) return;
-        if (responseData.status() != null && responseData.status().stream().anyMatch(
-                s -> s.statusCode() == org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code())) {
-            return;
-        }
         int topologyEpoch = result.topologyEpoch();
         if (!shouldSolicitTopologyPush(groupId, topologyEpoch, result)) return;
+        if (hasStaleTopologyStatus(responseData)) return;
         responseData.setTopologyDescriptionRequired(true);
         armBackoff(groupId, topologyEpoch);
+    }
+
+    private static boolean hasStaleTopologyStatus(StreamsGroupHeartbeatResponseData responseData) {
+        List<StreamsGroupHeartbeatResponseData.Status> status = responseData.status();
+        if (status == null) return false;
+        byte staleCode = org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code();
+        for (StreamsGroupHeartbeatResponseData.Status s : status) {
+            if (s.statusCode() == staleCode) return true;
+        }
+        return false;
     }
 
     /**
@@ -269,8 +272,6 @@ public class TopologyDescriptionManager implements AutoCloseable {
             int attempts = (existing != null && existing.topologyEpoch == pushedEpoch)
                 ? existing.attempts + 1
                 : 1;
-            // Capped exponential: 30s, 60s, 120s, ..., 3600s. attempts-1 because the first
-            // arm should land at RETRY_BACKOFF_INITIAL_MS, not double of it.
             long delay = Math.min(
                 RETRY_BACKOFF_INITIAL_MS * (1L << Math.min(attempts - 1, 30)),
                 RETRY_BACKOFF_MAX_MS
@@ -369,21 +370,20 @@ public class TopologyDescriptionManager implements AutoCloseable {
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
             return null;
         }
-        String groupIdForCallback = describedGroup.groupId();
-        return p.getTopology(groupIdForCallback, topologyEpoch)
+        return p.getTopology(describedGroup.groupId(), topologyEpoch)
             .handle((topology, throwable) -> {
-                applyGetTopologyResult(describedGroup, groupIdForCallback, topologyEpoch, topology, throwable);
+                applyGetTopologyResult(describedGroup, topologyEpoch, topology, throwable);
                 return null;
             });
     }
 
     private void applyGetTopologyResult(
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup,
-        String groupId,
         int topologyEpoch,
         StreamsGroupTopologyDescription topology,
         Throwable throwable
     ) {
+        String groupId = describedGroup.groupId();
         if (throwable != null) {
             log.warn("Plugin getTopology failed for group {}", groupId, throwable);
             metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME);
@@ -473,6 +473,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
         StreamsGroupTopologyDescriptionPlugin p = plugin.get();
         List<CompletableFuture<Void>> pluginFutures = new ArrayList<>(storedEpochs.size());
         for (String groupId : storedEpochs.keySet()) {
+            backoff.remove(groupId);
             pluginFutures.add(
                 p.deleteTopology(groupId).handle((__, throwable) -> {
                     if (throwable != null) {
@@ -523,7 +524,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
             (coordinator, lastCommittedOffset) ->
                 coordinator.listStreamsGroupsNeedingTopologyCleanup(lastCommittedOffset)
         );
-        List<CompletableFuture<?>> perGroupFutures = new ArrayList<>();
+        Queue<CompletableFuture<?>> perGroupFutures = new ConcurrentLinkedQueue<>();
         List<CompletableFuture<Void>> partitionDoneFutures = new ArrayList<>(partitionFutures.size());
         for (CompletableFuture<Set<String>> partitionFuture : partitionFutures) {
             CompletableFuture<Void> partitionDone = partitionFuture.handle((groupIds, throwable) -> {
@@ -534,7 +535,8 @@ public class TopologyDescriptionManager implements AutoCloseable {
                 if (groupIds == null || groupIds.isEmpty()) return null;
                 metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME, groupIds.size());
                 for (String groupId : groupIds) {
-                    CompletableFuture<Void> done = p.deleteTopology(groupId).handle((__, pluginEx) -> {
+                    backoff.remove(groupId);
+                    perGroupFutures.add(p.deleteTopology(groupId).handle((__, pluginEx) -> {
                         if (pluginEx != null) {
                             log.warn("Plugin deleteTopology failed for group {} during topology cleanup; will retry next cycle.",
                                 groupId, pluginEx);
@@ -544,23 +546,14 @@ public class TopologyDescriptionManager implements AutoCloseable {
                         metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME);
                         clearStoredTopologyEpochAsync(groupId);
                         return null;
-                    });
-                    synchronized (perGroupFutures) {
-                        perGroupFutures.add(done);
-                    }
+                    }));
                 }
                 return null;
             });
             partitionDoneFutures.add(partitionDone);
         }
         CompletableFuture.allOf(partitionDoneFutures.toArray(new CompletableFuture<?>[0]))
-            .thenCompose(__ -> {
-                CompletableFuture<?>[] snapshot;
-                synchronized (perGroupFutures) {
-                    snapshot = perGroupFutures.toArray(new CompletableFuture<?>[0]);
-                }
-                return CompletableFuture.allOf(snapshot);
-            })
+            .thenCompose(__ -> CompletableFuture.allOf(perGroupFutures.toArray(new CompletableFuture<?>[0])))
             .whenComplete((__, ___) -> cleanupCycleInFlight.set(false));
     }
 }

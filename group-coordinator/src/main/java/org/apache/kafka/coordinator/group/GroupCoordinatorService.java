@@ -134,7 +134,6 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -2583,11 +2582,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private static final byte NODE_TYPE_PROCESSOR = 2;
     private static final byte NODE_TYPE_SINK = 3;
 
-    static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_REQUESTED = 0;
-    static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED = 1;
-    static final byte TOPOLOGY_DESCRIPTION_STATUS_ERROR = 2;
-    static final byte TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE = 3;
-
     private static StreamsGroupTopologyDescription updateRequestToPojo(
             final UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription wire) {
         final List<StreamsGroupTopologyDescription.Subtopology> subtopologies = new ArrayList<>(wire.subtopologies().size());
@@ -2635,56 +2629,4 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
     }
 
-    private static StreamsGroupDescribeResponseData.TopologyDescription pojoToDescribeResponse(
-            final StreamsGroupTopologyDescription pojo) {
-        final List<StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology> subtopologies = new ArrayList<>(pojo.subtopologies().size());
-        for (StreamsGroupTopologyDescription.Subtopology sub : pojo.subtopologies()) {
-            subtopologies.add(new StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology()
-                .setSubtopologyId(sub.id())
-                .setNodes(pojoNodesToWire(sub.nodes())));
-        }
-        final List<StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore> globalStores = new ArrayList<>(pojo.globalStores().size());
-        for (StreamsGroupTopologyDescription.GlobalStore gs : pojo.globalStores()) {
-            globalStores.add(new StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore()
-                .setSource(pojoNodeToWire(gs.source()))
-                .setProcessor(pojoNodeToWire(gs.processor())));
-        }
-        return new StreamsGroupDescribeResponseData.TopologyDescription()
-            .setSubtopologies(subtopologies)
-            .setGlobalStores(globalStores);
-    }
-
-    private static List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> pojoNodesToWire(
-            final Collection<StreamsGroupTopologyDescription.Node> nodes) {
-        final List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> result = new ArrayList<>(nodes.size());
-        for (StreamsGroupTopologyDescription.Node node : nodes) {
-            result.add(pojoNodeToWire(node));
-        }
-        return result;
-    }
-
-    private static StreamsGroupDescribeResponseData.TopologyDescriptionNode pojoNodeToWire(
-            final StreamsGroupTopologyDescription.Node node) {
-        final StreamsGroupDescribeResponseData.TopologyDescriptionNode wire =
-            new StreamsGroupDescribeResponseData.TopologyDescriptionNode()
-                .setName(node.name())
-                .setSuccessors(new ArrayList<>(node.successors()));
-        if (node instanceof StreamsGroupTopologyDescription.Source source) {
-            wire.setNodeType(NODE_TYPE_SOURCE)
-                .setSourceTopics(new ArrayList<>(source.topics()))
-                .setStores(List.of());
-        } else if (node instanceof StreamsGroupTopologyDescription.Processor processor) {
-            wire.setNodeType(NODE_TYPE_PROCESSOR)
-                .setSourceTopics(List.of())
-                .setStores(new ArrayList<>(processor.stores()));
-        } else if (node instanceof StreamsGroupTopologyDescription.Sink sink) {
-            wire.setNodeType(NODE_TYPE_SINK)
-                .setSourceTopics(List.of())
-                .setStores(List.of())
-                .setSinkTopic(sink.topic().orElse(null));
-        } else {
-            throw new IllegalArgumentException("Unknown node type: " + node.getClass().getName());
-        }
-        return wire;
-    }
 }

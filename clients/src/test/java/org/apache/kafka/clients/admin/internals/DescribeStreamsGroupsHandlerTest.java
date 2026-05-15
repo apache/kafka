@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
