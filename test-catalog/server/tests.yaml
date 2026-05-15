@@ -217,6 +217,15 @@ org.apache.kafka.server.KRaftTopicCreatorTest:
 org.apache.kafka.server.LogManagerIntegrationTest:
 - testIOExceptionOnLogSegmentCloseResultsInRecovery
 - testRestartBrokerNoErrorIfMissingPartitionMetadata
+org.apache.kafka.server.LogOffsetTest:
+- testEmptyLogsGetOffsets
+- testFetchOffsetByTimestampForMaxTimestampAfterTruncate
+- testFetchOffsetByTimestampForMaxTimestampWithEmptyLog
+- testFetchOffsetByTimestampForMaxTimestampWithUnorderedTimestamps
+- testGetOffsetsAfterDeleteRecords
+- testGetOffsetsBeforeEarliestTime
+- testGetOffsetsBeforeLatestTime
+- testGetOffsetsForUnknownTopic
 org.apache.kafka.server.MetadataRequestTest:
 - testAliveBrokersWithNoTopics
 - testAllTopicsRequest
