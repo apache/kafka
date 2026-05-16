@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.oauthbearer.internals.unsecured;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -66,7 +65,7 @@ public class OAuthBearerScopeUtils {
                 retval.add(individualScopeItem);
             }
         }
-        return Collections.unmodifiableList(retval);
+        return List.copyOf(retval);
     }
 
     private OAuthBearerScopeUtils() {
