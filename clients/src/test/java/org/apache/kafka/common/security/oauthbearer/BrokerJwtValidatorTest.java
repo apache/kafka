@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
@@ -283,6 +284,50 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
                 SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
     }
 
+    @Test
+    public void testSpaceDelimitedStringScopesProcessedAccordingToRfc8693() throws Exception {
+        OAuthBearerToken token = validateTokenWithScope("email profile phone address");
+
+        assertEquals(Set.of("email", "profile", "phone", "address"), token.scope());
+    }
+
+    @Test
+    public void testSpaceDelimitedStringScopesTrimmedAndCollapsed() throws Exception {
+        OAuthBearerToken token = validateTokenWithScope("   email   profile   phone   ");
+
+        assertEquals(Set.of("email", "profile", "phone"), token.scope());
+    }
+
+    @Test
+    public void testSpaceDelimitedStringScopesProcessedWithConfiguredScopeClaimName() throws Exception {
+        OAuthBearerToken token = validateTokenWithCustomScopeClaimName("scp", "email profile phone");
+
+        assertEquals(Set.of("email", "profile", "phone"), token.scope());
+    }
+
+    @Test
+    public void testDuplicateSpaceDelimitedStringScopesRejected() {
+        JwtValidatorException exception = assertThrows(JwtValidatorException.class,
+            () -> validateTokenWithScope("email profile email"));
+
+        assertErrorMessageContains(exception.getMessage(), "scope value must not contain duplicates");
+    }
+
+    @Test
+    public void testBlankSpaceDelimitedStringScopesRejected() {
+        JwtValidatorException exception = assertThrows(JwtValidatorException.class,
+            () -> validateTokenWithScope("   "));
+
+        assertErrorMessageContains(exception.getMessage(), "scope value must not contain only whitespace");
+    }
+
+    @Test
+    public void testCollectionScopesStillProcessed() throws Exception {
+        OAuthBearerToken token = validateTokenWithScope(List.of("email", "profile", "phone"));
+
+        assertEquals(Set.of("email", "profile", "phone"), token.scope());
+    }
+
     private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg)
                 .addCustomClaim("iss", EXPECTED_ISSUER).audience(EXPECTED_AUDIENCE);
@@ -298,6 +343,45 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         assertEquals(builder.issuedAtSeconds() * 1000, token.startTimeMs());
         assertEquals(builder.expirationSeconds() * 1000, token.lifetimeMs());
         assertEquals(1, token.scope().size());
+    }
+
+    private OAuthBearerToken validateTokenWithScope(Object scope) throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+        AccessTokenBuilder tokenBuilder = new AccessTokenBuilder()
+            .jwk(jwk)
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256)
+            .addCustomClaim("iss", EXPECTED_ISSUER)
+            .audience(EXPECTED_AUDIENCE)
+            .scope(scope);
+        JwtValidator validator = createJwtValidator(tokenBuilder);
+        validator.configure(getSaslConfigs(Map.of(
+            SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+            SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE))),
+            OAUTHBEARER_MECHANISM, getJaasConfigEntries());
+
+        return validator.validate(tokenBuilder.build());
+    }
+
+    private OAuthBearerToken validateTokenWithCustomScopeClaimName(String scopeClaimName, String scope) throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+        AccessTokenBuilder tokenBuilder = new AccessTokenBuilder()
+            .jwk(jwk)
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256)
+            .addCustomClaim("iss", EXPECTED_ISSUER)
+            .audience(EXPECTED_AUDIENCE)
+            .scope("engineering")
+            .addCustomClaim(scopeClaimName, scope);
+        JwtValidator validator = createJwtValidator(tokenBuilder);
+        validator.configure(
+            getSaslConfigs(Map.of(
+                SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName,
+                SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER,
+                SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, List.of(EXPECTED_AUDIENCE))),
+            OAUTHBEARER_MECHANISM,
+            getJaasConfigEntries()
+        );
+
+        return validator.validate(tokenBuilder.build());
     }
 
 }
