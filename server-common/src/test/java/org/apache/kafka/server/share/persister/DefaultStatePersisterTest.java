@@ -106,8 +106,7 @@ class DefaultStatePersisterTest {
         }
 
         public DefaultStatePersister build() {
-            PersisterStateManager persisterStateManager = new PersisterStateManager(client, cacheHelper, time, timer);
-            return DefaultStatePersister.instance(persisterStateManager);
+            return DefaultStatePersister.instance(client, cacheHelper, time, timer);
         }
     }
 
