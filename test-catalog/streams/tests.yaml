@@ -248,11 +248,13 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldBeSupportNonPrefixedRestoreConsumerConfigs
 - shouldDefaultToEmptyListIfRackAwareAssignmentTagsIsNotSet
 - shouldDisableMetricCollectionForAllInternalClients
+- shouldDisableTransactionalStateStoresByDefault
 - shouldEnableAllOptimizationsWithOptimizeConfig
 - shouldEnableMetricCollectionForAllInternalClientsByDefault
 - shouldEnableMetricsForMainConsumerWhenConsumerPrefixDisabledMetricsPushEnabled
 - shouldEnableMetricsForMainConsumerWhenStreamMetricsPushDisabledButMainConsumerEnabled
 - shouldEnableSelfJoin
+- shouldEnableTransactionalStateStoresWhenConfigured
 - shouldEnsureExplicitInternalResourceNaming
 - shouldForwardCustomConfigsWithNoPrefixToAllClients
 - shouldGetClientTagsMapWhenSet
@@ -2291,6 +2293,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldLoadMissingFileAsEmptyPosition
 - shouldLogAWarningIfCheckpointThrowsAnIOException
 - shouldNotThrowTaskCorruptedExceptionAfterCheckpointing
+- shouldNotThrowTaskCorruptedWithoutCheckpointAndNonEmptyDirWhenTransactional
 - shouldNotThrowTaskCorruptedWithoutInMemoryStoreCheckpointAndNonEmptyDir
 - shouldNotWriteCheckpointForStoresWithoutChangelogTopic
 - shouldNotWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsNull
@@ -2302,6 +2305,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldRegisterPersistentStores
 - shouldRegisterPersistentUnloggedStore
 - shouldReportChangelogAsSource
+- shouldReportHasCorruptedStores
 - shouldReportTaskType
 - shouldRestoreNonTimestampedStoreWithNoConverter
 - shouldRestoreStoreWithRestoreCallback
@@ -2562,6 +2566,7 @@ org.apache.kafka.streams.processor.internals.StandbyTaskTest:
 - shouldInitTaskTimeoutAndEventuallyThrow
 - shouldNotCommitAndThrowOnCloseDirty
 - shouldNotThrowFromStateManagerCloseInCloseDirty
+- shouldNotWipeStateDirOnDirtyCloseWithEosAndTransactionalStateStores
 - shouldPrepareRecycleSuspendedTask
 - shouldRecordRestoredRecords
 - shouldRequireSuspendingCreatedTasksBeforeClose
@@ -2658,6 +2663,8 @@ org.apache.kafka.streams.processor.internals.StateManagerUtilTest:
 - testCloseStateManagerClean
 - testCloseStateManagerThrowsExceptionWhenClean
 - testCloseStateManagerThrowsExceptionWhenDirty
+- testCloseStateManagerTransactionalDoesNotWipeWhenNoCorruptedStores
+- testCloseStateManagerTransactionalWipesWhenStoresAreCorrupted
 - testCloseStateManagerWithStateStoreWipeOut
 - testCloseStateManagerWithStateStoreWipeOutRethrowWrappedIOException
 - testRegisterStateStoreFailToLockStateDirectory
@@ -2720,6 +2727,7 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldBeProcessableIfAllPartitionsBuffered
 - shouldBeRecordIdlingTimeIfSuspended
 - shouldCallPunctuateOnPassedInProcessorNode
+- shouldCheckpointOnPostCommitInRunningStateWithEosAndTransactionalStateStores
 - shouldClearCommitStatusesInCloseDirty
 - shouldClearTaskTimeout
 - shouldCloseStateManagerEvenDuringFailureOnUncleanTaskClose
@@ -2738,6 +2746,7 @@ org.apache.kafka.streams.processor.internals.StreamTaskTest:
 - shouldLogNotReadyWhenStaleAfterThreshold
 - shouldMaybeReturnOffsetsForRepartitionTopicsForPurging
 - shouldNotAttemptToLockIfNoStores
+- shouldNotCheckpointOnPostCommitInRunningStateWithEosAndNotEnforced
 - shouldNotCommitAfterRestorationWhenExactlyOnceEnabled
 - shouldNotCommitOnCloseCreated
 - shouldNotGetOffsetsIfPrepareCommitDirty
