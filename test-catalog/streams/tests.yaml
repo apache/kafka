@@ -4370,6 +4370,7 @@ org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
 - shouldCloseBothColumnFamilies
 - shouldCommitOffsets
 - shouldCommitPosition
+- shouldCommitStagedWritesWhenCommittingOffsets
 - shouldCreateAllIteratorForward
 - shouldCreateAllIteratorReverse
 - shouldCreatePrefixScanIterator
@@ -4383,9 +4384,14 @@ org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
 - shouldGetValueFromOldColumnFamilyAndConvert
 - shouldGetValueWithReadOptions
 - shouldIgnoreExceptionAfterUncleanClose
+- shouldMergeEntriesFromBothColumnFamiliesInForwardOrder
+- shouldMergeEntriesFromBothColumnFamiliesInReverseOrder
 - shouldOpenClean
+- shouldPreferNewFormatValueWhenSameKeyExistsInBothColumnFamilies
 - shouldPrepareBatchWithMultipleEntries
 - shouldPutValueToNewColumnFamilyAndDeleteFromOld
+- shouldRespectPrefixScanAcrossBothColumnFamilies
+- shouldRespectRangeBoundsAcrossBothColumnFamilies
 - shouldReturnNullWhenKeyNotFoundInEitherColumnFamily
 - shouldReturnSumOfEntriesFromBothColumnFamilies
 - shouldSkipPersistingStateOnCloseWhenStoreIsAlreadyClosed
