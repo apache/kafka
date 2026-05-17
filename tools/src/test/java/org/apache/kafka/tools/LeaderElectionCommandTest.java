@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.test.AdminUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -446,7 +447,7 @@ public class LeaderElectionCommandTest {
     }
 
     private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws Exception {
-        int leader = cluster.waitUntilLeaderIsElectedOrChangedWithAdmin(client, topicPartition.topic(), topicPartition.partition(), 30000);
+        int leader = AdminUtils.fetchOrWaitForLeader(client, topicPartition.topic(), topicPartition.partition(), 30000);
         assertEquals(expectedLeader, leader);
     }
 

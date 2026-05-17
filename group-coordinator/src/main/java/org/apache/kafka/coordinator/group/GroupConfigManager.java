@@ -90,6 +90,14 @@ public class GroupConfigManager implements AutoCloseable {
         return List.copyOf(configMap.keySet());
     }
 
+    public Optional<String> shareGroupDlqTopicPrefix() {
+        return Optional.ofNullable(groupCoordinatorConfig.errorsDLQTopicNamePrefix());
+    }
+
+    public boolean isDlqAutoTopicCreateEnabled() {
+        return groupCoordinatorConfig.errorsDLQAutoCreateTopicsEnable();
+    }
+
     /**
      * Remove all group configs.
      */

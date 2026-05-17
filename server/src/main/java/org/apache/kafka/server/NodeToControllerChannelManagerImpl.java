@@ -38,7 +38,6 @@ import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
-import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 
 import org.slf4j.Logger;
@@ -82,7 +81,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 buildNetworkClient(controllerInformation),
                 manualMetadataUpdater,
                 controllerNodeProvider,
-                config,
+                config.controllerSocketTimeoutMs(),
                 time,
                 threadName,
                 retryTimeoutMs
@@ -122,7 +121,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 50,
                 Selectable.USE_DEFAULT_BUFFER_SIZE,
                 Selectable.USE_DEFAULT_BUFFER_SIZE,
-                Math.min(Integer.MAX_VALUE, (int) Math.min(config.getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), // request timeout should not exceed the provided retry timeout
+                Math.min(Integer.MAX_VALUE, (int) Math.min(config.controllerSocketTimeoutMs(), retryTimeoutMs)), // request timeout should not exceed the provided retry timeout
                 config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                 config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
                 time,

@@ -19,7 +19,6 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.Collections
-import kafka.network.RequestChannel
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
@@ -29,7 +28,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.network.Session
+import org.apache.kafka.network.{Request, Session}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.quota.{ClientQuotaManager, ThrottleCallback}
 import org.junit.jupiter.api.AfterEach
@@ -54,7 +53,7 @@ class BaseClientQuotaManagerTest {
   }
 
   protected def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
-                                                   listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+                                                   listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, Request) = {
 
     val request = builder.build()
     val buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey, request.version, "", 0))
@@ -64,8 +63,7 @@ class BaseClientQuotaManagerTest {
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
-    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
-      requestChannelMetrics))
+    (request, new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics))
   }
 
   protected def buildSession(user: String): Session = {

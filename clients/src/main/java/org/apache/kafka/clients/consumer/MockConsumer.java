@@ -142,6 +142,34 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsAssigned(added));
     }
 
+    /**
+     * Simulates a partition loss event. Calls {@link ConsumerRebalanceListener#onPartitionsLost}
+     * for the specified partitions and removes them from the current assignment. Unlike
+     * {@link #rebalance(Collection)}, which calls {@link ConsumerRebalanceListener#onPartitionsRevoked},
+     * this method models the case where the consumer loses partitions without a graceful revoke..
+     *
+     * <p>Only records belonging to the lost partitions are cleared; records for retained
+     * partitions are unaffected.
+     *
+     * @param partitionsLost the partitions to lose; all must be currently assigned
+     * @throws IllegalStateException if any partition is not currently assigned
+     */
+    public synchronized void losePartitions(Collection<TopicPartition> partitionsLost) {
+        Set<TopicPartition> currentAssignment = this.subscriptions.assignedPartitions();
+        Set<TopicPartition> lost = new HashSet<>(partitionsLost);
+        List<TopicPartition> notAssigned = lost.stream()
+            .filter(tp -> !currentAssignment.contains(tp))
+            .collect(Collectors.toList());
+        if (!notAssigned.isEmpty())
+            throw new IllegalStateException("Cannot lose partitions that are not currently assigned: " + notAssigned);
+        lost.forEach(records::remove);
+        this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsLost(lost));
+        Set<TopicPartition> remaining = currentAssignment.stream()
+            .filter(tp -> !lost.contains(tp))
+            .collect(Collectors.toSet());
+        this.subscriptions.assignFromSubscribed(remaining);
+    }
+
     @Override
     public synchronized Set<String> subscription() {
         return this.subscriptions.subscription();

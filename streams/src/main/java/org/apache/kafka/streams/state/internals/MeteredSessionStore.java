@@ -146,20 +146,10 @@ public class MeteredSessionStore<K, V>
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                     (config, now) -> {
-                        final InMemorySessionStore inMemoryStore = findInMemorySessionStore(wrapped());
+                        final InMemorySessionStore inMemoryStore = findInner(InMemorySessionStore.class);
                         return inMemoryStore != null ? inMemoryStore.numEntries() : -1L;
                     }
             );
-        }
-    }
-
-    private static InMemorySessionStore findInMemorySessionStore(final StateStore store) {
-        if (store instanceof InMemorySessionStore) {
-            return (InMemorySessionStore) store;
-        } else if (store instanceof WrappedStateStore) {
-            return findInMemorySessionStore(((WrappedStateStore<?, ?, ?>) store).wrapped());
-        } else {
-            return null;
         }
     }
 

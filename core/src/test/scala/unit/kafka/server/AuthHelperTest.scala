@@ -17,11 +17,9 @@
 
 package kafka.server
 
-import kafka.network.RequestChannel.Request
-import org.apache.kafka.clients.admin.EndpointType
-
 import java.net.InetAddress
 import java.util
+import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.{DescribeClusterRequestData, DescribeClusterResponseData}
@@ -31,6 +29,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DescribeClusterRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.network.Request
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -56,7 +55,7 @@ object AuthHelperTest {
       ClientInformation.EMPTY,
       false)
     val request: Request = mock(classOf[Request])
-    when(request.body[DescribeClusterRequest]).thenReturn(
+    when(request.body(classOf[DescribeClusterRequest])).thenReturn(
       new DescribeClusterRequest(data, requestVersion.toShort))
     when(request.context).thenReturn(requestContext)
     when(request.header).thenReturn(requestContext.header)
