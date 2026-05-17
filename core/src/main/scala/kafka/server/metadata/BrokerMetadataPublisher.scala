@@ -36,7 +36,7 @@ import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublish
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
 import org.apache.kafka.server.common.{FinalizedFeatures, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
-import org.apache.kafka.storage.internals.log.{UnifiedLog, LogManager => JLogManager}
+import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog, LogManager => JLogManager}
 
 import java.util.concurrent.CompletableFuture
 
@@ -237,6 +237,17 @@ class BrokerMetadataPublisher(
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share partition manager " +
             s" with share version feature change in $deltaName", t)
+        }
+
+        // KIP-1333: gate the 12-byte offset-index format on the finalized metadata.version.
+        // We re-derive from the image on every features delta (including first publish) so
+        // that newly-rolled segments pick up the change without a broker restart.
+        try {
+          LogConfig.setLargeIndexFormatEnabled(
+            newImage.features.metadataVersionOrThrow.isLargeIndexFormatSupported)
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault(
+            s"Error updating large-index-format flag from $deltaName", t)
         }
       }
 

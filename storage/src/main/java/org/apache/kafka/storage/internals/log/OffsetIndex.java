@@ -84,7 +84,11 @@ public final class OffsetIndex extends AbstractIndex {
      * @param useLargeFormat If true, use 12-byte entries (8-byte physical position) for NEW files.
      *                       If false, use legacy 8-byte entries (4-byte physical position) for NEW files.
      *                       For EXISTING files, the format is auto-detected from the file content.
-     *                       Gated by MetadataVersion.isLargeIndexFormatSupported().
+     *                       <p>In production this value comes from
+     *                       {@link LogConfig#shouldUseLargeIndexFormat()}, which is updated by the
+     *                       broker's metadata publisher when the finalized {@code metadata.version}
+     *                       reaches {@code IBP_4_4_IV1} (KIP-1333). Tests may pass {@code true}
+     *                       directly to exercise the large-format path without finalization.
      */
     public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable, boolean useLargeFormat) throws IOException {
         this(file, baseOffset, maxIndexSize, writable, detectWithRetry(file, useLargeFormat), useLargeFormat);
@@ -220,18 +224,40 @@ public final class OffsetIndex extends AbstractIndex {
         if (largeValid && !legacyValid) return LARGE_ENTRY_SIZE;
         if (legacyValid && !largeValid) return LEGACY_ENTRY_SIZE;
 
-        // Both formats pass strict validation (plus the .log size cross-check, if a companion
-        // .log was found). For the LEGITIMATE migration case (clean indexes during legacy <-> large
-        // transition), the strict monotonicity and .log cross-check are decisive. The remaining
-        // ambiguity cases come from contrived/corrupted inputs (e.g., a single valid entry
-        // followed by random bytes that happen to align). Fall back to the requested entry size,
-        // which carries the MetadataVersion-declared intent. If the file is actually corrupt,
-        // sanityCheck() and downstream code will catch it and trigger recovery from the .log file.
-        log.warn("Could not unambiguously detect index format for {} (size={}, logFileSize={}); " +
-                "both legacy and large formats pass strict validation. Using requested entry size {} " +
-                "(MetadataVersion intent). sanityCheck() will reject if the file is genuinely corrupt.",
-            file.getAbsolutePath(), fileSize, logFileSize, requestedEntrySize);
-        return requestedEntrySize;
+        // If neither passes validation, the file is genuinely corrupt. Throw so recovery
+        // rebuilds from .log -- silently picking the requested format would mmap garbage.
+        if (!largeValid && !legacyValid) {
+            throw new CorruptIndexException("Index file " + file.getAbsolutePath() +
+                " (size=" + fileSize + ") failed strict validation against both legacy " +
+                "(8-byte) and large (12-byte) entry formats; recovery will rebuild from " +
+                "the companion .log file.");
+        }
+
+        // Both formats pass strict validation. The legitimate case is a tiny prefix
+        // (one or two entries) where the leading 4 bytes look like a valid relative offset
+        // either way. For files where the .log cross-check has narrowed the search but
+        // both still pass, we cannot distinguish them with confidence -- silently picking
+        // the requested format risks reading garbage and producing consumer-visible
+        // corruption. Fail loud so recovery rebuilds from .log; the resulting cost
+        // (rebuilding one index) is bounded and far cheaper than a corrupt-read incident.
+        //
+        // Exception: for very short files (less than two full entries in either format)
+        // both formats trivially validate and there is no realistic way to disambiguate;
+        // fall back to the requested entry size since recovery will overwrite this file
+        // anyway as soon as the first batch is appended.
+        long minDistinguishingBytes = 2L * LARGE_ENTRY_SIZE; // need >=2 entries to apply monotonicity
+        if (fileSize < minDistinguishingBytes) {
+            log.debug("Index file {} is too short ({} bytes) to distinguish legacy from " +
+                    "large format; using requested entry size {}. The file will be rewritten " +
+                    "as soon as a new batch is appended.",
+                file.getAbsolutePath(), fileSize, requestedEntrySize);
+            return requestedEntrySize;
+        }
+        throw new CorruptIndexException("Could not unambiguously detect index format for " +
+            file.getAbsolutePath() + " (size=" + fileSize + ", logFileSize=" + logFileSize +
+            "): both legacy (8-byte) and large (12-byte) formats pass strict validation. " +
+            "Recovery will rebuild from the companion .log file. This typically indicates a " +
+            "crash mid-write, a partial truncation, or a manually-edited file.");
     }
 
     /**
@@ -279,7 +305,12 @@ public final class OffsetIndex extends AbstractIndex {
             if (entrySize == LARGE_ENTRY_SIZE) {
                 position = buf.getLong(i * entrySize + 4);
             } else {
-                position = buf.getInt(i * entrySize + 4) & 0xFFFFFFFFL; // unsigned int
+                // Signed read matches physical() above; legacy positions are always
+                // non-negative ints because append() writes them via putInt((int) position)
+                // and requires position <= Integer.MAX_VALUE. A signed read therefore
+                // returns a non-negative long, and the "position < 0" check below correctly
+                // rejects any corrupt file whose 4-byte position has the sign bit set.
+                position = buf.getInt(i * entrySize + 4);
             }
 
             if (relOffset < 0 || position < 0) return false;
@@ -378,7 +409,14 @@ public final class OffsetIndex extends AbstractIndex {
                 } else {
                     if (position > Integer.MAX_VALUE) {
                         throw new IllegalArgumentException("Position " + position +
-                            " exceeds Integer.MAX_VALUE. Finalize MetadataVersion to IBP_4_4_IV1 to enable large index format.");
+                            " exceeds Integer.MAX_VALUE for legacy 8-byte index format in " +
+                            file().getAbsolutePath() + ". This index was opened with " +
+                            "useLargeFormat=false. To support physical positions > 2 GiB, " +
+                            "the broker must have a finalized metadata.version >= IBP_4_4_IV1 " +
+                            "(KIP-1333) so that LogConfig.shouldUseLargeIndexFormat() returns " +
+                            "true at segment-roll time, and the segment must be rolled (or the " +
+                            "broker restarted) so that newly-created indexes are opened in the " +
+                            "12-byte format.");
                     }
                     mmap().putInt((int) position);
                 }
@@ -441,6 +479,11 @@ public final class OffsetIndex extends AbstractIndex {
         if (indexEntrySize == LARGE_ENTRY_SIZE) {
             return buffer.getLong(n * indexEntrySize + 4);
         } else {
+            // Legacy positions were written via putInt((int) position) in append(), so the
+            // on-disk value is a signed int that is always non-negative (positions <=
+            // Integer.MAX_VALUE). A signed widening read is therefore correct and matches
+            // what append() wrote. validateEntries() applies the same signed read for
+            // consistency; do not change one without the other.
             return buffer.getInt(n * indexEntrySize + 4);
         }
     }

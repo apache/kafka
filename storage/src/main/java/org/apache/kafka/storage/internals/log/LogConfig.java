@@ -67,6 +67,45 @@ public class LogConfig extends AbstractConfig {
 
     private static final Logger LOG = LoggerFactory.getLogger(LogConfig.class);
 
+    /**
+     * Broker-wide flag that controls whether newly-created offset indexes use the 12-byte
+     * large-index format (KIP-1333). This is set from the finalized {@code metadata.version}
+     * by the broker's metadata publisher; see {@code BrokerMetadataPublisher}. It is a
+     * cluster-wide property because {@code MetadataVersion} is cluster-wide, so a static
+     * flag is the correct shape (per-topic differentiation is not supported by KIP-1333).
+     *
+     * <p>Default {@code false} preserves the legacy 8-byte format on a broker that has not
+     * yet received its first metadata image (e.g. before {@code finishInitializingReplicaManager}
+     * runs). Tests that need the large format should set this flag explicitly or pass
+     * {@code useLargeFormat=true} into the {@link OffsetIndex} / {@link LazyIndex} constructors
+     * directly.
+     */
+    private static final java.util.concurrent.atomic.AtomicBoolean LARGE_INDEX_FORMAT_ENABLED =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * Update the broker-wide large-index-format flag. Called by the metadata publisher when
+     * the finalized {@code metadata.version} advances past {@code IBP_4_4_IV1}. Logs the
+     * transition so operators can correlate it with segment-roll behaviour.
+     */
+    public static void setLargeIndexFormatEnabled(boolean enabled) {
+        boolean previous = LARGE_INDEX_FORMAT_ENABLED.getAndSet(enabled);
+        if (previous != enabled) {
+            LOG.info("Large offset-index format (12-byte entries) is now {}. " +
+                "Segments rolled after this point will use the {} index format.",
+                enabled ? "ENABLED" : "DISABLED",
+                enabled ? "large (12-byte)" : "legacy (8-byte)");
+        }
+    }
+
+    /**
+     * @return whether the broker should currently use the 12-byte large-index format for
+     *         newly-created offset indexes.
+     */
+    public static boolean shouldUseLargeIndexFormat() {
+        return LARGE_INDEX_FORMAT_ENABLED.get();
+    }
+
     private static class RemoteLogConfig {
 
         private final boolean remoteStorageEnable;
@@ -268,7 +307,6 @@ public class LogConfig extends AbstractConfig {
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
-    public final boolean useLargeIndexFormat;
     public final long flushInterval;
     public final long flushMs;
     public final long retentionSize;
@@ -314,12 +352,6 @@ public class LogConfig extends AbstractConfig {
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
-        // TODO: Wire this from MetadataVersion.isLargeIndexFormatSupported() via KafkaConfig.
-        // Currently defaults to false (legacy 8-byte index entries). When the MetadataVersion
-        // finalization hook is implemented, this should be set to:
-        //   metadataVersion.isLargeIndexFormatSupported()
-        // Until then, the 12-byte index format is only reachable via explicit constructor in tests.
-        this.useLargeIndexFormat = false;
         this.flushInterval = getLong(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG);
         this.flushMs = getLong(TopicConfig.FLUSH_MS_CONFIG);
         this.retentionSize = getLong(TopicConfig.RETENTION_BYTES_CONFIG);
@@ -371,7 +403,8 @@ public class LogConfig extends AbstractConfig {
     private void warnIfIndexUndersizedForSegment() {
         long effectiveSegmentSize = internalSegmentSize == null ? segmentSize : internalSegmentSize;
         if (indexInterval <= 0 || effectiveSegmentSize <= 0) return;
-        int entrySize = useLargeIndexFormat ? OffsetIndex.LARGE_ENTRY_SIZE : OffsetIndex.LEGACY_ENTRY_SIZE;
+        boolean largeFormat = shouldUseLargeIndexFormat();
+        int entrySize = largeFormat ? OffsetIndex.LARGE_ENTRY_SIZE : OffsetIndex.LEGACY_ENTRY_SIZE;
         // Use long arithmetic; required index size = ceil(segmentSize / indexInterval) * entrySize.
         long requiredEntries = (effectiveSegmentSize + indexInterval - 1) / indexInterval;
         long requiredIndexBytes = requiredEntries * entrySize;
@@ -382,7 +415,7 @@ public class LogConfig extends AbstractConfig {
                     "Raise segment.index.bytes to at least {} to allow the segment to fill, " +
                     "or lower segment.bytes / raise index.interval.bytes if early rolling is intended.",
                     effectiveSegmentSize, indexInterval, entrySize,
-                    useLargeIndexFormat ? "large" : "legacy",
+                    largeFormat ? "large" : "legacy",
                     requiredIndexBytes, maxIndexSize, requiredIndexBytes);
         }
     }

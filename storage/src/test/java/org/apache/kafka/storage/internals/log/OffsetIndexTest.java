@@ -611,16 +611,13 @@ public class OffsetIndexTest {
     }
 
     /**
-     * P0-1 (revised): when format is genuinely ambiguous (strict monotonicity passes for both
-     * formats AND no .log cross-check disambiguates), fall back to the requestedEntrySize (the
-     * MetadataVersion intent) with a WARN log. The hardened strict + cross-check checks already
-     * disambiguate the legitimate migration cases (legacy-as-large produces positions &gt; log
-     * size; large-as-legacy produces a stream of zeros that fails strict monotonicity). The
-     * remaining ambiguity cases come from corrupted/contrived bytes where sanityCheck() and
-     * recovery will catch downstream issues.
+     * P0-1 (revised v2): when format is genuinely ambiguous (strict monotonicity passes for both
+     * formats AND no .log cross-check disambiguates) for a non-trivially-short file, detection
+     * throws {@link CorruptIndexException} so recovery rebuilds from the .log file. Silently
+     * picking the wrong format would risk consumer-visible read corruption.
      */
     @Test
-    public void testDetectEntrySizeAmbiguousFallbackToRequested() throws IOException {
+    public void testDetectEntrySizeAmbiguousThrowsForNonTrivialFiles() throws IOException {
         File indexFile = nonExistentTempFile();
         ByteBuffer buf = ByteBuffer.allocate(24);
         // Bytes 1,2,3,4,5,6 pass strict monotonicity under both formats.
@@ -633,12 +630,97 @@ public class OffsetIndexTest {
         Files.write(indexFile.toPath(), buf.array());
 
         // No companion .log file. Both formats pass strict validation.
-        // Detection falls back to the requested entry size (MV intent).
-        assertEquals(OffsetIndex.LARGE_ENTRY_SIZE,
-            OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
+        // Detection must throw so recovery rebuilds from .log.
+        assertThrows(CorruptIndexException.class,
+            () -> OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
+        assertThrows(CorruptIndexException.class,
+            () -> OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LEGACY_ENTRY_SIZE));
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * P0-1 (corner case): for very short files (fewer than two large-format entries) the
+     * monotonicity check has no power to disambiguate. Detection returns the requested format
+     * because the file will be rewritten on the next append anyway.
+     */
+    @Test
+    public void testDetectEntrySizeShortFileFallsBackToRequested() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // 8 bytes: exactly one legacy entry, less than one large entry (12 bytes).
+        // Both formats trivially "validate" but we cannot tell them apart.
+        ByteBuffer buf = ByteBuffer.allocate(8);
+        buf.putInt(1);
+        buf.putInt(100);
+        Files.write(indexFile.toPath(), buf.array());
+
+        // For a single-entry file, fall back to requested format.
         assertEquals(OffsetIndex.LEGACY_ENTRY_SIZE,
             OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LEGACY_ENTRY_SIZE));
         Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * P0-1 (legitimate-migration case): a non-empty index that fails strict validation under both
+     * formats (e.g. corruption, partial-write tail) throws {@link CorruptIndexException}. This is
+     * the safer behaviour than silently picking the requested format and mmaping garbage.
+     */
+    @Test
+    public void testDetectEntrySizeCorruptThrows() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // 24 bytes that fail monotonicity under both 8-byte and 12-byte readings
+        // (decreasing relative offsets).
+        ByteBuffer buf = ByteBuffer.allocate(24);
+        buf.putInt(10);
+        buf.putInt(1000);
+        buf.putInt(5);  // decreases -- breaks legacy monotonicity at slot 1
+        buf.putInt(900);
+        buf.putInt(0);  // decreases again
+        buf.putInt(800);
+        Files.write(indexFile.toPath(), buf.array());
+
+        assertThrows(CorruptIndexException.class,
+            () -> OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * P0-1 (cross-check disambiguation): when both formats would pass strict monotonicity in
+     * isolation but the companion .log file's size rules out one of them, detection picks the
+     * other one cleanly. This exercises the LCM(8,12)=24-byte boundary -- one of the realistic
+     * migration shapes.
+     */
+    @Test
+    public void testDetectEntrySizeLogSizeCrossCheckPicksLegacy() throws IOException {
+        // The index file's name is "<prefix>.index"; companionLogFileSize replaces
+        // ".index" with ".log" in the name to find the sibling log file.
+        File indexFile = TestUtils.tempFile("offset-idx-cross-check", ".index");
+        String idxName = indexFile.getName();
+        String logName = idxName.substring(0, idxName.lastIndexOf(".index")) + ".log";
+        File logFile = new File(indexFile.getParentFile(), logName);
+
+        // Legacy data: three entries (offset, position) = (1,100),(2,200),(3,300)
+        ByteBuffer buf = ByteBuffer.allocate(24);
+        buf.putInt(1);
+        buf.putInt(100);
+        buf.putInt(2);
+        buf.putInt(200);
+        buf.putInt(3);
+        buf.putInt(300);
+        Files.write(indexFile.toPath(), buf.array());
+        // Companion .log file that is large enough to hold all legacy positions but smaller
+        // than what reading the same bytes as large format would imply.
+        // Large-format reading of these bytes would produce position=(100L<<32)|2 etc.,
+        // astronomically larger than any realistic .log size.
+        Files.write(logFile.toPath(), new byte[500]);
+
+        try {
+            // Even when caller requests LARGE, the .log cross-check rules it out.
+            assertEquals(OffsetIndex.LEGACY_ENTRY_SIZE,
+                OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
+        } finally {
+            Files.deleteIfExists(indexFile.toPath());
+            Files.deleteIfExists(logFile.toPath());
+        }
     }
 
     private void assertWriteFails(String message, OffsetIndex idx, int offset) {
