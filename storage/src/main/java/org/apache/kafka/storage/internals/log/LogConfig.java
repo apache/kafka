@@ -636,11 +636,6 @@ public class LogConfig extends AbstractConfig {
         Long localRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
         Long remoteCopyLagMs = (Long) props.get(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG);
         long effectiveLocalRetentionMs = localRetentionMs == -2 ? retentionMs : localRetentionMs;
-        if (effectiveLocalRetentionMs == -1 && remoteCopyLagMs == MAX_REMOTE_COPY_LAG_MS) {
-            String message = String.format("Value must not be -1 when effective %s is -1",
-                    TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
-            throw new ConfigException(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteCopyLagMs, message);
-        }
         if (remoteCopyLagMs > 0 && effectiveLocalRetentionMs >= 0
                 && remoteCopyLagMs > effectiveLocalRetentionMs) {
             String message = String.format("Value must not exceed %s (effective value: %d)",
@@ -654,11 +649,6 @@ public class LogConfig extends AbstractConfig {
         Long localRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         Long remoteCopyLagBytes = (Long) props.get(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG);
         long effectiveLocalRetentionBytes = localRetentionBytes == -2 ? retentionBytes : localRetentionBytes;
-        if (effectiveLocalRetentionBytes == -1 && remoteCopyLagBytes == MAX_REMOTE_COPY_LAG_BYTES) {
-            String message = String.format("Value must not be -1 when effective %s is -1",
-                    TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-            throw new ConfigException(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteCopyLagBytes, message);
-        }
         if (remoteCopyLagBytes > 0 && effectiveLocalRetentionBytes >= 0
                 && remoteCopyLagBytes > effectiveLocalRetentionBytes) {
             String message = String.format("Value must not exceed %s (effective value: %d)",
