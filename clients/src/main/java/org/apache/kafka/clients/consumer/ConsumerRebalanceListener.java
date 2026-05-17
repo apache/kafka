@@ -107,9 +107,6 @@ import java.util.Collection;
  * {@code
  *   consumer.setConsumerRebalanceListener(new ConsumerRebalanceListener() {
  *       @Override
- *       public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
- *
- *       @Override
  *       public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // save the offsets in an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
@@ -120,9 +117,6 @@ import java.util.Collection;
  *       public void onPartitionsLost(Collection<TopicPartition> partitions) {
  *           // do not need to save the offsets since these partitions are probably owned by other consumers already
  *       }
- *
- *       @Override
- *       public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
  *
  *       @Override
  *       public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
@@ -181,7 +175,7 @@ public interface ConsumerRebalanceListener {
      * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
-    void onPartitionsRevoked(Collection<TopicPartition> partitions);
+    default void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
 
     /**
      * Consumer-aware variant of {@link #onPartitionsRevoked(Collection)}.
@@ -236,7 +230,7 @@ public interface ConsumerRebalanceListener {
      * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
-    void onPartitionsAssigned(Collection<TopicPartition> partitions);
+    default void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
 
     /**
      * Consumer-aware variant of {@link #onPartitionsAssigned(Collection)}.
