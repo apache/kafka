@@ -958,13 +958,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                         previousSeg, copyLagMs, copyLagBytes, currentTimeMs, totalLogSize, cumulativeSize, totalLogSize - cumulativeSize);
             }
 
-            // When time lag is the default 0, upload immediately if local time-based retention is used, to avoid breaking delete policy.
-            if (logConfig.localRetentionMs() != -1 && copyLagMs == 0) {
-                return false;
-            }
-
-            // When size lag is the default 0, upload immediately when local size-based retention is used to avoid breaking delete policy
-            if (logConfig.localRetentionBytes() != -1 && copyLagBytes == 0) {
+            if (copyLagMs == 0 || copyLagBytes == 0) {
                 return false;
             }
 
