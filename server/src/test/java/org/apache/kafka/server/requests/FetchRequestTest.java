@@ -251,7 +251,7 @@ public class FetchRequestTest {
                 .toList();
 
         List<Consumer<byte[], byte[]>> consumers = consumerConfigs.stream()
-                .map(config -> cluster.<byte[], byte[]>consumer(config))
+                .map(cluster::<byte[], byte[]>consumer)
                 .toList();
 
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of())) {
