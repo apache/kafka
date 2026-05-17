@@ -16,16 +16,20 @@
  */
 package org.apache.kafka.tiered.storage;
 
+import kafka.integration.KafkaServerTestHarness;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.fault.FaultHandlerException;
+import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -35,15 +39,15 @@ import java.util.stream.Collectors;
 import scala.jdk.javaapi.CollectionConverters;
 
 /**
- * A {@link ClusterInstance} implementation backed by a {@link TieredStorageTestHarness}.
+ * A {@link ClusterInstance} implementation backed by a {@link KafkaServerTestHarness}.
  * This allows {@link TieredStorageTestContext} to depend only on {@link ClusterInstance}
  * rather than on the concrete harness class.
  */
 public class HarnessBackedClusterInstance implements ClusterInstance {
 
-    private final TieredStorageTestHarness harness;
+    private final KafkaServerTestHarness harness;
 
-    public HarnessBackedClusterInstance(TieredStorageTestHarness harness) {
+    public HarnessBackedClusterInstance(KafkaServerTestHarness harness) {
         this.harness = harness;
     }
 
@@ -54,7 +58,14 @@ public class HarnessBackedClusterInstance implements ClusterInstance {
 
     @Override
     public ClusterConfig config() {
-        return ClusterConfig.defaultBuilder().build();
+        return ClusterConfig.defaultBuilder()
+                .setBrokers(harness.brokers().size())
+                .setControllers(harness.controllerServers().size())
+                .setBrokerSecurityProtocol(harness.securityProtocol())
+                .setBrokerListenerName(harness.listenerName())
+                .setControllerListenerName(controllerListenerName())
+                .setMetadataVersion(harness.metadataVersion())
+                .build();
     }
 
     @Override
@@ -82,7 +93,7 @@ public class HarnessBackedClusterInstance implements ClusterInstance {
 
     @Override
     public String bootstrapControllers() {
-        return harness.bootstrapServers(harness.listenerName());
+        throw new UnsupportedOperationException("bootstrapControllers() is not supported in HarnessBackedClusterInstance");
     }
 
     @Override
@@ -117,7 +128,7 @@ public class HarnessBackedClusterInstance implements ClusterInstance {
 
     @Override
     public void start() {
-        throw new UnsupportedOperationException("start() is managed by TieredStorageTestHarness");
+        throw new UnsupportedOperationException("start() is managed by KafkaServerTestHarness");
     }
 
     @Override
@@ -127,7 +138,7 @@ public class HarnessBackedClusterInstance implements ClusterInstance {
 
     @Override
     public void stop() {
-        throw new UnsupportedOperationException("stop() is managed by TieredStorageTestHarness");
+        throw new UnsupportedOperationException("stop() is managed by KafkaServerTestHarness");
     }
 
     @Override
@@ -159,7 +170,7 @@ public class HarnessBackedClusterInstance implements ClusterInstance {
 
     @Override
     public Optional<FaultHandlerException> firstFatalException() {
-        return Optional.empty();
+        return Optional.ofNullable(harness.faultHandler().firstException());
     }
 
     @Override
@@ -169,7 +180,17 @@ public class HarnessBackedClusterInstance implements ClusterInstance {
 
     @Override
     public Map<String, Object> setClientSslConfig(Map<String, Object> configs) {
-        // TieredStorageTestHarness uses PLAINTEXT; no SSL config needed
-        return configs;
+        if (harness.trustStoreFile().isEmpty()) {
+            return configs;
+        }
+        try {
+            Map<String, Object> props = new HashMap<>(configs);
+            props.putAll(new TestSslUtils.SslConfigsBuilder(ConnectionMode.CLIENT)
+                    .useExistingTrustStore(harness.trustStoreFile().get())
+                    .build());
+            return props;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build client SSL config", e);
+        }
     }
 }

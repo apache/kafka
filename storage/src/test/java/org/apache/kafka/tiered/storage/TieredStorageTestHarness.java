@@ -95,7 +95,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     protected abstract void writeTestSpecifications(TieredStorageTestBuilder builder);
 
-    protected void overrideConsumerConfig(Properties consumerConfig) {
+    protected void overrideConsumerConfig(Map<String, Object> consumerConfig) {
     }
 
     @BeforeEach
@@ -104,10 +104,8 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         testClassName = testInfo.getTestClass().get().getSimpleName().toLowerCase(Locale.getDefault());
         storageDirPath = TestUtils.tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath();
         super.setUp(testInfo);
-        Properties consumerOverrides = new Properties();
-        overrideConsumerConfig(consumerOverrides);
         Map<String, Object> extraConsumerProps = new HashMap<>();
-        consumerOverrides.forEach((k, v) -> extraConsumerProps.put((String) k, v));
+        overrideConsumerConfig(extraConsumerProps);
         context = new TieredStorageTestContext(new HarnessBackedClusterInstance(this), extraConsumerProps);
     }
 

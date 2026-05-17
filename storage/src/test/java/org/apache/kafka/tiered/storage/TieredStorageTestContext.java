@@ -26,7 +26,6 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -43,6 +42,7 @@ import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
+import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
@@ -50,6 +50,7 @@ import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -60,9 +61,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-
-import scala.Function0;
-import scala.Function1;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 
@@ -175,7 +173,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void deleteTopic(String topic) throws InterruptedException, ExecutionException {
-        cluster.deleteTopic(topic);
+        admin.deleteTopics(List.of(topic)).all().get();
     }
 
     /**
@@ -198,7 +196,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     public List<ConsumerRecord<String, String>> consume(TopicPartition topicPartition,
                                                         Integer expectedTotalCount,
-                                                        Long fetchOffset) {
+                                                        Long fetchOffset) throws InterruptedException {
         consumer.assign(List.of(topicPartition));
         consumer.seek(topicPartition, fetchOffset);
 
@@ -206,15 +204,16 @@ public final class TieredStorageTestContext implements AutoCloseable {
         long pollTimeoutMs = 100L;
         String sep = System.lineSeparator();
         List<ConsumerRecord<String, String>> records = new ArrayList<>();
-        Function1<ConsumerRecords<String, String>, Object> pollAction = polledRecords -> {
-            polledRecords.forEach(records::add);
-            return records.size() >= expectedTotalCount;
-        };
-        Function0<String> messageSupplier = () ->
-                String.format("Could not consume %d records of %s from offset %d in %d ms. %d message(s) consumed:%s%s",
-                        expectedTotalCount, topicPartition, fetchOffset, timeoutMs, records.size(), sep,
-                        records.stream().map(Object::toString).collect(Collectors.joining(sep)));
-        kafka.utils.TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs, pollTimeoutMs);
+        TestUtils.waitForCondition(
+            () -> {
+                consumer.poll(Duration.ofMillis(pollTimeoutMs)).forEach(records::add);
+                return records.size() >= expectedTotalCount;
+            },
+            timeoutMs,
+            () -> String.format("Could not consume %d records of %s from offset %d in %d ms. %d message(s) consumed:%s%s",
+                    expectedTotalCount, topicPartition, fetchOffset, timeoutMs, records.size(), sep,
+                    records.stream().map(Object::toString).collect(Collectors.joining(sep)))
+        );
         return records;
     }
 
@@ -307,7 +306,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
         return localStorages;
     }
 
-    public Deserializer<String> de() {
+    public Deserializer<String> deserializer() {
         return new StringDeserializer();
     }
 
