@@ -45,7 +45,6 @@ import java.util.concurrent.CompletableFuture;
  */
 public class DefaultStatePersister implements Persister {
     private final PersisterStateManager stateManager;
-
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
 
     public static DefaultStatePersister instance(KafkaClient client, ShareCoordinatorMetadataCacheHelper cacheHelper, Time time, Timer timer) {
@@ -55,19 +54,12 @@ public class DefaultStatePersister implements Persister {
     }
 
     // Visibility for tests
-    static DefaultStatePersister instance(PersisterStateManager stateManager) {
-        DefaultStatePersister instance = new DefaultStatePersister(stateManager);
-        instance.start();
-        return instance;
+    DefaultStatePersister(PersisterStateManager stateManager) {
+        this.stateManager = stateManager;
     }
 
     private DefaultStatePersister(KafkaClient client, ShareCoordinatorMetadataCacheHelper cacheHelper, Time time, Timer timer) {
         this.stateManager = new PersisterStateManager(client, cacheHelper, time, timer);
-    }
-
-    // For testing purpose only
-    private DefaultStatePersister(PersisterStateManager stateManager) {
-        this.stateManager = stateManager;
     }
 
     private void start() {

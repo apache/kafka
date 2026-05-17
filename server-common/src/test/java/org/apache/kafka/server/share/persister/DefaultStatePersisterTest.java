@@ -1242,7 +1242,7 @@ class DefaultStatePersisterTest {
             );
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         WriteShareGroupStateResult results = dsp.writeResponsesToResult(futureMap);
 
@@ -1289,7 +1289,7 @@ class DefaultStatePersisterTest {
             .put(tp2.partition(), CompletableFuture.failedFuture(new Exception("scary stuff")));
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         WriteShareGroupStateResult results = dsp.writeResponsesToResult(futureMap);
 
@@ -1349,7 +1349,7 @@ class DefaultStatePersisterTest {
             );
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         ReadShareGroupStateResult results = dsp.readResponsesToResult(futureMap);
 
@@ -1399,7 +1399,7 @@ class DefaultStatePersisterTest {
             .put(tp2.partition(), CompletableFuture.failedFuture(new Exception("scary stuff")));
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         ReadShareGroupStateResult results = dsp.readResponsesToResult(futureMap);
 
@@ -1460,7 +1460,7 @@ class DefaultStatePersisterTest {
             );
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         ReadShareGroupStateSummaryResult results = dsp.readSummaryResponsesToResult(futureMap);
 
@@ -1511,7 +1511,7 @@ class DefaultStatePersisterTest {
             .put(tp2.partition(), CompletableFuture.failedFuture(new Exception("scary stuff")));
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         ReadShareGroupStateSummaryResult results = dsp.readSummaryResponsesToResult(futureMap);
 
@@ -1568,7 +1568,7 @@ class DefaultStatePersisterTest {
             );
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         DeleteShareGroupStateResult results = dsp.deleteResponsesToResult(futureMap);
 
@@ -1611,7 +1611,7 @@ class DefaultStatePersisterTest {
             .put(tp2.partition(), CompletableFuture.failedFuture(new Exception("scary stuff")));
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         DeleteShareGroupStateResult results = dsp.deleteResponsesToResult(futureMap);
 
@@ -1662,7 +1662,7 @@ class DefaultStatePersisterTest {
         ));
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         InitializeShareGroupStateResult results = dsp.initializeResponsesToResult(futureMap);
 
@@ -1706,7 +1706,7 @@ class DefaultStatePersisterTest {
             .put(tp2.partition(), CompletableFuture.failedFuture(new Exception("scary stuff")));
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
 
         InitializeShareGroupStateResult results = dsp.initializeResponsesToResult(futureMap);
 
@@ -1733,7 +1733,7 @@ class DefaultStatePersisterTest {
     @Test
     public void testDefaultPersisterClose() {
         PersisterStateManager psm = mock(PersisterStateManager.class);
-        DefaultStatePersister dsp = DefaultStatePersister.instance(psm);
+        DefaultStatePersister dsp = new DefaultStatePersister(psm);
         try {
             verify(psm, times(0)).stop();
 
