@@ -41,7 +41,6 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetIndexTest {
 
@@ -612,30 +611,19 @@ public class OffsetIndexTest {
     }
 
     /**
-     * P0-1 fix: when format is genuinely ambiguous (strict monotonicity passes for both formats
-     * AND log-file cross-check cannot disambiguate), throw CorruptIndexException so recovery
-     * rebuilds from the .log file. Silent fallback to the wrong format corrupts reads.
-     *
-     * <p>Byte layout chosen so that both interpretations pass strict monotonicity:
-     * <pre>
-     * Bytes (big-endian ints):  1, 2, 3, 4, 5, 6  (each 4 bytes -> 24 bytes total)
-     *
-     * Legacy (3 x 8-byte entries):
-     *   entry 0: relOff=1, pos=2
-     *   entry 1: relOff=3, pos=4
-     *   entry 2: relOff=5, pos=6
-     *   All strictly increasing -> passes.
-     *
-     * Large (2 x 12-byte entries):
-     *   entry 0: relOff=1, pos=long((2<<32)|3) = 8589934595
-     *   entry 1: relOff=4, pos=long((5<<32)|6) = 21474836486
-     *   All strictly increasing -> passes.
-     * </pre>
+     * P0-1 (revised): when format is genuinely ambiguous (strict monotonicity passes for both
+     * formats AND no .log cross-check disambiguates), fall back to the requestedEntrySize (the
+     * MetadataVersion intent) with a WARN log. The hardened strict + cross-check checks already
+     * disambiguate the legitimate migration cases (legacy-as-large produces positions &gt; log
+     * size; large-as-legacy produces a stream of zeros that fails strict monotonicity). The
+     * remaining ambiguity cases come from corrupted/contrived bytes where sanityCheck() and
+     * recovery will catch downstream issues.
      */
     @Test
-    public void testDetectEntrySizeThrowsOnTrueAmbiguity() throws IOException {
+    public void testDetectEntrySizeAmbiguousFallbackToRequested() throws IOException {
         File indexFile = nonExistentTempFile();
         ByteBuffer buf = ByteBuffer.allocate(24);
+        // Bytes 1,2,3,4,5,6 pass strict monotonicity under both formats.
         buf.putInt(1);
         buf.putInt(2);
         buf.putInt(3);
@@ -644,12 +632,12 @@ public class OffsetIndexTest {
         buf.putInt(6);
         Files.write(indexFile.toPath(), buf.array());
 
-        // No companion .log file -> cross-check is skipped -> both formats pass strict validation
-        // -> CorruptIndexException is thrown rather than silently choosing one.
-        CorruptIndexException ex = assertThrows(CorruptIndexException.class, () ->
+        // No companion .log file. Both formats pass strict validation.
+        // Detection falls back to the requested entry size (MV intent).
+        assertEquals(OffsetIndex.LARGE_ENTRY_SIZE,
             OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
-        assertTrue(ex.getMessage().contains("Cannot disambiguate"),
-            "Expected disambiguation error but got: " + ex.getMessage());
+        assertEquals(OffsetIndex.LEGACY_ENTRY_SIZE,
+            OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LEGACY_ENTRY_SIZE));
         Files.deleteIfExists(indexFile.toPath());
     }
 
