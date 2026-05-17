@@ -1036,7 +1036,6 @@ public class MirrorConnectorsIntegrationBaseTest {
     }
 
     private void testConnectorMetrics(String format, Supplier<Boolean> assertions) throws InterruptedException, ExecutionException {
-        CollectAllMetricsReporter.METRICS.clear();
         // one way replication from primary to backup
         mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
         if (format != null) {
