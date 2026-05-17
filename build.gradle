@@ -1035,6 +1035,7 @@ project(':server') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':metadata'))
 
     testFixturesImplementation project(':clients')
     testFixturesImplementation testFixtures(project(':clients'))
@@ -2473,6 +2474,7 @@ project(':storage') {
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':metadata'))
     testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
     testImplementation libs.jacksonDataformatYaml

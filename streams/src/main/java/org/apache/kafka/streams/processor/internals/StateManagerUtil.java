@@ -158,11 +158,15 @@ final class StateManagerUtil {
                                   final String logPrefix,
                                   final boolean closeClean,
                                   final boolean eosEnabled,
+                                  final boolean transactionalStateStoresEnabled,
                                   final ProcessorStateManager stateMgr,
                                   final StateDirectory stateDirectory,
                                   final TaskType taskType) {
-        // if EOS is enabled, wipe out the whole state store for unclean close since it is now invalid
-        final boolean wipeStateStore = !closeClean && eosEnabled;
+        // if EOS is enabled, wipe out the whole state store for unclean close since it is now invalid.
+        // With transactional state stores, uncommitted data is never written to the base store,
+        // so wiping is only needed when stores have been marked as corrupted (e.g. InvalidOffsetException).
+        final boolean wipeStateStore = !closeClean && eosEnabled
+            && (!transactionalStateStoresEnabled || stateMgr.hasCorruptedStores());
 
         final TaskId id = stateMgr.taskId();
         log.trace("Closing state manager for {} task {}", taskType, id);

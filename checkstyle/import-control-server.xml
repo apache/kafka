@@ -114,6 +114,7 @@
     <allow pkg="org.apache.kafka.network" />
     <allow pkg="org.apache.kafka.server" />
     <allow pkg="org.apache.kafka.server.authorizer" />
+    <allow class="org.apache.kafka.controller.MockAclMutator" />
   </subpackage>
 
   <subpackage name="network">
