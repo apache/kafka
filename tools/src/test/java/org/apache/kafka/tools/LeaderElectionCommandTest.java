@@ -447,7 +447,7 @@ public class LeaderElectionCommandTest {
     }
 
     private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws Exception {
-        int leader = AdminUtils.fetchOrWaitForLeader(client, topicPartition.topic(), topicPartition.partition(), 30000);
+        int leader = AdminUtils.fetchOrWaitForExpectedLeader(client, topicPartition.topic(), topicPartition.partition(), expectedLeader, 30000);
         assertEquals(expectedLeader, leader);
     }
 

@@ -49,36 +49,69 @@ public final class AdminUtils {
             }
 
             public void checkLeader() {
-                try {
-                    TopicDescription topicDescription = admin.describeTopics(List.of(topic))
-                            .allTopicNames().get().get(topic);
-
-                    Optional<Integer> leader = topicDescription.partitions().stream()
-                            .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
-                            .findFirst()
-                            .flatMap(partitionInfo -> Optional.ofNullable(partitionInfo.leader()))
-                            .map(node -> {
-                                int leaderId = node.id();
-                                return leaderId == Node.noNode().id() ? null : leaderId;
-                            });
-
-                    leader.ifPresent(integer -> this.leader = integer);
-                } catch (ExecutionException e) {
-                    Throwable cause = e.getCause();
-                    boolean isTransient = cause instanceof UnknownTopicOrPartitionException
-                            || cause instanceof LeaderNotAvailableException;
-                    if (!isTransient) {
-                        throw new RuntimeException(e);
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException(e);
-                }
+                fetchPartitionLeader(admin, topic, partitionNumber).ifPresent(integer -> this.leader = integer);
             }
         };
 
         TestUtils.waitForCondition(condition, timeoutMs, "Timing out after %d ms since a leader was not elected for partition %s-%d".formatted(timeoutMs, topic, partitionNumber));
 
         return condition.leader;
+    }
+
+    /**
+     * Fetch the partition leader or wait until the expected leader is observed using the provided admin client.
+     */
+    public static int fetchOrWaitForExpectedLeader(Admin admin,
+                                                   String topic,
+                                                   int partitionNumber,
+                                                   int expectedLeaderId,
+                                                   long timeoutMs) throws InterruptedException {
+        var condition = new Supplier<Boolean>() {
+            int leader = Node.noNode().id();
+
+            @Override
+            public Boolean get() {
+                checkLeader();
+                return this.leader == expectedLeaderId;
+            }
+
+            public void checkLeader() {
+                fetchPartitionLeader(admin, topic, partitionNumber).ifPresent(integer -> this.leader = integer);
+            }
+        };
+
+        TestUtils.waitForCondition(condition, timeoutMs,
+            () -> "Timing out after %d ms waiting for partition %s-%d leader to become %d, last observed=%d"
+                .formatted(timeoutMs, topic, partitionNumber, expectedLeaderId, condition.leader));
+
+        return condition.leader;
+    }
+
+    private static Optional<Integer> fetchPartitionLeader(Admin admin, String topic, int partitionNumber) {
+        try {
+            TopicDescription topicDescription = admin.describeTopics(List.of(topic))
+                .allTopicNames().get().get(topic);
+
+            return topicDescription.partitions().stream()
+                .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
+                .findFirst()
+                .flatMap(partitionInfo -> Optional.ofNullable(partitionInfo.leader()))
+                .map(node -> {
+                    int leaderId = node.id();
+                    return leaderId == Node.noNode().id() ? null : leaderId;
+                });
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            boolean isTransient = cause instanceof UnknownTopicOrPartitionException
+                || cause instanceof LeaderNotAvailableException;
+            if (!isTransient) {
+                throw new RuntimeException(e);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+
+        return Optional.empty();
     }
 }
