@@ -17,6 +17,7 @@
 package kafka.server
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{EndTxnRequest, JoinGroupRequest}
@@ -75,13 +76,14 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
     assertNotEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, memberId)
     assertNotEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, memberEpoch)
 
-    createTopic(topic, 1)
+    val topicId = createTopic(topic, 1)
 
-    for (version <- 0 to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(false)) {
+    for (version <- 0 to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       // Verify that the TXN_OFFSET_COMMIT request is processed correctly when member id is UNKNOWN_MEMBER_ID
       // and generation id is UNKNOWN_GENERATION_ID under all api versions.
       verifyTxnCommitAndFetch(
         topic = topic,
+        topicId = topicId,
         partition = partition,
         transactionalId = transactionalId,
         groupId = groupId,
@@ -98,6 +100,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
         // must not be empty from version 3 onwards.
         verifyTxnCommitAndFetch(
           topic = topic,
+          topicId = topicId,
           partition = partition,
           transactionalId = transactionalId,
           groupId = groupId,
@@ -111,6 +114,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
         // Verify TXN_OFFSET_COMMIT request failed with incorrect memberId.
         verifyTxnCommitAndFetch(
           topic = topic,
+          topicId = topicId,
           partition = partition,
           transactionalId = transactionalId,
           groupId = groupId,
@@ -122,8 +126,11 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
         )
 
         // Verify TXN_OFFSET_COMMIT request failed with incorrect generationId.
+        // Under the new consumer group protocol, v6+ returns STALE_MEMBER_EPOCH
+        // directly while v0-5 maps it to ILLEGAL_GENERATION (KIP-1319).
         verifyTxnCommitAndFetch(
           topic = topic,
+          topicId = topicId,
           partition = partition,
           transactionalId = transactionalId,
           groupId = groupId,
@@ -131,13 +138,51 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
           generationId = 100,
           offset = 200 + version,
           version = version.toShort,
-          expectedTxnCommitError = Errors.ILLEGAL_GENERATION
+          expectedTxnCommitError =
+            if (useNewProtocol && version >= 6) Errors.STALE_MEMBER_EPOCH
+            else Errors.ILLEGAL_GENERATION
         )
+
+        // Verify TXN_OFFSET_COMMIT request failed with an unknown groupId.
+        // v6+ propagates GROUP_ID_NOT_FOUND directly while v0-5 maps it to
+        // ILLEGAL_GENERATION (KIP-1319). This applies to both protocols.
+        verifyTxnCommitAndFetch(
+          topic = topic,
+          topicId = topicId,
+          partition = partition,
+          transactionalId = transactionalId,
+          groupId = "unknown",
+          memberId = memberId,
+          generationId = memberEpoch,
+          offset = 200 + version,
+          version = version.toShort,
+          expectedTxnCommitError =
+            if (version >= 6) Errors.GROUP_ID_NOT_FOUND
+            else Errors.ILLEGAL_GENERATION
+        )
+
+        if (version >= 6) {
+          // Verify TXN_OFFSET_COMMIT request failed with UNKNOWN_TOPIC_ID for an
+          // unknown topic id. Only v6+ carries topic IDs on the wire.
+          verifyTxnCommitAndFetch(
+            topic = topic,
+            topicId = Uuid.randomUuid(),
+            partition = partition,
+            transactionalId = transactionalId,
+            groupId = groupId,
+            memberId = memberId,
+            generationId = memberEpoch,
+            offset = 200 + version,
+            version = version.toShort,
+            expectedTxnCommitError = Errors.UNKNOWN_TOPIC_ID
+          )
+        }
       } else {
         // Verify that the TXN_OFFSET_COMMIT request failed when group metadata is set under version 3.
         assertThrows(classOf[UnsupportedVersionException], () =>
           verifyTxnCommitAndFetch(
             topic = topic,
+            topicId = topicId,
             partition = partition,
             transactionalId = transactionalId,
             groupId = groupId,
@@ -154,6 +199,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
 
   private def verifyTxnCommitAndFetch(
     topic: String,
+    topicId: Uuid,
     partition: Int,
     transactionalId: String,
     groupId: String,
@@ -195,6 +241,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
       producerEpoch = producerIdAndEpoch.epoch,
       transactionalId = transactionalId,
       topic = topic,
+      topicId = topicId,
       partition = partition,
       offset = offset,
       expectedError = expectedTxnCommitError,
@@ -239,9 +286,9 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
     assertNotEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, memberId)
     assertNotEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, memberEpoch)
 
-    createTopic(topic, 1)
+    val topicId = createTopic(topic, 1)
 
-    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(false)) {
+    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       val useTV2 = version > EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2
 
       // Initialize producer. Wait until the coordinator finishes loading.
@@ -300,6 +347,7 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
         producerEpoch = producerIdAndEpoch.epoch,
         transactionalId = transactionalId,
         topic = topic,
+        topicId = topicId,
         partition = partition,
         offset = offset,
         expectedError = if (useTV2) Errors.INVALID_PRODUCER_EPOCH else Errors.NONE,

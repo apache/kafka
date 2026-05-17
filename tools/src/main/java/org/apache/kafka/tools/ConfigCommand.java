@@ -34,6 +34,7 @@ import org.apache.kafka.clients.admin.UserScramCredentialAlteration;
 import org.apache.kafka.clients.admin.UserScramCredentialDeletion;
 import org.apache.kafka.clients.admin.UserScramCredentialUpsertion;
 import org.apache.kafka.clients.admin.UserScramCredentialsDescription;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -71,6 +72,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -93,7 +96,7 @@ import joptsimple.OptionSpec;
  * An entity described or altered by the command may be one of:
  * <ul>
  *     <li> topic: {@code --topic <topic>} OR {@code --entity-type topics --entity-name <topic>}
- *     <li> client: {@code --client <client>} OR {@code --entity-type clients --entity-name <client-id>}
+ *     <li> client: {@code --client <client-id>} OR {@code --entity-type clients --entity-name <client-id>}
  *     <li> user: {@code --user <user-principal>} OR {@code --entity-type users --entity-name <user-principal>}
  *     <li> {@code <user, client>}: {@code --user <user-principal> --client <client-id>} OR
  *                          {@code --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>}
@@ -113,7 +116,6 @@ public class ConfigCommand {
     private static final Logger LOG = LoggerFactory.getLogger(ConfigCommand.class);
 
     private static final String BROKER_DEFAULT_ENTITY_NAME = "";
-    private static final List<String> BROKER_SUPPORTED_CONFIG_TYPES;
     private static final int DEFAULT_SCRAM_ITERATIONS = 4096;
     private static final String TOPIC_TYPE = ConfigType.TOPIC.value();
     private static final String CLIENT_METRICS_TYPE = ConfigType.CLIENT_METRICS.value();
@@ -124,13 +126,10 @@ public class ConfigCommand {
     private static final String IP_TYPE = ConfigType.IP.value();
 
     static final String BROKER_LOGGER_CONFIG_TYPE = "broker-loggers";
-    static {
-        BROKER_SUPPORTED_CONFIG_TYPES = new ArrayList<>();
-        BROKER_SUPPORTED_CONFIG_TYPES.add(BROKER_LOGGER_CONFIG_TYPE);
-        for (ConfigType configType : ConfigType.values()) {
-            BROKER_SUPPORTED_CONFIG_TYPES.add(configType.value());
-        }
-    }
+    private static final List<String> BROKER_SUPPORTED_CONFIG_TYPES = Stream.concat(
+            Stream.of(BROKER_LOGGER_CONFIG_TYPE),
+            Stream.of(ConfigType.values()).map(ConfigType::value)
+    ).toList();
 
     public static void main(String[] args) {
         try {
@@ -276,7 +275,7 @@ public class ConfigCommand {
                 throw new InvalidConfigurationException("Invalid broker logger(s): " + String.join(",", invalidBrokerLoggers));
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName);
-            AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false);
+            AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000);
             List<AlterConfigOp> addEntries = configsToBeAdded.values().stream().map(k -> new AlterConfigOp(k, AlterConfigOp.OpType.SET)).toList();
             List<AlterConfigOp> deleteEntries = configsToBeDeleted.stream().map(k -> new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE)).toList();
             Collection<AlterConfigOp> alterEntries = Stream.concat(deleteEntries.stream(), addEntries.stream()).toList();
@@ -444,7 +443,7 @@ public class ConfigCommand {
         }
         ClientQuotaEntity entity = new ClientQuotaEntity(alterEntityMap);
 
-        AlterClientQuotasOptions alterOptions = new AlterClientQuotasOptions().validateOnly(false);
+        AlterClientQuotasOptions alterOptions = new AlterClientQuotasOptions();
 
         List<ClientQuotaAlteration.Op> addOps = configsToBeAddedMap.entrySet().stream()
                 .map(entry -> {
@@ -530,40 +529,58 @@ public class ConfigCommand {
             }
         }
 
-        List<String> entities;
+        Set<String> entities;
         if (entityName.isPresent()) {
-            entities = List.of(entityName.get());
+            entities = Set.of(entityName.get());
         } else {
             if (TOPIC_TYPE.equals(entityType)) {
-                entities = new ArrayList<>(adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get());
+                entities = new LinkedHashSet<>(adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get());
             } else if (BROKER_TYPE.equals(entityType) || BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
-                List<String> brokerIds = adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().stream()
+                Set<String> brokerIds = adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().stream()
                         .map(Node::idString)
-                        .collect(Collectors.toList());
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
                 brokerIds.add(BROKER_DEFAULT_ENTITY_NAME);
                 entities = brokerIds;
             } else if (CLIENT_METRICS_TYPE.equals(entityType)) {
                 entities = adminClient.listConfigResources(Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions()).all().get().stream()
                         .map(ConfigResource::name)
-                        .toList();
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
             } else if (GROUP_TYPE.equals(entityType)) {
                 Set<String> groupIds = adminClient.listGroups().all().get().stream()
                         .map(GroupListing::groupId)
-                        .collect(Collectors.toSet());
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
                 Set<String> groupResources = listGroupConfigResources(adminClient)
                         .map(resources -> resources.stream()
                                 .map(ConfigResource::name)
-                                .collect(Collectors.toSet()))
-                        .orElse(Set.of());
-                Set<String> combined = new HashSet<>(groupIds);
+                                .collect(Collectors.toCollection(LinkedHashSet::new)))
+                        .orElseGet(LinkedHashSet::new);
+                Set<String> combined = new LinkedHashSet<>(groupIds);
                 combined.addAll(groupResources);
-                entities = new ArrayList<>(combined);
+                entities = combined;
             } else {
                 throw new IllegalArgumentException("Invalid entity type: " + entityType);
             }
         }
 
+        if (entities.isEmpty()) {
+            return;
+        }
+
+        Map<String, DescribeConfigContext> contextsByEntity = new LinkedHashMap<>();
         for (String entity : entities) {
+            contextsByEntity.put(entity, describeConfigContext(entityType, entity));
+        }
+
+        DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(true);
+        Map<ConfigResource, KafkaFuture<Config>> configs = adminClient.describeConfigs(
+                contextsByEntity.values().stream()
+                        .map(DescribeConfigContext::configResource)
+                        .toList(),
+                describeOptions
+        ).values();
+
+        for (String entity : entities) {
+            DescribeConfigContext context = contextsByEntity.get(entity);
             if (BROKER_DEFAULT_ENTITY_NAME.equals(entity)) {
                 System.out.println("Default configs for " + entityType + " in the cluster are:");
             } else {
@@ -571,7 +588,12 @@ public class ConfigCommand {
                 String entityTypeSingular = entityType.substring(0, entityType.length() - 1);
                 System.out.println(configSourceStr + " configs for " + entityTypeSingular + " " + entity + " are:");
             }
-            getResourceConfig(adminClient, entityType, entity, true, describeAll).forEach(entry -> {
+
+            Optional<ConfigEntry.ConfigSource> configSourceFilter = describeAll
+                    ? Optional.empty()
+                    : Optional.of(context.dynamicConfigSource());
+            Config config = configs.get(context.configResource()).get(30, TimeUnit.SECONDS);
+            filterAndSortEntries(config, configSourceFilter).forEach(entry -> {
                 String synonyms = entry.synonyms().stream()
                         .map(synonym -> synonym.source() + ":" + synonym.name() + "=" + synonym.value())
                         .collect(Collectors.joining(", ", "{", "}"));
@@ -582,7 +604,7 @@ public class ConfigCommand {
 
     private static void alterResourceConfig(Admin adminClient, String entityNameHead, List<String> configsToBeDeleted, Map<String, ConfigEntry> configsToBeAdded, ConfigResource.Type resourceType) throws ExecutionException, InterruptedException, TimeoutException {
         ConfigResource configResource = new ConfigResource(resourceType, entityNameHead);
-        AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false);
+        AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000);
         List<AlterConfigOp> addEntries = configsToBeAdded.values().stream().map(k -> new AlterConfigOp(k, AlterConfigOp.OpType.SET)).toList();
         List<AlterConfigOp> deleteEntries = configsToBeDeleted.stream().map(k -> new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE)).toList();
         Collection<AlterConfigOp> alterEntries = Stream.concat(deleteEntries.stream(), addEntries.stream()).toList();
@@ -597,52 +619,63 @@ public class ConfigCommand {
         }
     }
 
-    private static List<ConfigEntry> getResourceConfig(Admin adminClient, String entityType, String entityName, boolean includeSynonyms, boolean describeAll) throws ExecutionException, InterruptedException, TimeoutException {
+    private record DescribeConfigContext(ConfigResource configResource, ConfigEntry.ConfigSource dynamicConfigSource) {
+    }
+
+    private static DescribeConfigContext describeConfigContext(String entityType, String entityName) {
         ConfigResource.Type configResourceType;
-        Optional<ConfigEntry.ConfigSource> dynamicConfigSource;
+        ConfigEntry.ConfigSource dynamicConfigSource;
 
         if (TOPIC_TYPE.equals(entityType)) {
             if (!entityName.isEmpty()) {
                 Topic.validate(entityName);
             }
             configResourceType = ConfigResource.Type.TOPIC;
-            dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG);
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG;
         } else if (BROKER_TYPE.equals(entityType)) {
+            configResourceType = ConfigResource.Type.BROKER;
             if (BROKER_DEFAULT_ENTITY_NAME.equals(entityName)) {
-                configResourceType = ConfigResource.Type.BROKER;
-                dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG);
+                dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG;
             } else {
                 validateBrokerId(entityName, entityType);
-                configResourceType = ConfigResource.Type.BROKER;
-                dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG);
+                dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
             }
         } else if (BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
             if (!entityName.isEmpty()) {
                 validateBrokerId(entityName, entityType);
             }
             configResourceType = ConfigResource.Type.BROKER_LOGGER;
-            dynamicConfigSource = Optional.empty();
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG;
         } else if (CLIENT_METRICS_TYPE.equals(entityType)) {
             configResourceType = ConfigResource.Type.CLIENT_METRICS;
-            dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG);
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG;
         } else if (GROUP_TYPE.equals(entityType)) {
             configResourceType = ConfigResource.Type.GROUP;
-            dynamicConfigSource = Optional.of(ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG);
+            dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG;
         } else {
             throw new IllegalArgumentException("Invalid entity type: " + entityType);
         }
 
-        Optional<ConfigEntry.ConfigSource> configSourceFilter = describeAll ? Optional.empty() : dynamicConfigSource;
+        return new DescribeConfigContext(new ConfigResource(configResourceType, entityName), dynamicConfigSource);
+    }
 
-        ConfigResource configResource = new ConfigResource(configResourceType, entityName);
-        DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms);
-        Map<ConfigResource, Config> configs = adminClient.describeConfigs(Collections.singleton(configResource), describeOptions)
-                    .all().get(30, TimeUnit.SECONDS);
-
-        return configs.get(configResource).entries().stream()
+    private static List<ConfigEntry> filterAndSortEntries(Config config, Optional<ConfigEntry.ConfigSource> configSourceFilter) {
+        return config.entries().stream()
                 .filter(entry -> configSourceFilter.isEmpty() || entry.source() == configSourceFilter.get())
                 .sorted(Comparator.comparing(ConfigEntry::name))
                 .toList();
+    }
+
+    private static List<ConfigEntry> getResourceConfig(Admin adminClient, String entityType, String entityName, boolean includeSynonyms, boolean describeAll) throws ExecutionException, InterruptedException, TimeoutException {
+        DescribeConfigContext context = describeConfigContext(entityType, entityName);
+        Optional<ConfigEntry.ConfigSource> configSourceFilter = describeAll
+                ? Optional.empty()
+                : Optional.of(context.dynamicConfigSource());
+        DescribeConfigsOptions describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms);
+        Map<ConfigResource, Config> configs = adminClient.describeConfigs(Collections.singleton(context.configResource()), describeOptions)
+                    .all().get(30, TimeUnit.SECONDS);
+
+        return filterAndSortEntries(configs.get(context.configResource()), configSourceFilter);
     }
 
     private static void describeQuotaConfigs(Admin adminClient, List<String> entityTypes, List<String> entityNames) throws ExecutionException, InterruptedException, TimeoutException {

@@ -17,7 +17,6 @@
 
 package kafka.server.handlers;
 
-import kafka.network.RequestChannel;
 import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 
@@ -31,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.network.Request;
 
 import java.util.HashSet;
 import java.util.List;
@@ -55,7 +55,7 @@ public class DescribeTopicPartitionsRequestHandler {
         this.config = config;
     }
 
-    public DescribeTopicPartitionsResponseData handleDescribeTopicPartitionsRequest(RequestChannel.Request abstractRequest) {
+    public DescribeTopicPartitionsResponseData handleDescribeTopicPartitionsRequest(Request abstractRequest) {
         DescribeTopicPartitionsRequestData request = ((DescribeTopicPartitionsRequest) abstractRequest.loggableRequest()).data();
         Set<String> topics = new HashSet<>();
         boolean fetchAllTopics = request.topics().isEmpty();
