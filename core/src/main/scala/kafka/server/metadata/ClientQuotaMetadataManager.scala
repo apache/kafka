@@ -74,7 +74,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       val userVal = entity.entries().get(ClientQuotaEntity.USER)
       val clientIdVal = entity.entries().get(ClientQuotaEntity.CLIENT_ID)
 
-      // In User+Client quota managers, "<default>" is used for default entity, so we need to represent all possible
+      // In User+Client quota managers, null is used for the default entity, so we need to represent all possible
       // combinations of values, defaults, and absent entities
       val userClientEntity = if (entity.entries().containsKey(ClientQuotaEntity.USER) &&
           entity.entries().containsKey(ClientQuotaEntity.CLIENT_ID)) {
