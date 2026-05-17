@@ -380,9 +380,10 @@ public class DescribeConsumerGroupTest {
                     protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Map.of()));
                 }
 
-                int expectedNumLines = DESCRIBE_TYPES.size() * 2;
-
                 for (List<String> describeType : DESCRIBE_TYPES) {
+                    int expectedNumLines = describeType.contains("--state")
+                        ? DESCRIBE_TYPES.size() + 1
+                        : DESCRIBE_TYPES.size() * 2;
                     List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe"));
                     cgcArgs.addAll(groups);
                     cgcArgs.addAll(describeType);
@@ -420,8 +421,10 @@ public class DescribeConsumerGroupTest {
                     groups.add(group);
                     protocolConsumerGroupExecutors.add(consumerGroupClosable(groupProtocol, group, topic, Map.of()));
                 }
-                int expectedNumLines = DESCRIBE_TYPES.size() * 2;
                 for (List<String> describeType : DESCRIBE_TYPES) {
+                    int expectedNumLines = describeType.contains("--state")
+                        ? DESCRIBE_TYPES.size() + 1
+                        : DESCRIBE_TYPES.size() * 2;
                     List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe", "--all-groups"));
                     cgcArgs.addAll(describeType);
                     try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs.toArray(new String[0]))) {
