@@ -16,17 +16,30 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.Reconfigurable;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.raft.KRaftConfigs;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mockStatic;
 
 public class AbstractKafkaConfigTest {
+
+    private static final String TEST_INTERNAL_GROUP_CONFIG = "group.test.internal.config";
+    private static final String TEST_INTERNAL_GROUP_CONFIG_BROKER_SYNONYM = "group.test.internal.config.broker.synonym";
 
     @Test
     public void testPopulateSynonymsOnEmptyMap() {
@@ -51,5 +64,52 @@ public class AbstractKafkaConfigTest {
         expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4");
         expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4");
         assertEquals(expectedOutput, AbstractKafkaConfig.populateSynonyms(input));
+    }
+
+    @Test
+    public void testInternalConfigWithDefaultSynonymIsSkipped() {
+        Map<String, Object> config = mockInternalGroupConfigMap(Map.of(), true);
+
+        assertFalse(config.containsKey(TEST_INTERNAL_GROUP_CONFIG));
+    }
+
+    @Test
+    public void testInternalConfigWithSetSynonymIsIncluded() {
+        Map<String, Object> config = mockInternalGroupConfigMap(Map.of(TEST_INTERNAL_GROUP_CONFIG_BROKER_SYNONYM, "override-value"), true);
+
+        assertTrue(config.containsKey(TEST_INTERNAL_GROUP_CONFIG));
+        assertEquals("override-value", config.get(TEST_INTERNAL_GROUP_CONFIG));
+    }
+
+    @Test
+    public void testNonInternalConfigIsIncluded() {
+        Map<String, Object> config = mockInternalGroupConfigMap(Map.of(), false);
+
+        assertTrue(config.containsKey(TEST_INTERNAL_GROUP_CONFIG));
+        assertEquals("default-value", config.get(TEST_INTERNAL_GROUP_CONFIG));
+    }
+
+    private static Map<String, Object> mockInternalGroupConfigMap(Map<String, Object> overrides, boolean isInternal) {
+        try (MockedStatic<GroupConfig> mocked = mockStatic(GroupConfig.class, Mockito.CALLS_REAL_METHODS)) {
+
+            // mock group config
+            mocked.when(GroupConfig::configNames).thenReturn(Set.of(TEST_INTERNAL_GROUP_CONFIG));
+            mocked.when(() -> GroupConfig.brokerSynonym(TEST_INTERNAL_GROUP_CONFIG)).thenReturn(Optional.of(TEST_INTERNAL_GROUP_CONFIG_BROKER_SYNONYM));
+            mocked.when(() -> GroupConfig.isInternal(TEST_INTERNAL_GROUP_CONFIG)).thenReturn(isInternal);
+
+            // mock broker synonym config
+            ConfigDef configDef = new ConfigDef().define(TEST_INTERNAL_GROUP_CONFIG_BROKER_SYNONYM, ConfigDef.Type.STRING,
+                "default-value", ConfigDef.Importance.LOW, "test broker synonym");
+
+            AbstractKafkaConfig kafkaConfig = new AbstractKafkaConfig(configDef, new HashMap<>(overrides), Map.of(), false) {
+                @Override
+                public void addReconfigurable(Reconfigurable reconfigurable) { }
+
+                @Override
+                public void removeReconfigurable(Reconfigurable reconfigurable) { }
+            };
+
+            return kafkaConfig.extractGroupConfigMap();
+        }
     }
 }
