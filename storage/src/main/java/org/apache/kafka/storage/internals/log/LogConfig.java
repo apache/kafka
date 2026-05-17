@@ -34,6 +34,9 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -61,6 +64,8 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 public class LogConfig extends AbstractConfig {
+
+    private static final Logger LOG = LoggerFactory.getLogger(LogConfig.class);
 
     private static class RemoteLogConfig {
 
@@ -347,6 +352,39 @@ public class LogConfig extends AbstractConfig {
         this.errorsDeadletterqueueGroupEnable = getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);
+
+        warnIfIndexUndersizedForSegment();
+    }
+
+    /**
+     * Warn the operator if {@code segment.bytes} is large enough that the offset index will fill up
+     * before the segment reaches the configured size, causing early segment rolls.
+     *
+     * <p>An offset index entry is added every {@code index.interval.bytes} of log data. With the
+     * large-format 12-byte entries (KIP-1333), an 8 GiB segment with the default 4 KiB index
+     * interval needs ~24 MiB of index space. The default {@code segment.index.bytes} (10 MiB) is
+     * not large enough, so the segment would roll at ~3.4 GiB instead of the configured 8 GiB.
+     *
+     * <p>This check warns rather than failing because the user may intentionally accept early
+     * rolls (e.g., to increase index granularity) or rely on dynamic config updates.
+     */
+    private void warnIfIndexUndersizedForSegment() {
+        long effectiveSegmentSize = internalSegmentSize == null ? segmentSize : internalSegmentSize;
+        if (indexInterval <= 0 || effectiveSegmentSize <= 0) return;
+        int entrySize = useLargeIndexFormat ? OffsetIndex.LARGE_ENTRY_SIZE : OffsetIndex.LEGACY_ENTRY_SIZE;
+        // Use long arithmetic; required index size = ceil(segmentSize / indexInterval) * entrySize.
+        long requiredEntries = (effectiveSegmentSize + indexInterval - 1) / indexInterval;
+        long requiredIndexBytes = requiredEntries * entrySize;
+        if (requiredIndexBytes > maxIndexSize) {
+            LOG.warn("Segment will roll early on offset-index fullness, not segment size: " +
+                    "segment.bytes={}, index.interval.bytes={}, index entry size={} bytes ({} format), " +
+                    "computed required index bytes={}, but segment.index.bytes={}. " +
+                    "Raise segment.index.bytes to at least {} to allow the segment to fill, " +
+                    "or lower segment.bytes / raise index.interval.bytes if early rolling is intended.",
+                    effectiveSegmentSize, indexInterval, entrySize,
+                    useLargeIndexFormat ? "large" : "legacy",
+                    requiredIndexBytes, maxIndexSize, requiredIndexBytes);
+        }
     }
 
     private Optional<Compression> getCompression() {

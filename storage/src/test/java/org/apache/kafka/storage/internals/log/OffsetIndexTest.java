@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,6 +41,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetIndexTest {
 
@@ -574,6 +576,81 @@ public class OffsetIndexTest {
         assertEquals(OffsetIndex.LEGACY_ENTRY_SIZE,
                 OffsetIndex.detectEntrySize(emptyFile, OffsetIndex.LEGACY_ENTRY_SIZE));
         Files.deleteIfExists(emptyFile.toPath());
+    }
+
+    /**
+     * Cross-check against the companion .log file size disambiguates ~all real cases:
+     * legacy-read-as-large produces positions > 2^32 for segments < 2GiB; the .log
+     * length cross-check rejects those impossible positions.
+     */
+    @Test
+    public void testDetectEntrySizeCrossChecksLogFileSize() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // Write 3 legacy entries (24 bytes, ambiguous size)
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 100);
+            legacyIdx.append(2, 200);
+            legacyIdx.append(3, 300);
+        }
+
+        // Create a companion .log file that is too small for any large-format positions
+        // to be valid (positions would have to be <= 1024).
+        String indexPath = indexFile.getAbsolutePath();
+        File logFile = new File(indexPath.substring(0, indexPath.lastIndexOf('.')) + ".log");
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(logFile, "rw")) {
+            raf.setLength(1024);
+        }
+
+        // Detection should pick legacy thanks to the .log cross-check.
+        try (OffsetIndex reopened = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LARGE_ENTRY_SIZE, false, true)) {
+            assertEquals(3, reopened.entries());
+            assertEquals(new OffsetPosition(1, 100), reopened.entry(0));
+        }
+
+        Files.deleteIfExists(logFile.toPath());
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * P0-1 fix: when format is genuinely ambiguous (strict monotonicity passes for both formats
+     * AND log-file cross-check cannot disambiguate), throw CorruptIndexException so recovery
+     * rebuilds from the .log file. Silent fallback to the wrong format corrupts reads.
+     *
+     * <p>Byte layout chosen so that both interpretations pass strict monotonicity:
+     * <pre>
+     * Bytes (big-endian ints):  1, 2, 3, 4, 5, 6  (each 4 bytes -> 24 bytes total)
+     *
+     * Legacy (3 x 8-byte entries):
+     *   entry 0: relOff=1, pos=2
+     *   entry 1: relOff=3, pos=4
+     *   entry 2: relOff=5, pos=6
+     *   All strictly increasing -> passes.
+     *
+     * Large (2 x 12-byte entries):
+     *   entry 0: relOff=1, pos=long((2<<32)|3) = 8589934595
+     *   entry 1: relOff=4, pos=long((5<<32)|6) = 21474836486
+     *   All strictly increasing -> passes.
+     * </pre>
+     */
+    @Test
+    public void testDetectEntrySizeThrowsOnTrueAmbiguity() throws IOException {
+        File indexFile = nonExistentTempFile();
+        ByteBuffer buf = ByteBuffer.allocate(24);
+        buf.putInt(1);
+        buf.putInt(2);
+        buf.putInt(3);
+        buf.putInt(4);
+        buf.putInt(5);
+        buf.putInt(6);
+        Files.write(indexFile.toPath(), buf.array());
+
+        // No companion .log file -> cross-check is skipped -> both formats pass strict validation
+        // -> CorruptIndexException is thrown rather than silently choosing one.
+        CorruptIndexException ex = assertThrows(CorruptIndexException.class, () ->
+            OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
+        assertTrue(ex.getMessage().contains("Cannot disambiguate"),
+            "Expected disambiguation error but got: " + ex.getMessage());
+        Files.deleteIfExists(indexFile.toPath());
     }
 
     private void assertWriteFails(String message, OffsetIndex idx, int offset) {

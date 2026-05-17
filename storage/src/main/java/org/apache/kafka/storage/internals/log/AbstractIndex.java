@@ -388,7 +388,7 @@ public abstract class AbstractIndex implements Closeable {
      * lookups should go to the 1st branch. We call the last N entries the "warm" section. As we frequently look up in this
      * relatively small section, the pages containing this section are more likely to be in the page cache.
      *
-     * We set N (_warmEntries) to 8192, because
+     * We set N (_warmEntries) to fit in 8192 bytes for legacy 8-byte entries, because
      * 1. This number is small enough to guarantee all the pages of the "warm" section is touched in every warm-section
      *    lookup. So that, the entire warm section is really "warm".
      *    When doing warm-section lookup, following 3 entries are always touched: indexEntry(end), indexEntry(end-N),
@@ -398,15 +398,24 @@ public abstract class AbstractIndex implements Closeable {
      * 2. This number is large enough to guarantee most of the in-sync lookups are in the warm-section. With default Kafka
      *    settings, 8KB index corresponds to about 4MB (offset index) or 2.7MB (time index) log messages.
      *
-     *  We can't set make N (_warmEntries) to be larger than 8192, as there is no simple way to guarantee all the "warm"
-     *  section pages are really warm (touched in every lookup) on a typical 4KB-page host.
+     * For the large-format OffsetIndex (12-byte entries, KIP-1333), we keep the same target of 1024 warm entries
+     * by allowing the warm section to span up to 12 KiB. Three 12-byte coordinate touches still cover at most three
+     * 4 KiB pages, so the touched-page guarantee holds. The warm section still corresponds to ~4 MiB of log data,
+     * preserving the lookup-locality property described above.
      *
-     * In there future, we may use a backend thread to periodically touch the entire warm section. So that, we can
+     *  We can't set make N (_warmEntries) larger than 1024 (which is 8 KiB at 8 B/entry or 12 KiB at 12 B/entry),
+     *  as there is no simple way to guarantee all the "warm" section pages are really warm (touched in every lookup)
+     *  on a typical 4KB-page host.
+     *
+     * In the future, we may use a backend thread to periodically touch the entire warm section. So that, we can
      * 1) support larger warm section
      * 2) make sure the warm section of low QPS topic-partitions are really warm.
      */
     protected final int warmEntries() {
-        return 8192 / effectiveEntrySize();
+        // Target a fixed number of entries (1024) so the warm-section log coverage is constant across
+        // legacy and large index formats. With page size >= 4096 bytes, the three coordinate-touches
+        // in warm-section lookup still cover at most three pages.
+        return 1024;
     }
 
     protected void safeForceUnmap() {

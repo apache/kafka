@@ -1038,14 +1038,18 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             boolean isTxnIdxEmpty = segment.txnIndex().isEmpty();
             long actualSegmentSize = segment.log().sizeInBytesLong();
             // RemoteLogSegmentMetadata.segmentSizeInBytes is int (schema uses int32).
-            // Segments >2GB will have truncated size in metadata until the schema is evolved.
+            // Until the metadata record schema is evolved to int64, skip tiering of segments >2GiB.
+            // Silently clamping the size would corrupt remote-tier accounting (retention, deletion,
+            // remote-bytes metrics) and could cause incorrect data to be served on fetch.
             if (actualSegmentSize > Integer.MAX_VALUE) {
-                logger.warn("Segment {} has size {} bytes which exceeds Integer.MAX_VALUE. " +
-                    "The segment size in RemoteLogSegmentMetadata will be clamped to Integer.MAX_VALUE " +
-                    "until the metadata schema is evolved to support long sizes.",
-                    segment, actualSegmentSize);
+                logger.warn("Skipping tiered-storage copy of segment {} of partition {} because its size ({} bytes) " +
+                    "exceeds the int32 limit of RemoteLogSegmentMetadata.segmentSizeInBytes. " +
+                    "This segment will remain on local storage. The tiered-storage metadata schema must be evolved " +
+                    "to int64 to support segments larger than 2GiB (tracked separately from KIP-1333).",
+                    segment.baseOffset(), topicIdPartition, actualSegmentSize);
+                return;
             }
-            int segmentSizeForMetadata = (int) Math.min(actualSegmentSize, Integer.MAX_VALUE);
+            int segmentSizeForMetadata = (int) actualSegmentSize;
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(segmentId, segment.baseOffset(), endOffset,
                     segment.largestTimestamp(), brokerId, time.milliseconds(), segmentSizeForMetadata,
                     segmentLeaderEpochs, isTxnIdxEmpty);

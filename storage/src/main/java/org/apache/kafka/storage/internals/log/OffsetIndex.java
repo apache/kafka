@@ -87,29 +87,94 @@ public final class OffsetIndex extends AbstractIndex {
      *                       Gated by MetadataVersion.isLargeIndexFormatSupported().
      */
     public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable, boolean useLargeFormat) throws IOException {
-        this(file, baseOffset, maxIndexSize, writable,
-                detectEntrySize(file, useLargeFormat ? LARGE_ENTRY_SIZE : LEGACY_ENTRY_SIZE));
-    }
-
-    private OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable, int detectedEntrySize) throws IOException {
-        super(file, baseOffset, maxIndexSize, writable, detectedEntrySize);
-        this.indexEntrySize = detectedEntrySize;
-
-        lastOffset = lastEntry().offset();
-
-        log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}, entrySize = {}",
-            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position(), indexEntrySize);
+        this(file, baseOffset, maxIndexSize, writable, detectWithRetry(file, useLargeFormat), useLargeFormat);
     }
 
     /**
-     * Detect the entry size of an index file. For new or empty files, returns the requested format.
-     * For existing files with data, auto-detects the format from the file size:
-     * - If file size is only divisible by 12 (not 8): large format
-     * - If file size is only divisible by 8 (not 12): legacy format
-     * - If divisible by both (ambiguous): validates entries to determine format
-     * - If divisible by neither: returns requested format (file will fail sanityCheck and be rebuilt)
+     * Detect entry size, then re-verify after entering the constructor to catch TOCTOU races
+     * where the file is truncated/extended between detection and mmap. If the file length
+     * changed between detection and verification, we re-detect once and throw if it changes again.
+     *
+     * <p>This mitigates two race windows:
+     * <ol>
+     *   <li>A concurrent {@code recover()} / {@code truncateTo()} / {@code reset()} changes
+     *       {@code file.length()} between detection and the mmap open in
+     *       {@link AbstractIndex#createAndAssignMmap()}.
+     *   <li>A partial-write tail from a previous crash makes the on-disk length straddle an
+     *       entry boundary.
+     * </ol>
+     *
+     * <p>The mitigation does not require a file lock because the {@link AbstractIndex} constructor
+     * opens the file with O_CREAT semantics on a fresh new file (in which case
+     * {@code detectEntrySize} returned {@code requestedEntrySize}), and existing files are
+     * touched only by single-threaded log recovery. A double-check at construction time is
+     * sufficient to detect any in-flight concurrent modification.
      */
-    static int detectEntrySize(File file, int requestedEntrySize) {
+    private static int detectWithRetry(File file, boolean useLargeFormat) throws IOException {
+        int requested = useLargeFormat ? LARGE_ENTRY_SIZE : LEGACY_ENTRY_SIZE;
+        long lengthBefore = file.exists() ? file.length() : 0;
+        int detected = detectEntrySize(file, requested);
+        long lengthAfter = file.exists() ? file.length() : 0;
+        if (lengthBefore != lengthAfter) {
+            // File changed during detection; re-detect once.
+            int redetected = detectEntrySize(file, requested);
+            long lengthFinal = file.exists() ? file.length() : 0;
+            if (lengthAfter != lengthFinal || detected != redetected) {
+                throw new CorruptIndexException("Index file " + file.getAbsolutePath() +
+                    " length changed during format detection (" + lengthBefore + " -> " +
+                    lengthAfter + " -> " + lengthFinal + "); refusing to mmap with a possibly-wrong " +
+                    "entry size. Recovery will rebuild from the .log file.");
+            }
+            return redetected;
+        }
+        return detected;
+    }
+
+    private OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable,
+                        int detectedEntrySize, boolean useLargeFormat) throws IOException {
+        super(file, baseOffset, maxIndexSize, writable, detectedEntrySize);
+        this.indexEntrySize = detectedEntrySize;
+
+        // TOCTOU verification: re-detect from the now-mmapped file's length.
+        // AbstractIndex has just opened and mmapped the file using its own raf.length() read;
+        // if that length differs from what detection saw, the mmap stride could be wrong.
+        long mmapLength = length();
+        if (mmapLength > 0 && mmapLength % detectedEntrySize != 0) {
+            throw new CorruptIndexException("Index file " + file.getAbsolutePath() +
+                " length (" + mmapLength + ") is not a multiple of the detected entry size (" +
+                detectedEntrySize + "). File was modified between detection and mmap. " +
+                "Recovery will rebuild from the .log file.");
+        }
+
+        lastOffset = lastEntry().offset();
+
+        log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}, entrySize = {}, useLargeFormat = {}",
+            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position(), indexEntrySize, useLargeFormat);
+    }
+
+    // Number of leading entries to inspect when disambiguating index format on read.
+    // Scanning more than this is unnecessary because legitimate indexes have strictly
+    // monotonic prefixes that disambiguate quickly; corrupt prefixes are caught immediately.
+    static final int FORMAT_DETECTION_PREFIX_ENTRIES = 32;
+
+    /**
+     * Detect the entry size of an existing index file.
+     *
+     * <p>For new or empty files, returns the requested format. For existing files with data,
+     * auto-detects the format from the file size:
+     * <ul>
+     *   <li>If file size is only divisible by 12 (not 8): large format
+     *   <li>If file size is only divisible by 8 (not 12): legacy format
+     *   <li>If divisible by neither: returns requested format (file will fail sanityCheck and be rebuilt)
+     *   <li>If divisible by both (ambiguous, ~1/3 of legacy and ~1/2 of large indexes): cross-checks
+     *       against the companion .log file size and validates entries with strict monotonicity
+     * </ul>
+     *
+     * <p>On true ambiguity (both formats validate equally and the .log cross-check cannot
+     * disambiguate), throws {@link CorruptIndexException} so the caller can trigger a
+     * segment rebuild from the .log file. Silently picking the wrong format can corrupt reads.
+     */
+    static int detectEntrySize(File file, int requestedEntrySize) throws IOException {
         if (!file.exists()) return requestedEntrySize;
         long fileSize = file.length();
         if (fileSize == 0) return requestedEntrySize;
@@ -121,64 +186,100 @@ public final class OffsetIndex extends AbstractIndex {
         if (validAsLegacy && !validAsLarge) return LEGACY_ENTRY_SIZE;
         if (!validAsLegacy && !validAsLarge) return requestedEntrySize; // corrupt, will fail sanityCheck
 
-        // Ambiguous: file size is divisible by both 8 and 12.
-        // Validate entries by reading the first few and checking if positions are reasonable.
-        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
-            return detectEntryByValidation(raf, fileSize, requestedEntrySize);
-        } catch (Exception e) {
-            log.warn("Failed to auto-detect index format for {}, using requested entry size {}", file, requestedEntrySize, e);
-            return requestedEntrySize;
-        }
+        // Ambiguous: file size is divisible by both 8 and 12 (lcm = 24).
+        // This is the common case, not an edge case: ~1/3 of legacy and ~1/2 of large indexes.
+        // We must NOT silently fall back to requestedEntrySize -- a wrong choice produces
+        // garbage OffsetPositions and consumer-visible read corruption.
+        return detectEntryByValidation(file, fileSize, requestedEntrySize);
     }
 
     /**
      * For ambiguous files (size divisible by both 8 and 12), validate entries with each format
-     * and return the one that produces valid data.
+     * using strict monotonicity and cross-check positions against the companion .log file.
+     * Throws CorruptIndexException if both formats remain plausible -- recovery will rebuild.
      */
-    private static int detectEntryByValidation(RandomAccessFile raf, long fileSize, int requestedEntrySize) throws IOException {
-        ByteBuffer buf = ByteBuffer.allocate((int) Math.min(fileSize, 120)); // read up to 10 large entries
-        raf.getChannel().read(buf, 0);
+    private static int detectEntryByValidation(File file, long fileSize, int requestedEntrySize) throws IOException {
+        // Read enough bytes to inspect up to FORMAT_DETECTION_PREFIX_ENTRIES of the LARGE format
+        // (which is the bigger of the two, so it bounds the read size for both).
+        long maxReadBytes = (long) FORMAT_DETECTION_PREFIX_ENTRIES * LARGE_ENTRY_SIZE;
+        int readBytes = (int) Math.min(fileSize, maxReadBytes);
+        ByteBuffer buf = ByteBuffer.allocate(readBytes);
+        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+            int n = raf.getChannel().read(buf, 0);
+            if (n < readBytes) {
+                throw new IOException("Short read of index file " + file.getAbsolutePath() +
+                    " for format detection: expected " + readBytes + " bytes, got " + n);
+            }
+        }
         buf.flip();
 
-        boolean largeValid = validateEntries(buf, LARGE_ENTRY_SIZE);
+        // Cross-check against the companion .log file: positions must be <= log length.
+        // This single check disambiguates ~all real cases because legacy-read-as-large
+        // produces astronomical positions (>2^32) for segments < 2GiB, and
+        // large-read-as-legacy produces a stream of zeros for the upper bytes.
+        long logFileSize = companionLogFileSize(file);
+
+        boolean largeValid = validateEntries(buf, LARGE_ENTRY_SIZE, fileSize, logFileSize);
         buf.rewind();
-        boolean legacyValid = validateEntries(buf, LEGACY_ENTRY_SIZE);
+        boolean legacyValid = validateEntries(buf, LEGACY_ENTRY_SIZE, fileSize, logFileSize);
 
         if (largeValid && !legacyValid) return LARGE_ENTRY_SIZE;
         if (legacyValid && !largeValid) return LEGACY_ENTRY_SIZE;
 
-        // Both valid or both invalid -- use requested format.
-        // This can happen when the file has very few entries whose byte patterns are
-        // valid under both interpretations. Log a warning so operators have visibility.
-        log.warn("Ambiguous index format detection for file size {}: both legacy and large formats " +
-            "appear valid (largeValid={}, legacyValid={}). Using requested entry size {}.",
-            fileSize, largeValid, legacyValid, requestedEntrySize);
-        return requestedEntrySize;
+        // True ambiguity: both formats pass strict validation. This can only happen for
+        // a very short index whose byte patterns happen to be valid under both
+        // interpretations. Throw so the caller rebuilds from the .log file -- the cost of
+        // one segment recovery is bounded; the risk of a silent misread is not.
+        throw new CorruptIndexException("Cannot disambiguate index format for " + file.getAbsolutePath() +
+            " (size=" + fileSize + ", logFileSize=" + logFileSize + "): both legacy and large formats " +
+            "pass strict validation. Recovery will rebuild this index from the .log file.");
+    }
+
+    /**
+     * Return the size of the companion .log file, or -1 if it does not exist (in which case
+     * the position cross-check is skipped).
+     */
+    private static long companionLogFileSize(File indexFile) {
+        String indexPath = indexFile.getAbsolutePath();
+        int dot = indexPath.lastIndexOf('.');
+        if (dot < 0) return -1;
+        File logFile = new File(indexPath.substring(0, dot) + ".log");
+        return logFile.exists() ? logFile.length() : -1;
     }
 
     /**
      * Check if entries read with the given entry size produce valid data:
-     * - Relative offsets should be non-negative and non-decreasing
-     * - Positions should be non-negative and non-decreasing
+     * <ul>
+     *   <li>Relative offsets must be non-negative and strictly increasing
+     *   <li>Positions must be non-negative and strictly increasing
+     *   <li>If logFileSize is known (&gt;= 0), every position must be &lt;= logFileSize
+     * </ul>
+     * Inspects up to FORMAT_DETECTION_PREFIX_ENTRIES entries from the buffer.
      */
-    private static boolean validateEntries(ByteBuffer buf, int entrySize) {
-        int numEntries = buf.limit() / entrySize;
+    private static boolean validateEntries(ByteBuffer buf, int entrySize, long indexFileSize, long logFileSize) {
+        int availableEntries = buf.limit() / entrySize;
+        int totalEntries = (int) Math.min(indexFileSize / entrySize, FORMAT_DETECTION_PREFIX_ENTRIES);
+        int numEntries = Math.min(availableEntries, totalEntries);
         if (numEntries == 0) return true;
 
         int prevRelOffset = -1;
         long prevPosition = -1;
-        for (int i = 0; i < Math.min(numEntries, 10); i++) {
+        for (int i = 0; i < numEntries; i++) {
             int relOffset = buf.getInt(i * entrySize);
             long position;
             if (entrySize == LARGE_ENTRY_SIZE) {
                 position = buf.getLong(i * entrySize + 4);
             } else {
-                position = buf.getInt(i * entrySize + 4);
+                position = buf.getInt(i * entrySize + 4) & 0xFFFFFFFFL; // unsigned int
             }
 
             if (relOffset < 0 || position < 0) return false;
-            if (prevRelOffset >= 0 && relOffset < prevRelOffset) return false;
-            if (prevPosition >= 0 && position < prevPosition) return false;
+            // Strict monotonicity: a legitimate index never repeats either coordinate.
+            if (i > 0 && relOffset <= prevRelOffset) return false;
+            if (i > 0 && position <= prevPosition) return false;
+            // Position cross-check against companion .log file (when available).
+            // A legitimate position is bounded by the actual log file size.
+            if (logFileSize >= 0 && position > logFileSize) return false;
 
             prevRelOffset = relOffset;
             prevPosition = position;
@@ -193,7 +294,8 @@ public final class OffsetIndex extends AbstractIndex {
                 "but the last offset is " + lastOffset + " which is less than the base offset " + baseOffset());
         if (length() % entrySize() != 0)
             throw new CorruptIndexException("Index file " + file().getAbsolutePath() + " is corrupt, found " + length() +
-                " bytes which is neither positive nor a multiple of " + entrySize());
+                " bytes which is neither positive nor a multiple of the runtime entry size " + entrySize() +
+                " (legacy=" + LEGACY_ENTRY_SIZE + ", large=" + LARGE_ENTRY_SIZE + ")");
         // Validate that entries are monotonically non-decreasing in both offset and position.
         // This catches corruption that passes the above checks (e.g., when the file size is
         // divisible by the entry size but the content is garbage).
@@ -208,6 +310,10 @@ public final class OffsetIndex extends AbstractIndex {
                 for (int i = 1; i < entries(); i++) {
                     int relOff = relativeOffset(idx, i);
                     long pos = physical(idx, i);
+                    // Non-decreasing check: tolerates repeated zero entries that can arise from
+                    // pre-allocated index files (where unwritten slots are zero-filled). Format
+                    // detection (validateEntries) uses strict monotonicity for stronger guarantees
+                    // on the disambiguation path.
                     if (relOff < prevRelOff || pos < prevPos)
                         throw new CorruptIndexException("Corrupt index found, index file " + file().getAbsolutePath() +
                             " has non-monotonic entry at slot " + i + ": relativeOffset=" + relOff +
