@@ -2169,6 +2169,7 @@ public class RemoteLogManagerTest {
         Map<String, Long> logProps = new HashMap<>();
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 100L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
         when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
@@ -2197,6 +2198,7 @@ public class RemoteLogManagerTest {
         Map<String, Long> logProps = new HashMap<>();
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 100L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
         when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
@@ -2231,6 +2233,7 @@ public class RemoteLogManagerTest {
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, -1L);
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -2L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, -1L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 60L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
@@ -2259,6 +2262,7 @@ public class RemoteLogManagerTest {
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, -1L);
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -2L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, -1L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, 50L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
@@ -2410,10 +2414,8 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testCandidateLogSegmentsUploadWhenRemoteCopyLagMsIsZeroAndSizeLagExceeded() {
-        // If local retention ms is unlimited and remote.copy.lag.ms is the default 0, whether
-        // upload is delayed depends on the size-based lag configuration.
-        // This case verifies non-delayed upload.
+    public void testCandidateLogSegmentsUploadImmediatelyWhenRemoteCopyLagMsIsZeroAndSizeLagExceeded() {
+        // remote.copy.lag.ms=0 means immediate upload without any delay check, even if size lag is exceeded.
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
@@ -2439,17 +2441,16 @@ public class RemoteLogManagerTest {
         RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES);
         List<RemoteLogManager.EnrichedLogSegment> expected =
                 List.of(
-                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L)
+                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
+                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
                 );
         List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
         assertEquals(expected, actual);
     }
 
     @Test
-    public void testCandidateLogSegmentsDelayUploadWhenRemoteCopyLagMsIsZeroAndSizeLagNotExceeded() {
-        // If local retention ms is unlimited and remote.copy.lag.ms is the default 0, whether
-        // upload is delayed depends on the size-based lag configuration.
-        // This case verifies delayed upload.
+    public void testCandidateLogSegmentsUploadImmediatelyWhenRemoteCopyLagMsIsZeroAndSizeLagNotExceeded() {
+        // remote.copy.lag.ms=0 means immediate upload without any delay check, even if size lag is not exceeded.
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
@@ -2473,8 +2474,13 @@ public class RemoteLogManagerTest {
         when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
 
         RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES);
+        List<RemoteLogManager.EnrichedLogSegment> expected =
+                List.of(
+                        new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
+                        new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
+                );
         List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
-        assertTrue(actual.isEmpty());
+        assertEquals(expected, actual);
     }
 
     @Test
@@ -2495,6 +2501,7 @@ public class RemoteLogManagerTest {
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, 100L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
         when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
@@ -2531,6 +2538,7 @@ public class RemoteLogManagerTest {
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, 100L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, -1L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
         when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
@@ -2563,6 +2571,7 @@ public class RemoteLogManagerTest {
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -2L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, 50L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, -1L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
@@ -2597,6 +2606,7 @@ public class RemoteLogManagerTest {
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, -2L);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
         logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, 60L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, -1L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
@@ -2694,6 +2704,7 @@ public class RemoteLogManagerTest {
         Map<String, Long> logProps = new HashMap<>();
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
         logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 100L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
         when(segment1.largestTimestamp()).thenThrow(new IOException("failed-to-read-largest-timestamp"));
