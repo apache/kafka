@@ -24,7 +24,6 @@ import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
 import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
-import org.apache.kafka.clients.KafkaClient
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -54,7 +53,7 @@ import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
-import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, ShareCoordinatorMetadataCacheHelper}
+import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister}
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper, Timer}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
@@ -726,13 +725,12 @@ class BrokerServer(
     if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
       if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
-        klass.getDeclaredMethod("instance", classOf[KafkaClient], classOf[ShareCoordinatorMetadataCacheHelper], classOf[Time], classOf[Timer])
-          .invoke(null,
-            NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
-            new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
-            Time.SYSTEM,
-            shareGroupTimer
-          ).asInstanceOf[Persister]
+        DefaultStatePersister.instance(
+          NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
+          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+          Time.SYSTEM,
+          shareGroupTimer
+        )
       } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
         info("Using no-op persister")
         new NoOpStatePersister()
