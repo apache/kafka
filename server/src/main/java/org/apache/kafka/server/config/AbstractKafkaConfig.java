@@ -632,6 +632,13 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return millis < 0 ? Long.valueOf(-1) : millis;
     }
 
+    /**
+     * Returns a map of group config names to their broker-level synonym values, used as
+     * defaults when building a {@link GroupConfig} for {@code DescribeConfigs}.
+     * Internal group configs are excluded unless their broker synonym was explicitly configured.
+     *
+     * @return a map of group config names to their corresponding broker-level values
+     */
     public Map<String, Object> extractGroupConfigMap() {
         Map<String, Object> defaults = new HashMap<>();
         Map<String, Object> brokerOriginals = originals();

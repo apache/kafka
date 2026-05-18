@@ -67,29 +67,29 @@ public class AbstractKafkaConfigTest {
     }
 
     @Test
-    public void testInternalConfigWithDefaultSynonymIsSkipped() {
-        Map<String, Object> config = mockInternalGroupConfigMap(Map.of(), true);
+    public void testExtractGroupConfigMapExcludesInternalConfigWithUnconfiguredBrokerSynonym() {
+        Map<String, Object> config = extractGroupConfigMap(Map.of(), true);
 
         assertFalse(config.containsKey(TEST_INTERNAL_GROUP_CONFIG));
     }
 
     @Test
-    public void testInternalConfigWithSetSynonymIsIncluded() {
-        Map<String, Object> config = mockInternalGroupConfigMap(Map.of(TEST_INTERNAL_GROUP_CONFIG_BROKER_SYNONYM, "override-value"), true);
+    public void testExtractGroupConfigMapIncludesInternalConfigWithConfiguredBrokerSynonym() {
+        Map<String, Object> config = extractGroupConfigMap(Map.of(TEST_INTERNAL_GROUP_CONFIG_BROKER_SYNONYM, "override-value"), true);
 
         assertTrue(config.containsKey(TEST_INTERNAL_GROUP_CONFIG));
         assertEquals("override-value", config.get(TEST_INTERNAL_GROUP_CONFIG));
     }
 
     @Test
-    public void testNonInternalConfigIsIncluded() {
-        Map<String, Object> config = mockInternalGroupConfigMap(Map.of(), false);
+    public void testExtractGroupConfigMapIncludesNonInternalConfig() {
+        Map<String, Object> config = extractGroupConfigMap(Map.of(), false);
 
         assertTrue(config.containsKey(TEST_INTERNAL_GROUP_CONFIG));
         assertEquals("default-value", config.get(TEST_INTERNAL_GROUP_CONFIG));
     }
 
-    private static Map<String, Object> mockInternalGroupConfigMap(Map<String, Object> overrides, boolean isInternal) {
+    private static Map<String, Object> extractGroupConfigMap(Map<String, Object> brokerProps, boolean isInternal) {
         try (MockedStatic<GroupConfig> mocked = mockStatic(GroupConfig.class, Mockito.CALLS_REAL_METHODS)) {
 
             // mock group config
@@ -101,7 +101,7 @@ public class AbstractKafkaConfigTest {
             ConfigDef configDef = new ConfigDef().define(TEST_INTERNAL_GROUP_CONFIG_BROKER_SYNONYM, ConfigDef.Type.STRING,
                 "default-value", ConfigDef.Importance.LOW, "test broker synonym");
 
-            AbstractKafkaConfig kafkaConfig = new AbstractKafkaConfig(configDef, new HashMap<>(overrides), Map.of(), false) {
+            AbstractKafkaConfig kafkaConfig = new AbstractKafkaConfig(configDef, new HashMap<>(brokerProps), Map.of(), false) {
                 @Override
                 public void addReconfigurable(Reconfigurable reconfigurable) { }
 
