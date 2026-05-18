@@ -111,7 +111,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     /**
      * Integer specifying the number of partitions in __share_group_state topic. It helps create a hash which is
      * used for the mapping between {@link SharePartitionKey} and the relevant {@link ShareCoordinatorShard}.
-     * Invoked by the broker lifecycle manager.
+     * Updated by call from broker lifecycle manager.
      */
     private volatile int numPartitions = -1;
 
