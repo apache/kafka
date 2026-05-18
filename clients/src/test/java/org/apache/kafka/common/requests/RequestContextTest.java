@@ -37,7 +37,6 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
@@ -128,9 +127,9 @@ public class RequestContextTest {
                 KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
                 ClientInformation.EMPTY, true);
 
-        assertInstanceOf(BufferUnderflowException.class,
-                assertThrows(InvalidRequestException.class,
-                        () -> context.parseRequest(corruptBuffer)).getCause());
+        String msg = assertThrows(InvalidRequestException.class,
+                () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
+        assertEquals("Tried to allocate a collection of size 1073741823, but there are only 17 bytes remaining.", msg);
     }
 
     @Test
@@ -145,9 +144,10 @@ public class RequestContextTest {
                 KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
                 ClientInformation.EMPTY, true);
 
-        assertInstanceOf(BufferUnderflowException.class,
-                assertThrows(InvalidRequestException.class,
-                        () -> context.parseRequest(corruptBuffer)).getCause());
+        String msg = assertThrows(InvalidRequestException.class,
+                () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
+        assertEquals(
+                "Tried to allocate a collection of size 2147483647, but there are only 8 bytes remaining.", msg);
     }
 
     private ByteBuffer produceRequest(short version) {
@@ -184,9 +184,9 @@ public class RequestContextTest {
                 KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
                 ClientInformation.EMPTY, true);
 
-        assertInstanceOf(BufferUnderflowException.class,
-                assertThrows(InvalidRequestException.class,
-                        () -> context.parseRequest(corruptBuffer)).getCause());
+        String msg = assertThrows(InvalidRequestException.class,
+                () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
+        assertEquals("Error reading byte array of 2147483647 byte(s): only 0 byte(s) available", msg);
     }
 
 }

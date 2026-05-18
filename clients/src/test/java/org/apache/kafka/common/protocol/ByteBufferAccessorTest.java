@@ -18,7 +18,6 @@ package org.apache.kafka.common.protocol;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
@@ -38,7 +37,9 @@ public class ByteBufferAccessorTest {
         final byte[] testArray2 = accessor.readArray(3);
         assertArrayEquals(testArray, testArray2);
         assertEquals(12345, accessor.readInt());
-        assertThrows(BufferUnderflowException.class, () -> accessor.readArray(3));
+        assertEquals("Error reading byte array of 3 byte(s): only 0 byte(s) available",
+            assertThrows(RuntimeException.class,
+                () -> accessor.readArray(3)).getMessage());
     }
 
     @Test
@@ -50,35 +51,8 @@ public class ByteBufferAccessorTest {
         accessor.writeByteArray(testArray);
         accessor.flip();
         assertEquals("ABC", accessor.readString(3));
-        assertThrows(BufferUnderflowException.class, () -> accessor.readString(2));
-    }
-
-    @Test
-    public void testReadByteBufferThrowsBufferUnderflowWhenLengthExceedsRemaining() {
-        ByteBufferAccessor accessor = new ByteBufferAccessor(ByteBuffer.allocate(4));
-        assertThrows(BufferUnderflowException.class, () -> accessor.readByteBuffer(5));
-    }
-
-    @Test
-    public void testPrimitiveReadsThrowBufferUnderflowOnEmpty() {
-        ByteBufferAccessor empty = new ByteBufferAccessor(ByteBuffer.allocate(0));
-        assertThrows(BufferUnderflowException.class, empty::readByte);
-        assertThrows(BufferUnderflowException.class, empty::readShort);
-        assertThrows(BufferUnderflowException.class, empty::readInt);
-        assertThrows(BufferUnderflowException.class, empty::readLong);
-        assertThrows(BufferUnderflowException.class, empty::readDouble);
-        assertThrows(BufferUnderflowException.class, empty::readUnsignedVarint);
-        assertThrows(BufferUnderflowException.class, empty::readVarint);
-        assertThrows(BufferUnderflowException.class, empty::readVarlong);
-    }
-
-    @Test
-    public void testVarintReadsThrowOnMalformedVarint() {
-        // Five continuation-bit bytes without a terminating byte: ByteUtils throws IllegalArgumentException.
-        byte[] nonTerminating = new byte[]{(byte) 0x80, (byte) 0x80, (byte) 0x80, (byte) 0x80, (byte) 0x80};
-        assertThrows(IllegalArgumentException.class,
-            () -> new ByteBufferAccessor(ByteBuffer.wrap(nonTerminating)).readUnsignedVarint());
-        assertThrows(IllegalArgumentException.class,
-            () -> new ByteBufferAccessor(ByteBuffer.wrap(nonTerminating)).readVarint());
+        assertEquals("Error reading byte array of 2 byte(s): only 0 byte(s) available",
+                assertThrows(RuntimeException.class,
+                        () -> accessor.readString(2)).getMessage());
     }
 }

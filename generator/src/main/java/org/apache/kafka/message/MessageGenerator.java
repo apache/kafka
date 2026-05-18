@@ -102,10 +102,6 @@ public final class MessageGenerator {
 
     static final String SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.Schema";
 
-    static final String SCHEMA_EXCEPTION_CLASS = "org.apache.kafka.common.protocol.types.SchemaException";
-
-    static final String BUFFER_UNDERFLOW_EXCEPTION_CLASS = "java.nio.BufferUnderflowException";
-
     static final String NULLABLE_SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.NullableSchema";
 
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";

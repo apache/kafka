@@ -116,7 +116,7 @@ public class ConsumerProtocol {
                 ownedPartitions,
                 data.generationId(),
                 data.rackId() == null || data.rackId().isEmpty() ? Optional.empty() : Optional.of(data.rackId()));
-        } catch (BufferUnderflowException | IllegalArgumentException | SchemaException e) {
+        } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
         }
     }
@@ -133,7 +133,7 @@ public class ConsumerProtocol {
 
         try {
             return new ConsumerProtocolSubscription(new ByteBufferAccessor(buffer), version);
-        } catch (BufferUnderflowException | IllegalArgumentException | SchemaException e) {
+        } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
         }
     }
@@ -186,7 +186,7 @@ public class ConsumerProtocol {
             return new Assignment(
                 assignedPartitions,
                 data.userData() != null ? data.userData().duplicate() : null);
-        } catch (BufferUnderflowException | IllegalArgumentException | SchemaException e) {
+        } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's assignment", e);
         }
     }
@@ -203,7 +203,7 @@ public class ConsumerProtocol {
 
         try {
             return new ConsumerProtocolAssignment(new ByteBufferAccessor(buffer), version);
-        } catch (BufferUnderflowException | IllegalArgumentException | SchemaException e) {
+        } catch (BufferUnderflowException e) {
             throw new SchemaException("Buffer underflow while parsing consumer protocol's assignment", e);
         }
     }

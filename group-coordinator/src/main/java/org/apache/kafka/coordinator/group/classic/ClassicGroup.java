@@ -29,7 +29,6 @@ import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMe
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -1178,7 +1177,7 @@ public class ClassicGroup implements Group {
                     ));
                 });
                 return Optional.of(allSubscribedTopics);
-            } catch (SchemaException e) {
+            } catch (RuntimeException e) {
                 log.warn("Failed to parse Consumer Protocol {}:{} of group {}. Consumer group coordinator is not aware of the subscribed topics.",
                         ConsumerProtocol.PROTOCOL_TYPE, protocolName.get(), groupId, e);
             }

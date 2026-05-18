@@ -101,9 +101,8 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
         try {
             message.read(new ByteBufferAccessor(buffer), version);
         } catch (RuntimeException ex) {
-            String detail = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();
             throw new RuntimeException(String.format("Could not read record with version %d from %s's buffer due to: %s.",
-                version, name, detail), ex);
+                version, name, ex.getMessage()), ex);
         }
     }
 

@@ -624,19 +624,15 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("if (%s < 0) {%n", lengthVar);
         buffer.incrementIndent();
         VersionConditional.forVersions(nullableVersions, possibleVersions).
-            ifNotMember(__ -> {
-                headerGenerator.addImport(MessageGenerator.SCHEMA_EXCEPTION_CLASS);
-                buffer.printf("throw new SchemaException(\"non-nullable field %s " +
-                    "was serialized as null\");%n", name);
-            }).
+            ifNotMember(__ -> buffer.printf("throw new RuntimeException(\"non-nullable field %s " +
+                "was serialized as null\");%n", name)).
             ifMember(__ -> buffer.printf("%snull%s", assignmentPrefix, assignmentSuffix)).
             generate(buffer);
         buffer.decrementIndent();
         if (type.isString()) {
             buffer.printf("} else if (%s > 0x7fff) {%n", lengthVar);
             buffer.incrementIndent();
-            headerGenerator.addImport(MessageGenerator.SCHEMA_EXCEPTION_CLASS);
-            buffer.printf("throw new SchemaException(\"string field %s " +
+            buffer.printf("throw new RuntimeException(\"string field %s " +
                 "had invalid length \" + %s);%n", name, lengthVar);
             buffer.decrementIndent();
         }
@@ -660,8 +656,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
             buffer.printf("if (%s > _readable.remaining()) {%n", lengthVar);
             buffer.incrementIndent();
-            headerGenerator.addImport(MessageGenerator.BUFFER_UNDERFLOW_EXCEPTION_CLASS);
-            buffer.printf("throw new BufferUnderflowException();%n");
+            buffer.printf("throw new RuntimeException(\"Tried to allocate a collection of size \" + %s + \", but " +
+                    "there are only \" + _readable.remaining() + \" bytes remaining.\");%n", lengthVar);
             buffer.decrementIndent();
             buffer.printf("}%n");
             if (isStructArrayWithKeys) {
