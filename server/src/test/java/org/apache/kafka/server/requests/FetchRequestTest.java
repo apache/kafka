@@ -103,18 +103,15 @@ public class FetchRequestTest {
     public static final int LEADER_BROKER_ID = 0;
     public static final int FOLLOWER_BROKER_ID = 1;
 
-    private ClusterInstance cluster;
-
     @ClusterTest
     public void testFollowerCompleteDelayedFetchesOnReplication(ClusterInstance cluster) throws Exception {
-        this.cluster = cluster;
         cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
         int leaderId = waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
 
         var topicPartition = new TopicPartition(TOPIC, 0);
         assertEquals(LEADER_BROKER_ID, leaderId);
 
-        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = createPartitionMap(1000, List.of(topicPartition), Map.of(topicPartition, 0L));
+        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = createPartitionMap(cluster, 1000, List.of(topicPartition), Map.of(topicPartition, 0L));
         FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 20000, 1, fetchData)
                 .setMaxBytes(1000)
                 .rackId("")
@@ -145,12 +142,11 @@ public class FetchRequestTest {
 
     @ClusterTest
     public void testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable(ClusterInstance cluster) throws Exception {
-        this.cluster = cluster;
         cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
         waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
 
-        produceMessages(10);
-        assertEquals(1, getPreferredReplica());
+        produceMessages(cluster, 10);
+        assertEquals(1, getPreferredReplica(cluster));
 
         cluster.brokers().get(FOLLOWER_BROKER_ID).shutdown();
         TopicPartition topicPartition = new TopicPartition(TOPIC, 0);
@@ -165,12 +161,11 @@ public class FetchRequestTest {
                 "follower is still reachable."
         );
 
-        assertEquals(-1, getPreferredReplica());
+        assertEquals(-1, getPreferredReplica(cluster));
     }
 
     @ClusterTest
     public void testFetchFromFollowerWithRoll(ClusterInstance cluster) throws Exception {
-        this.cluster = cluster;
         cluster.createTopicWithAssignment(TOPIC, Map.of(0, List.of(LEADER_BROKER_ID, FOLLOWER_BROKER_ID)));
         waitUntilLeaderIsKnown(cluster.brokers().values(), new TopicPartition(TOPIC, 0));
 
@@ -192,30 +187,30 @@ public class FetchRequestTest {
 
             // Wait until preferred replica is set to follower.
             waitForCondition(
-                    () -> getPreferredReplica() == FOLLOWER_BROKER_ID,
+                    () -> getPreferredReplica(cluster) == FOLLOWER_BROKER_ID,
                     "Preferred replica is not set to follower"
             );
 
             // Produce and consume from both consumers.
-            produceMessages(1);
+            produceMessages(cluster, 1);
             consumeRecords(followerConsumer, 1);
             consumeRecords(leaderConsumer, 1);
 
             // Shutdown follower, produce and consume should work for both consumers.
             cluster.shutdownBroker(FOLLOWER_BROKER_ID);
-            produceMessages(1);
+            produceMessages(cluster, 1);
             consumeRecords(followerConsumer, 1);
             consumeRecords(leaderConsumer, 1);
 
             // Start the follower and wait until preferred replica is set to follower.
             cluster.startBroker(FOLLOWER_BROKER_ID);
             waitForCondition(
-                    () -> getPreferredReplica() == FOLLOWER_BROKER_ID,
+                    () -> getPreferredReplica(cluster) == FOLLOWER_BROKER_ID,
                     "Preferred replica is not set to follower after restart"
             );
 
             // Produce and consume should still work for both consumers.
-            produceMessages(1);
+            produceMessages(cluster, 1);
             consumeRecords(followerConsumer, 1);
             consumeRecords(leaderConsumer, 1);
         }
@@ -223,7 +218,6 @@ public class FetchRequestTest {
 
     @ClusterTest
     public void testRackAwareRangeAssignor(ClusterInstance cluster) throws Exception {
-        this.cluster = cluster;
         List<Integer> partitionList = cluster.brokers().keySet().stream()
                 .sorted()
                 .toList();
@@ -291,7 +285,7 @@ public class FetchRequestTest {
         }
     }
 
-    private Map<String, Uuid> getTopicIds() throws Exception {
+    private Map<String, Uuid> getTopicIds(ClusterInstance cluster) throws Exception {
         Map<String, Uuid> topicIds = new HashMap<>();
         try (Admin admin = cluster.admin()) {
             Map<String, TopicDescription> descriptions = admin.describeTopics(List.of(TOPIC))
@@ -303,13 +297,14 @@ public class FetchRequestTest {
     }
 
     private LinkedHashMap<TopicPartition, FetchRequest.PartitionData> createPartitionMap(
+            ClusterInstance cluster,
             int maxPartitionBytes,
             List<TopicPartition> topicPartitions,
             Map<TopicPartition, Long> offsetMap) throws Exception {
 
         var partitionMap = new LinkedHashMap<TopicPartition, FetchRequest.PartitionData>();
         for (TopicPartition tp : topicPartitions) {
-            Uuid topicId = getTopicIds().getOrDefault(tp.topic(), Uuid.ZERO_UUID);
+            Uuid topicId = getTopicIds(cluster).getOrDefault(tp.topic(), Uuid.ZERO_UUID);
             long fetchOffset = offsetMap.getOrDefault(tp, 0L);
             partitionMap.put(tp, new FetchRequest.PartitionData(
                     topicId,
@@ -322,10 +317,10 @@ public class FetchRequestTest {
         return partitionMap;
     }
 
-    private int getPreferredReplica() throws Exception {
+    private int getPreferredReplica(ClusterInstance cluster) throws Exception {
         var topicPartition = new TopicPartition(TOPIC, 0);
         Map<TopicPartition, Long> offsetMap = Map.of(topicPartition, 0L);
-        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = createPartitionMap(1000, List.of(topicPartition), offsetMap);
+        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = createPartitionMap(cluster, 1000, List.of(topicPartition), offsetMap);
         FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 500, 1, fetchData)
                 .setMaxBytes(1000)
                 .rackId(String.valueOf(FOLLOWER_BROKER_ID))
@@ -348,7 +343,7 @@ public class FetchRequestTest {
         }
     }
 
-    private void produceMessages(int numMessages) throws Exception {
+    private void produceMessages(ClusterInstance cluster, int numMessages) throws Exception {
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of())) {
             for (int i = 0; i < numMessages; i++) {
                 producer.send(new ProducerRecord<>(TOPIC, ("key-" + i).getBytes(), ("value-" + i).getBytes())).get();
