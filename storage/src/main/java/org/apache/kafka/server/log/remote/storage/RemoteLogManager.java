@@ -966,22 +966,23 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             boolean needCheckCopyLagMs =  copyLagMs > 0;
             boolean needCheckCopyLagBytes = copyLagBytes > 0;
 
-            // When no lag delay is enabled, upload immediately.
             if (!needCheckCopyLagMs && !needCheckCopyLagBytes) {
                 return true;
             }
 
-            // When both lag delays are enabled, upload immediately if any delay checks decide to upload.
-            if (needCheckCopyLagMs && needCheckCopyLagBytes) {
-                return eligibleUploadByTime(previousSeg, currentTimeMs, copyLagMs) || eligibleUploadBySize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
-            }
-
-            // If only one lag delay is enabled, use that check as the final result.
             if (needCheckCopyLagMs) {
-                return eligibleUploadByTime(previousSeg, currentTimeMs, copyLagMs);
+                if (eligibleUploadByTime(previousSeg, currentTimeMs, copyLagMs)) {
+                    return true;
+                }
             }
 
-            return eligibleUploadBySize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
+            if (needCheckCopyLagBytes) {
+                if (eligibleUploadBySize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes)) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private boolean eligibleUploadByTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
