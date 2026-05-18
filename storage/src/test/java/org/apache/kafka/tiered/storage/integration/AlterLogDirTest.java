@@ -21,25 +21,20 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
-import org.apache.kafka.common.test.api.TestKitDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
-import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
 public final class AlterLogDirTest {
 
@@ -47,31 +42,11 @@ public final class AlterLogDirTest {
     private static final int BROKER_COUNT = 2;
 
     private static List<ClusterConfig> clusterConfig() {
-        String storageDirPath = TestUtils
-                .tempDirectory("kafka-remote-tier-" + TEST_CLASS_NAME).getAbsolutePath();
-
-        Properties tieredProps = createPropsForRemoteStorage(
-                TEST_CLASS_NAME, 
-                storageDirPath, 
-                BROKER_COUNT, 
-                5, 
-                new Properties()
-        );
-
-        Map<String, String> serverProps = new HashMap<>();
-        tieredProps.forEach((k, v) -> serverProps.put(k.toString(), v.toString()));
-
-        // TestKit registers brokers under "EXTERNAL"; createPropsForRemoteStorage defaults to "PLAINTEXT"
-        serverProps.put(
-                RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
-                TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME
-        );
-
         return List.of(ClusterConfig.defaultBuilder()
                 .setTypes(Set.of(Type.KRAFT))
                 .setBrokers(BROKER_COUNT)
                 .setDisksPerBroker(2)
-                .setServerProperties(serverProps)
+                .setServerProperties(createServerPropsForRemoteStorage(TEST_CLASS_NAME, BROKER_COUNT, 5))
                 .build());
     }
 
