@@ -59,8 +59,11 @@ public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, Aut
 
     /**
      * Remove any topology description stored for this group. Called when the group is
-     * deleted or expires. Failures are logged by the broker but do not propagate to the
-     * user-visible result of whatever operation triggered the removal.
+     * deleted or expires. A failure (future completed exceptionally) is reported to the
+     * caller of {@code DeleteGroups} as {@code TOPOLOGY_DESCRIPTION_DELETE_FAILED} on that
+     * group's per-group result and the broker does not tombstone the group; a retry of
+     * {@code DeleteGroups} re-invokes this method idempotently. The periodic-cleanup path
+     * treats a failure identically — the group's tombstone is deferred to a future cycle.
      */
     CompletableFuture<Void> deleteTopology(String groupId);
 

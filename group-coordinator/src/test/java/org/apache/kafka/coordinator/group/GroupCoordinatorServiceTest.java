@@ -136,6 +136,7 @@ import org.mockito.ArgumentMatchers;
 
 import java.net.InetAddress;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -6834,6 +6835,44 @@ public class GroupCoordinatorServiceTest {
             BufferSupplier.NO_CACHING).get(5, TimeUnit.SECONDS);
         verify(plugin).deleteTopology(eq("foo"));
         verify(plugin, times(0)).deleteTopology(eq("bar"));
+    }
+
+    @Test
+    public void testDeleteGroupsSkipsTombstoneWhenPluginDeleteFails() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
+
+        // foo: streams group with stored topology; plugin delete will fail.
+        // bar: non-streams group (no stored topology); plugin not called; tombstoned normally.
+        DeleteGroupsResponseData.DeletableGroupResultCollection writeResults =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        writeResults.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("bar").setErrorCode(Errors.NONE.code()));
+
+        when(runtime.scheduleWriteOperation(ArgumentMatchers.eq("delete-share-groups"),
+            ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.<Map<String, Integer>>scheduleReadOperation(
+            ArgumentMatchers.eq("list-streams-stored-topology-epochs"),
+            ArgumentMatchers.any(), ArgumentMatchers.any()))
+            .thenReturn(CompletableFuture.completedFuture(Map.of("foo", 3)));
+        when(runtime.scheduleWriteOperation(ArgumentMatchers.eq("delete-groups"),
+            ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(writeResults));
+        when(plugin.deleteTopology(eq("foo")))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin down")));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection response = service.deleteGroups(
+            requestContext(ApiKeys.DELETE_GROUPS), List.of("foo", "bar"),
+            BufferSupplier.NO_CACHING).get(5, TimeUnit.SECONDS);
+
+        Map<String, Short> codes = new HashMap<>();
+        response.forEach(r -> codes.put(r.groupId(), r.errorCode()));
+        assertEquals(Errors.TOPOLOGY_DESCRIPTION_DELETE_FAILED.code(), codes.get("foo"));
+        assertEquals(Errors.NONE.code(), codes.get("bar"));
+
+        // Tombstone write was issued for bar only — never for foo.
+        verify(runtime).scheduleWriteOperation(ArgumentMatchers.eq("delete-groups"),
+            ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 
     private static DeleteShareGroupStateParameters createDeleteShareRequest(String groupId, Uuid topic, List<Integer> partitions) {

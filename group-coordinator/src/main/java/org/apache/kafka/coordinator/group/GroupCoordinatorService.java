@@ -1617,9 +1617,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         List<String> groupIds
     ) {
         // Step 1: read which IDs in this partition are streams groups with a stored topology.
-        // Step 2: for each such ID, call plugin.deleteTopology with the user's request context
-        //         (per-group failures are logged but do not block the delete).
-        // Step 3: only after the plugin calls have all settled, issue the actual delete-groups write.
+        // Step 2: for each such ID, call plugin.deleteTopology. Groups whose plugin call fails are
+        //         excluded from the tombstone write and reported as TOPOLOGY_DESCRIPTION_DELETE_FAILED.
+        // Step 3: issue the delete-groups write for the remaining group IDs and merge the results.
         return runtime.<Map<String, Integer>>scheduleReadOperation(
             "list-streams-stored-topology-epochs",
             topicPartition,
@@ -1631,13 +1631,36 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return Map.of();
         }).thenCompose(storedEpochs ->
             topologyDescriptionManager.deleteBeforeGroupDelete(storedEpochs)
-        ).thenCompose(__ ->
-            runtime.scheduleWriteOperation(
+        ).thenCompose(pluginFailures -> {
+            DeleteGroupsResponseData.DeletableGroupResultCollection results =
+                new DeleteGroupsResponseData.DeletableGroupResultCollection();
+            List<String> remaining;
+            if (pluginFailures.isEmpty()) {
+                remaining = groupIds;
+            } else {
+                remaining = new ArrayList<>(groupIds.size() - pluginFailures.size());
+                for (String groupId : groupIds) {
+                    if (pluginFailures.containsKey(groupId)) {
+                        results.add(new DeleteGroupsResponseData.DeletableGroupResult()
+                            .setGroupId(groupId)
+                            .setErrorCode(Errors.TOPOLOGY_DESCRIPTION_DELETE_FAILED.code()));
+                    } else {
+                        remaining.add(groupId);
+                    }
+                }
+            }
+            if (remaining.isEmpty()) {
+                return CompletableFuture.completedFuture(results);
+            }
+            return runtime.<DeleteGroupsResponseData.DeletableGroupResultCollection>scheduleWriteOperation(
                 "delete-groups",
                 topicPartition,
-                coordinator -> coordinator.deleteGroups(context, groupIds)
-            )
-        ).exceptionally(exception -> handleOperationException(
+                coordinator -> coordinator.deleteGroups(context, remaining)
+            ).thenApply(writeResults -> {
+                writeResults.forEach(result -> results.add(result.duplicate()));
+                return results;
+            });
+        }).exceptionally(exception -> handleOperationException(
             "delete-groups",
             groupIds,
             exception,

@@ -116,6 +116,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.ShareSessionLimitReachedException;
+import org.apache.kafka.common.errors.TopologyDescriptionDeleteFailedException;
 import org.apache.kafka.common.errors.TopologyDescriptionTooLargeException;
 import org.apache.kafka.common.errors.TopologyDescriptionUpdateFailedException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
@@ -422,7 +423,8 @@ public enum Errors {
     STREAMS_TOPOLOGY_FENCED(132, "The supplied topology epoch is outdated.", StreamsTopologyFencedException::new),
     SHARE_SESSION_LIMIT_REACHED(133, "The limit of share sessions has been reached.", ShareSessionLimitReachedException::new),
     TOPOLOGY_DESCRIPTION_TOO_LARGE(134, "The topology description exceeds the size the topology description plugin is willing to store.", TopologyDescriptionTooLargeException::new),
-    TOPOLOGY_DESCRIPTION_UPDATE_FAILED(135, "The topology description plugin failed to process the request.", TopologyDescriptionUpdateFailedException::new);
+    TOPOLOGY_DESCRIPTION_UPDATE_FAILED(135, "The topology description plugin failed to process the request.", TopologyDescriptionUpdateFailedException::new),
+    TOPOLOGY_DESCRIPTION_DELETE_FAILED(136, "The topology description plugin failed to delete the description for this group; the group has not been tombstoned.", TopologyDescriptionDeleteFailedException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

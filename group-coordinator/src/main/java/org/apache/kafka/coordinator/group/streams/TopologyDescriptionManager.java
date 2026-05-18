@@ -454,25 +454,31 @@ public class TopologyDescriptionManager implements AutoCloseable {
     /**
      * Fires {@code plugin.deleteTopology} for each streams group ID with a stored topology, before
      * the actual group tombstone is written. Returns a future that completes once every per-group
-     * plugin call has settled (success or failure). Per-group failures are logged at WARN; they do
-     * not affect the user-visible DeleteGroups response, matching the existing KIP semantics.
+     * plugin call has settled, resolving to a map from {@code groupId} to the failure cause for
+     * groups whose plugin call failed. Groups not present in the map succeeded (or had no stored
+     * topology). The service uses the map to skip the tombstone for failed groups and report
+     * {@code TOPOLOGY_DESCRIPTION_DELETE_FAILED} on the per-group result.
      */
-    public CompletableFuture<Void> deleteBeforeGroupDelete(
+    public CompletableFuture<Map<String, Throwable>> deleteBeforeGroupDelete(
         Map<String, Integer> storedEpochs
     ) {
         if (storedEpochs.isEmpty() || plugin.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(Map.of());
         }
         StreamsGroupTopologyDescriptionPlugin p = plugin.get();
+        Map<String, Throwable> failures = new ConcurrentHashMap<>();
         List<CompletableFuture<Void>> pluginFutures = new ArrayList<>(storedEpochs.size());
         for (String groupId : storedEpochs.keySet()) {
             backoff.remove(groupId);
             pluginFutures.add(
                 callDeleteTopology(p, groupId).handle((__, throwable) -> {
                     if (throwable != null) {
-                        log.warn("Failed to delete topology for group {} ahead of DeleteGroups; orphan may remain in the plugin.",
-                            groupId, throwable);
+                        Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
+                            ? throwable.getCause() : throwable;
+                        log.warn("Plugin deleteTopology failed for group {} during DeleteGroups; group will not be tombstoned.",
+                            groupId, cause);
                         metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME);
+                        failures.put(groupId, cause);
                     } else {
                         metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME);
                     }
@@ -480,7 +486,8 @@ public class TopologyDescriptionManager implements AutoCloseable {
                 })
             );
         }
-        return CompletableFuture.allOf(pluginFutures.toArray(new CompletableFuture<?>[0]));
+        return CompletableFuture.allOf(pluginFutures.toArray(new CompletableFuture<?>[0]))
+            .thenApply(__ -> Map.copyOf(failures));
     }
 
     // The plugin SPI mandates exceptions-via-future, but a misbehaving plugin may throw synchronously;
