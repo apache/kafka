@@ -455,13 +455,13 @@ public class FetchRequestTest {
         Uuid topicId = Uuid.randomUuid();
         TopicIdPartition tp = new TopicIdPartition(topicId, 0, "topic");
 
-        Map<TopicPartition, FetchRequest.PartitionData> partitionData = Collections.singletonMap(tp.topicPartition(),
+        Map<TopicPartition, FetchRequest.PartitionData> partitionData = Map.of(tp.topicPartition(),
                 new FetchRequest.PartitionData(topicId, 0, 0, 0, Optional.empty()));
-        List<TopicIdPartition> toReplace = Collections.singletonList(tp);
+        List<TopicIdPartition> toReplace = List.of(tp);
 
         FetchRequest fetchRequest = FetchRequest.Builder
                 .forReplica(version, 0, 1, 1, 1, partitionData)
-                .removed(Collections.emptyList())
+                .removed(List.of())
                 .replaced(toReplace)
                 .metadata(FetchMetadata.newIncremental(123)).build(version);
 
@@ -491,7 +491,7 @@ public class FetchRequestTest {
         Uuid topicId1 = Uuid.randomUuid();
 
         // Only include topic IDs for the first topic partition.
-        Map<Uuid, String> topicNames = Collections.singletonMap(topicId0, topicPartition0.topic());
+        Map<Uuid, String> topicNames = Map.of(topicId0, topicPartition0.topic());
         List<TopicIdPartition> topicIdPartitions = new LinkedList<>();
         topicIdPartitions.add(new TopicIdPartition(topicId0, topicPartition0));
         topicIdPartitions.add(new TopicIdPartition(topicId1, topicPartition1));
@@ -504,8 +504,8 @@ public class FetchRequestTest {
 
         FetchRequest fetchRequest = FetchRequest.parse(FetchRequest.Builder
                 .forReplica(version, 0, 1, 1, 1, partitionData)
-                .removed(Collections.emptyList())
-                .replaced(Collections.emptyList())
+                .removed(List.of())
+                .replaced(List.of())
                 .metadata(FetchMetadata.newIncremental(123)).build(version).serialize(), version);
 
         if (version >= 15) {
@@ -555,7 +555,7 @@ public class FetchRequestTest {
             Uuid topicId0 = Uuid.randomUuid();
             Uuid topicId1 = Uuid.randomUuid();
             // Only include topic IDs for the first topic partition.
-            Map<Uuid, String> topicNames = Collections.singletonMap(topicId0, topicPartition0.topic());
+            Map<Uuid, String> topicNames = Map.of(topicId0, topicPartition0.topic());
 
             // Include one topic with topic IDs in the topic names map and one without.
             List<TopicIdPartition> toForgetTopics = new LinkedList<>();
@@ -565,9 +565,9 @@ public class FetchRequestTest {
             boolean fetchRequestUsesTopicIds = version >= 13;
 
             FetchRequest fetchRequest = FetchRequest.parse(FetchRequest.Builder
-                    .forReplica(version, 0, 1, 1, 1, Collections.emptyMap())
+                    .forReplica(version, 0, 1, 1, 1, Map.of())
                     .removed(toForgetTopics)
-                    .replaced(Collections.emptyList())
+                    .replaced(List.of())
                     .metadata(FetchMetadata.newIncremental(123)).build(version).serialize(), version);
 
             // For versions < 13, we will be provided a topic name and a zero Uuid in FetchRequestData.
@@ -654,7 +654,7 @@ public class FetchRequestTest {
 
         FetchRequest fetchRequest = createFetchRequestByVersion(version, topicId, tp);
 
-        Map<Uuid, String> topicNames = Collections.singletonMap(topicId, tp.topic());
+        Map<Uuid, String> topicNames = Map.of(topicId, tp.topic());
         List<TopicIdPartition> requestsWithTopicsName = fetchRequest.forgottenTopics(topicNames);
         assertEquals(topicNames.size(), requestsWithTopicsName.size());
         requestsWithTopicsName.forEach(request -> {
@@ -665,7 +665,7 @@ public class FetchRequestTest {
         });
 
         String expectedTopic = version >= 13 ? null : tp.topic();
-        List<TopicIdPartition> requestData = fetchRequest.forgottenTopics(Collections.emptyMap());
+        List<TopicIdPartition> requestData = fetchRequest.forgottenTopics(Map.of());
         assertEquals(1, requestData.size());
         requestData.forEach(request -> {
             assertEquals(expectedTopic, request.topic());
@@ -682,16 +682,16 @@ public class FetchRequestTest {
 
     private FetchRequest createFetchRequestByVersion(short version, TopicIdPartition tp,
                                                      FetchRequest.PartitionData partitionData) {
-        Map<TopicPartition, FetchRequest.PartitionData> partitionDataMap = Collections.singletonMap(tp.topicPartition(), partitionData);
+        Map<TopicPartition, FetchRequest.PartitionData> partitionDataMap = Map.of(tp.topicPartition(), partitionData);
         if (version >= 13) {
             return FetchRequest.Builder
                 .forReplica(version, 0, 1, 1, 1, partitionDataMap)
-                .replaced(Collections.singletonList(tp))
+                .replaced(List.of(tp))
                 .metadata(FetchMetadata.newIncremental(123)).build(version);
         } else {
             return FetchRequest.Builder
                 .forReplica(version, 0, 1, 1, 1, partitionDataMap)
-                .removed(Collections.singletonList(tp))
+                .removed(List.of(tp))
                 .metadata(FetchMetadata.newIncremental(123)).build(version);
         }
     }
@@ -708,7 +708,7 @@ public class FetchRequestTest {
         Optional<Integer> currentLeaderEpoch = Optional.of(121);
         FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch);
         FetchRequest fetchRequest = createFetchRequestByVersion(version, tp, partitionData);
-        Map<Uuid, String> topicNames = Collections.singletonMap(topicId, tp.topic());
+        Map<Uuid, String> topicNames = Map.of(topicId, tp.topic());
         Map<TopicIdPartition, FetchRequest.PartitionData> topicIdPartitionMap = fetchRequest.fetchData(topicNames);
 
         assertEquals(topicNames.size(), topicIdPartitionMap.size());
@@ -724,7 +724,7 @@ public class FetchRequestTest {
         });
 
         String expectedTopic = version >= 13 ? null : tp.topic();
-        topicIdPartitionMap = fetchRequest.fetchData(Collections.emptyMap());
+        topicIdPartitionMap = fetchRequest.fetchData(Map.of());
         assertEquals(1, topicIdPartitionMap.size());
         topicIdPartitionMap.forEach((topicIdPartition, partitionDataTmp) -> {
             assertEquals(expectedTopic, topicIdPartition.topic());
