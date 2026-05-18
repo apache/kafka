@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 
 public final class AdminUtils {
@@ -39,50 +40,45 @@ public final class AdminUtils {
                                            String topic,
                                            int partitionNumber,
                                            long timeoutMs) throws InterruptedException {
-
-        var condition = new Supplier<Boolean>() {
-            int leader = Node.noNode().id();
-            @Override
-            public Boolean get() {
-                checkLeader();
-                return this.leader != Node.noNode().id();
-            }
-
-            public void checkLeader() {
-                fetchPartitionLeader(admin, topic, partitionNumber).ifPresent(integer -> this.leader = integer);
-            }
-        };
-
-        TestUtils.waitForCondition(condition, timeoutMs, "Timing out after %d ms since a leader was not elected for partition %s-%d".formatted(timeoutMs, topic, partitionNumber));
-
-        return condition.leader;
+        return waitForLeader(admin, topic, partitionNumber,
+            id -> id != Node.noNode().id(),
+            timeoutMs,
+            "Timing out after %d ms since a leader was not elected for partition %s-%d"
+                .formatted(timeoutMs, topic, partitionNumber));
     }
 
     /**
-     * Fetch the partition leader or wait until the expected leader is observed using the provided admin client.
+     * Wait until the expected leader is observed for the given partition using the provided admin client.
      */
-    public static int fetchOrWaitForExpectedLeader(Admin admin,
-                                                   String topic,
-                                                   int partitionNumber,
-                                                   int expectedLeaderId,
-                                                   long timeoutMs) throws InterruptedException {
+    public static void waitForExpectedLeader(Admin admin,
+                                             String topic,
+                                             int partitionNumber,
+                                             int expectedLeaderId,
+                                             long timeoutMs) throws InterruptedException {
+        waitForLeader(admin, topic, partitionNumber,
+            id -> id == expectedLeaderId,
+            timeoutMs,
+            "Timing out after %d ms waiting for partition %s-%d leader to become %d"
+                .formatted(timeoutMs, topic, partitionNumber, expectedLeaderId));
+    }
+
+    private static int waitForLeader(Admin admin,
+                                     String topic,
+                                     int partitionNumber,
+                                     IntPredicate leaderMatches,
+                                     long timeoutMs,
+                                     String timeoutMessage) throws InterruptedException {
         var condition = new Supplier<Boolean>() {
             int leader = Node.noNode().id();
 
             @Override
             public Boolean get() {
-                checkLeader();
-                return this.leader == expectedLeaderId;
-            }
-
-            public void checkLeader() {
-                fetchPartitionLeader(admin, topic, partitionNumber).ifPresent(integer -> this.leader = integer);
+                fetchPartitionLeader(admin, topic, partitionNumber).ifPresent(id -> this.leader = id);
+                return leaderMatches.test(this.leader);
             }
         };
 
-        TestUtils.waitForCondition(condition, timeoutMs,
-            () -> "Timing out after %d ms waiting for partition %s-%d leader to become %d, last observed=%d"
-                .formatted(timeoutMs, topic, partitionNumber, expectedLeaderId, condition.leader));
+        TestUtils.waitForCondition(condition, timeoutMs, () -> "%s, last observed=%d".formatted(timeoutMessage, condition.leader));
 
         return condition.leader;
     }

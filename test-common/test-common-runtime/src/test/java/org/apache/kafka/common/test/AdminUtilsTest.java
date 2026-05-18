@@ -87,7 +87,7 @@ public class AdminUtilsTest {
     }
 
     @Test
-    void testFetchOrWaitForExpectedLeader() throws Exception {
+    void testWaitForExpectedLeader() throws Exception {
         String topic = "test-topic";
         int partition = 0;
         int expectedLeader = 1;
@@ -112,13 +112,11 @@ public class AdminUtilsTest {
             }
         });
 
-        int result = AdminUtils.fetchOrWaitForExpectedLeader(admin, topic, partition, expectedLeader, 1000);
-
-        assertEquals(expectedLeader, result);
+        AdminUtils.waitForExpectedLeader(admin, topic, partition, expectedLeader, 1000);
     }
 
     @Test
-    void testFetchOrWaitForExpectedLeaderTimesOut() {
+    void testWaitForExpectedLeaderTimesOut() {
         String topic = "test-topic";
         int partition = 0;
         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(partition, new Node(2, "", 0), List.of(), List.of());
@@ -128,7 +126,7 @@ public class AdminUtilsTest {
         when(admin.describeTopics(anyCollection())).thenReturn(describeResult);
 
         AssertionError error = assertThrows(AssertionError.class, () ->
-            AdminUtils.fetchOrWaitForExpectedLeader(admin, topic, partition, 1, 1));
+            AdminUtils.waitForExpectedLeader(admin, topic, partition, 1, 1));
         assertTrue(error.getCause().getMessage().contains(
             "Timing out after 1 ms waiting for partition test-topic-0 leader to become 1, last observed=2"),
             error.getCause().getMessage());
