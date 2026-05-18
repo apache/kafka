@@ -28,7 +28,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockNetworkChannel implements NetworkChannel {
-    public static final ListenerName LISTENER_NAME = VoterSetTest.DEFAULT_LISTENER_NAME;
+    public static final ListenerName LISTENER_NAME = VoterSetTestUtil.DEFAULT_LISTENER_NAME;
 
     private final AtomicInteger correlationIdCounter;
     private final List<RaftRequest.Outbound> sendQueue = new ArrayList<>();

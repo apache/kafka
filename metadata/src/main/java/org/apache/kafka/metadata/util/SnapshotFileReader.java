@@ -58,7 +58,6 @@ public final class SnapshotFileReader implements AutoCloseable {
     private final CompletableFuture<Void> caughtUpFuture;
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
-    private final MetadataRecordSerde serde = new MetadataRecordSerde();
     private long lastOffset = -1L;
     private volatile OptionalLong highWaterMark = OptionalLong.empty();
 
@@ -155,7 +154,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         for (Record record : batch) {
             ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
             try {
-                ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
+                ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(accessor, record.valueSize());
                 messages.add(messageAndVersion);
             } catch (Throwable e) {
                 log.error("unable to read metadata record at offset {}", record.offset(), e);

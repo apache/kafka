@@ -43,7 +43,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
-import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, SocketServer => JSocketServer, SocketServerConfigs, TooManyConnectionsException}
+import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, Request, SocketServer => JSocketServer, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{ApiVersionManager, ServerSocketFactory}
 import org.apache.kafka.server.config.QuotaConfig
@@ -58,6 +58,7 @@ import org.slf4j.event.Level
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 import scala.util.control.ControlThrowable
 
 /**
@@ -980,7 +981,7 @@ private[kafka] class Processor(
     // `channel` can be None if the connection was closed remotely or if selector closed it for being idle for too long
     if (channel(connectionId).isEmpty) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $connectionId")
-      response.request.updateRequestMetrics(0L, response)
+      response.request.updateRequestMetrics(0L, response.responseLog.toJava)
     }
     // Invoke send for closingChannel as well so that the send is failed and the channel closed properly and
     // removed from the Selector after discarding any pending staged receives.
@@ -1005,7 +1006,7 @@ private[kafka] class Processor(
   private def processCompletedReceives(): Unit = {
     selector.completedReceives.forEach { receive =>
       var header: RequestHeader = null
-      var req: RequestChannel.Request = null
+      var req: Request = null
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
@@ -1027,13 +1028,12 @@ private[kafka] class Processor(
                   channel.principal, listenerName, securityProtocol, channel.channelMetadataRegistry.clientInformation,
                   isPrivilegedListener, channel.principalSerde)
 
-                req = new RequestChannel.Request(processor = id, context = context,
-                  startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics, None)
+                req = new Request(id, context, nowNanos, memoryPool, receive.payload, requestChannel.metrics)
 
                 // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name
                 // and version. It is done here to avoid wiring things up to the api layer.
                 if (header.apiKey == ApiKeys.API_VERSIONS) {
-                  val apiVersionsRequest = req.body[ApiVersionsRequest]
+                  val apiVersionsRequest = req.body(classOf[ApiVersionsRequest])
                   if (apiVersionsRequest.isValid) {
                     channel.channelMetadataRegistry.registerClientInformation(new ClientInformation(
                       apiVersionsRequest.data.clientSoftwareName,
@@ -1090,7 +1090,7 @@ private[kafka] class Processor(
   private def updateRequestMetrics(response: RequestChannel.Response): Unit = {
     val request = response.request
     val networkThreadTimeNanos = openOrClosingChannel(request.context.connectionId).fold(0L)(_.getAndResetNetworkThreadTimeNanos())
-    request.updateRequestMetrics(networkThreadTimeNanos, response)
+    request.updateRequestMetrics(networkThreadTimeNanos, response.responseLog.toJava)
   }
 
   private def processDisconnected(): Unit = {
@@ -1217,7 +1217,7 @@ private[kafka] class Processor(
   private def dequeueResponse(): RequestChannel.Response = {
     val response = responseQueue.poll()
     if (response != null)
-      response.request.responseDequeueTimeNanos = Time.SYSTEM.nanoseconds
+      response.request.responseDequeueTimeNanos(Time.SYSTEM.nanoseconds)
     response
   }
 

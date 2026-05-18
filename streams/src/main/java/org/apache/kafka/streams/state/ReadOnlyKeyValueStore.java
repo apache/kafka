@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 
@@ -133,4 +134,24 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     long approximateNumEntries();
+
+    /**
+     * Return a read-only view of this store bound to the given {@link IsolationLevel}.
+     * <p>
+     * For stores without a transaction buffer (i.e. when {@code enable.transactional.statestores}
+     * is {@code false}), the default implementation returns {@code this} — the isolation level has
+     * no observable effect. Transactional stores override this method to return a view that
+     * either consults the transaction buffer ({@code READ_UNCOMMITTED}) or reads directly from
+     * the underlying committed data ({@code READ_COMMITTED}).
+     * <p>
+     * Wrapping store implementations propagate {@code readOnly} to their inner store so that
+     * transformations such as serdes or metrics are applied on top of the isolation-level-aware
+     * view.
+     *
+     * @param isolationLevel the isolation level the returned view should use for reads.
+     * @return a read-only view of this store using the given isolation level.
+     */
+    default ReadOnlyKeyValueStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        return this;
+    }
 }
