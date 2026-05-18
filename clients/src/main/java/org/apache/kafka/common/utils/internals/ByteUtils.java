@@ -67,6 +67,21 @@ public final class ByteUtils {
     }
 
     /**
+     * Increment the underlying byte array by adding 1 without throwing on overflow.
+     *
+     * @param input - The byte array to increment
+     * @return A new copy of the incremented byte array, or {@code null} if incrementing causes the
+     *         underlying input byte array to overflow
+     */
+    public static Bytes incrementWithoutOverflow(final Bytes input) {
+        try {
+            return increment(input);
+        } catch (final IndexOutOfBoundsException e) {
+            return null;
+        }
+    }
+
+    /**
      * A byte array comparator based on lexicographic ordering.
      */
     public static final ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();

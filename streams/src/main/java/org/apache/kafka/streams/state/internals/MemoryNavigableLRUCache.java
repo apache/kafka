@@ -90,13 +90,16 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix, final PS prefixKeySerializer) {
 
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
-        final Bytes to = ByteUtils.increment(from);
+        final Bytes to = ByteUtils.incrementWithoutOverflow(from);
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
 
         return new DelegatingPeekingKeyValueIterator<>(
             name(),
-            new MemoryNavigableLRUCache.CacheIterator(treeMap.subMap(from, true, to, false).keySet().iterator(), treeMap)
+            new MemoryNavigableLRUCache.CacheIterator(
+                (to == null ? treeMap.tailMap(from, true) : treeMap.subMap(from, true, to, false)).keySet().iterator(),
+                treeMap
+            )
         );
     }
 

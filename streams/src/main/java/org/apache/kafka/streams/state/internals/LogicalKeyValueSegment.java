@@ -44,7 +44,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWithoutOverflow;
+import static org.apache.kafka.common.utils.internals.ByteUtils.incrementWithoutOverflow;
 
 /**
  * This "logical segment" is a segment which shares its underlying physical store with other
