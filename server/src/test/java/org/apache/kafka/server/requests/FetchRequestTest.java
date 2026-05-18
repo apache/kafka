@@ -302,9 +302,10 @@ public class FetchRequestTest {
             List<TopicPartition> topicPartitions,
             Map<TopicPartition, Long> offsetMap) throws Exception {
 
+        Map<String, Uuid> topicIds = getTopicIds(cluster);
         var partitionMap = new LinkedHashMap<TopicPartition, FetchRequest.PartitionData>();
         for (TopicPartition tp : topicPartitions) {
-            Uuid topicId = getTopicIds(cluster).getOrDefault(tp.topic(), Uuid.ZERO_UUID);
+            Uuid topicId = topicIds.getOrDefault(tp.topic(), Uuid.ZERO_UUID);
             long fetchOffset = offsetMap.getOrDefault(tp, 0L);
             partitionMap.put(tp, new FetchRequest.PartitionData(
                     topicId,
@@ -327,20 +328,13 @@ public class FetchRequestTest {
                 .build();
 
         int leaderPort = cluster.brokers().get(LEADER_BROKER_ID).boundPort(cluster.clientListener());
-        try (Socket socket = IntegrationTestUtils.connect(leaderPort)) {
-            IntegrationTestUtils.sendRequest(socket,
-                    Utils.toArray(
-                            fetchRequest.serializeWithHeader(
-                                    IntegrationTestUtils.nextRequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion()))));
-
-            FetchResponse response = IntegrationTestUtils.receive(socket, ApiKeys.FETCH, ApiKeys.FETCH.latestVersion());
-            assertEquals(Errors.NONE, response.error());
-            assertEquals(Map.of(Errors.NONE, 2), response.errorCounts());
-            assertEquals(1, response.data().responses().size());
-            FetchResponseData.FetchableTopicResponse topicResponse = response.data().responses().get(0);
-            assertEquals(1, topicResponse.partitions().size());
-            return topicResponse.partitions().get(0).preferredReadReplica();
-        }
+        FetchResponse response = IntegrationTestUtils.connectAndReceive(fetchRequest, leaderPort);
+        assertEquals(Errors.NONE, response.error());
+        assertEquals(Map.of(Errors.NONE, 2), response.errorCounts());
+        assertEquals(1, response.data().responses().size());
+        FetchResponseData.FetchableTopicResponse topicResponse = response.data().responses().get(0);
+        assertEquals(1, topicResponse.partitions().size());
+        return topicResponse.partitions().get(0).preferredReadReplica();
     }
 
     private void produceMessages(ClusterInstance cluster, int numMessages) throws Exception {
@@ -442,7 +436,7 @@ public class FetchRequestTest {
         return ApiKeys.FETCH.allVersions().stream().map(Arguments::of);
     }
 
-    protected static int waitUntilLeaderIsKnown(
+    private static int waitUntilLeaderIsKnown(
             Collection<KafkaBroker> brokers,
             TopicPartition tp) throws InterruptedException {
         return TestUtils.awaitLeaderChange(brokers, tp, Optional.empty(), Optional.empty(), DEFAULT_MAX_WAIT_MS);

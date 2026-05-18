@@ -182,7 +182,6 @@ public class TestUtils {
         return newLeaderExists.get().get();
     }
 
-
     /**
      * Wait for the leader of the partition to change from {@code oldLeaderOpt} to {@code expectedLeaderOpt},
      * or for any leader to be elected if both are empty.
