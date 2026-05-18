@@ -973,40 +973,40 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             // When both lag delays are enabled, upload immediately if any delay checks decide to upload.
             if (needCheckCopyLagMs && needCheckCopyLagBytes) {
-                return exceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs) || exceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
+                return eligibleUploadByTime(previousSeg, currentTimeMs, copyLagMs) || eligibleUploadBySize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
             }
 
             // If only one lag delay is enabled, use that check as the final result.
             if (needCheckCopyLagMs) {
-                return exceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs);
+                return eligibleUploadByTime(previousSeg, currentTimeMs, copyLagMs);
             }
 
-            return exceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
+            return eligibleUploadBySize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
         }
 
-        private boolean exceededCopyLagTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
+        private boolean eligibleUploadByTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
             try {
                 long segmentAgeMs = currentTimeMs - segment.largestTimestamp();
-                boolean exceeded = segmentAgeMs >= copyLagMs;
+                boolean eligibleUpload = segmentAgeMs >= copyLagMs;
                 if (logger.isTraceEnabled()) {
                     logger.trace("{} eligible for upload by time? {} (segment age {} ms, copy lag {} ms)",
-                            segment, exceeded, segmentAgeMs, copyLagMs);
+                            segment, eligibleUpload, segmentAgeMs, copyLagMs);
                 }
-                return exceeded;
+                return eligibleUpload;
             } catch (IOException e) {
                 logger.warn("Failed to get largest timestamp for segment {}, take it as eligible for upload based on time", segment, e);
                 return true;
             }
         }
 
-        private boolean exceededCopyLagSize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
+        private boolean eligibleUploadBySize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
             long sizeLagBytes = totalLogSize - cumulativeSize;
-            boolean exceeded = sizeLagBytes >= copyLagBytes;
+            boolean eligibleUpload = sizeLagBytes >= copyLagBytes;
             if (logger.isTraceEnabled()) {
                 logger.trace("{} eligible for upload by size? {} (size lag {} bytes, copy lag {} bytes, totalLogSize={}, cumulativeSize={})",
-                        segment, exceeded, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
+                        segment, eligibleUpload, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
             }
-            return exceeded;
+            return eligibleUpload;
         }
         
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
