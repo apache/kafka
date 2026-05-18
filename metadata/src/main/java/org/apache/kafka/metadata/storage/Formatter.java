@@ -26,7 +26,6 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.KafkaRaftClient;
-import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
@@ -521,12 +520,10 @@ public class Formatter {
             setRawSnapshotWriter(FileRawSnapshotWriter.create(
                 clusterMetadataDirectory.toPath(),
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
-            setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion));
-        if (initialControllers.isPresent()) {
-            VoterSet voterSet = initialControllers.get().toVoterSet(controllerListenerName);
-            builder.setVoterSet(Optional.of(voterSet));
-        }
-        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
+            setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
+            setVoterSet(initialControllers.map(controllers -> controllers.toVoterSet(controllerListenerName)));
+
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(MetadataRecordSerde.INSTANCE)) {
             writer.append(bootstrapMetadata.records());
             writer.freeze();
         }

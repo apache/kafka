@@ -1004,6 +1004,8 @@ project(':server') {
     archivesName = "kafka-server"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     compileOnly libs.bndlib
     compileOnly libs.spotbugs
@@ -1033,6 +1035,13 @@ project(':server') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':metadata'))
+
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.junitJupiter
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1152,7 +1161,7 @@ project(':core') {
     testImplementation testFixtures(project(':raft'))
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':storage:storage-api'))
-    testImplementation project(':server').sourceSets.test.output
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
@@ -2430,6 +2439,8 @@ project(':storage') {
     archivesName = "kafka-storage"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     generator
   }
@@ -2446,17 +2457,25 @@ project(':storage') {
     implementation libs.jacksonDatabind
     implementation libs.metrics
 
+    testFixturesImplementation project(':storage:storage-api')
+    testFixturesImplementation project(':clients')
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation libs.slf4jApi
+
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':storage:storage-api'))
+    testImplementation project(':metadata')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
+    testImplementation testFixtures(project(':metadata'))
     testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
     testImplementation libs.jacksonDataformatYaml
@@ -2608,6 +2627,12 @@ project(':tools') {
 
   configurations {
     releaseOnly
+    // ApacheDS 2.0.0-M24 pulls in the stale bcprov-jdk15on:1.56, which ships the same
+    // RosstandartObjectIdentifiers class as the modern bcprov-jdk18on we already depend on
+    // but is missing fields referenced by bcpkix-jdk18on:1.84. When IntelliJ's test runner
+    // orders the old JAR first, BC provider registration fails with NoSuchFieldError. Drop it.
+    testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
   }
 
   dependencies {
@@ -2642,8 +2667,8 @@ project(':tools') {
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':server')
-    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation testFixtures(project(':server'))
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
@@ -2653,7 +2678,7 @@ project(':tools') {
     testImplementation project(':connect:runtime')
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.main.output
-    testImplementation project(':storage').sourceSets.test.output
+    testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
     testImplementation project(':streams').sourceSets.test.output
     testImplementation project(':streams:integration-tests').sourceSets.test.output
@@ -3552,7 +3577,6 @@ project(':jmh-benchmarks') {
     implementation testFixtures(project(':clients'))
     implementation testFixtures(project(':server-common'))
     implementation testFixtures(project(':metadata'))
-    implementation project(':server').sourceSets.test.output
 
     implementation libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
@@ -4117,8 +4141,10 @@ gradle.projectsEvaluated {
   def protectedModules = [
     'clients': ':clients',
     'server-common': ':server-common',
+    'server': ':server',
     'storage/api': ':storage:storage-api',
     'coordinator-common': ':coordinator-common',
+    'storage': ':storage',
     'group-coordinator': ':group-coordinator',
     'share-coordinator': ':share-coordinator',
     'metadata': ':metadata',

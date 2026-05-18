@@ -5024,7 +5024,7 @@ It is recommended, that you compare the output of `Topology.describe()` for the 
 
 ### Migration Examples
 
-To migrate from the deprecated `transform`, `transformValues`, `flatTransform`, and `flatTransformValues` methods to the Processor API (PAPI) in Kafka Streams, let's resume the previouss examples. The new `process` and `processValues` methods enable a more flexible and reusable approach by requiring implementations of the `Processor` or `FixedKeyProcessor` interfaces.  
+To migrate from the deprecated `transform`, `transformValues`, `flatTransform`, and `flatTransformValues` methods to the Processor API (PAPI) in Kafka Streams, let's resume the previous examples. The new `process` and `processValues` methods enable a more flexible and reusable approach by requiring implementations of the `Processor` or `FixedKeyProcessor` interfaces.  
   
 <table>  
 <tr>  

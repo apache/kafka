@@ -21686,6 +21686,8 @@ public class GroupMetadataManagerTest {
                 "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
             ),
             assignor.lastPassedAssignmentConfigs());
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT,
+            result.response().data().taskOffsetIntervalMs());
         // Advance time.
         assertEquals(
             List.of(),
@@ -21695,7 +21697,7 @@ public class GroupMetadataManagerTest {
         // Dynamic update group config with out-of-range values.
         // Session timeout 70000 exceeds max 60000; heartbeat interval 1 is below min 5000;
         // num standby replicas 100 exceeds max 2.
-        // task offset interval 100 exceeds min 15000.
+        // task offset interval 100 is below min 15000.
         Properties newGroupConfig = new Properties();
         newGroupConfig.put(STREAMS_SESSION_TIMEOUT_MS_CONFIG, 70000);
         newGroupConfig.put(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, 1);
@@ -21726,6 +21728,8 @@ public class GroupMetadataManagerTest {
                 "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)
             ),
             assignor.lastPassedAssignmentConfigs());
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
+            result.response().data().taskOffsetIntervalMs());
     }
 
     @Test

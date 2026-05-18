@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.time.Instant;
@@ -416,5 +417,13 @@ public interface ReadOnlySessionStore<K, AGG> {
     default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K keyFrom, final K keyTo) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
+    }
+
+    /**
+     * Return a read-only view of this store bound to the given {@link IsolationLevel}.
+     * See {@link ReadOnlyKeyValueStore#readOnly(IsolationLevel)} for semantics.
+     */
+    default ReadOnlySessionStore<K, AGG> readOnly(final IsolationLevel isolationLevel) {
+        return this;
     }
 }
