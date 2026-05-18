@@ -503,7 +503,7 @@ public class MetadataQuorumCommand {
             throw new TerseException("Failed to parse --controller-directory-id: " + e.getMessage());
         }
         if (!dryRun) {
-            removeRaftVoter(admin, controllerId, directoryId);
+            removeRaftVoter(admin, controllerId, directoryId, unregister);
         }
         System.out.printf("%s KRaft controller %d with directory id %s%n",
             dryRun ? "DRY RUN of removing " : "Removed ",
@@ -519,14 +519,18 @@ public class MetadataQuorumCommand {
         }
     }
 
-    private static void removeRaftVoter(Admin admin, int controllerId, Uuid directoryId)
-            throws TerseException, ExecutionException, InterruptedException {
+    private static void removeRaftVoter(
+        Admin admin,
+        int controllerId,
+        Uuid directoryId,
+        boolean unregister
+    ) throws TerseException, ExecutionException, InterruptedException {
         try {
             admin.removeRaftVoter(controllerId, directoryId).all().get();
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof UnsupportedVersionException ||
-                cause instanceof VoterNotFoundException) {
+            if (unregister && (cause instanceof UnsupportedVersionException ||
+                cause instanceof VoterNotFoundException)) {
                 throw new TerseException("Failed to remove KRaft voter " + controllerId
                     + ": " + cause.getMessage()
                     + ". To unregister the controller from the cluster, run "
