@@ -33,6 +33,7 @@ import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.network.Request
+import org.apache.kafka.server.AuthHelper
 import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
 import org.apache.kafka.server.config.{DynamicBrokerConfig, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.logger.LoggingController
