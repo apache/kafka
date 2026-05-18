@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -44,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.apache.kafka.test.MockRecordCollector;
@@ -634,6 +636,151 @@ public class MeteredKeyValueStoreTest {
         }
         // no open iterators left, timestamp should be reset to 0
         assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewGetApplySerdesAndRecordGetMetric() {
+        setUp();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.get(KEY_BYTES)).thenReturn(VALUE_BYTES);
+        init();
+
+        final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertThat(view.get(KEY), equalTo(VALUE));
+
+        assertTrue((Double) metric("get-rate").metricValue() > 0);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewRangeApplySerdesAndRecordRangeMetric() {
+        setUp();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.range(KEY_BYTES, KEY_BYTES))
+            .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
+        init();
+
+        final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final KeyValueIterator<String, String> it = view.range(KEY, KEY)) {
+            assertThat(it.next().value, equalTo(VALUE));
+            assertFalse(it.hasNext());
+        }
+
+        assertTrue((Double) metric("range-rate").metricValue() > 0);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewReverseRangeApplySerdesAndRecordRangeMetric() {
+        setUp();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.reverseRange(KEY_BYTES, KEY_BYTES))
+            .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
+        init();
+
+        final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final KeyValueIterator<String, String> it = view.reverseRange(KEY, KEY)) {
+            assertThat(it.next().value, equalTo(VALUE));
+            assertFalse(it.hasNext());
+        }
+
+        assertTrue((Double) metric("range-rate").metricValue() > 0);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewAllApplySerdesAndRecordAllMetric() {
+        setUp();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.all())
+            .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
+        init();
+
+        final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final KeyValueIterator<String, String> it = view.all()) {
+            assertThat(it.next().value, equalTo(VALUE));
+            assertFalse(it.hasNext());
+        }
+
+        assertTrue((Double) metric(new MetricName("all-rate", STORE_LEVEL_GROUP, "", tags)).metricValue() > 0);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewReverseAllApplySerdesAndRecordAllMetric() {
+        setUp();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.reverseAll())
+            .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
+        init();
+
+        final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final KeyValueIterator<String, String> it = view.reverseAll()) {
+            assertThat(it.next().value, equalTo(VALUE));
+            assertFalse(it.hasNext());
+        }
+
+        assertTrue((Double) metric(new MetricName("all-rate", STORE_LEVEL_GROUP, "", tags)).metricValue() > 0);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewPrefixScanApplySerdesAndRecordPrefixScanMetric() {
+        setUp();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        final StringSerializer stringSerializer = new StringSerializer();
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.prefixScan(KEY, stringSerializer))
+            .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(BYTE_KEY_VALUE_PAIR).iterator()));
+        init();
+
+        final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final KeyValueIterator<String, String> it = view.prefixScan(KEY, stringSerializer)) {
+            assertThat(it.next().value, equalTo(VALUE));
+            assertFalse(it.hasNext());
+        }
+
+        assertTrue((Double) metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags)).metricValue() > 0);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewApproximateNumEntriesDelegatesToUnderlying() {
+        setUp();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.approximateNumEntries()).thenReturn(42L);
+        init();
+
+        final ReadOnlyKeyValueStore<String, String> view = metered.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertThat(view.approximateNumEntries(), equalTo(42L));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPassReadCommittedThroughToInner() {
+        setUp();
+        final ReadOnlyKeyValueStore<Bytes, byte[]> innerView = mock(ReadOnlyKeyValueStore.class);
+        when(inner.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
+        init();
+
+        metered.readOnly(IsolationLevel.READ_COMMITTED);
+
+        verify(inner).readOnly(IsolationLevel.READ_COMMITTED);
+    }
+
+    @Test
+    public void shouldThrowNpeOnNullIsolationLevel() {
+        setUp();
+        init();
+
+        assertThrows(NullPointerException.class, () -> metered.readOnly(null));
     }
 
     private KafkaMetric metric(final MetricName metricName) {
