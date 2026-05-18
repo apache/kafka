@@ -120,19 +120,26 @@ public class FetchRequestTest {
                 .rackId("")
                 .build();
 
+        int leaderPort = cluster.brokers().get(LEADER_BROKER_ID).boundPort(cluster.clientListener());
         int followerPort = cluster.brokers().get(FOLLOWER_BROKER_ID).boundPort(cluster.clientListener());
-        try (Socket socket = IntegrationTestUtils.connect(followerPort)) {
-            IntegrationTestUtils.sendRequest(socket,
-                    Utils.toArray(fetchRequest.serializeWithHeader(
-                            IntegrationTestUtils.nextRequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion()))));
+        byte[] serializedFetchRequest = Utils.toArray(fetchRequest.serializeWithHeader(
+                IntegrationTestUtils.nextRequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion())));
+        try (Socket leaderSocket = IntegrationTestUtils.connect(leaderPort);
+             Socket followerSocket = IntegrationTestUtils.connect(followerPort)) {
+            IntegrationTestUtils.sendRequest(leaderSocket, serializedFetchRequest);
+            IntegrationTestUtils.sendRequest(followerSocket, serializedFetchRequest);
 
             try (Producer<byte[], byte[]> producer = cluster.producer(Map.of())) {
                 producer.send(new ProducerRecord<>(TOPIC, "key".getBytes(), "value".getBytes())).get();
             }
 
-            FetchResponse response = IntegrationTestUtils.receive(socket, ApiKeys.FETCH, ApiKeys.FETCH.latestVersion());
-            assertEquals(Errors.NONE, response.error());
-            assertEquals(Map.of(Errors.NONE, 2), response.errorCounts());
+            FetchResponse leaderResponse = IntegrationTestUtils.receive(leaderSocket, ApiKeys.FETCH, ApiKeys.FETCH.latestVersion());
+            assertEquals(Errors.NONE, leaderResponse.error());
+            assertEquals(Map.of(Errors.NONE, 2), leaderResponse.errorCounts());
+
+            FetchResponse followerResponse = IntegrationTestUtils.receive(followerSocket, ApiKeys.FETCH, ApiKeys.FETCH.latestVersion());
+            assertEquals(Errors.NONE, followerResponse.error());
+            assertEquals(Map.of(Errors.NONE, 2), followerResponse.errorCounts());
         }
     }
 

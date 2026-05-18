@@ -204,21 +204,12 @@ public class TestUtils {
             throw new IllegalArgumentException("Cannot define both oldLeaderOpt and expectedLeaderOpt");
         }
 
-        Supplier<Optional<Integer>> newLeaderExists = () -> {
-            if (expectedLeaderOpt.isPresent()) {
-                LOG.debug("Checking leader that has changed to {}", expectedLeaderOpt.get());
-            } else if (oldLeaderOpt.isPresent()) {
-                LOG.debug("Checking leader that has changed from {}", oldLeaderOpt.get());
-            } else {
-                LOG.debug("Checking the elected leader");
-            }
-            return brokers.stream()
+        Supplier<Optional<Integer>> newLeaderExists = () -> brokers.stream()
                     .filter(b -> expectedLeaderOpt.map(id -> b.config().brokerId() == id).orElse(true))
                     .filter(b -> oldLeaderOpt.map(id -> b.config().brokerId() != id).orElse(true))
                     .filter(b -> b.replicaManager().onlinePartition(tp).exists(p -> p.leaderLogIfLocal().isDefined()))
                     .map(b -> b.config().brokerId())
                     .findFirst();
-        };
 
         waitForCondition(() -> newLeaderExists.get().isPresent(),
                 timeoutMs, "Did not observe leader change for partition " + tp + " after " + timeoutMs + " ms");
