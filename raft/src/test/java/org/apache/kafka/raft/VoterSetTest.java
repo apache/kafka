@@ -20,7 +20,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
@@ -32,8 +31,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -365,64 +362,36 @@ public final class VoterSetTest {
         );
     }
 
-    public static final ListenerName DEFAULT_LISTENER_NAME = ListenerName.normalised("LISTENER");
+    public static final ListenerName DEFAULT_LISTENER_NAME = VoterSetTestUtil.DEFAULT_LISTENER_NAME;
 
     public static Map<Integer, VoterSet.VoterNode> voterMap(
         IntStream replicas,
         boolean withDirectoryId
     ) {
-        return replicas
-            .boxed()
-            .collect(
-                Collectors.toMap(
-                    Function.identity(),
-                    id -> voterNode(id, withDirectoryId)
-                )
-            );
+        return VoterSetTestUtil.voterMap(replicas, withDirectoryId);
     }
 
     public static Map<Integer, VoterSet.VoterNode> voterMap(Stream<ReplicaKey> replicas) {
-        return replicas
-            .collect(Collectors.toMap(ReplicaKey::id, VoterSetTest::voterNode));
+        return VoterSetTestUtil.voterMap(replicas);
     }
 
     public static VoterSet.VoterNode voterNode(int id, boolean withDirectoryId) {
-        return voterNode(
-            ReplicaKey.of(
-                id,
-                withDirectoryId ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID
-            )
-        );
+        return VoterSetTestUtil.voterNode(id, withDirectoryId);
     }
 
     public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey) {
-        return voterNode(
-            replicaKey,
-            Endpoints.fromInetSocketAddresses(
-                Map.of(
-                    DEFAULT_LISTENER_NAME,
-                    InetSocketAddress.createUnresolved(
-                        "localhost",
-                        9990 + replicaKey.id()
-                    )
-                )
-            )
-        );
+        return VoterSetTestUtil.voterNode(replicaKey);
     }
 
     public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey, Endpoints endpoints) {
-        var supportedVersionRange = replicaKey.directoryId().isEmpty() ?
-            new SupportedVersionRange((short) 0) :
-            Feature.KRAFT_VERSION.supportedVersionRange();
-
-        return new VoterSet.VoterNode(replicaKey, endpoints, supportedVersionRange);
+        return VoterSetTestUtil.voterNode(replicaKey, endpoints);
     }
 
     public static VoterSet voterSet(Map<Integer, VoterSet.VoterNode> voters) {
-        return VoterSet.fromMap(voters);
+        return VoterSetTestUtil.voterSet(voters);
     }
 
     public static VoterSet voterSet(Stream<ReplicaKey> voterKeys) {
-        return voterSet(voterMap(voterKeys));
+        return VoterSetTestUtil.voterSet(voterKeys);
     }
 }

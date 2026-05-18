@@ -1273,10 +1273,6 @@ public class GroupCoordinatorShardTest {
             any(), eq(image)
         );
 
-        verify(offsetMetadataManager, times(1)).onMetadataUpdate(
-            any(), eq(image)
-        );
-
         verify(groupMetadataManager, times(1)).onLoaded();
     }
 
@@ -1302,10 +1298,6 @@ public class GroupCoordinatorShardTest {
         coordinator.onMetadataUpdate(delta, image);
 
         verify(groupMetadataManager, times(1)).onMetadataUpdate(
-            eq(delta), eq(image)
-        );
-
-        verify(offsetMetadataManager, times(1)).onMetadataUpdate(
             eq(delta), eq(image)
         );
     }

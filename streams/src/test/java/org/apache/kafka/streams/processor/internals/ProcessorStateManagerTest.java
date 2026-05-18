@@ -203,6 +203,7 @@ public class ProcessorStateManagerTest {
             taskId,
             Task.TaskType.STANDBY,
             false,
+            false,
             logContext,
             stateDirectory,
             mkMap(
@@ -222,6 +223,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.STANDBY,
+            false,
             false,
             logContext,
             stateDirectory,
@@ -397,6 +399,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
+            false,
             false,
             logContext,
             stateDirectory,
@@ -682,6 +685,7 @@ public class ProcessorStateManagerTest {
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             taskId,
             Task.TaskType.STANDBY,
+            false,
             false,
             logContext,
             stateDirectory,
@@ -1261,11 +1265,69 @@ public class ProcessorStateManagerTest {
         assertEquals(200L, written.get(persistentStoreTwoPartition));
     }
 
+    @Test
+    public void shouldReportHasCorruptedStores() throws IOException {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, null);
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
+            assertFalse(stateMgr.hasCorruptedStores());
+            stateMgr.markChangelogAsCorrupted(Collections.singleton(persistentStorePartition));
+            assertTrue(stateMgr.hasCorruptedStores());
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldNotThrowTaskCorruptedWithoutCheckpointAndNonEmptyDirWhenTransactional() throws IOException {
+        // With transactional state stores + EOS, a missing checkpoint on a non-empty store dir should NOT
+        // be treated as corruption — uncommitted data is never written to the base store.
+        final long checkpointOffset = 10L;
+
+        final Map<TopicPartition, Long> offsets = mkMap(
+            mkEntry(persistentStorePartition, checkpointOffset),
+            mkEntry(nonPersistentStorePartition, checkpointOffset),
+            mkEntry(irrelevantPartition, 999L)
+        );
+        checkpoint.write(offsets);
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true, true, null);
+
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
+            stateMgr.registerStore(persistentStoreTwo, persistentStoreTwo.stateRestoreCallback, null);
+            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback, null);
+
+            // should not throw TaskCorruptedException
+            stateMgr.initializeStoreOffsets(false);
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled, final boolean transactionalStateStoresEnabled, final UpgradeFromValues upgradeFrom) {
+        return new ProcessorStateManager(
+            taskId,
+            taskType,
+            eosEnabled,
+            transactionalStateStoresEnabled,
+            logContext,
+            stateDirectory,
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
+            ),
+            emptySet(),
+            upgradeFrom);
+    }
+
     private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled, final UpgradeFromValues upgradeFrom) {
         return new ProcessorStateManager(
             taskId,
             taskType,
             eosEnabled,
+            false,
             logContext,
             stateDirectory,
             mkMap(

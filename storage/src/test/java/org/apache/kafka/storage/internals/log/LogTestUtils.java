@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
@@ -38,6 +39,7 @@ import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -52,6 +54,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -59,6 +62,8 @@ import java.util.function.LongFunction;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 
@@ -255,6 +260,78 @@ public class LogTestUtils {
             result.addAll(segment.txnIndex().allAbortedTxns());
         }
         return result;
+    }
+
+    /**
+     * Extract all the keys from a log.
+     */
+    public static List<Long> keysInLog(UnifiedLog log) {
+        List<Long> keys = new ArrayList<>();
+        for (LogSegment segment : log.logSegments()) {
+            for (RecordBatch batch : segment.log().batches()) {
+                if (batch.isControlBatch()) {
+                    continue;
+                }
+                for (Record record : batch) {
+                    if (record.hasValue() && record.hasKey()) {
+                        keys.add(Long.parseLong(readString(record.key())));
+                    }
+                }
+            }
+        }
+        return keys;
+    }
+
+    /**
+     * Recover log file and check that after recovery, keys are as expected
+     * and all temporary files have been deleted.
+     */
+    public static UnifiedLog recoverAndCheck(
+        File logDir,
+        LogConfig config,
+        List<Long> expectedKeys,
+        BrokerTopicStats brokerTopicStats,
+        Time time,
+        Scheduler scheduler
+    ) throws IOException {
+        UnifiedLog recoveredLog = createLog(logDir, config, brokerTopicStats, scheduler, time, false);
+        time.sleep(config.fileDeleteDelayMs + 1);
+        for (File file : logDir.listFiles()) {
+            assertFalse(file.getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX), "Unexpected .deleted file after recovery");
+            assertFalse(file.getName().endsWith(UnifiedLog.CLEANED_FILE_SUFFIX), "Unexpected .cleaned file after recovery");
+            assertFalse(file.getName().endsWith(UnifiedLog.SWAP_FILE_SUFFIX), "Unexpected .swap file after recovery");
+        }
+        assertEquals(expectedKeys, keysInLog(recoveredLog));
+        assertFalse(hasOffsetOverflow(recoveredLog));
+        return recoveredLog;
+    }
+
+    public static UnifiedLog createLog(
+        File dir,
+        LogConfig config,
+        BrokerTopicStats brokerTopicStats,
+        Scheduler scheduler,
+        Time time,
+        boolean lastShutdownClean
+    ) throws IOException {
+        return UnifiedLog.create(
+            dir,
+            config,
+            0L,
+            0L,
+            scheduler,
+            brokerTopicStats,
+            time,
+            5 * 60 * 1000,
+            new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+            TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+            new LogDirFailureChannel(10),
+            lastShutdownClean,
+            Optional.empty(),
+            new ConcurrentHashMap<>(),
+            false,
+            LogOffsetsListener.NO_OP_OFFSETS_LISTENER
+        );
     }
 
     public static void deleteProducerSnapshotFiles(File logDir) {
@@ -529,11 +606,20 @@ public class LogTestUtils {
     public static class FakeOffsetMap implements OffsetMap {
 
         private final Map<String, Long> map = new HashMap<>();
+        private final int slots;
         private long latestOff = -1L;
+
+        public FakeOffsetMap() {
+            this(Integer.MAX_VALUE);
+        }
+
+        public FakeOffsetMap(int slots) {
+            this.slots = slots;
+        }
 
         @Override
         public int slots() {
-            return Integer.MAX_VALUE;
+            return slots;
         }
         
         @Override
@@ -566,5 +652,9 @@ public class LogTestUtils {
         public long latestOffset() {
             return latestOff;
         }
-    } 
+
+        public Map<String, Long> map() {
+            return map;
+        }
+    }
 }

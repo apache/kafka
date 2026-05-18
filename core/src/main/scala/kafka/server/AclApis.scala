@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclBinding
@@ -30,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.network.Request
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer._
@@ -59,9 +59,9 @@ class AclApis(authHelper: AuthHelper,
 
   def close(): Unit = alterAclsPurgatory.shutdown()
 
-  def handleDescribeAcls(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  def handleDescribeAcls(request: Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, DESCRIBE)
-    val describeAclsRequest = request.body[DescribeAclsRequest]
+    val describeAclsRequest = request.body(classOf[DescribeAclsRequest])
     authorizerPlugin match {
       case None =>
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -81,9 +81,9 @@ class AclApis(authHelper: AuthHelper,
     CompletableFuture.completedFuture[Unit](())
   }
 
-  def handleCreateAcls(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  def handleCreateAcls(request: Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, ALTER)
-    val createAclsRequest = request.body[CreateAclsRequest]
+    val createAclsRequest = request.body(classOf[CreateAclsRequest])
 
     authorizerPlugin match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -137,9 +137,9 @@ class AclApis(authHelper: AuthHelper,
     }
   }
 
-  def handleDeleteAcls(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  def handleDeleteAcls(request: Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, ALTER)
-    val deleteAclsRequest = request.body[DeleteAclsRequest]
+    val deleteAclsRequest = request.body(classOf[DeleteAclsRequest])
     authorizerPlugin match {
       case None =>
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>

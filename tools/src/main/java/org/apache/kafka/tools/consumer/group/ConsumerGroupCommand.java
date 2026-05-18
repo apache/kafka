@@ -44,7 +44,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.OffsetsUtils;
+import org.apache.kafka.tools.GroupOffsetsResetter;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -131,7 +131,7 @@ public class ConsumerGroupCommand {
                     String exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset);
                     System.out.println(exported);
                 } else
-                    OffsetsUtils.printOffsetsToReset(offsetsToReset);
+                    GroupOffsetsResetter.printOffsetsToReset(offsetsToReset);
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 consumerGroupService.deleteOffsets();
             }
@@ -182,7 +182,7 @@ public class ConsumerGroupCommand {
         final ConsumerGroupCommandOptions opts;
         final Map<String, String> configOverrides;
         private final Admin adminClient;
-        private final OffsetsUtils offsetsUtils;
+        private final GroupOffsetsResetter groupOffsetsResetter;
 
         ConsumerGroupService(ConsumerGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
@@ -192,12 +192,12 @@ public class ConsumerGroupCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
-        private OffsetsUtils.OffsetsUtilsOptions getOffsetsUtilsOptions(ConsumerGroupCommandOptions opts) {
+        private GroupOffsetsResetter.GroupOffsetsResetterOptions getGroupOffsetsResetterOptions(ConsumerGroupCommandOptions opts) {
             return
-                new OffsetsUtils.OffsetsUtilsOptions(opts.options.valuesOf(opts.groupOpt),
+                new GroupOffsetsResetter.GroupOffsetsResetterOptions(opts.options.valuesOf(opts.groupOpt),
                     opts.options.valuesOf(opts.resetToOffsetOpt),
                     opts.options.valuesOf(opts.resetFromFileOpt),
                     opts.options.valuesOf(opts.resetToDatetimeOpt),
@@ -598,19 +598,19 @@ public class ConsumerGroupCommand {
                     consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt, leaderEpoch);
             };
 
-            List<TopicPartition> topicPartitionsWithoutLeader = offsetsUtils.filterNoneLeaderPartitions(topicPartitions);
+            List<TopicPartition> topicPartitionsWithoutLeader = groupOffsetsResetter.filterNoneLeaderPartitions(topicPartitions);
             List<TopicPartition> topicPartitionsWithLeader = topicPartitions.stream().filter(tp -> !topicPartitionsWithoutLeader.contains(tp)).toList();
 
             // prepare data for partitions with leaders
-            List<PartitionAssignmentState> existLeaderAssignments = offsetsUtils.getLogEndOffsets(topicPartitionsWithLeader).entrySet().stream().map(logEndOffsetResult -> {
-                if (logEndOffsetResult.getValue() instanceof OffsetsUtils.LogOffset)
+            List<PartitionAssignmentState> existLeaderAssignments = groupOffsetsResetter.getLogEndOffsets(topicPartitionsWithLeader).entrySet().stream().map(logEndOffsetResult -> {
+                if (logEndOffsetResult.getValue() instanceof GroupOffsetsResetter.LogOffset)
                     return getDescribePartitionResult.apply(
                         logEndOffsetResult.getKey(),
-                        Optional.of(((OffsetsUtils.LogOffset) logEndOffsetResult.getValue()).value())
+                        Optional.of(((GroupOffsetsResetter.LogOffset) logEndOffsetResult.getValue()).value())
                     );
-                else if (logEndOffsetResult.getValue() instanceof OffsetsUtils.Unknown)
+                else if (logEndOffsetResult.getValue() instanceof GroupOffsetsResetter.Unknown)
                     return getDescribePartitionResult.apply(logEndOffsetResult.getKey(), Optional.empty());
-                else if (logEndOffsetResult.getValue() instanceof OffsetsUtils.Ignore)
+                else if (logEndOffsetResult.getValue() instanceof GroupOffsetsResetter.Ignore)
                     return null;
 
                 throw new IllegalStateException("Unknown LogOffset subclass: " + logEndOffsetResult.getValue());
@@ -706,7 +706,7 @@ public class ConsumerGroupCommand {
                     topicWithoutPartitions.add(topic);
             }
 
-            List<TopicPartition> knownPartitions = topicWithPartitions.stream().flatMap(offsetsUtils::parseTopicsWithPartitions).toList();
+            List<TopicPartition> knownPartitions = topicWithPartitions.stream().flatMap(groupOffsetsResetter::parseTopicsWithPartitions).toList();
 
             // Get the partitions of topics that the user did not explicitly specify the partitions
             DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(
@@ -947,7 +947,7 @@ public class ConsumerGroupCommand {
                 return getCommittedOffsets(groupId).keySet();
             } else if (opts.options.has(opts.topicOpt)) {
                 List<String> topics = opts.options.valuesOf(opts.topicOpt);
-                return offsetsUtils.parseTopicPartitionsToReset(topics);
+                return groupOffsetsResetter.parseTopicPartitionsToReset(topics);
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
                     CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
@@ -969,26 +969,26 @@ public class ConsumerGroupCommand {
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
             // ensure all partitions are valid, otherwise throw a runtime exception
-            offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
+            groupOffsetsResetter.checkAllTopicPartitionsValid(partitionsToReset);
 
             if (opts.options.has(opts.resetToOffsetOpt)) {
-                return offsetsUtils.resetToOffset(partitionsToReset);
+                return groupOffsetsResetter.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
-                return offsetsUtils.resetToEarliest(partitionsToReset);
+                return groupOffsetsResetter.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {
-                return offsetsUtils.resetToLatest(partitionsToReset);
+                return groupOffsetsResetter.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetShiftByOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                return offsetsUtils.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
+                return groupOffsetsResetter.resetByShiftBy(partitionsToReset, currentCommittedOffsets);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-                return offsetsUtils.resetToDateTime(partitionsToReset);
+                return groupOffsetsResetter.resetToDateTime(partitionsToReset);
             } else if (opts.options.has(opts.resetByDurationOpt)) {
-                return offsetsUtils.resetByDuration(partitionsToReset);
-            } else if (offsetsUtils.resetPlanFromFile().isPresent()) {
-                return offsetsUtils.resetFromFile(groupId);
+                return groupOffsetsResetter.resetByDuration(partitionsToReset);
+            } else if (groupOffsetsResetter.resetPlanFromFile().isPresent()) {
+                return groupOffsetsResetter.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
                 Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets = getCommittedOffsets(groupId);
-                return offsetsUtils.resetToCurrent(partitionsToReset, currentCommittedOffsets);
+                return groupOffsetsResetter.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
             CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
