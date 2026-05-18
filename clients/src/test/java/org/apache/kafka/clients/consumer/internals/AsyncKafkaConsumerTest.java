@@ -87,10 +87,10 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.TestUtils;
 
@@ -609,6 +609,7 @@ public class AsyncKafkaConsumerTest {
             // Do NOT mark reconciliation check complete - simulating background hasn't processed it yet
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+        consumer.setHasPendingReconciliation(true);
 
         // Poll should return empty because reconciliation check is not complete.
         ConsumerRecords<?, ?> result1 = consumer.poll(Duration.ZERO);
@@ -621,6 +622,60 @@ public class AsyncKafkaConsumerTest {
         // Next poll should return the records since reconciliation check is now complete
         ConsumerRecords<?, ?> result2 = consumer.poll(Duration.ZERO);
         assertEquals(2, result2.count(), "Expected 2 records after reconciliation check is complete");
+    }
+
+    @Test
+    public void testPollDoesNotWaitForReconciliationCheckIfNoPendingReconciliation() {
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+                new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+                new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                new ConsumerInterceptors<>(Collections.emptyList(), metrics),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions);
+
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        // PositionsValidator starts with metadataUpdateVersion=-1. Stub metadata.updateVersion() to match,
+        // so canSkipUpdateFetchPositions() passes and we test the reconciliation check path.
+        doReturn(-1).when(metadata).updateVersion();
+
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        // Simulate partition assignment from group coordinator
+        subscriptions.assignFromSubscribed(singleton(tp));
+
+        // Set up position so canSkipUpdateFetchPositions() returns true (partition in FETCHING state)
+        completeSeekUnvalidatedEventSuccessfully();
+        subscriptions.seek(tp, 0);
+
+        // Set up fetch collector to return records when called
+        doReturn(Fetch.forPartition(tp, records, true, new OffsetAndMetadata(4, Optional.of(0), "")))
+                .when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        // Capture the AsyncPollEvent but leave the reconciliation check incomplete.
+        // Since there is no pending reconciliation, poll should not wait for it.
+        AtomicReference<AsyncPollEvent> capturedEvent = new AtomicReference<>();
+        doAnswer(invocation -> {
+            AsyncPollEvent event = invocation.getArgument(0);
+            assertTrue(capturedEvent.compareAndSet(null, event));
+            // Do NOT mark reconciliation check complete - simulating background hasn't processed it yet
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+        consumer.setHasPendingReconciliation(false);
+        
+        // Poll does not wait AsyncPollEvent if there is no pending reconciliation.
+        ConsumerRecords<?, ?> result = consumer.poll(Duration.ZERO);
+
+        assertNotNull(capturedEvent.get(), "AsyncPollEvent should have been captured");
+        assertFalse(capturedEvent.get().isReconciliationCheckComplete(), "Reconciliation check should still be incomplete");
+        assertEquals(2, result.count(), "Expected records without waiting when no reconciliation is pending");
     }
 
     @Test
@@ -1822,6 +1877,61 @@ public class AsyncKafkaConsumerTest {
 
         // Only one AsyncPollEvent must have been added despite multiple poll loop iterations.
         verify(applicationEventHandler, times(1)).add(isA(AsyncPollEvent.class));
+    }
+
+    /**
+     * Verifies that with manual partition assignment, poll() blocks for
+     * the full user-supplied timeout instead of spinning in a busy loop.
+     * Before the fix, AbstractHeartbeatRequestManager.maximumTimeToWait() returned 0
+     * while the membership state was UNSUBSCRIBED (the state used for manual assignment),
+     * causing pollForFetches() to call fetchBuffer.awaitWakeup() with a 0-timeout timer
+     * and re-enter the poll loop immediately. After KAFKA-20426, maximumTimeToWait() returns
+     * Long.MAX_VALUE in that state so the application thread can block for the full timeout.
+     */
+    @Test
+    public void testPollWithManualAssignmentDoesNotBusyLoop() {
+        FetchBuffer fetchBuffer = mock(FetchBuffer.class);
+        ConsumerInterceptors<String, String> interceptors = mock(ConsumerInterceptors.class);
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = mock(ConsumerRebalanceListenerInvoker.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(fetchBuffer, interceptors, rebalanceListenerInvoker, subscriptions);
+
+        final TopicPartition tp = new TopicPartition("topic1", 0);
+
+        // Manual assignment with valid position so pollForFetches() does not shrink pollTimeout to retryBackoffMs.
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // Simulate the FIXED behavior of AbstractHeartbeatRequestManager#maximumTimeToWait() when the
+        // membership state is UNSUBSCRIBED, i.e. user called assign().
+        doReturn(Long.MAX_VALUE).when(applicationEventHandler).maximumTimeToWait();
+
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+
+        // Capture the Timer passed to awaitWakeup so we can assert it was given the full
+        // poll timeout, i.e. no busy loop. Also advance mock time by the timer's remaining ms so the
+        // outer poll timer expires after a single wait.
+        AtomicReference<Long> awaitTimerInitialMs = new AtomicReference<>();
+        doAnswer(invocation -> {
+            Timer pollTimer = invocation.getArgument(0, Timer.class);
+            awaitTimerInitialMs.compareAndSet(null, pollTimer.remainingMs());
+            time.sleep(pollTimer.remainingMs());
+            pollTimer.update();
+            return null;
+        }).when(fetchBuffer).awaitWakeup(any(Timer.class));
+
+        final long pollTimeoutMs = 500;
+        consumer.poll(Duration.ofMillis(pollTimeoutMs));
+
+        // The poll timer passed to awaitWakeup must have been set to the full user timeout,
+        // proving pollTimeout was NOT clamped to 0 (busy loop) by maximumTimeToWait().
+        assertNotNull(awaitTimerInitialMs.get(), "fetchBuffer.awaitWakeup was never called");
+        assertEquals(pollTimeoutMs, awaitTimerInitialMs.get(),
+            "Expected poll wait timer to use the full user timeout (no busy loop), but was " + awaitTimerInitialMs.get());
+
+        // Only a single wait cycle should have happened
+        verify(fetchBuffer, times(1)).awaitWakeup(any(Timer.class));
     }
 
     /**

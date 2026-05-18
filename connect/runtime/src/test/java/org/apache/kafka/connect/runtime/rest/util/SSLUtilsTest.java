@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -161,6 +162,36 @@ public class SSLUtilsTest {
         assertEquals(SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ssl.getTrustManagerFactoryAlgorithm());
         assertFalse(ssl.getNeedClientAuth());
         assertFalse(ssl.getWantClientAuth());
+    }
+
+    @Test
+    public void testCreateServerSideSslContextFactoryWithListenerPrefixedConfigs() {
+        Map<String, String> configMap = new HashMap<>();
+        // Use listener-prefixed SSL configs (but not all of them).
+        // This triggers the "all" branch of valuesWithPrefixAllOrNothing,
+        // which returns only prefixed entries — keys without a prefixed
+        // counterpart (like ssl.cipher.suites) will be absent from the map.
+        configMap.put("listeners.https.ssl.keystore.location", keystorePath);
+        configMap.put("listeners.https.ssl.keystore.password", keystorePassword.value());
+        configMap.put("listeners.https.ssl.key.password", keystorePassword.value());
+        configMap.put("listeners.https.ssl.truststore.location", truststorePath);
+        configMap.put("listeners.https.ssl.truststore.password", truststorePassword.value());
+
+        RestServerConfig config = RestServerConfig.forPublic(null, configMap);
+        assertDoesNotThrow(() -> SSLUtils.createServerSideSslContextFactory(config));
+    }
+
+    @Test
+    public void testCreateClientSideSslContextFactoryWithListenerPrefixedConfigs() {
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put("listeners.https.ssl.keystore.location", keystorePath);
+        configMap.put("listeners.https.ssl.keystore.password", keystorePassword.value());
+        configMap.put("listeners.https.ssl.key.password", keystorePassword.value());
+        configMap.put("listeners.https.ssl.truststore.location", truststorePath);
+        configMap.put("listeners.https.ssl.truststore.password", truststorePassword.value());
+
+        RestServerConfig config = RestServerConfig.forPublic(null, configMap);
+        assertDoesNotThrow(() -> SSLUtils.createClientSideSslContextFactory(config));
     }
 
     @Test

@@ -54,7 +54,6 @@ import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateRequest;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.InterBrokerSendThread;
@@ -127,6 +126,13 @@ public class PersisterStateManager {
         UNKNOWN
     }
 
+    /**
+     * Creates a new PersisterStateManager.
+     *
+     * <p>The caller retains ownership of the supplied {@link Timer} and is responsible for
+     * closing it. {@link #stop()} will not close the timer, allowing it to be shared with
+     * other components.
+     */
     public PersisterStateManager(KafkaClient client, ShareCoordinatorMetadataCacheHelper cacheHelper, Time time, Timer timer) {
         if (client == null) {
             throw new IllegalArgumentException("Kafkaclient must not be null.");
@@ -166,7 +172,6 @@ public class PersisterStateManager {
     public void stop() throws Exception {
         if (isStarted.compareAndSet(true, false)) {
             this.sender.shutdown();
-            Utils.closeQuietly(this.timer, "PersisterStateManager timer");
         }
     }
 

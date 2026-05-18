@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyQueryMetadata;
@@ -442,5 +442,19 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 .filter(t -> topologyName.equals(t.id().topologyName()))
                 .collect(Collectors.toList())));
         return allLocalStorePartitionLags(allTopologyTasks);
+    }
+
+    // VisibleForTesting
+    public boolean hasAnyLocalTaskForTopology(final String topologyName) {
+        synchronized (threads) {
+            return threads.stream().anyMatch(thread -> thread.hasAnyTaskForTopology(topologyName));
+        }
+    }
+    
+    // VisibleForTesting
+    public boolean areAllLocalTasksRunningForTopology(final String topologyName) {
+        synchronized (threads) {
+            return threads.stream().allMatch(thread -> thread.areAllTasksRunningForTopology(topologyName));
+        }
     }
 }

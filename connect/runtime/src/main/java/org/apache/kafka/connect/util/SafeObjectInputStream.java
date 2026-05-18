@@ -18,8 +18,10 @@ package org.apache.kafka.connect.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InvalidClassException;
 import java.io.ObjectInputStream;
 import java.io.ObjectStreamClass;
+import java.util.Objects;
 import java.util.Set;
 
 
@@ -30,40 +32,44 @@ import java.util.Set;
  */
 public class SafeObjectInputStream extends ObjectInputStream {
 
-    protected static final Set<String> DEFAULT_NO_DESERIALIZE_CLASS_NAMES = Set.of(
-            "org.apache.commons.collections.functors.InvokerTransformer",
-            "org.apache.commons.collections.functors.InstantiateTransformer",
-            "org.apache.commons.collections4.functors.InvokerTransformer",
-            "org.apache.commons.collections4.functors.InstantiateTransformer",
-            "org.codehaus.groovy.runtime.ConvertedClosure",
-            "org.codehaus.groovy.runtime.MethodClosure",
-            "org.springframework.beans.factory.ObjectFactory",
-            "com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl",
-            "org.apache.xalan.xsltc.trax.TemplatesImpl"
+    /**
+     * The exact class descriptors produced when deserializing {@code HashMap<byte[], byte[]>},
+     * the format written by {@link org.apache.kafka.connect.storage.FileOffsetBackingStore}.
+     * Verified by inspection: only {@code java.util.HashMap} and {@code [B} (byte[]) appear.
+     * Allowing any additional type would widen the attack surface without justification.
+     */
+    public static final Set<String> BASE_TYPES = Set.of(
+            "java.util.HashMap",
+            "[B"   // JVM descriptor for byte[]
     );
 
+    private final Set<String> allowedClasses;
+
+    /**
+     * Uses {@link #BASE_TYPES} as the allowlist. Suitable for {@code FileOffsetBackingStore}.
+     */
     public SafeObjectInputStream(InputStream in) throws IOException {
+        this(in, BASE_TYPES);
+    }
+
+    /**
+     * Permits only the classes in {@code allowedClasses}. Use when the stream contains
+     * types beyond {@link #BASE_TYPES}; the caller must enumerate every expected type.
+     */
+    public SafeObjectInputStream(InputStream in, Set<String> allowedClasses) throws IOException {
         super(in);
+        this.allowedClasses = Objects.requireNonNull(allowedClasses, "allowedClasses");
     }
 
     @Override
     protected Class<?> resolveClass(ObjectStreamClass desc) throws IOException, ClassNotFoundException {
         String name = desc.getName();
-
-        if (isBlocked(name)) {
-            throw new SecurityException("Illegal type to deserialize: prevented for security reasons");
+        if (!allowedClasses.contains(name)) {
+            throw new InvalidClassException(name,
+                    "Rejected by deserialization allowlist. If this class is legitimately " +
+                    "required, pass an explicit allowedClasses set to " +
+                    "SafeObjectInputStream(InputStream, Set).");
         }
-
         return super.resolveClass(desc);
-    }
-
-    private boolean isBlocked(String name) {
-        for (String list : DEFAULT_NO_DESERIALIZE_CLASS_NAMES) {
-            if (name.endsWith(list)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
