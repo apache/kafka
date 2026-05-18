@@ -935,10 +935,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
                         cumulativeSize += previousSeg.size();
-                        if (delayCopy(log.config(), previousSeg, currentTimeMs, totalLogSize, cumulativeSize)) {
+                        if (isEligibleForUpload(log.config(), previousSeg, currentTimeMs, totalLogSize, cumulativeSize)) {
+                            candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
+                        } else {
                             break;
                         }
-                        candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
                     }
                 }
                 // Discard the last active segment
@@ -946,9 +947,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return candidateLogSegments;
         }
 
-        private boolean delayCopy(LogConfig logConfig, LogSegment previousSeg, long currentTimeMs, long totalLogSize, long cumulativeSize) {
+        private boolean isEligibleForUpload(LogConfig logConfig, LogSegment previousSeg, long currentTimeMs, long totalLogSize, long cumulativeSize) {
             if (logConfig == null) {
-                return false;
+                return true;
             }
 
             long copyLagMs = logConfig.remoteCopyLagMs();
@@ -959,7 +960,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             }
 
             if (copyLagMs == 0 || copyLagBytes == 0) {
-                return false;
+                return true;
             }
 
             boolean needCheckCopyLagMs =  copyLagMs > 0;
@@ -967,23 +968,23 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             // When no lag delay is enabled, upload immediately.
             if (!needCheckCopyLagMs && !needCheckCopyLagBytes) {
-                return false;
+                return true;
             }
 
-            // When both lag delays are enabled, delay upload only if both delay checks decide to delay.
+            // When both lag delays are enabled, upload immediately if any delay checks decide to upload.
             if (needCheckCopyLagMs && needCheckCopyLagBytes) {
-                return notExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs) && notExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
+                return exceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs) || exceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
             }
 
             // If only one lag delay is enabled, use that check as the final result.
             if (needCheckCopyLagMs) {
-                return notExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs);
+                return exceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs);
             }
 
-            return notExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
+            return exceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
         }
 
-        private boolean notExceededCopyLagTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
+        private boolean exceededCopyLagTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
             try {
                 long segmentAgeMs = currentTimeMs - segment.largestTimestamp();
                 boolean exceeded = segmentAgeMs >= copyLagMs;
@@ -991,21 +992,21 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     logger.trace("{} eligible for upload by time? {} (segment age {} ms, copy lag {} ms)",
                             segment, exceeded, segmentAgeMs, copyLagMs);
                 }
-                return !exceeded;
+                return exceeded;
             } catch (IOException e) {
                 logger.warn("Failed to get largest timestamp for segment {}, take it as eligible for upload based on time", segment, e);
-                return false;
+                return true;
             }
         }
 
-        private boolean notExceededCopyLagSize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
+        private boolean exceededCopyLagSize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
             long sizeLagBytes = totalLogSize - cumulativeSize;
             boolean exceeded = sizeLagBytes >= copyLagBytes;
             if (logger.isTraceEnabled()) {
                 logger.trace("{} eligible for upload by size? {} (size lag {} bytes, copy lag {} bytes, totalLogSize={}, cumulativeSize={})",
                         segment, exceeded, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
             }
-            return !exceeded;
+            return exceeded;
         }
         
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
