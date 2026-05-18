@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -30,7 +30,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -56,7 +55,7 @@ public class ValueToKeyTest {
 
     @Test
     void schemaless() {
-        xform.configure(Collections.singletonMap("fields", "a,b"));
+        xform.configure(Map.of("fields", "a,b"));
 
         final HashMap<String, Integer> value = new HashMap<>();
         value.put("a", 1);
@@ -76,7 +75,7 @@ public class ValueToKeyTest {
 
     @Test
     void withSchema() {
-        xform.configure(Collections.singletonMap("fields", "a,b"));
+        xform.configure(Map.of("fields", "a,b"));
 
         final Schema valueSchema = SchemaBuilder.struct()
                 .field("a", Schema.INT32_SCHEMA)
@@ -107,7 +106,7 @@ public class ValueToKeyTest {
 
     @Test
     void nonExistingField() {
-        xform.configure(Collections.singletonMap("fields", "not_exist"));
+        xform.configure(Map.of("fields", "not_exist"));
 
         final Schema valueSchema = SchemaBuilder.struct()
             .field("a", Schema.INT32_SCHEMA)
@@ -273,7 +272,7 @@ public class ValueToKeyTest {
         xform.configure(configs);
 
         final Map<String, Object> value = new HashMap<>();
-        value.put("address", Collections.singletonMap("city", "New York"));
+        value.put("address", Map.of("city", "New York"));
 
         final SinkRecord sinkRecord = new SinkRecord("", 0, null, null, null, value, 0);
         final SinkRecord transformedRecord = xform.apply(sinkRecord);
@@ -287,7 +286,7 @@ public class ValueToKeyTest {
     @Test
     void v1BackwardCompatibilityDottedFieldName() {
         // With V1 (default), a dotted field name is treated as a literal field name
-        xform.configure(Collections.singletonMap("fields", "address.city"));
+        xform.configure(Map.of("fields", "address.city"));
 
         final Schema valueSchema = SchemaBuilder.struct()
                 .field("address.city", Schema.STRING_SCHEMA)
