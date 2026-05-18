@@ -47,6 +47,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -80,8 +81,7 @@ public class LogConfig extends AbstractConfig {
      * {@code useLargeFormat=true} into the {@link OffsetIndex} / {@link LazyIndex} constructors
      * directly.
      */
-    private static final java.util.concurrent.atomic.AtomicBoolean LARGE_INDEX_FORMAT_ENABLED =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static final AtomicBoolean LARGE_INDEX_FORMAT_ENABLED = new AtomicBoolean(false);
 
     /**
      * Update the broker-wide large-index-format flag. Called by the metadata publisher when

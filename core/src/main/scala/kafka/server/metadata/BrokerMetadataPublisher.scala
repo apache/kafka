@@ -223,6 +223,22 @@ class BrokerMetadataPublisher(
         finishInitializingReplicaManager()
       }
 
+      // KIP-1333: gate the 12-byte offset-index format on the finalized metadata.version.
+      // Applied both on the first publish (to carry the bootstrap MV without waiting for a
+      // features delta) and on every subsequent featuresDelta (to pick up
+      // kafka-features.sh upgrade --metadata 4.4-IV1 without a broker restart). Without the
+      // first-publish branch, a broker that boots at IBP_4_4_IV1 would roll its very first
+      // segment in legacy format and only switch on the next features delta.
+      if (_firstPublish || delta.featuresDelta != null) {
+        try {
+          LogConfig.setLargeIndexFormatEnabled(
+            newImage.features.metadataVersionOrThrow.isLargeIndexFormatSupported)
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault(
+            s"Error updating large-index-format flag from $deltaName", t)
+        }
+      }
+
       if (delta.featuresDelta != null) {
         try {
           val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
@@ -237,17 +253,6 @@ class BrokerMetadataPublisher(
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share partition manager " +
             s" with share version feature change in $deltaName", t)
-        }
-
-        // KIP-1333: gate the 12-byte offset-index format on the finalized metadata.version.
-        // We re-derive from the image on every features delta (including first publish) so
-        // that newly-rolled segments pick up the change without a broker restart.
-        try {
-          LogConfig.setLargeIndexFormatEnabled(
-            newImage.features.metadataVersionOrThrow.isLargeIndexFormatSupported)
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault(
-            s"Error updating large-index-format flag from $deltaName", t)
         }
       }
 
