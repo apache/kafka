@@ -154,7 +154,7 @@ Kafka Streams materializes one state store per stream partition. This means your
 
 <a id="header-aware-stores-interactive-queries"></a>
 
-**Note:** For a [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores), use the matching **`*WithHeaders()`** entry from the list above when interactive query results must include record headers.
+**Note:** For a [header-aware store](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores), use the **`*WithHeaders()`** entry from the list above that corresponds to your store type when interactive query results must include record headers.
 
 ## Querying local key-value stores
 
