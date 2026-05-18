@@ -449,6 +449,35 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTest
+    public void testDescribeStatePrintsHeaderOnceForMultipleGroups(ClusterInstance clusterInstance) throws Exception {
+        this.clusterInstance = clusterInstance;
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name() + ".header-once";
+            createTopic(topic);
+            String group1 = GROUP_PREFIX + groupProtocol.name() + ".header-once.g1";
+            String group2 = GROUP_PREFIX + groupProtocol.name() + ".header-once.g2";
+            try (AutoCloseable executor1 = consumerGroupClosable(groupProtocol, group1, topic, Map.of());
+                 AutoCloseable executor2 = consumerGroupClosable(groupProtocol, group2, topic, Map.of())) {
+                String[] cgcArgs = new String[]{
+                    "--bootstrap-server", clusterInstance.bootstrapServers(),
+                    "--describe", "--all-groups", "--state"
+                };
+                try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs)) {
+                    TestUtils.waitForCondition(() -> {
+                        Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                        return res.getValue().isEmpty() &&
+                            countStateHeaderLines(res.getKey(), false) == 1 &&
+                            countStateDataLines(res.getKey()) >= 2;
+                    }, "Expected a single state header and at least two data rows for --all-groups --state.");
+                }
+            } finally {
+                deleteConsumerGroups(List.of(group1, group2));
+                deleteTopic(topic);
+            }
+        }
+    }
+
+    @ClusterTest
     public void testDescribeOffsetsOfExistingGroup(ClusterInstance clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
@@ -1299,6 +1328,21 @@ public class DescribeConsumerGroupTest {
             List.of("GROUP", "COORDINATOR", "(ID)", "ASSIGNMENT-STRATEGY", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS") :
             List.of("GROUP", "COORDINATOR", "(ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS");
         return Arrays.stream(output.trim().split("\\s+")).toList().equals(expectedKeys);
+    }
+
+    private long countStateHeaderLines(String output, boolean verbose) {
+        return Arrays.stream(output.split("\n"))
+            .filter(line -> !line.isBlank())
+            .filter(line -> checkStateArgsHeaderOutput(line, verbose))
+            .count();
+    }
+
+    private long countStateDataLines(String output) {
+        return Arrays.stream(output.split("\n"))
+            .filter(line -> !line.isBlank())
+            .filter(line -> !checkStateArgsHeaderOutput(line, false))
+            .filter(this::checkStateArgsOutput)
+            .count();
     }
 
     private void sendRecords(String topic, int partition, int recordsCount) {

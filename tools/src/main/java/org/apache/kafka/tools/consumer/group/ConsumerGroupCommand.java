@@ -509,6 +509,10 @@ public class ConsumerGroupCommand {
             }).sorted().collect(Collectors.joining(";"));
         }
 
+        private static String formatCoordinator(Node coordinator) {
+            return coordinator.host() + ":" + coordinator.port() + "  (" + coordinator.idString() + ")";
+        }
+
         private void printStates(Map<String, GroupInformation> states, boolean verbose) {
             List<GroupInformation> printableStates = new ArrayList<>();
             states.forEach((groupId, state) -> {
@@ -524,7 +528,7 @@ public class ConsumerGroupCommand {
             int coordinatorColLen = 25;
             int groupColLen = 15;
             for (GroupInformation state : printableStates) {
-                String coordinator = state.coordinator().host() + ":" + state.coordinator().port() + "  (" + state.coordinator().idString() + ")";
+                String coordinator = formatCoordinator(state.coordinator());
                 coordinatorColLen = Math.max(coordinatorColLen, coordinator.length());
                 groupColLen = Math.max(groupColLen, state.group().length());
             }
@@ -540,7 +544,7 @@ public class ConsumerGroupCommand {
             }
 
             for (GroupInformation state : printableStates) {
-                String coordinator = state.coordinator().host() + ":" + state.coordinator().port() + "  (" + state.coordinator().idString() + ")";
+                String coordinator = formatCoordinator(state.coordinator());
                 String assignmentStrategy = state.assignmentStrategy().isEmpty() ? MISSING_COLUMN_VALUE : state.assignmentStrategy();
                 if (verbose) {
                     System.out.printf(format, state.group(), coordinator, assignmentStrategy, state.groupState(),
