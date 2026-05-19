@@ -22,25 +22,35 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -135,6 +145,7 @@ public class ShareGroupDLQStateManager {
         private final ShareGroupDLQRecordParameter param;
         private static final Logger LOG = LoggerFactory.getLogger(ShareGroupDLQStateManager.ProduceRequestHandler.class);
         private final ExponentialBackoffManager createTopicsBackoff;
+        private Node dlqPartitionLeaderNode;
 
         public ProduceRequestHandler(
             ShareGroupDLQRecordParameter param,
@@ -165,8 +176,8 @@ public class ShareGroupDLQStateManager {
 
             if (response.requestHeader().apiKey() == ApiKeys.CREATE_TOPICS) {
                 handleCreateTopicsResponse(response);
-            } else {
-                // handle the response
+            } else if (response.requestHeader().apiKey() == ApiKeys.PRODUCE) {
+                handleProduceResponse(response);
             }
 
             sender.wakeup();
@@ -202,6 +213,89 @@ public class ShareGroupDLQStateManager {
 
             return new CreateTopicsRequest.Builder(new CreateTopicsRequestData()
                 .setTopics(topicCollection));
+        }
+
+        public AbstractRequest.Builder<ProduceRequest> createProduceRequest() throws ConfigException {
+            Optional<String> dlqTopic = cacheHelper.shareGroupDlqTopic(param.groupId());
+            if (dlqTopic.isEmpty()) {
+                throw new ConfigException(String.format("DLQ topic is not configured for share group %s.", param.groupId()));
+            }
+
+            ShareGroupDLQMetadataCacheHelper.TopicPartitionData tpData = cacheHelper.topicPartitionData(dlqTopic.get());
+
+            if (tpData.topicId().isEmpty()) {
+                throw new ConfigException(String.format("DLQ topic id could not be found for share group %s with DLQ topic %s.", param.groupId(), dlqTopic.get()));
+            }
+
+            if (tpData.numPartitions().isEmpty()) {
+                throw new ConfigException(String.format("DLQ topic partition count not be found for share group %s with DLQ topic %s.", param.groupId(), dlqTopic.get()));
+            }
+
+            if (tpData.partitionLeaderNodes().isEmpty() || tpData.partitionLeaderNodes().size() != tpData.numPartitions().get()) {
+                throw new ConfigException(String.format("DLQ topic partition leaders for share group %s with DLQ topic %s could not be found.", param.groupId(), dlqTopic.get()));
+            }
+
+            int dlqDestinationPartition = param.topicIdPartition().partition() % tpData.numPartitions().get();
+            this.dlqPartitionLeaderNode = tpData.partitionLeaderNodes().get(dlqDestinationPartition);
+
+            if (this.dlqPartitionLeaderNode == null) {
+                throw new ConfigException(String.format("DLQ topic partition leader node for share group %s with DLQ topic %s and partition %d could not be found.", param.groupId(), dlqTopic.get(), dlqDestinationPartition));
+            }
+
+            List<SimpleRecord> simpleRecords = new ArrayList<>();
+            for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
+                long timestamp = time.hiResClockMs();
+                simpleRecords.add(new SimpleRecord(timestamp, (byte[]) null, null, headers(i)));
+            }
+
+            MemoryRecords records = MemoryRecords.withRecords(
+                Compression.NONE,
+                simpleRecords.toArray(new SimpleRecord[0])
+            );
+
+            ProduceRequestData data = new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+                    List.of(
+                        new ProduceRequestData.TopicProduceData()
+                            .setName(dlqTopic.get())
+                            .setTopicId(tpData.topicId().get())
+                            .setPartitionData(List.of(
+                                new ProduceRequestData.PartitionProduceData()
+                                    .setIndex(dlqDestinationPartition)  // partition
+                                    .setRecords(records)
+                            ))
+                    ).iterator()
+                ))
+                .setAcks((short) -1)  // all replicas
+                .setTimeoutMs(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT);
+
+            return new ProduceRequest.Builder(ApiKeys.PRODUCE.latestVersion(), ApiKeys.PRODUCE.latestVersion(), data);
+        }
+
+        public Node dlqPartitionLeaderNode() {
+            return dlqPartitionLeaderNode;
+        }
+
+        private Header[] headers(long offset) {
+            List<Header> headers = new ArrayList<>();
+            headers.add(new RecordHeader("__dlq.errors.topic", recordTopic().getBytes(StandardCharsets.UTF_8)));
+            headers.add(new RecordHeader("__dlq.errors.partition", Integer.toString(param.topicIdPartition().partition()).getBytes(StandardCharsets.UTF_8)));
+            headers.add(new RecordHeader("__dlq.errors.offset", Long.toString(offset).getBytes(StandardCharsets.UTF_8)));
+            headers.add(new RecordHeader("__dlq.errors.group", param.groupId().getBytes(StandardCharsets.UTF_8)));
+            param.deliveryCount().ifPresent(deliveryCount -> headers.add(
+                new RecordHeader("__dlq.errors.delivery.count", Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8))));
+
+            return headers.toArray(new Header[0]);
+        }
+
+        private String recordTopic() {
+            TopicIdPartition topicIdPartition = param.topicIdPartition();
+            String recordTopicName = param.topicIdPartition().topic();
+            if (recordTopicName == null || recordTopicName.isEmpty()) {
+                // If topic name lookup fails, use topic id as a String in the header.
+                recordTopicName = cacheHelper.topicName(param.topicIdPartition().topicId()).orElse(topicIdPartition.topicId().toString());
+            }
+            return recordTopicName;
         }
 
         public Optional<Throwable> validateDlqTopic() {
@@ -274,7 +368,7 @@ public class ShareGroupDLQStateManager {
             createTopicsBackoff.incrementAttempt();
             Errors clientResponseError = checkResponseError(response).orElse(Errors.NONE);
             String clientResponseErrorMessage = clientResponseError.message();
-            String dlqTopicName = cacheHelper.shareGroupDlqTopic(param.groupId()).orElse("UNKNOWN");
+            String dlqTopicName = cacheHelper.shareGroupDlqTopic(param.groupId()).orElse("<UNKNOWN>");
 
             switch (clientResponseError) {
                 case NONE:
@@ -293,7 +387,6 @@ public class ShareGroupDLQStateManager {
                     switch (error) {
                         case NONE:
                             // Replace with enqueue post PRODUCE implementation
-                            this.result.complete(null);
                             break;
 
                         case TOPIC_ALREADY_EXISTS:
@@ -332,6 +425,11 @@ public class ShareGroupDLQStateManager {
                     requestErrorResponse(clientResponseError.exception());
             }
         }
+
+        private void handleProduceResponse(ClientResponse response) {
+            log.info("Received ProduceResponse {}", response);
+            log.info("DLQ produce response {} {}", response.responseBody().data(), response.responseBody().errorCounts());
+        }
     }
 
     private class SendThread extends InterBrokerSendThread {
@@ -366,6 +464,19 @@ public class ShareGroupDLQStateManager {
                         return List.of(new RequestAndCompletionHandler(
                             time.milliseconds(),
                             randomNode,
+                            builder,
+                            handler
+                        ));
+                    } catch (ConfigException exp) {
+                        log.error("Unable to create topic request.", exp);
+                        handler.requestErrorResponse(Errors.INVALID_CONFIG.exception());
+                    }
+                } else {
+                    try {
+                        AbstractRequest.Builder<ProduceRequest> builder = handler.createProduceRequest();
+                        return List.of(new RequestAndCompletionHandler(
+                            time.milliseconds(),
+                            handler.dlqPartitionLeaderNode(),
                             builder,
                             handler
                         ));

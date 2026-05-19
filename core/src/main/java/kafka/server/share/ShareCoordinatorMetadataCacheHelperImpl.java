@@ -18,6 +18,7 @@
 package kafka.server.share;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -29,10 +30,11 @@ import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.Int;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -150,5 +152,35 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
             log.warn("Exception while getting cluster nodes", e);
         }
         return List.of();
+    }
+
+    @Override
+    public Optional<String> topicName(Uuid topicId) {
+        try {
+            return metadataCache.getTopicName(topicId);
+        } catch (Exception e) {
+            log.warn("Exception while fetching topic name", e);
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public TopicPartitionData topicPartitionData(String topicName) {
+        Uuid topicId = metadataCache.getTopicId(topicName);
+        Optional<Integer> numPartitions = metadataCache.numPartitions(topicName);
+        List<Node> partitionLeaders = new ArrayList<>();
+
+        if (numPartitions.isPresent()) {
+            for (int i = 0; i < numPartitions.get(); i++) {
+                partitionLeaders.add(metadataCache.getPartitionLeaderEndpoint(topicName, i, interBrokerListenerName).orElse(null));
+            }
+        }
+
+        return new TopicPartitionData(
+            topicName,
+            numPartitions,
+            Optional.ofNullable(topicId == Uuid.ZERO_UUID ? null : topicId),
+            partitionLeaders
+        );
     }
 }
