@@ -61,39 +61,21 @@ public class TransactionsTest {
     }
 
     @ClusterTest
-    public void testClassicBasicTransactions() throws Exception {
+    public void testBasicTransactions() throws Exception {
         TransactionsTestHelper.testBasicTransactions(
                 clusterInstance, GroupProtocol.CLASSIC, TransactionsTestHelper.NO_OP_HOOKS, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testAsyncBasicTransactions() throws Exception {
-        TransactionsTestHelper.testBasicTransactions(
-                clusterInstance, GroupProtocol.CONSUMER, TransactionsTestHelper.NO_OP_HOOKS, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testClassicReadCommittedConsumerShouldNotSeeUndecidedData() throws Exception {
+    public void testReadCommittedConsumerShouldNotSeeUndecidedData() throws Exception {
         TransactionsTestHelper.testReadCommittedConsumerShouldNotSeeUndecidedData(
                 clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testAsyncReadCommittedConsumerShouldNotSeeUndecidedData() throws Exception {
-        TransactionsTestHelper.testReadCommittedConsumerShouldNotSeeUndecidedData(
-                clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testClassicDelayedFetchIncludesAbortedTransaction() throws Exception {
+    public void testDelayedFetchIncludesAbortedTransaction() throws Exception {
         TransactionsTestHelper.testDelayedFetchIncludesAbortedTransaction(
                 clusterInstance, GroupProtocol.CLASSIC, TransactionsTestHelper.NO_OP_HOOKS, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testAsyncDelayedFetchIncludesAbortedTransaction() throws Exception {
-        TransactionsTestHelper.testDelayedFetchIncludesAbortedTransaction(
-                clusterInstance, GroupProtocol.CONSUMER, TransactionsTestHelper.NO_OP_HOOKS, TOPIC_CONFIG);
     }
 
     @ClusterTest
@@ -109,23 +91,13 @@ public class TransactionsTest {
     }
 
     @ClusterTest
-    public void testClassicFencingOnCommit() throws Exception {
+    public void testFencingOnCommit() throws Exception {
         TransactionsTestHelper.testFencingOnCommit(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testAsyncFencingOnCommit() throws Exception {
-        TransactionsTestHelper.testFencingOnCommit(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testClassicFencingOnSendOffsets() throws Exception {
+    public void testFencingOnSendOffsets() throws Exception {
         TransactionsTestHelper.testFencingOnSendOffsets(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testAsyncFencingOnSendOffsets() throws Exception {
-        TransactionsTestHelper.testFencingOnSendOffsets(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
@@ -161,43 +133,23 @@ public class TransactionsTest {
     }
 
     @ClusterTest
-    public void testClassicFencingOnSend() throws Exception {
+    public void testFencingOnSend() throws Exception {
         TransactionsTestHelper.testFencingOnSend(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testAsyncFencingOnSend() throws Exception {
-        TransactionsTestHelper.testFencingOnSend(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testClassicFencingOnAddPartitions() throws Exception {
+    public void testFencingOnAddPartitions() throws Exception {
         TransactionsTestHelper.testFencingOnAddPartitions(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testAsyncFencingOnAddPartitions() throws Exception {
-        TransactionsTestHelper.testFencingOnAddPartitions(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testClassicFencingOnTransactionExpiration() throws Exception {
+    public void testFencingOnTransactionExpiration() throws Exception {
         TransactionsTestHelper.testFencingOnTransactionExpiration(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
     }
 
     @ClusterTest
-    public void testAsyncFencingOnTransactionExpiration() throws Exception {
-        TransactionsTestHelper.testFencingOnTransactionExpiration(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testClassicMultipleMarkersOneLeader() throws Exception {
+    public void testMultipleMarkersOneLeader() throws Exception {
         TransactionsTestHelper.testMultipleMarkersOneLeader(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
-    }
-
-    @ClusterTest
-    public void testAsyncMultipleMarkersOneLeader() throws Exception {
-        TransactionsTestHelper.testMultipleMarkersOneLeader(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
@@ -211,27 +163,15 @@ public class TransactionsTest {
     }
 
     @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1)})
-    public void testClassicBumpTransactionalEpochWithTV2Disabled() throws Exception {
+    public void testBumpTransactionalEpochWithTV2Disabled() throws Exception {
         TransactionsTestHelper.testBumpTransactionalEpochWithTV2Disabled(
                 clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
     }
 
-    @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1)})
-    public void testAsyncBumpTransactionalEpochWithTV2Disabled() throws Exception {
-        TransactionsTestHelper.testBumpTransactionalEpochWithTV2Disabled(
-                clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
-    }
-
     @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)})
-    public void testClassicBumpTransactionalEpochWithTV2Enabled() throws Exception {
+    public void testBumpTransactionalEpochWithTV2Enabled() throws Exception {
         TransactionsTestHelper.testBumpTransactionalEpochWithTV2Enabled(
                 clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
-    }
-
-    @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)})
-    public void testAsyncBumpTransactionalEpochWithTV2Enabled() throws Exception {
-        TransactionsTestHelper.testBumpTransactionalEpochWithTV2Enabled(
-                clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1)})
