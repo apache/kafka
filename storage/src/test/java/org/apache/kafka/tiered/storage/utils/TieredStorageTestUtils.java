@@ -166,15 +166,20 @@ public class TieredStorageTestUtils {
     }
 
     public static Map<String, String> createServerPropsForRemoteStorage(
-            String testClassName, int brokerCount, int numRemoteLogMetadataPartitions) {
+            String testClassName, 
+            int brokerCount, 
+            int numRemoteLogMetadataPartitions
+    ) {
         String storageDirPath = org.apache.kafka.test.TestUtils
                 .tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath();
         Properties tieredProps = createPropsForRemoteStorage(
                 testClassName, storageDirPath, brokerCount, numRemoteLogMetadataPartitions, new Properties());
         Map<String, String> serverProps = new HashMap<>();
         tieredProps.forEach((k, v) -> serverProps.put(k.toString(), v.toString()));
-        serverProps.put(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
-                TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME);
+        serverProps.put(
+                REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+                TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME
+        );
         return serverProps;
     }
 

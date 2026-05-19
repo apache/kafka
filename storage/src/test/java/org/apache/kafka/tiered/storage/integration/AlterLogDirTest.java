@@ -38,7 +38,6 @@ import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.creat
 
 public final class AlterLogDirTest {
 
-    private static final String TEST_CLASS_NAME = "alterlogdirtest";
     private static final int BROKER_COUNT = 3;
 
     private static List<ClusterConfig> clusterConfig() {
@@ -46,7 +45,10 @@ public final class AlterLogDirTest {
                 .setTypes(Set.of(Type.KRAFT))
                 .setBrokers(BROKER_COUNT)
                 .setDisksPerBroker(2)
-                .setServerProperties(createServerPropsForRemoteStorage(TEST_CLASS_NAME, BROKER_COUNT, 5))
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        AlterLogDirTest.class.getSimpleName().toLowerCase(Locale.ROOT), 
+                        BROKER_COUNT, 
+                        5))
                 .build());
     }
 
