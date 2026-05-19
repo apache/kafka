@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server.share.persister;
 
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
@@ -24,6 +25,8 @@ import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.util.timer.Timer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,11 +45,24 @@ import java.util.concurrent.CompletableFuture;
  */
 public class DefaultStatePersister implements Persister {
     private final PersisterStateManager stateManager;
-
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
 
-    public DefaultStatePersister(PersisterStateManager stateManager) {
+    public static DefaultStatePersister instance(KafkaClient client, ShareCoordinatorMetadataCacheHelper cacheHelper, Time time, Timer timer) {
+        DefaultStatePersister instance = new DefaultStatePersister(client, cacheHelper, time, timer);
+        instance.start();
+        return instance;
+    }
+
+    // Visibility for tests
+    DefaultStatePersister(PersisterStateManager stateManager) {
         this.stateManager = stateManager;
+    }
+
+    private DefaultStatePersister(KafkaClient client, ShareCoordinatorMetadataCacheHelper cacheHelper, Time time, Timer timer) {
+        this.stateManager = new PersisterStateManager(client, cacheHelper, time, timer);
+    }
+
+    private void start() {
         this.stateManager.start();
     }
 
