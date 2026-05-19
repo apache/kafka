@@ -5349,6 +5349,8 @@ org.apache.kafka.common.telemetry.internals.ClientTelemetryReporterTest:
 - testUpdateMetricsLabels
 org.apache.kafka.common.telemetry.internals.ClientTelemetryUtilsTest:
 - testCompressDecompress
+- testDecompressExceedingMaxSizeThrows
+- testDecompressWithPayloadSizeSucceeds
 - testGetCompressionTypesFromAcceptedList
 - testGetSelectorFromRequestedMetrics
 - testMaybeFetchErrorIntervalMs
