@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicCollection;
@@ -65,13 +66,13 @@ public class AdminMetadataTest {
             List<String> brokerStrs = Arrays.stream(clusterInstance.bootstrapServers().split(","))
                     .sorted()
                     .toList();
-            List<String> nodeStrs;
-            do {
-                nodeStrs = admin.describeCluster().nodes().get().stream()
-                        .map(node -> node.host() + ":" + node.port())
-                        .sorted()
-                        .toList();
-            } while (nodeStrs.size() < brokerStrs.size());
+            TestUtils.waitForCondition(
+                    () -> admin.describeCluster().nodes().get().size() >= brokerStrs.size(),
+                    "Timed out waiting for all brokers to be discovered");
+            List<String> nodeStrs = admin.describeCluster().nodes().get().stream()
+                    .map(node -> node.host() + ":" + node.port())
+                    .sorted()
+                    .toList();
             assertEquals(String.join(",", brokerStrs), String.join(",", nodeStrs));
         }
     }
@@ -141,11 +142,19 @@ public class AdminMetadataTest {
     @ClusterTest
     public void testListTopicsWithOptionListInternal() throws Exception {
         try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1))).all().get();
-            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
+            String topic = "test-topic";
+            admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
+            clusterInstance.waitTopicCreation(topic, 1);
 
-            Set<String> topicNames = admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
-            assertFalse(topicNames.isEmpty(), "Expected to see internal topics");
+            try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
+                consumer.subscribe(List.of(topic));
+                consumer.poll(Duration.ofMillis(100));
+            }
+
+            TestUtils.waitForCondition(() -> {
+                Set<String> topicNames = admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
+                return topicNames.contains(Topic.GROUP_METADATA_TOPIC_NAME);
+            }, "Expected to see internal topic " + Topic.GROUP_METADATA_TOPIC_NAME);
         }
     }
 
