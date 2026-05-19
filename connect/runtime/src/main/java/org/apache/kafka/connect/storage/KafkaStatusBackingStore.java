@@ -128,6 +128,11 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             TOPIC_STATUS_VALUE_SCHEMA_V0
     ).build();
 
+    // Retry configuration constants
+    private static final int MAX_RETRY_ATTEMPTS = 10;
+    private static final long INITIAL_RETRY_BACKOFF_MS = 300;
+    private static final long MAX_RETRY_BACKOFF_MS = 60000; // 60 seconds
+
     private final Time time;
     private final Converter converter;
     //visible for testing
@@ -276,18 +281,62 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
 
         final byte[] value = serializeTopicStatus(status);
 
+        sendWithRetry(key, value, 0);
+    }
+
+    /**
+     * Send a message to the status topic with retry logic using exponential backoff.
+     *
+     * @param key the message key
+     * @param value the message value
+     * @param attemptNumber the current retry attempt number (0 for first attempt)
+     */
+    private void sendWithRetry(final String key, final byte[] value, final int attemptNumber) {
         kafkaLog.send(key, value, new org.apache.kafka.clients.producer.Callback() {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
-                if (exception == null) return;
-                // TODO: retry more gracefully and not forever
+                if (exception == null) {
+                    if (attemptNumber > 0) {
+                        log.info("Successfully sent status update for key {} after {} retry attempt(s)",
+                                key, attemptNumber);
+                    }
+                    return;
+                }
+                
                 if (exception instanceof RetriableException) {
-                    sendRetryExecutor.submit(() -> kafkaLog.send(key, value, this));
+                    if (attemptNumber >= MAX_RETRY_ATTEMPTS) {
+                        log.error("Failed to write status update for key {} after {} attempts. Giving up.",
+                                key, attemptNumber + 1, exception);
+                        return;
+                    }
+                    
+                    long backoffMs = calculateBackoff(attemptNumber);
+                    log.warn("Failed to write status update for key {} (attempt {}/{}). " +
+                            "Retrying after {}ms. Reason: {}",
+                            key, attemptNumber + 1, MAX_RETRY_ATTEMPTS + 1, backoffMs, exception.getMessage());
+                    
+                    sendRetryExecutor.submit(() -> {
+                        time.sleep(backoffMs);
+                        sendWithRetry(key, value, attemptNumber + 1);
+                    });
                 } else {
-                    log.error("Failed to write status update", exception);
+                    log.error("Failed to write status update for key {} with non-retriable exception",
+                            key, exception);
                 }
             }
         });
+    }
+
+    /**
+     * Calculate exponential backoff delay for retry attempts.
+     * Uses formula: min(INITIAL_BACKOFF * 2^attempt, MAX_BACKOFF)
+     *
+     * @param attemptNumber the retry attempt number (0-based)
+     * @return the backoff delay in milliseconds
+     */
+    private long calculateBackoff(int attemptNumber) {
+        long backoff = INITIAL_RETRY_BACKOFF_MS * (1L << attemptNumber);
+        return Math.min(backoff, MAX_RETRY_BACKOFF_MS);
     }
 
     private <V extends AbstractStatus<?>> void send(final String key,
@@ -304,21 +353,66 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
 
         final byte[] value = status.state() == ConnectorStatus.State.DESTROYED ? null : serialize(status);
 
+        sendWithRetry(key, value, status, entry, safeWrite, sequence, 0);
+    }
+
+    /**
+     * Send a status update with retry logic using exponential backoff.
+     *
+     * @param key the message key
+     * @param value the message value
+     * @param status the status object
+     * @param entry the cache entry
+     * @param safeWrite whether to perform safe write checks
+     * @param sequence the sequence number for safe write validation
+     * @param attemptNumber the current retry attempt number (0 for first attempt)
+     */
+    private <V extends AbstractStatus<?>> void sendWithRetry(final String key,
+                                                              final byte[] value,
+                                                              final V status,
+                                                              final CacheEntry<V> entry,
+                                                              final boolean safeWrite,
+                                                              final int sequence,
+                                                              final int attemptNumber) {
         kafkaLog.send(key, value, new org.apache.kafka.clients.producer.Callback() {
             @Override
             public void onCompletion(RecordMetadata metadata, Exception exception) {
-                if (exception == null) return;
+                if (exception == null) {
+                    if (attemptNumber > 0) {
+                        log.info("Successfully sent status update for key {} after {} retry attempt(s)",
+                                key, attemptNumber);
+                    }
+                    return;
+                }
+                
                 if (exception instanceof RetriableException) {
                     synchronized (KafkaStatusBackingStore.this) {
                         if (entry.isDeleted()
                             || status.generation() != generation
-                            || (safeWrite && !entry.canWriteSafely(status, sequence)))
+                            || (safeWrite && !entry.canWriteSafely(status, sequence))) {
+                            log.debug("Skipping retry for key {} due to stale status or deleted entry", key);
                             return;
+                        }
                     }
 
-                    sendRetryExecutor.submit(() -> kafkaLog.send(key, value, this));
+                    if (attemptNumber >= MAX_RETRY_ATTEMPTS) {
+                        log.error("Failed to write status update for key {} after {} attempts. Giving up.",
+                                key, attemptNumber + 1, exception);
+                        return;
+                    }
+                    
+                    long backoffMs = calculateBackoff(attemptNumber);
+                    log.warn("Failed to write status update for key {} (attempt {}/{}). " +
+                            "Retrying after {}ms. Reason: {}",
+                            key, attemptNumber + 1, MAX_RETRY_ATTEMPTS + 1, backoffMs, exception.getMessage());
+                    
+                    sendRetryExecutor.submit(() -> {
+                        time.sleep(backoffMs);
+                        sendWithRetry(key, value, status, entry, safeWrite, sequence, attemptNumber + 1);
+                    });
                 } else {
-                    log.error("Failed to write status update", exception);
+                    log.error("Failed to write status update for key {} with non-retriable exception",
+                            key, exception);
                 }
             }
         });
