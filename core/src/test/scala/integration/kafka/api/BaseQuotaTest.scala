@@ -288,9 +288,8 @@ abstract class QuotaTestClients(topic: String,
 
   private def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {
     if (expectThrottle) {
-      // Broker records the throttle-time sample on the response path, which can lag the client-observed
-      // throttle signal driving produceUntilThrottled / consumeUntilThrottled. Wait for it instead of
-      // reading synchronously to avoid a race (KAFKA-18810).
+      // Poll until at least one metric is recorded to give the broker thread time to flush the throttled value
+      // after the response is snt
       TestUtils.waitUntilTrue(() => {
         val metric = throttleMetric(quotaType, clientId)
         metric != null && metricValue(metric) > 0
