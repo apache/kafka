@@ -18,8 +18,8 @@ package org.apache.kafka.common.telemetry.internals;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;

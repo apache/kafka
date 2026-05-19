@@ -17,6 +17,7 @@
 package org.apache.kafka.common.telemetry.internals;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.utils.Utils;
@@ -48,8 +49,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import org.apache.kafka.common.errors.TelemetryTooLargeException;
 
 public class ClientTelemetryUtilsTest {
 
