@@ -174,7 +174,6 @@ public final class RemoteLogManagerConfig {
             "When set to a positive value (ms), a segment can't become eligible for upload until the time since the latest record in the segment reaches the value. " +
             "The value should not exceed the real local retention ms except the latter is retained indefinitely (-1). " +
             "When set to -1, resolves to the real local retention ms as maximum delay. " +
-            "If the real local retention ms is configured as infinite, -1 is treated as no delay check on this time configure. " +
             "For how the real local retention time is computed, see <code>log.local.retention.ms</code>.";
     public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_MS = 0L;
 
@@ -184,7 +183,6 @@ public final class RemoteLogManagerConfig {
             "When set to a positive value (bytes), a segment can't become eligible for upload until the total bytes of log data after the segment reach the value. " +
             "The value should not exceed the real local retention bytes except the latter is retained indefinitely (-1). " +
             "When set to -1, resolves to the real local retention bytes as maximum delay. " +
-            "If the real local retention bytes is configured as infinite, -1 is treated as no delay check on this size configure. " +
             "For how the real local retention size is computed, see <code>log.local.retention.bytes</code>.";
     public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_BYTES = 0L;
 
