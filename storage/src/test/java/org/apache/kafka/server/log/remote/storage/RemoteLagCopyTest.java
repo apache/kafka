@@ -337,7 +337,7 @@ public class RemoteLagCopyTest {
     }
 
     @Test
-    public void testCandidateLogSegmentsUploadWhenRemoteCopyLagAndLocalRetentionAreUnlimited() {
+    public void testCandidateLogSegmentsNotUploadWhenRemoteCopyLagAndLocalRetentionAreUnlimited() {
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
@@ -363,12 +363,8 @@ public class RemoteLagCopyTest {
 
         RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(
                 leaderTopicIdPartition, RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES);
-        List<RemoteLogManager.EnrichedLogSegment> expected = List.of(
-                new RemoteLogManager.EnrichedLogSegment(segment1, 10L),
-                new RemoteLogManager.EnrichedLogSegment(segment2, 15L)
-        );
         List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
-        assertEquals(expected, actual);
+        assertTrue(actual.isEmpty());
     }
 
     @Test
