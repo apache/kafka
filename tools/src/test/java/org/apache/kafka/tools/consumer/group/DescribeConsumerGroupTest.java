@@ -460,15 +460,19 @@ public class DescribeConsumerGroupTest {
                  AutoCloseable executor2 = consumerGroupClosable(groupProtocol, group2, topic, Map.of())) {
                 String[] cgcArgs = new String[]{
                     "--bootstrap-server", clusterInstance.bootstrapServers(),
-                    "--describe", "--all-groups", "--state"
+                    "--describe", "--group", group1, "--group", group2, "--state"
                 };
                 try (ConsumerGroupCommand.ConsumerGroupService service = consumerGroupService(cgcArgs)) {
                     TestUtils.waitForCondition(() -> {
                         Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
-                        return res.getValue().isEmpty() &&
-                            countStateHeaderLines(res.getKey(), false) == 1 &&
-                            countStateDataLines(res.getKey()) >= 2;
-                    }, "Expected a single state header and at least two data rows for --all-groups --state.");
+                        if (!res.getValue().isEmpty()) {
+                            return false;
+                        }
+                        long nonBlankLines = Arrays.stream(res.getKey().split("\n"))
+                            .filter(line -> !line.isBlank())
+                            .count();
+                        return countStateHeaderLines(res.getKey(), false) == 1 && nonBlankLines == 3;
+                    }, "Expected a single state header and two data rows for multiple --group --state.");
                 }
             } finally {
                 deleteConsumerGroups(List.of(group1, group2));
@@ -1334,14 +1338,6 @@ public class DescribeConsumerGroupTest {
         return Arrays.stream(output.split("\n"))
             .filter(line -> !line.isBlank())
             .filter(line -> checkStateArgsHeaderOutput(line, verbose))
-            .count();
-    }
-
-    private long countStateDataLines(String output) {
-        return Arrays.stream(output.split("\n"))
-            .filter(line -> !line.isBlank())
-            .filter(line -> !checkStateArgsHeaderOutput(line, false))
-            .filter(this::checkStateArgsOutput)
             .count();
     }
 
