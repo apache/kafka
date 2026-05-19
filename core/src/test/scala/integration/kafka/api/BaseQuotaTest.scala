@@ -142,7 +142,6 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @Flaky("KAFKA-18810")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testQuotaOverrideDelete(groupProtocol: String): Unit = {
@@ -288,10 +287,16 @@ abstract class QuotaTestClients(topic: String,
   }
 
   private def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {
-    val throttleMetricValue = metricValue(throttleMetric(quotaType, clientId))
     if (expectThrottle) {
-      assertTrue(throttleMetricValue > 0, s"Client with id=$clientId should have been throttled")
+      // Broker records the throttle-time sample on the response path, which can lag the client-observed
+      // throttle signal driving produceUntilThrottled / consumeUntilThrottled. Wait for it instead of
+      // reading synchronously to avoid a race (KAFKA-18810).
+      TestUtils.waitUntilTrue(() => {
+        val metric = throttleMetric(quotaType, clientId)
+        metric != null && metricValue(metric) > 0
+      }, s"Client with id=$clientId should have been throttled")
     } else {
+      val throttleMetricValue = metricValue(throttleMetric(quotaType, clientId))
       assertTrue(throttleMetricValue.isNaN, s"Client with id=$clientId should not have been throttled")
     }
   }
