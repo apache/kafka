@@ -84,10 +84,12 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
                 Utils.atomicMoveWithFallback(file.toPath(), f.toPath(), false);
             } catch (NoSuchFileException e) {
                 if (file.exists()) {
-                    throw new UncheckedIOException(e);
+                    throw new UncheckedIOException(
+                        String.format("Error renaming index file %s to %s", file, f), e);
                 }
             } catch (IOException e) {
-                throw new UncheckedIOException(e);
+                throw new UncheckedIOException(
+                    String.format("Error renaming index file %s to %s", file, f), e);
             } finally {
                 file = f;
             }
@@ -98,7 +100,8 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
             try {
                 return Files.deleteIfExists(file.toPath());
             } catch (IOException e) {
-                throw new UncheckedIOException(e);
+                throw new UncheckedIOException(
+                    String.format("Error deleting index file %s", file), e);
             }
         }
 
@@ -133,7 +136,8 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
             try {
                 index.renameTo(f);
             } catch (IOException e) {
-                throw new UncheckedIOException(e);
+                throw new UncheckedIOException(
+                    String.format("Error renaming index file %s to %s", index.file(), f), e);
             }
         }
 
@@ -142,7 +146,8 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
             try {
                 return index.deleteIfExists();
             } catch (IOException e) {
-                throw new UncheckedIOException(e);
+                throw new UncheckedIOException(
+                    String.format("Error deleting index file %s", index.file()), e);
             }
         }
 
@@ -151,7 +156,8 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
             try {
                 index.close();
             } catch (IOException e) {
-                throw new UncheckedIOException(e);
+                throw new UncheckedIOException(
+                    String.format("Error closing index file %s", index.file()), e);
             }
         }
 
@@ -200,7 +206,8 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
                 try {
                     loaded = indexLoader.load(indexFile.file);
                 } catch (IOException e) {
-                    throw new UncheckedIOException(e);
+                    throw new UncheckedIOException(
+                        String.format("Error loading index file %s", indexFile.file), e);
                 }
                 IndexValue<T> indexValue = new IndexValue<>(loaded);
                 indexWrapper = indexValue;
