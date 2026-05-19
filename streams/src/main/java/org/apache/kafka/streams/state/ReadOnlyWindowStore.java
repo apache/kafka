@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 
@@ -206,5 +207,13 @@ public interface ReadOnlyWindowStore<K, V> {
      */
     default KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException  {
         throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Return a read-only view of this store bound to the given {@link IsolationLevel}.
+     * See {@link ReadOnlyKeyValueStore#readOnly(IsolationLevel)} for semantics.
+     */
+    default ReadOnlyWindowStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        return this;
     }
 }

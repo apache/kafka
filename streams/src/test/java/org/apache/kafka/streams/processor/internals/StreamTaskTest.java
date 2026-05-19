@@ -307,6 +307,16 @@ public class StreamTaskTest {
         final Class<? extends DeserializationExceptionHandler> deserializationExceptionHandler,
         final Class<? extends ProcessingExceptionHandler> processingExceptionHandler,
         final Class<? extends TimestampExtractor> timestampExtractor) {
+        return createConfig(eosConfig, enforcedProcessingValue, deserializationExceptionHandler, processingExceptionHandler, timestampExtractor, false);
+    }
+
+    private static StreamsConfig createConfig(
+        final String eosConfig,
+        final String enforcedProcessingValue,
+        final Class<? extends DeserializationExceptionHandler> deserializationExceptionHandler,
+        final Class<? extends ProcessingExceptionHandler> processingExceptionHandler,
+        final Class<? extends TimestampExtractor> timestampExtractor,
+        final boolean transactionalStateStores) {
         final String canonicalPath;
         try {
             canonicalPath = BASE_DIR.getCanonicalPath();
@@ -324,7 +334,8 @@ public class StreamTaskTest {
             mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, enforcedProcessingValue),
             mkEntry(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, deserializationExceptionHandler.getName()),
             mkEntry(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, processingExceptionHandler.getName()),
-            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, timestampExtractor.getName())
+            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, timestampExtractor.getName()),
+            mkEntry(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, String.valueOf(transactionalStateStores))
         )));
     }
 
@@ -2908,6 +2919,38 @@ public class StreamTaskTest {
         verify(processorStateManager, never()).commit();
         verify(processorStateManager, never()).changelogOffsets();
         verify(recordCollector, never()).offsets();
+    }
+
+    @Test
+    public void shouldNotCheckpointOnPostCommitInRunningStateWithEosAndNotEnforced() {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
+
+        task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true, processorStateManager);
+        task.initializeIfNeeded();
+        // completeRestoration does not call commit() under EOS (verified by shouldNotCommitAfterRestorationWhenExactlyOnceEnabled)
+        task.completeRestoration(noOpResetter -> { });
+        task.postCommit(false);
+        // total commit() invocations should remain 0
+        verify(processorStateManager, never()).commit();
+    }
+
+    @Test
+    public void shouldCheckpointOnPostCommitInRunningStateWithEosAndTransactionalStateStores() {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
+
+        task = createStatefulTask(
+            createConfig(EXACTLY_ONCE_V2, "100", LogAndFailExceptionHandler.class, LogAndFailProcessingExceptionHandler.class, FailOnInvalidTimestamp.class, true),
+            true,
+            processorStateManager
+        );
+        task.initializeIfNeeded();
+        // completeRestoration does not call commit() under EOS
+        task.completeRestoration(noOpResetter -> { });
+        task.postCommit(false);
+        // transactionalStateStoresEnabled=true triggers maybeCheckpoint() on postCommit even under EOS
+        verify(processorStateManager).commit();
     }
 
     @Test

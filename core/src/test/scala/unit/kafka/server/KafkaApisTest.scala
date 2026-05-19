@@ -87,7 +87,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTes
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheFixtures, MockConfigRepository}
-import org.apache.kafka.network.Session
+import org.apache.kafka.network.{Request, Session}
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.security.authorizer.AclEntry
@@ -126,6 +126,7 @@ import java.util.function.Consumer
 import java.util.{Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 class KafkaApisTest extends Logging {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -394,7 +395,7 @@ class KafkaApisTest extends Logging {
       .build(requestHeader.apiVersion)
     val request = buildRequest(describeConfigsRequest,
       requestHeader = Option(requestHeader))
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
 
     createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
@@ -555,7 +556,7 @@ class KafkaApisTest extends Logging {
     val apiRequest = requestBuilder.build(topicHeader.apiVersion)
     val request = buildRequest(apiRequest)
 
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     val forwardCallback: ArgumentCaptor[Option[AbstractResponse] => Unit] = ArgumentCaptor.forClass(classOf[Option[AbstractResponse] => Unit])
 
@@ -789,7 +790,7 @@ class KafkaApisTest extends Logging {
           .setKey(key))
     }
     val request = buildRequest(findCoordinatorRequestBuilder.build(requestHeader.apiVersion))
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
 
     val capturedRequest = verifyTopicCreation(topicName, enableAutoTopicCreation = true, isInternal = true, request)
@@ -949,7 +950,7 @@ class KafkaApisTest extends Logging {
     ).build(requestHeader.apiVersion)
     val request = buildRequest(metadataRequest)
 
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
 
     val capturedRequest = verifyTopicCreation(topicName, enableAutoTopicCreation, isInternal, request)
@@ -975,7 +976,7 @@ class KafkaApisTest extends Logging {
   private def verifyTopicCreation(topicName: String,
                                   enableAutoTopicCreation: Boolean,
                                   isInternal: Boolean,
-                                  request: RequestChannel.Request): ArgumentCaptor[RequestContext] = {
+                                  request: Request): ArgumentCaptor[RequestContext] = {
     val capturedRequest: ArgumentCaptor[RequestContext] = ArgumentCaptor.forClass(classOf[RequestContext])
     if (enableAutoTopicCreation) {
 
@@ -1352,7 +1353,7 @@ class KafkaApisTest extends Logging {
         .setTopics(TxnOffsetCommitRequest.getTopics(util.Map.of(invalidTopicPartition, partitionOffsetCommitData)))
       val offsetCommitRequest = TxnOffsetCommitRequest.Builder.forTopicNames(data, true).build()
       val request = buildRequest(offsetCommitRequest)
-      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
         any[Long])).thenReturn(0)
       val kafkaApis = createKafkaApis()
       try {
@@ -2446,7 +2447,7 @@ class KafkaApisTest extends Logging {
         any()
       )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
-      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
@@ -2506,7 +2507,7 @@ class KafkaApisTest extends Logging {
     // Create argument captors to verify session information passed to quota managers
     val sessionCaptorFetch = ArgumentCaptor.forClass(classOf[Session])
     val clientIdCaptor = ArgumentCaptor.forClass(classOf[String])
-    val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
+    val requestCaptor = ArgumentCaptor.forClass(classOf[Request])
     
     // Mock quota manager responses and capture arguments
     when(quotas.fetch.maybeRecordAndGetThrottleTimeMs(
@@ -2553,7 +2554,7 @@ class KafkaApisTest extends Logging {
     verify(quotas.fetch, times(1)).maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)
     verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyLong)
+      any[Request](), anyLong)
     
     // Verify the Session data passed to fetch quota manager is exactly what was defined in the test
     val capturedSession = sessionCaptorFetch.getValue
@@ -2601,7 +2602,7 @@ class KafkaApisTest extends Logging {
             .setErrorCode(Errors.NONE.code))))
 
     // Create argument captors to verify session information passed to quota managers
-    val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
+    val requestCaptor = ArgumentCaptor.forClass(classOf[Request])
     
     // Mock quota manager responses and capture arguments
     // For ShareAcknowledge, we only verify Request quota (not fetch quota)
@@ -2652,7 +2653,7 @@ class KafkaApisTest extends Logging {
     
     // Verify that request quota method was called
     verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyLong)
+      any[Request](), anyLong)
     
     // Verify that fetch quota method was NOT called (ShareAcknowledge only uses request quota)
     verify(quotas.fetch, times(0)).maybeRecordAndGetThrottleTimeMs(
@@ -2713,7 +2714,7 @@ class KafkaApisTest extends Logging {
     // Create argument captors to verify session information passed to quota managers
     val sessionCaptorFetch = ArgumentCaptor.forClass(classOf[Session])
     val clientIdCaptor = ArgumentCaptor.forClass(classOf[String])
-    val requestCaptor = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
+    val requestCaptor = ArgumentCaptor.forClass(classOf[Request])
     
     // Mock quota manager responses and capture arguments
     when(quotas.fetch.maybeRecordAndGetThrottleTimeMs(
@@ -2769,7 +2770,7 @@ class KafkaApisTest extends Logging {
     verify(quotas.fetch, times(1)).maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)
     verify(quotas.request, times(1)).maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyLong)
+      any[Request](), anyLong)
     
     // Verify the Session data passed to fetch quota manager is exactly what was defined in the test
     val capturedSession = sessionCaptorFetch.getValue
@@ -2844,7 +2845,7 @@ class KafkaApisTest extends Logging {
       when(partition.leaderReplicaIdOpt).thenAnswer(_ => Some(newLeaderId))
       when(partition.getLeaderEpoch).thenAnswer(_ => newLeaderEpoch)
 
-      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
        any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
@@ -2913,7 +2914,7 @@ class KafkaApisTest extends Logging {
 
       when(replicaManager.getPartitionOrError(tp.topicPartition())).thenAnswer(_ => Left(Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
-      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
@@ -2985,7 +2986,7 @@ class KafkaApisTest extends Logging {
 
       when(replicaManager.getPartitionOrError(tp.topicPartition)).thenAnswer(_ => Left(Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
-      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
@@ -3080,7 +3081,7 @@ class KafkaApisTest extends Logging {
       ).build()
       val request = buildRequest(addPartitionsToTxnRequest)
 
-      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
         any[Long])).thenReturn(0)
       val kafkaApis = createKafkaApis()
       try {
@@ -4235,7 +4236,7 @@ class KafkaApisTest extends Logging {
     val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
     kafkaApis.handleListOffsetRequest(request)
@@ -4402,7 +4403,7 @@ class KafkaApisTest extends Logging {
     // 4. Send TopicMetadataReq using topicId
     val metadataReqByTopicId = MetadataRequest.Builder.forTopicIds(util.Set.of(authorizedTopicId, unauthorizedTopicId)).build()
     val repByTopicId = buildRequest(metadataReqByTopicId, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleTopicMetadataRequest(repByTopicId)
@@ -8887,7 +8888,7 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
   def testHandleLeaveGroupWithMultipleMembers(version: Short): Unit = {
-    def makeRequest(version: Short): RequestChannel.Request = {
+    def makeRequest(version: Short): Request = {
       buildRequest(new LeaveGroupRequest.Builder(
         "group",
         util.List.of(
@@ -9071,7 +9072,7 @@ class KafkaApisTest extends Logging {
     val fooId = Uuid.randomUuid()
     addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
 
-    def makeRequest(version: Short): RequestChannel.Request = {
+    def makeRequest(version: Short): Request = {
       buildRequest(
         OffsetFetchRequest.Builder.forTopicIdsOrNames(
           new OffsetFetchRequestData()
@@ -9234,7 +9235,7 @@ class KafkaApisTest extends Logging {
     val barId = Uuid.randomUuid()
     addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
 
-    def makeRequest(version: Short): RequestChannel.Request = {
+    def makeRequest(version: Short): Request = {
       buildRequest(
         OffsetFetchRequest.Builder.forTopicIdsOrNames(
           new OffsetFetchRequestData()
@@ -9371,7 +9372,7 @@ class KafkaApisTest extends Logging {
   // The single group builder does not support topic ids.
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, toVersion = 9)
   def testHandleOffsetFetchWithSingleGroup(version: Short): Unit = {
-    def makeRequest(version: Short): RequestChannel.Request = {
+    def makeRequest(version: Short): Request = {
       buildRequest(OffsetFetchRequest.Builder.forTopicNames(
         new OffsetFetchRequestData()
           .setRequireStable(false)
@@ -9455,7 +9456,7 @@ class KafkaApisTest extends Logging {
     val fooId = Uuid.randomUuid()
     addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
 
-    def makeRequest(version: Short): RequestChannel.Request = {
+    def makeRequest(version: Short): Request = {
       buildRequest(OffsetFetchRequest.Builder.forTopicIdsOrNames(
         new OffsetFetchRequestData()
           .setRequireStable(false)
@@ -9554,7 +9555,7 @@ class KafkaApisTest extends Logging {
     addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
     addTopicToMetadataCache(bar, topicId = barId, numPartitions = 2)
 
-    def makeRequest(version: Short): RequestChannel.Request = {
+    def makeRequest(version: Short): Request = {
       buildRequest(
         OffsetFetchRequest.Builder.forTopicIdsOrNames(
           new OffsetFetchRequestData()
@@ -9748,7 +9749,7 @@ class KafkaApisTest extends Logging {
     addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
     addTopicToMetadataCache(bar, topicId = barId, numPartitions = 2)
 
-    def makeRequest(version: Short): RequestChannel.Request = {
+    def makeRequest(version: Short): Request = {
       buildRequest(
         OffsetFetchRequest.Builder.forTopicIdsOrNames(
           new OffsetFetchRequestData()
@@ -10290,7 +10291,7 @@ class KafkaApisTest extends Logging {
                            listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
                            fromPrivilegedListener: Boolean = false,
                            requestHeader: Option[RequestHeader] = None,
-                           requestMetrics: RequestChannelMetrics = requestChannelMetrics): RequestChannel.Request = {
+                           requestMetrics: RequestChannelMetrics = requestChannelMetrics): Request = {
     buildRequest(request, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"), InetAddress.getLocalHost, listenerName,
       fromPrivilegedListener, requestHeader, requestMetrics)
   }
@@ -10301,7 +10302,7 @@ class KafkaApisTest extends Logging {
                              listenerName: ListenerName,
                              fromPrivilegedListener: Boolean,
                              requestHeader: Option[RequestHeader],
-                             requestMetrics: RequestChannelMetrics): RequestChannel.Request = {
+                             requestMetrics: RequestChannelMetrics): Request = {
     val buffer = request.serializeWithHeader(
       requestHeader.getOrElse(new RequestHeader(request.apiKey, request.version, clientId, 0)))
 
@@ -10314,12 +10315,11 @@ class KafkaApisTest extends Logging {
     val context = new RequestContext(header, "1", clientAddress, Optional.empty(),
       principal, listenerName, SecurityProtocol.SSL,
       ClientInformation.EMPTY, fromPrivilegedListener, Optional.of(kafkaPrincipalSerde))
-    new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
-      requestMetrics, envelope = None)
+    new Request(1, context, 0, MemoryPool.NONE, buffer, requestMetrics)
   }
 
   private def verifyNoThrottling[T <: AbstractResponse](
-    request: RequestChannel.Request
+    request: Request
   ): T = {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
@@ -10340,7 +10340,7 @@ class KafkaApisTest extends Logging {
   }
 
   private def verifyNoThrottlingAndUpdateMetrics[T <: AbstractResponse](
-    request: RequestChannel.Request
+    request: Request
   ): T = {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
@@ -10358,10 +10358,10 @@ class KafkaApisTest extends Logging {
     val sendResponse = new RequestChannel.SendResponse(
       request,
       request.buildResponseSend(response),
-      request.responseNode(response),
+      request.responseNode(response).toScala,
       None
     )
-    request.updateRequestMetrics(time.milliseconds(), sendResponse)
+    request.updateRequestMetrics(time.milliseconds(), sendResponse.responseLog.toJava)
 
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
@@ -10444,7 +10444,7 @@ class KafkaApisTest extends Logging {
 
     reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     val t0p0 = new TopicPartition("t0", 0)
     val t0p1 = new TopicPartition("t0", 1)
@@ -10567,7 +10567,7 @@ class KafkaApisTest extends Logging {
 
     val describeProducersRequest = new DescribeProducersRequest.Builder(data).build()
     val request = buildRequest(describeProducersRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleDescribeProducersRequest(request)
@@ -10608,7 +10608,7 @@ class KafkaApisTest extends Logging {
       .setTransactionalIds(util.List.of("foo", "bar"))
     val describeTransactionsRequest = new DescribeTransactionsRequest.Builder(data).build()
     val request = buildRequest(describeTransactionsRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
 
     def buildExpectedActions(transactionalId: String): util.List[Action] = {
@@ -10659,7 +10659,7 @@ class KafkaApisTest extends Logging {
       .setTransactionalIds(util.List.of(transactionalId))
     val describeTransactionsRequest = new DescribeTransactionsRequest.Builder(data).build()
     val request = buildRequest(describeTransactionsRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
 
     def expectDescribe(
@@ -10725,7 +10725,7 @@ class KafkaApisTest extends Logging {
     val data = new ListTransactionsRequestData()
     val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
     val request = buildRequest(listTransactionsRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
 
     when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L, null))
@@ -10745,7 +10745,7 @@ class KafkaApisTest extends Logging {
     val data = new ListTransactionsRequestData().setTransactionalIdPattern("my.*")
     val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
     val request = buildRequest(listTransactionsRequest)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
 
     val transactionStates = new util.ArrayList[ListTransactionsResponseData.TransactionState]()
@@ -10789,7 +10789,7 @@ class KafkaApisTest extends Logging {
   def testEmptyLegacyAlterConfigsRequestWithKRaft(): Unit = {
     val request = buildRequest(new AlterConfigsRequest(new AlterConfigsRequestData(), 1.toShort))
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
     kafkaApis.handleAlterConfigsRequest(request)
@@ -10809,7 +10809,7 @@ class KafkaApisTest extends Logging {
             setName("foo").
             setValue(null))))))), 1.toShort))
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
     kafkaApis.handleAlterConfigsRequest(request)
@@ -10832,7 +10832,7 @@ class KafkaApisTest extends Logging {
     )
     val request = buildRequest(alterConfigsRequest)
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
@@ -10860,7 +10860,7 @@ class KafkaApisTest extends Logging {
     )
     val request = buildRequest(alterConfigsRequest)
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
