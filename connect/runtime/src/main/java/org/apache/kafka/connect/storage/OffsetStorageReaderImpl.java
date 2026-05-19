@@ -68,8 +68,13 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> Map<Map<String, T>, Map<String, Object>> offsets(Collection<Map<String, T>> partitions) {
+        Map<ByteBuffer, Map<String, T>> serializedToOriginal = serializePartitions(partitions);
+        Map<ByteBuffer, ByteBuffer> raw = readOffsetsFromBackingStore(serializedToOriginal.keySet());
+        return deserializeOffsets(serializedToOriginal, raw);
+    }
+
+    private <T> Map<ByteBuffer, Map<String, T>> serializePartitions(Collection<Map<String, T>> partitions) {
         // Serialize keys so backing store can work with them
         Map<ByteBuffer, Map<String, T>> serializedToOriginal = new HashMap<>(partitions.size());
         for (Map<String, T> key : partitions) {
@@ -85,7 +90,10 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
                         + "task or cause it to skip some data.", namespace, t);
             }
         }
+        return serializedToOriginal;
+    }
 
+    private Map<ByteBuffer, ByteBuffer> readOffsetsFromBackingStore(Set<ByteBuffer> keys) {
         // Get serialized key -> serialized value from backing store
         Map<ByteBuffer, ByteBuffer> raw;
         try {
@@ -96,7 +104,7 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
             }
 
             // Note: this call can block for long time waiting for data flush to complete (`KafkaProducer.flush()`).
-            offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
+            offsetReadFuture = backingStore.get(keys);
 
             synchronized (offsetReadFutures) {
                 if (closed.get()) {
@@ -122,9 +130,15 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
             log.error("Failed to fetch offsets from namespace {}: ", namespace, e);
             throw new ConnectException("Failed to fetch offsets.", e);
         }
+        return raw;
+    }
 
+    @SuppressWarnings("unchecked")
+    private <T> Map<Map<String, T>, Map<String, Object>> deserializeOffsets(
+            Map<ByteBuffer, Map<String, T>> serializedToOriginal,
+            Map<ByteBuffer, ByteBuffer> raw) {
         // Deserialize all the values and map back to the original keys
-        Map<Map<String, T>, Map<String, Object>> result = new HashMap<>(partitions.size());
+        Map<Map<String, T>, Map<String, Object>> result = new HashMap<>(serializedToOriginal.size());
         for (Map.Entry<ByteBuffer, ByteBuffer> rawEntry : raw.entrySet()) {
             try {
                 // Since null could be a valid key, explicitly check whether map contains the key
