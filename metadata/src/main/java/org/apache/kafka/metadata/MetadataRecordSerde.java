@@ -23,6 +23,13 @@ import org.apache.kafka.server.common.serialization.AbstractApiMessageSerde;
 public class MetadataRecordSerde extends AbstractApiMessageSerde {
     public static final MetadataRecordSerde INSTANCE = new MetadataRecordSerde();
 
+    /**
+     * Prefer using {@link #INSTANCE} instead of creating new instances,
+     * as this class is stateless and thread-safe.
+     */
+    public MetadataRecordSerde() {
+    }
+
     @Override
     public ApiMessage apiMessageFor(short apiKey) {
         return MetadataRecordType.fromId(apiKey).newMetadataRecord();

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.query.FailureReason;
@@ -24,13 +26,26 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.time.Instant;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class StoreQueryUtilsTest {
 
@@ -83,5 +98,122 @@ public class StoreQueryUtilsTest {
                    + " is not yet up to the bound"
                    + " PositionBound{position=Position{position={topic={0=1}}}}")
         );
+    }
+
+    @Test
+    public void shouldPassIsolationLevelToReadOnlyForRangeQuery() {
+        @SuppressWarnings("unchecked") final KeyValueStore<Bytes, byte[]> store =
+            Mockito.mock(KeyValueStore.class);
+        @SuppressWarnings("unchecked") final ReadOnlyKeyValueStore<Bytes, byte[]> readOnlyView =
+            Mockito.mock(ReadOnlyKeyValueStore.class);
+        when(store.readOnly(any())).thenReturn(readOnlyView);
+        when(readOnlyView.all()).thenReturn(Mockito.mock(org.apache.kafka.streams.state.KeyValueIterator.class));
+        final StateStoreContext context = Mockito.mock(StateStoreContext.class);
+        when(context.taskId()).thenReturn(new TaskId(0, 0));
+
+        StoreQueryUtils.handleBasicQueries(
+            RangeQuery.withNoBounds(),
+            PositionBound.unbounded(),
+            new QueryConfig(false, IsolationLevel.READ_COMMITTED),
+            store,
+            Position.emptyPosition(),
+            context
+        );
+
+        verify(store).readOnly(IsolationLevel.READ_COMMITTED);
+    }
+
+    @Test
+    public void shouldPassIsolationLevelToReadOnlyForKeyQuery() {
+        @SuppressWarnings("unchecked") final KeyValueStore<Bytes, byte[]> store =
+            Mockito.mock(KeyValueStore.class);
+        @SuppressWarnings("unchecked") final ReadOnlyKeyValueStore<Bytes, byte[]> readOnlyView =
+            Mockito.mock(ReadOnlyKeyValueStore.class);
+        when(store.readOnly(any())).thenReturn(readOnlyView);
+        final StateStoreContext context = Mockito.mock(StateStoreContext.class);
+        when(context.taskId()).thenReturn(new TaskId(0, 0));
+
+        StoreQueryUtils.handleBasicQueries(
+            KeyQuery.withKey(Bytes.wrap(new byte[]{1})),
+            PositionBound.unbounded(),
+            new QueryConfig(false, IsolationLevel.READ_COMMITTED),
+            store,
+            Position.emptyPosition(),
+            context
+        );
+
+        verify(store).readOnly(IsolationLevel.READ_COMMITTED);
+    }
+
+    @Test
+    public void shouldPassIsolationLevelToReadOnlyForWindowKeyQuery() {
+        @SuppressWarnings("unchecked") final WindowStore<Bytes, byte[]> store =
+            Mockito.mock(WindowStore.class);
+        @SuppressWarnings("unchecked") final ReadOnlyWindowStore<Bytes, byte[]> readOnlyView =
+            Mockito.mock(ReadOnlyWindowStore.class);
+        when(store.readOnly(any())).thenReturn(readOnlyView);
+        when(readOnlyView.fetch(any(), any(Instant.class), any(Instant.class)))
+            .thenReturn(Mockito.mock(org.apache.kafka.streams.state.WindowStoreIterator.class));
+        final StateStoreContext context = Mockito.mock(StateStoreContext.class);
+        when(context.taskId()).thenReturn(new TaskId(0, 0));
+
+        StoreQueryUtils.handleBasicQueries(
+            WindowKeyQuery.withKeyAndWindowStartRange(Bytes.wrap(new byte[]{1}), Instant.ofEpochMilli(0), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false, IsolationLevel.READ_COMMITTED),
+            store,
+            Position.emptyPosition(),
+            context
+        );
+
+        verify(store).readOnly(IsolationLevel.READ_COMMITTED);
+    }
+
+    @Test
+    public void shouldPassIsolationLevelToReadOnlyForWindowRangeQuery() {
+        @SuppressWarnings("unchecked") final WindowStore<Bytes, byte[]> store =
+            Mockito.mock(WindowStore.class);
+        @SuppressWarnings("unchecked") final ReadOnlyWindowStore<Bytes, byte[]> readOnlyView =
+            Mockito.mock(ReadOnlyWindowStore.class);
+        when(store.readOnly(any())).thenReturn(readOnlyView);
+        when(readOnlyView.fetchAll(any(), any()))
+            .thenReturn(Mockito.mock(org.apache.kafka.streams.state.KeyValueIterator.class));
+        final StateStoreContext context = Mockito.mock(StateStoreContext.class);
+        when(context.taskId()).thenReturn(new TaskId(0, 0));
+
+        StoreQueryUtils.handleBasicQueries(
+            WindowRangeQuery.withWindowStartRange(Instant.ofEpochMilli(0), Instant.ofEpochMilli(100)),
+            PositionBound.unbounded(),
+            new QueryConfig(false, IsolationLevel.READ_COMMITTED),
+            store,
+            Position.emptyPosition(),
+            context
+        );
+
+        verify(store).readOnly(IsolationLevel.READ_COMMITTED);
+    }
+
+    @Test
+    public void shouldPassIsolationLevelToReadOnlyForSessionWindowRangeQuery() {
+        @SuppressWarnings("unchecked") final SessionStore<Bytes, byte[]> store =
+            Mockito.mock(SessionStore.class);
+        @SuppressWarnings("unchecked") final ReadOnlySessionStore<Bytes, byte[]> readOnlyView =
+            Mockito.mock(ReadOnlySessionStore.class);
+        when(store.readOnly(any())).thenReturn(readOnlyView);
+        when(readOnlyView.fetch(any(Bytes.class)))
+            .thenReturn(Mockito.mock(org.apache.kafka.streams.state.KeyValueIterator.class));
+        final StateStoreContext context = Mockito.mock(StateStoreContext.class);
+        when(context.taskId()).thenReturn(new TaskId(0, 0));
+
+        StoreQueryUtils.handleBasicQueries(
+            WindowRangeQuery.withKey(Bytes.wrap(new byte[]{1})),
+            PositionBound.unbounded(),
+            new QueryConfig(false, IsolationLevel.READ_COMMITTED),
+            store,
+            Position.emptyPosition(),
+            context
+        );
+
+        verify(store).readOnly(IsolationLevel.READ_COMMITTED);
     }
 }
