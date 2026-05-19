@@ -79,7 +79,7 @@ help|-h|--help
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
         [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6]
-        [--memory MEMORY_LIMIT]
+        [--memory MEMORY_LIMIT] [--build-arg KEY=VALUE]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
@@ -101,6 +101,11 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     If --memory is specified, sets the memory limit for each container node.
     Defaults to ${default_docker_run_memory_limit}. Can also be set via the DUCKER_RUN_MEMORY
     environment variable. The --memory flag takes precedence over the environment variable.
+
+    If --build-arg is specified, the KEY=VALUE pair is forwarded to the underlying
+    'docker build --build-arg' invocation. The flag may be repeated to pass multiple
+    arguments and is useful for overriding Dockerfile ARGs such as KAFKA_MIRROR or
+    GRAALVM_URL without editing this script.
 
     Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678
     on your local machine to enable debugging in VS Code.
@@ -296,6 +301,7 @@ ducker_build() {
         --build-arg "jdk_version=${jdk_version}" \
         --build-arg "UID=${UID}" \
         --build-arg "KAFKA_MODE=${kafka_mode}" \
+        "${extra_build_args[@]}" \
         -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
     docker_status=$?
@@ -394,6 +400,7 @@ prepare_native_dir() {
 ducker_up() {
     detect_container_runtime
     require_commands ${container_runtime}
+    extra_build_args=()
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
@@ -404,6 +411,7 @@ ducker_up() {
             -m|--kafka_mode) set_once kafka_mode "${2}" "the mode in which kafka will run"; shift 2;;
             --memory) set_once docker_run_memory_limit "${2}" "the container memory limit"; shift 2;;
             --ipv6) set_once ipv6 "true" "enable IPv6"; shift;;
+            --build-arg) extra_build_args+=("--build-arg" "${2}"); shift 2;;
             *) set_once image_name "${1}" "container image name"; shift;;
         esac
     done
