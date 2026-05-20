@@ -523,7 +523,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendNoOpResponseExemptThrottle(request)
         }
       } else {
-        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs, nodeEndpoints.values.toList.asJava), None)
+        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs, nodeEndpoints.values.toList.asJava))
       }
     }
 
@@ -724,7 +724,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         recordBytesOutMetric(fetchResponse)
         // Send the response immediately.
-        requestChannel.sendResponse(request, fetchResponse, None)
+        requestChannel.sendResponse(request, fetchResponse)
       }
     }
 
@@ -3428,7 +3428,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
       } else {
-        requestChannel.sendResponse(request, result, None)
+        requestChannel.sendResponse(request, result)
       }
     }
   }

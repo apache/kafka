@@ -20,7 +20,6 @@ package kafka.server
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import org.apache.kafka.common.errors.ClusterAuthorizationException
-import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.Request
@@ -62,7 +61,7 @@ class RequestHandlerHelper(
     if (response == null)
       requestChannel.closeConnection(request, requestBody.errorCounts(error))
     else
-      requestChannel.sendResponse(request, response, None)
+      requestChannel.sendResponse(request, response)
   }
 
   def sendForwardedResponse(request: Request,
@@ -74,7 +73,7 @@ class RequestHandlerHelper(
     val appliedThrottleTimeMs = math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
     throttle(quotas.request, request, appliedThrottleTimeMs)
     response.maybeSetThrottleTimeMs(appliedThrottleTimeMs)
-    requestChannel.sendResponse(request, response, None)
+    requestChannel.sendResponse(request, response)
   }
 
   // Throttle the channel if the request quota is enabled but has been violated. Regardless of throttling, send the
@@ -88,7 +87,7 @@ class RequestHandlerHelper(
     if (!request.isForwarded)
       throttle(quotas.request, request, throttleTimeMs)
     response.maybeSetThrottleTimeMs(throttleTimeMs)
-    requestChannel.sendResponse(request, response, None)
+    requestChannel.sendResponse(request, response)
   }
 
   def sendResponseMaybeThrottle(request: Request,
@@ -97,7 +96,7 @@ class RequestHandlerHelper(
     // Only throttle non-forwarded requests
     if (!request.isForwarded)
       throttle(quotas.request, request, throttleTimeMs)
-    requestChannel.sendResponse(request, createResponse(throttleTimeMs), None)
+    requestChannel.sendResponse(request, createResponse(throttleTimeMs))
   }
 
   def sendErrorResponseMaybeThrottle(request: Request, error: Throwable): Unit = {
@@ -138,14 +137,13 @@ class RequestHandlerHelper(
     }
 
     response.maybeSetThrottleTimeMs(maxThrottleTimeMs)
-    requestChannel.sendResponse(request, response, None)
+    requestChannel.sendResponse(request, response)
   }
 
   def sendResponseExemptThrottle(request: Request,
-                                 response: AbstractResponse,
-                                 onComplete: Option[Send => Unit] = None): Unit = {
+                                 response: AbstractResponse): Unit = {
     quotas.request.maybeRecordExempt(request)
-    requestChannel.sendResponse(request, response, onComplete)
+    requestChannel.sendResponse(request, response)
   }
 
   private def sendErrorResponseExemptThrottle(request: Request, error: Throwable): Unit = {

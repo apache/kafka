@@ -71,7 +71,7 @@ class RequestConvertToJsonTest {
     val req = request(alterIsrRequest)
     val send = new NetworkSend(req.context.connectionId, alterIsrRequest.toSend(req.header))
     val headerLog = RequestConvertToJson.requestHeaderNode(req.header)
-    val res = new RequestChannel.SendResponse(req, send, Some(headerLog), None)
+    val res = new RequestChannel.SendResponse(req, send, Some(headerLog))
 
     val totalTimeMs = 1
     val requestQueueTimeMs = 2

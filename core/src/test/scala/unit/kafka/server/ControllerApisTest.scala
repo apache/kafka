@@ -359,8 +359,7 @@ class ControllerApisTest {
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None))
+      capturedResponse.capture())
     assertNotNull(capturedResponse.getValue)
     val response = capturedResponse.getValue.asInstanceOf[AlterConfigsResponse]
     assertEquals(Set(
@@ -458,8 +457,7 @@ class ControllerApisTest {
     controllerApis.handle(request, RequestLocal.withThreadConfinedCaching)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None))
+      capturedResponse.capture())
 
     assertNotNull(capturedResponse.getValue)
 
@@ -518,8 +516,7 @@ class ControllerApisTest {
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None))
+      capturedResponse.capture())
     assertNotNull(capturedResponse.getValue)
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     assertEquals(Set(new AlterConfigsResourceResponse().
@@ -633,8 +630,7 @@ class ControllerApisTest {
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None))
+      capturedResponse.capture())
     assertNotNull(capturedResponse.getValue)
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     assertEquals(Set(
@@ -1249,8 +1245,7 @@ class ControllerApisTest {
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(req),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
 
     capturedResponse.getValue match {
@@ -1271,7 +1266,7 @@ class ControllerApisTest {
     val responseFuture = new CompletableFuture[ApiMessage]()
     val errorResponseFuture = new AtomicReference[AbstractResponse]()
     when(raftManager.handleRequest(any(), any(), any(), any())).thenReturn(responseFuture)
-    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+    when(requestChannel.sendResponse(any(), any())).thenAnswer { _ =>
       // Simulate an encoding failure in the initial fetch response
       throw new UnsupportedVersionException("Something went wrong")
     }.thenAnswer { invocation =>

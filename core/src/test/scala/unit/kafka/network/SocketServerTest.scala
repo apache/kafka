@@ -164,7 +164,7 @@ class SocketServerTest {
     val byteBuffer = request.body(classOf[AbstractRequest]).serializeWithHeader(request.header)
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
-    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
+    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog)))
   }
 
   def processRequestNoOpResponse(channel: RequestChannel, request: Request): Unit = {
@@ -652,7 +652,7 @@ class SocketServerTest {
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
-        new RequestChannel.SendResponse(request, send, Some(headerLog), None)
+        new RequestChannel.SendResponse(request, send, Some(headerLog))
       else
         new RequestChannel.NoOpResponse(request)
     server.dataPlaneRequestChannel.sendResponse(response)
@@ -1104,7 +1104,7 @@ class SocketServerTest {
       val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
       val headerLog = new ObjectNode(JsonNodeFactory.instance)
       headerLog.set("response", new TextNode("someResponse"))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog)))
 
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
