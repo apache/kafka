@@ -30,7 +30,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.network.Request
-import org.apache.kafka.security.authorizer.AuthorizerUtils
+import org.apache.kafka.security.authorizer.{AuthorizerUtils, JAuthHelper}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.purgatory.DelayedFuturePurgatory
@@ -46,7 +46,7 @@ import scala.jdk.OptionConverters.RichOptional
 /**
  * Logic to handle ACL requests.
  */
-class AclApis(authHelper: AuthHelper,
+class AclApis(authHelper: JAuthHelper,
               authorizerPlugin: Option[Plugin[Authorizer]],
               requestHelper: RequestHandlerHelper,
               role: ProcessRole,

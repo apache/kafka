@@ -17,7 +17,6 @@
 
 package kafka.server.handlers;
 
-import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
 
 import org.apache.kafka.common.Uuid;
@@ -31,6 +30,7 @@ import org.apache.kafka.common.requests.DescribeTopicPartitionsRequest;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.network.Request;
+import org.apache.kafka.security.authorizer.JAuthHelper;
 
 import java.util.HashSet;
 import java.util.List;
@@ -42,12 +42,12 @@ import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 
 public class DescribeTopicPartitionsRequestHandler {
     MetadataCache metadataCache;
-    AuthHelper authHelper;
+    JAuthHelper authHelper;
     KafkaConfig config;
 
     public DescribeTopicPartitionsRequestHandler(
         MetadataCache metadataCache,
-        AuthHelper authHelper,
+        JAuthHelper authHelper,
         KafkaConfig config
     ) {
         this.metadataCache = metadataCache;

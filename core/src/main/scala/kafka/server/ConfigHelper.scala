@@ -33,6 +33,7 @@ import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.network.Request
+import org.apache.kafka.security.authorizer.JAuthHelper
 import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
 import org.apache.kafka.server.config.{DynamicBrokerConfig, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.logger.LoggingController
@@ -47,7 +48,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   def handleDescribeConfigsRequest(
     request: Request,
-    authHelper: AuthHelper
+    authHelper: JAuthHelper
   ): DescribeConfigsResponseData = {
     val describeConfigsRequest = request.body(classOf[DescribeConfigsRequest])
     val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>

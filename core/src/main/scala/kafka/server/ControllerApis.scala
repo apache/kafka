@@ -55,12 +55,14 @@ import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply,
 import org.apache.kafka.network.Request
 import org.apache.kafka.raft.RaftManager
 import org.apache.kafka.security.DelegationTokenManager
+import org.apache.kafka.security.authorizer.JAuthHelper
 import org.apache.kafka.server.{ApiVersionManager, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
 import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 
 /**
@@ -81,7 +83,7 @@ class ControllerApis(
 ) extends ApiRequestHandler with Logging {
 
   this.logIdent = s"[ControllerApis nodeId=${config.nodeId}] "
-  val authHelper = new AuthHelper(authorizerPlugin)
+  val authHelper = new JAuthHelper(authorizerPlugin.toJava)
   val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val runtimeLoggerManager = new RuntimeLoggerManager(config.nodeId, logger.underlying)
@@ -204,9 +206,9 @@ class ControllerApis(
     val future = deleteTopics(context,
       deleteTopicsRequest.data,
       request.context.apiVersion,
-      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
-      names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
-      names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
+      authHelper.authorize(request.context, DELETE, CLUSTER, CLUSTER_NAME, true, false, 1),
+      names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names.asJava, (n: String) => n).asScala.toSet,
+      names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names.asJava, (n: String) => n).asScala.toSet)
     future.handle[Unit] { (results, exception) =>
       val response = if (exception != null) {
         deleteTopicsRequest.getErrorResponse(exception)
@@ -367,10 +369,10 @@ class ControllerApis(
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
     val future = createTopics(context,
         createTopicsRequest.data,
-        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false),
-        names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names)(identity),
+        authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, true, false, 1),
+        names => authHelper.filterByAuthorized(request.context, CREATE, TOPIC, names.asJava, (n: String) => n).asScala.toSet,
         names => authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
-            names, logIfDenied = false)(identity),
+            names.asJava, true, false, (n: String) => n).asScala.toSet,
         request.isForwarded)
     future.handle[Unit] { (result, exception) =>
       val response = if (exception != null) {
@@ -795,7 +797,7 @@ class ControllerApis(
 
   private def handleCreatePartitions(request: Request): CompletableFuture[Unit] = {
     def filterAlterAuthorizedTopics(topics: Iterable[String]): Set[String] = {
-      authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
+      authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics.asJava, (n:String) => n).asScala.toSet
     }
     val createPartitionsRequest = request.body(classOf[CreatePartitionsRequest])
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request.session, request.header, 3)
