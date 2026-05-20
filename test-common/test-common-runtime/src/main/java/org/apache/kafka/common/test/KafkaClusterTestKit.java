@@ -513,6 +513,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         "bootstrap metadata. Use Formatter.setScramArguments() instead.");
                 }
             }
+            for (String disabledFeature : nodes.disabledFeatures()) {
+                formatter.setFeatureLevel(disabledFeature, (short) 0);
+            }
             formatter.setAdditionalBootstrapRecords(additionalRecords);
 
             StringBuilder dynamicVotersBuilder = new StringBuilder();

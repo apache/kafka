@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -54,6 +55,7 @@ public class TestKitNodes {
         private int numDisksPerBroker = 1;
         private Map<Integer, Map<String, String>> perServerProperties = Map.of();
         private BootstrapMetadata bootstrapMetadata;
+        private Set<String> disabledFeatures = Set.of();
 
         public Builder() {
             this(BootstrapMetadata.fromVersions(
@@ -90,6 +92,11 @@ public class TestKitNodes {
 
         public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
             this.bootstrapMetadata = bootstrapMetadata;
+            return this;
+        }
+
+        public Builder setDisabledFeatures(Set<String> disabledFeatures) {
+            this.disabledFeatures = Collections.unmodifiableSet(disabledFeatures);
             return this;
         }
 
@@ -215,14 +222,15 @@ public class TestKitNodes {
                 brokerNodes.put(id, brokerNode);
             }
 
-            return new TestKitNodes(baseDirectory.toFile().getAbsolutePath(), clusterId, bootstrapMetadata, controllerNodes, brokerNodes,
-                brokerListenerName, brokerSecurityProtocol, controllerListenerName, controllerSecurityProtocol);
+            return new TestKitNodes(baseDirectory.toFile().getAbsolutePath(), clusterId, bootstrapMetadata, disabledFeatures, controllerNodes,
+                brokerNodes, brokerListenerName, brokerSecurityProtocol, controllerListenerName, controllerSecurityProtocol);
         }
     }
 
     private final String baseDirectory;
     private final String clusterId;
     private final BootstrapMetadata bootstrapMetadata;
+    private final Set<String> disabledFeatures;
     private final SortedMap<Integer, TestKitNode> controllerNodes;
     private final SortedMap<Integer, TestKitNode> brokerNodes;
     private final ListenerName brokerListenerName;
@@ -234,6 +242,7 @@ public class TestKitNodes {
         String baseDirectory,
         String clusterId,
         BootstrapMetadata bootstrapMetadata,
+        Set<String> disabledFeatures,
         SortedMap<Integer, TestKitNode> controllerNodes,
         SortedMap<Integer, TestKitNode> brokerNodes,
         ListenerName brokerListenerName,
@@ -244,6 +253,7 @@ public class TestKitNodes {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
         this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
+        this.disabledFeatures = Objects.requireNonNull(disabledFeatures);
         this.controllerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(controllerNodes)));
         this.brokerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(brokerNodes)));
         this.brokerListenerName = Objects.requireNonNull(brokerListenerName);
@@ -270,6 +280,10 @@ public class TestKitNodes {
 
     public BootstrapMetadata bootstrapMetadata() {
         return bootstrapMetadata;
+    }
+
+    public Set<String> disabledFeatures() {
+        return disabledFeatures;
     }
 
     public SortedMap<Integer, TestKitNode> brokerNodes() {
