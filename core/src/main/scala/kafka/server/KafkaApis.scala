@@ -1547,7 +1547,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val nonExistingTopicResponses = mutable.Map[TopicPartition, DeleteRecordsPartitionResult]()
     val authorizedForDeleteTopicOffsets = mutable.Map[TopicPartition, Long]()
 
-     val topics = deleteRecordsRequest.data.topics.asScala
+    val topics = deleteRecordsRequest.data.topics.asScala
     val authorizedTopics = authHelper.filterByAuthorized(request.context, DELETE, TOPIC, deleteRecordsRequest.data.topics, (t: DeleteRecordsRequestData.DeleteRecordsTopic) => t.name)
     val deleteTopicPartitions = topics.flatMap { deleteTopic =>
       deleteTopic.partitions.asScala.map { deletePartition =>
@@ -2651,11 +2651,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       if (consumerGroupHeartbeatRequest.data.subscribedTopicNames != null &&
         !consumerGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
-         // Check the authorization if the subscribed topic names are provided.
-         // Clients are not allowed to see topics that are not authorized for Describe.
-         val subscribedTopicSet = consumerGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
-         val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
-           subscribedTopicSet.asJava, (t: String) => t)
+        // Check the authorization if the subscribed topic names are provided.
+        // Clients are not allowed to see topics that are not authorized for Describe.
+        val subscribedTopicSet = consumerGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
+        val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+          subscribedTopicSet.asJava, (t: String) => t)
         if (authorizedTopics.size < subscribedTopicSet.size) {
           val responseData = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
@@ -3096,11 +3096,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       if (shareGroupHeartbeatRequest.data.subscribedTopicNames != null &&
         !shareGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
-         // Check the authorization if the subscribed topic names are provided.
-         // Clients are not allowed to see topics that are not authorized for Describe.
-         val subscribedTopicSet = shareGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
-         val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
-           subscribedTopicSet.asJava, (t: String) => t)
+        // Check the authorization if the subscribed topic names are provided.
+        // Clients are not allowed to see topics that are not authorized for Describe.
+        val subscribedTopicSet = shareGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
+        val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+          subscribedTopicSet.asJava, (t: String) => t)
         if (authorizedTopics.size < subscribedTopicSet.size) {
           val responseData = new ShareGroupHeartbeatResponseData()
             .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
