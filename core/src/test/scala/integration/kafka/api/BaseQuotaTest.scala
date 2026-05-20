@@ -289,7 +289,7 @@ abstract class QuotaTestClients(topic: String,
   private def verifyThrottleTimeMetric(quotaType: QuotaType, clientId: String, expectThrottle: Boolean): Unit = {
     if (expectThrottle) {
       // Poll until at least one metric is recorded to give the broker thread time to flush the throttled value
-      // after the response is snt
+      // after the response is sent
       TestUtils.waitUntilTrue(() => {
         val metric = throttleMetric(quotaType, clientId)
         metric != null && metricValue(metric) > 0
