@@ -39,6 +39,14 @@ type: docs
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0
 
+Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.3.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.3.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.3.x.
+
+**For a rolling upgrade:**
+
+  1. Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
+  2. Once the cluster's behavior and performance have been verified, finalize the upgrade by running `bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.3`
+  3. Note that cluster metadata downgrade is not supported in this version since it has metadata changes. Every [MetadataVersion](https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java) has a boolean parameter that indicates if there are metadata changes (i.e. `IBP_4_3_IV0(30, "4.3", "IV0", true)` means this version has metadata changes). Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.
+
 ### Notable changes in 4.3.0
 
   * `kafka-configs.sh --alter --delete-config` no longer requires the specified config keys to exist on the target resource. Previously, attempting to delete a non-existent config key raised an `InvalidConfigurationException`. The deletion is now a no-op when the key does not exist, which allows managing configs for offline brokers via `--bootstrap-controller`. For further details, please refer to [KAFKA-20506](https://issues.apache.org/jira/browse/KAFKA-20506).
@@ -58,6 +66,15 @@ type: docs
 ## Upgrading to 4.2.0
 
 ### Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x
+
+Note: Apache Kafka 4.2 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.2.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.2.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.2.x.
+
+**For a rolling upgrade:**
+
+  1. Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
+  2. Once the cluster's behavior and performance have been verified, finalize the upgrade by running `bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.2`
+  3. Note that cluster metadata downgrade is supported in this version since it has no metadata changes. Every [MetadataVersion](https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java) has a boolean parameter that indicates if there are metadata changes (i.e. `IBP_4_2_IV1(29, "4.2", "IV1", false)` means this version has no metadata changes). Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.
+
 
   * If you wish to use share groups in a cluster with fewer than 3 brokers, you must set the broker configurations `share.coordinator.state.topic.replication.factor` and `share.coordinator.state.topic.min.isr` to 1 before you start using share groups. This is because share groups make use of a new internal topic called `__share_group_state` which is automatically created when you first use share groups. In common with the other internal topics, the default configuration uses 3 replicas and requires at least 3 brokers.
 
