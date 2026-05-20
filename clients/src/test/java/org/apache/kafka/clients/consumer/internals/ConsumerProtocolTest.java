@@ -40,6 +40,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -360,82 +361,84 @@ public class ConsumerProtocolTest {
     }
 
     @Test
-    public void testDeserializeSubscriptionThrowsSchemaExceptionForEveryTruncation() {
+    public void deserializeSubscriptionThrowsSchemaExceptionForEveryTruncation() {
         Subscription subscription = new Subscription(
             Arrays.asList("foo", "bar"),
             ByteBuffer.wrap(new byte[]{0x01, 0x02}),
             Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1)),
             DEFAULT_GENERATION,
             Optional.of("rack"));
-        byte[] serialized = toBytes(ConsumerProtocol.serializeSubscription(subscription,
-            ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION));
+        ByteBuffer serialized = ConsumerProtocol.serializeSubscription(subscription,
+            ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION);
+        byte[] serializedBytes = new byte[serialized.remaining()];
+        serialized.duplicate().get(serializedBytes);
 
-        for (int len = 0; len < serialized.length; len++) {
-            byte[] truncated = Arrays.copyOf(serialized, len);
+        for (int len = 0; len < serializedBytes.length; len++) {
+            byte[] truncated = Arrays.copyOf(serializedBytes, len);
             assertThrows(SchemaException.class,
                 () -> ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(truncated)),
                 "Expected SchemaException for subscription truncated to length " + len);
         }
-        ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(serialized));
+        assertDoesNotThrow(() -> ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(serializedBytes)));
     }
 
     @Test
-    public void testDeserializeAssignmentThrowsSchemaExceptionForEveryTruncation() {
+    public void deserializeAssignmentThrowsSchemaExceptionForEveryTruncation() {
         Assignment assignment = new Assignment(
             Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1)),
             ByteBuffer.wrap(new byte[]{0x01, 0x02}));
-        byte[] serialized = toBytes(ConsumerProtocol.serializeAssignment(assignment,
-            ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION));
+        ByteBuffer serialized = ConsumerProtocol.serializeAssignment(assignment,
+            ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION);
+        byte[] serializedBytes = new byte[serialized.remaining()];
+        serialized.duplicate().get(serializedBytes);
 
-        for (int len = 0; len < serialized.length; len++) {
-            byte[] truncated = Arrays.copyOf(serialized, len);
+        for (int len = 0; len < serializedBytes.length; len++) {
+            byte[] truncated = Arrays.copyOf(serializedBytes, len);
             assertThrows(SchemaException.class,
                 () -> ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(truncated)),
                 "Expected SchemaException for assignment truncated to length " + len);
         }
-        ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(serialized));
+        assertDoesNotThrow(() -> ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(serializedBytes)));
     }
 
     @Test
-    public void testDeserializeConsumerProtocolSubscriptionThrowsSchemaExceptionForEveryTruncation() {
+    public void deserializeConsumerProtocolSubscriptionThrowsSchemaExceptionForEveryTruncation() {
         Subscription subscription = new Subscription(
             Arrays.asList("foo", "bar"),
             ByteBuffer.wrap(new byte[]{0x01, 0x02}),
             Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1)),
             DEFAULT_GENERATION,
             Optional.of("rack"));
-        byte[] serialized = toBytes(ConsumerProtocol.serializeSubscription(subscription,
-            ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION));
+        ByteBuffer serialized = ConsumerProtocol.serializeSubscription(subscription,
+            ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION);
+        byte[] serializedBytes = new byte[serialized.remaining()];
+        serialized.duplicate().get(serializedBytes);
 
-        for (int len = 0; len < serialized.length; len++) {
-            byte[] truncated = Arrays.copyOf(serialized, len);
+        for (int len = 0; len < serializedBytes.length; len++) {
+            byte[] truncated = Arrays.copyOf(serializedBytes, len);
             assertThrows(SchemaException.class,
                 () -> ConsumerProtocol.deserializeConsumerProtocolSubscription(ByteBuffer.wrap(truncated)),
                 "Expected SchemaException for ConsumerProtocolSubscription truncated to length " + len);
         }
-        ConsumerProtocol.deserializeConsumerProtocolSubscription(ByteBuffer.wrap(serialized));
+        assertDoesNotThrow(() -> ConsumerProtocol.deserializeConsumerProtocolSubscription(ByteBuffer.wrap(serializedBytes)));
     }
 
     @Test
-    public void testDeserializeConsumerProtocolAssignmentThrowsSchemaExceptionForEveryTruncation() {
+    public void deserializeConsumerProtocolAssignmentThrowsSchemaExceptionForEveryTruncation() {
         Assignment assignment = new Assignment(
             Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1)),
             ByteBuffer.wrap(new byte[]{0x01, 0x02}));
-        byte[] serialized = toBytes(ConsumerProtocol.serializeAssignment(assignment,
-            ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION));
+        ByteBuffer serialized = ConsumerProtocol.serializeAssignment(assignment,
+            ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION);
+        byte[] serializedBytes = new byte[serialized.remaining()];
+        serialized.duplicate().get(serializedBytes);
 
-        for (int len = 0; len < serialized.length; len++) {
-            byte[] truncated = Arrays.copyOf(serialized, len);
+        for (int len = 0; len < serializedBytes.length; len++) {
+            byte[] truncated = Arrays.copyOf(serializedBytes, len);
             assertThrows(SchemaException.class,
                 () -> ConsumerProtocol.deserializeConsumerProtocolAssignment(ByteBuffer.wrap(truncated)),
                 "Expected SchemaException for ConsumerProtocolAssignment truncated to length " + len);
         }
-        ConsumerProtocol.deserializeConsumerProtocolAssignment(ByteBuffer.wrap(serialized));
-    }
-
-    private static byte[] toBytes(ByteBuffer buffer) {
-        byte[] arr = new byte[buffer.remaining()];
-        buffer.duplicate().get(arr);
-        return arr;
+        assertDoesNotThrow(() -> ConsumerProtocol.deserializeConsumerProtocolAssignment(ByteBuffer.wrap(serializedBytes)));
     }
 }

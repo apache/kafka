@@ -117,7 +117,7 @@ public class ConsumerProtocol {
                 data.generationId(),
                 data.rackId() == null || data.rackId().isEmpty() ? Optional.empty() : Optional.of(data.rackId()));
         } catch (RuntimeException e) {
-            throw new SchemaException("Malformed consumer protocol's subscription", e);
+            throw new SchemaException("Malformed consumer protocol subscription", e);
         }
     }
 
@@ -134,7 +134,7 @@ public class ConsumerProtocol {
         try {
             return new ConsumerProtocolSubscription(new ByteBufferAccessor(buffer), version);
         } catch (RuntimeException e) {
-            throw new SchemaException("Malformed consumer protocol's subscription", e);
+            throw new SchemaException("Malformed consumer protocol subscription", e);
         }
     }
 
@@ -187,7 +187,7 @@ public class ConsumerProtocol {
                 assignedPartitions,
                 data.userData() != null ? data.userData().duplicate() : null);
         } catch (RuntimeException e) {
-            throw new SchemaException("Malformed consumer protocol's assignment", e);
+            throw new SchemaException("Malformed consumer protocol assignment", e);
         }
     }
 
@@ -204,7 +204,7 @@ public class ConsumerProtocol {
         try {
             return new ConsumerProtocolAssignment(new ByteBufferAccessor(buffer), version);
         } catch (RuntimeException e) {
-            throw new SchemaException("Malformed consumer protocol's assignment", e);
+            throw new SchemaException("Malformed consumer protocol assignment", e);
         }
     }
 

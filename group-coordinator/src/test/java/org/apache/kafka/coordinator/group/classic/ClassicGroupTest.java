@@ -1271,7 +1271,10 @@ public class ClassicGroupTest {
         JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
         protocols.add(new JoinGroupRequestProtocol()
             .setName("range")
-            .setMetadata(new byte[]{0, 1, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF})); // Throws RuntimeException
+            .setMetadata(new byte[]{
+                0, 1,                                              // version (int16) = 1
+                (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF // topics array length (int32) = -1
+            }));
 
         ClassicGroupMember poisonMember = new ClassicGroupMember(
             "poisonMember",
@@ -1288,7 +1291,7 @@ public class ClassicGroupTest {
         group.transitionTo(PREPARING_REBALANCE);
         group.initNextGeneration();
 
-        // Should not propagate; falls through to Optional.empty().
+        // RuntimeException should not propagate; falls through to Optional.empty().
         assertEquals(Optional.empty(), group.computeSubscribedTopics());
     }
 

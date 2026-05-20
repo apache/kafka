@@ -12173,7 +12173,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testUpgradeFailsOnMalformedClassicGroupProtocol() {
+    public void testConsumerGroupHeartbeatWithStableClassicGroupFailsOnMalformedProtocol() {
         String groupId = "group-id";
         String memberId1 = "member-id-1";
         String memberId2 = "member-id-2";
@@ -12194,7 +12194,10 @@ public class GroupMetadataManagerTest {
             .build();
 
         // Throws RuntimeException when read
-        byte[] poisonMetadata = new byte[]{0, 1, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        byte[] poisonMetadata = new byte[]{
+            0, 1,                                              // version (int16) = 1
+            (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF // topics array length (int32) = -1
+        };
 
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
         protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
@@ -12248,7 +12251,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testClassicJoinToConsumerGroupFailsOnMalformedSubscriptionMetadata() {
+    public void testClassicGroupJoinToConsumerGroupFailsOnMalformedSubscriptionMetadata() {
         String groupId = "group-id";
         String existingMemberId = Uuid.randomUuid().toString();
         String newMemberId = Uuid.randomUuid().toString();
@@ -12287,7 +12290,10 @@ public class GroupMetadataManagerTest {
             .build();
 
         // Throws RuntimeException when read.
-        byte[] poisonMetadata = new byte[]{0, 1, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        byte[] poisonMetadata = new byte[]{
+            0, 1,                                              // version (int16) = 1
+            (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF // topics array length (int32) = -1
+        };
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(1);
         protocols.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
             .setName("range")
