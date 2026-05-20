@@ -63,19 +63,19 @@ public class TransactionsTest {
     @ClusterTest
     public void testBasicTransactions() throws Exception {
         TransactionsTestHelper.testBasicTransactions(
-                clusterInstance, GroupProtocol.CLASSIC, TransactionsTestHelper.NO_OP_HOOKS, TOPIC_CONFIG);
+                clusterInstance, GroupProtocol.CONSUMER, TransactionsTestHelper.NO_OP_HOOKS, TOPIC_CONFIG);
     }
 
     @ClusterTest
     public void testReadCommittedConsumerShouldNotSeeUndecidedData() throws Exception {
         TransactionsTestHelper.testReadCommittedConsumerShouldNotSeeUndecidedData(
-                clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+                clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
     public void testDelayedFetchIncludesAbortedTransaction() throws Exception {
         TransactionsTestHelper.testDelayedFetchIncludesAbortedTransaction(
-                clusterInstance, GroupProtocol.CLASSIC, TransactionsTestHelper.NO_OP_HOOKS, TOPIC_CONFIG);
+                clusterInstance, GroupProtocol.CONSUMER, TransactionsTestHelper.NO_OP_HOOKS, TOPIC_CONFIG);
     }
 
     @ClusterTest
@@ -92,12 +92,12 @@ public class TransactionsTest {
 
     @ClusterTest
     public void testFencingOnCommit() throws Exception {
-        TransactionsTestHelper.testFencingOnCommit(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+        TransactionsTestHelper.testFencingOnCommit(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
     public void testFencingOnSendOffsets() throws Exception {
-        TransactionsTestHelper.testFencingOnSendOffsets(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+        TransactionsTestHelper.testFencingOnSendOffsets(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
@@ -134,22 +134,22 @@ public class TransactionsTest {
 
     @ClusterTest
     public void testFencingOnSend() throws Exception {
-        TransactionsTestHelper.testFencingOnSend(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+        TransactionsTestHelper.testFencingOnSend(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
     public void testFencingOnAddPartitions() throws Exception {
-        TransactionsTestHelper.testFencingOnAddPartitions(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+        TransactionsTestHelper.testFencingOnAddPartitions(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
     public void testFencingOnTransactionExpiration() throws Exception {
-        TransactionsTestHelper.testFencingOnTransactionExpiration(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+        TransactionsTestHelper.testFencingOnTransactionExpiration(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
     public void testMultipleMarkersOneLeader() throws Exception {
-        TransactionsTestHelper.testMultipleMarkersOneLeader(clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+        TransactionsTestHelper.testMultipleMarkersOneLeader(clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest
@@ -165,13 +165,13 @@ public class TransactionsTest {
     @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1)})
     public void testBumpTransactionalEpochWithTV2Disabled() throws Exception {
         TransactionsTestHelper.testBumpTransactionalEpochWithTV2Disabled(
-                clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+                clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)})
     public void testBumpTransactionalEpochWithTV2Enabled() throws Exception {
         TransactionsTestHelper.testBumpTransactionalEpochWithTV2Enabled(
-                clusterInstance, GroupProtocol.CLASSIC, TOPIC_CONFIG);
+                clusterInstance, GroupProtocol.CONSUMER, TOPIC_CONFIG);
     }
 
     @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1)})
