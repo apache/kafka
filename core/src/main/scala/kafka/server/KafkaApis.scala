@@ -792,10 +792,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
     }
 
-    val partitionResult = authHelper.partitionSeqByAuthorized(request.context,
+    val partitionResult = authHelper.partitionByAuthorized(request.context,
         DESCRIBE, TOPIC, offsetRequest.topics.asScala.toSeq.asJava, (t: ListOffsetsRequestData.ListOffsetsTopic) => t.name)
-    val authorizedRequestInfo = partitionResult.getKey.asScala
-    val unauthorizedRequestInfo = partitionResult.getValue.asScala
+    val authorizedRequestInfo = partitionResult.authorized.asScala
+    val unauthorizedRequestInfo = partitionResult.unauthorized.asScala
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.map(topic =>
       new ListOffsetsTopicResponse()
@@ -1436,9 +1436,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val deleteGroupsRequest = request.body(classOf[DeleteGroupsRequest])
     val groups = deleteGroupsRequest.data.groupsNames.asScala.distinct
 
-    val deleteGroupsPartition = authHelper.partitionSeqByAuthorized(request.context, DELETE, GROUP, groups.asJava, (g: String) => g)
-    val authorizedGroups = deleteGroupsPartition.getKey.asScala
-    val unauthorizedGroups = deleteGroupsPartition.getValue.asScala
+    val deleteGroupsPartition = authHelper.partitionByAuthorized(request.context, DELETE, GROUP, groups.asJava, (g: String) => g)
+    val authorizedGroups = deleteGroupsPartition.authorized.asScala
+    val unauthorizedGroups = deleteGroupsPartition.unauthorized.asScala
 
     groupCoordinator.deleteGroups(
       request.context,
@@ -2165,8 +2165,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME, true, false, 1))
         (topics, Seq.empty[OffsetForLeaderTopic])
       else {
-        val partitionResult = authHelper.partitionSeqByAuthorized(request.context, DESCRIBE, TOPIC, topics.asJava, (t: OffsetForLeaderTopic) => t.topic)
-        (partitionResult.getKey.asScala.toSeq, partitionResult.getValue.asScala.toSeq)
+        val partitionResult = authHelper.partitionByAuthorized(request.context, DESCRIBE, TOPIC, topics.asJava, (t: OffsetForLeaderTopic) => t.topic)
+        (partitionResult.authorized.asScala.toSeq, partitionResult.unauthorized.asScala.toSeq)
       }
 
     val endOffsetsForAuthorizedPartitions = replicaManager.lastOffsetForLeaderEpoch(authorizedTopics)
@@ -2839,8 +2839,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (topicsToCreate.nonEmpty) {
 
             val createTopicUnauthorized =
-              if(!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, true, false, 1))
-                authHelper.partitionSeqByAuthorized(request.context, CREATE, TOPIC, topicsToCreate.keys.toSeq.asJava, (t: String) => t).getValue.asScala
+              if (!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, true, false, 1))
+                authHelper.partitionByAuthorized(request.context, CREATE, TOPIC, topicsToCreate.keys.toSeq.asJava, (t: String) => t).unauthorized.asScala
               else Set.empty
 
             if (createTopicUnauthorized.nonEmpty) {
@@ -3841,14 +3841,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setErrorMessage(error.message)
       } else {
         // Clients are not allowed to see offsets for topics that are not authorized for Describe.
-        val authorizedOffsetsPartition = authHelper.partitionSeqByAuthorized(
+        val authorizedOffsetsPartition = authHelper.partitionByAuthorized(
           requestContext,
           DESCRIBE,
           TOPIC,
           groupDescribeOffsetsResponse.topics,
           (t: DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic) => t.topicName
         )
-        val authorizedOffsets = authorizedOffsetsPartition.getKey
+        val authorizedOffsets = authorizedOffsetsPartition.authorized
         groupDescribeOffsetsResponse.setTopics(authorizedOffsets)
       }
     }
@@ -3858,15 +3858,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
   ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
     // Clients are not allowed to see offsets for topics that are not authorized for Describe.
-    val partitionResult = authHelper.partitionSeqByAuthorized(
+    val partitionResult = authHelper.partitionByAuthorized(
       requestContext,
       DESCRIBE,
       TOPIC,
       groupDescribeOffsetsRequest.topics,
       (t: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic) => t.topicName
     )
-    val authorizedTopics = partitionResult.getKey
-    val unauthorizedTopics = partitionResult.getValue.asScala
+    val authorizedTopics = partitionResult.authorized
+    val unauthorizedTopics = partitionResult.unauthorized.asScala
 
     groupCoordinator.describeShareGroupOffsets(
       requestContext,

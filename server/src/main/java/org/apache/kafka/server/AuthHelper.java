@@ -178,7 +178,10 @@ public class AuthHelper {
         return filterByAuthorized(requestContext, operation, resourceType, resources, true, true, resourceName);
     }
 
-    public <T> Map.Entry<List<T>, List<T>> partitionSeqByAuthorized(
+    public record PartitionResult<T>(List<T> authorized, List<T> unauthorized) {
+    }
+
+    public <T> PartitionResult<T> partitionByAuthorized(
         RequestContext requestContext,
         AclOperation operation,
         ResourceType resourceType,
@@ -188,7 +191,7 @@ public class AuthHelper {
         Function<T, String> resourceName
     ) {
         if (authorizer.isEmpty()) {
-            return Map.entry(resources, List.of());
+            return new PartitionResult<>(resources, List.of());
         }
         Set<String> authorizedResourceNames = filterByAuthorized(
             requestContext, operation, resourceType, resources, logIfAllowed, logIfDenied, resourceName
@@ -202,17 +205,17 @@ public class AuthHelper {
                 unauthorized.add(resource);
             }
         }
-        return Map.entry(authorized, unauthorized);
+        return new PartitionResult<>(authorized, unauthorized);
     }
 
-    public <T> Map.Entry<List<T>, List<T>> partitionSeqByAuthorized(
+    public <T> PartitionResult<T> partitionByAuthorized(
         RequestContext requestContext,
         AclOperation operation,
         ResourceType resourceType,
         List<T> resources,
         Function<T, String> resourceName
     ) {
-        return partitionSeqByAuthorized(requestContext, operation, resourceType, resources, true, true, resourceName);
+        return partitionByAuthorized(requestContext, operation, resourceType, resources, true, true, resourceName);
     }
 
     public DescribeClusterResponseData computeDescribeClusterResponse(
