@@ -41,6 +41,7 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
@@ -59,8 +60,17 @@ import static org.mockito.Mockito.when;
 
 public class AuthHelperTest {
 
+    private Authorizer authorizer;
+    private Plugin<Authorizer> authorizerPlugin;
+
+    @BeforeEach
+    public void setUp() {
+        authorizer = mock(Authorizer.class);
+        authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
+    }
+
     private static Request newMockDescribeClusterRequest(DescribeClusterRequestData data, int requestVersion)
-            throws UnknownHostException {
+        throws UnknownHostException {
         RequestContext requestContext = new RequestContext(
             new RequestHeader(ApiKeys.DESCRIBE_CLUSTER, (short) requestVersion, "", 0),
             "",
@@ -80,9 +90,6 @@ public class AuthHelperTest {
 
     @Test
     public void testAuthorize() throws UnknownHostException {
-        Authorizer authorizer = mock(Authorizer.class);
-        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
-
         AclOperation operation = AclOperation.WRITE;
         ResourceType resourceType = ResourceType.TOPIC;
         String resourceName = "topic-1";
@@ -107,9 +114,6 @@ public class AuthHelperTest {
 
     @Test
     public void testFilterByAuthorized() throws UnknownHostException {
-        Authorizer authorizer = mock(Authorizer.class);
-        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
-
         AclOperation operation = AclOperation.WRITE;
         ResourceType resourceType = ResourceType.TOPIC;
         String resourceName1 = "topic-1";
@@ -159,8 +163,6 @@ public class AuthHelperTest {
 
     @Test
     public void testComputeDescribeClusterResponseV1WithUnknownEndpointType() throws UnknownHostException {
-        Authorizer authorizer = mock(Authorizer.class);
-        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
         AuthHelper authHelper = new AuthHelper(Optional.of(authorizerPlugin));
         Request request = newMockDescribeClusterRequest(
             new DescribeClusterRequestData().setEndpointType((byte) 123), 1);
@@ -176,8 +178,6 @@ public class AuthHelperTest {
 
     @Test
     public void testComputeDescribeClusterResponseV0WithUnknownEndpointType() throws UnknownHostException {
-        Authorizer authorizer = mock(Authorizer.class);
-        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
         AuthHelper authHelper = new AuthHelper(Optional.of(authorizerPlugin));
         Request request = newMockDescribeClusterRequest(
             new DescribeClusterRequestData().setEndpointType((byte) 123), 0);
@@ -193,8 +193,6 @@ public class AuthHelperTest {
 
     @Test
     public void testComputeDescribeClusterResponseV1WithUnexpectedEndpointType() throws UnknownHostException {
-        Authorizer authorizer = mock(Authorizer.class);
-        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
         AuthHelper authHelper = new AuthHelper(Optional.of(authorizerPlugin));
         Request request = newMockDescribeClusterRequest(
             new DescribeClusterRequestData().setEndpointType(EndpointType.BROKER.id()), 1);
@@ -204,15 +202,13 @@ public class AuthHelperTest {
             DescribeClusterBrokerCollection::new,
             () -> 1);
         assertEquals(new DescribeClusterResponseData()
-            .setErrorCode(Errors.MISMATCHED_ENDPOINT_TYPE.code())
-            .setErrorMessage("The request was sent to an endpoint of type CONTROLLER, but we wanted an endpoint of type BROKER"),
+                .setErrorCode(Errors.MISMATCHED_ENDPOINT_TYPE.code())
+                .setErrorMessage("The request was sent to an endpoint of type CONTROLLER, but we wanted an endpoint of type BROKER"),
             responseData);
     }
 
     @Test
     public void testComputeDescribeClusterResponseV0WithUnexpectedEndpointType() throws UnknownHostException {
-        Authorizer authorizer = mock(Authorizer.class);
-        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
         AuthHelper authHelper = new AuthHelper(Optional.of(authorizerPlugin));
         Request request = newMockDescribeClusterRequest(
             new DescribeClusterRequestData().setEndpointType(EndpointType.BROKER.id()), 0);
@@ -222,15 +218,13 @@ public class AuthHelperTest {
             DescribeClusterBrokerCollection::new,
             () -> 1);
         assertEquals(new DescribeClusterResponseData()
-            .setErrorCode(Errors.INVALID_REQUEST.code())
-            .setErrorMessage("The request was sent to an endpoint of type CONTROLLER, but we wanted an endpoint of type BROKER"),
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("The request was sent to an endpoint of type CONTROLLER, but we wanted an endpoint of type BROKER"),
             responseData);
     }
 
     @Test
     public void testComputeDescribeClusterResponseWhereControllerIsNotFound() throws UnknownHostException {
-        Authorizer authorizer = mock(Authorizer.class);
-        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
         AuthHelper authHelper = new AuthHelper(Optional.of(authorizerPlugin));
         Request request = newMockDescribeClusterRequest(
             new DescribeClusterRequestData().setEndpointType(EndpointType.CONTROLLER.id()), 1);
@@ -248,8 +242,6 @@ public class AuthHelperTest {
 
     @Test
     public void testComputeDescribeClusterResponseSuccess() throws UnknownHostException {
-        Authorizer authorizer = mock(Authorizer.class);
-        Plugin<Authorizer> authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
         AuthHelper authHelper = new AuthHelper(Optional.of(authorizerPlugin));
         Request request = newMockDescribeClusterRequest(
             new DescribeClusterRequestData().setEndpointType(EndpointType.CONTROLLER.id()), 1);
