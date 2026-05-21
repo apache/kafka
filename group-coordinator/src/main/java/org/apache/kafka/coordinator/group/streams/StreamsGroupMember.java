@@ -361,13 +361,6 @@ public record StreamsGroupMember(String memberId,
     }
 
     /**
-     * @return True if the member is in the Unrevoked state.
-     */
-    public boolean isUnrevokedState() {
-        return state == MemberState.UNREVOKED_TASKS;
-    }
-
-    /**
      * Creates a member description for the streams group describe response from this member.
      *
      * @param targetAssignment The target assignment of this member in the corresponding group.

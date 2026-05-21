@@ -485,16 +485,6 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Gets a dynamic member.
-     *
-     * @param memberId The Member ID.
-     * @return The member corresponding to the given member ID or null if it does not exist
-     */
-    public StreamsGroupMember dynamicMember(String memberId) {
-        return members.get(memberId);
-    }
-
-    /**
      * Adds or updates the member.
      *
      * @param newMember The new member state.
@@ -590,8 +580,16 @@ public class StreamsGroup implements Group {
     
     /**
      * Returns the target assignment of the member.
+     * <p>
+     * If {@code instanceId} is empty, the assignment is looked up by {@code memberId}.
+     * If {@code instanceId} is present, the assignment is looked up by the member ID
+     * associated with that static member instance ID.
      *
-     * @return The StreamsGroupMemberAssignment or an EMPTY one if it does not exist.
+     * @param memberId The member id.
+     * @param instanceId The instance id.                   
+     * 
+     * @return The StreamsGroupMemberAssignment for the resolved member ID, or {@link TasksTuple#EMPTY}
+     *         if no assignment exists or no static member exists for {@code instanceId}.
      */
     public TasksTuple targetAssignment(String memberId, Optional<String> instanceId) {
         if (instanceId.isEmpty()) {
