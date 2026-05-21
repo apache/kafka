@@ -62,7 +62,7 @@ public class PushTelemetryRequestTest {
         MetricsData metricsData = getMetricsData();
         PushTelemetryRequest req = getPushTelemetryRequest(metricsData, compressionType);
 
-        ByteBuffer receivedMetricsBuffer = req.metricsData();
+        ByteBuffer receivedMetricsBuffer = req.metricsData(1024 * 1024);
         assertNotNull(receivedMetricsBuffer);
         assertTrue(receivedMetricsBuffer.capacity() > 0);
 

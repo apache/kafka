@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.jmh.coordinator;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
-import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.GroupMetadataManager;
@@ -29,9 +26,6 @@ import org.apache.kafka.coordinator.group.OffsetMetadataManager;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.openjdk.jmh.annotations.Benchmark;
@@ -83,14 +77,6 @@ public class TransactionalOffsetFetchBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         LogContext logContext = new LogContext();
-        MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(MetadataImage.EMPTY)
-            .build();
-        delta.replay(new TopicRecord()
-            .setTopicId(Uuid.randomUuid())
-            .setName(TOPIC_NAME));
-        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
-
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
 
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
@@ -103,7 +89,6 @@ public class TransactionalOffsetFetchBenchmark {
             .withTime(TIME)
             .withGroupMetadataManager(groupMetadataManager)
             .withGroupCoordinatorConfig(mock(GroupCoordinatorConfig.class))
-            .withMetadataImage(new KRaftCoordinatorMetadataImage(image))
             .withGroupCoordinatorMetricsShard(mock(GroupCoordinatorMetricsShard.class))
             .build();
 

@@ -420,6 +420,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
 
+    private volatile boolean hasPendingReconciliation = false;
+
     private final MemberStateListener memberStateListener = new MemberStateListener() {
         @Override
         public void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId) {
@@ -429,6 +431,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         @Override
         public void onGroupAssignmentUpdated(Set<TopicPartition> partitions) {
             setGroupAssignmentSnapshot(partitions);
+        }
+
+        @Override
+        public void onMemberStateChange(MemberState memberState) {
+            setHasPendingReconciliation(memberState == MemberState.RECONCILING);
         }
     };
 
@@ -871,6 +878,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     void setGroupAssignmentSnapshot(final Set<TopicPartition> partitions) {
         groupAssignmentSnapshot.set(Collections.unmodifiableSet(partitions));
+    }
+
+    void setHasPendingReconciliation(final boolean hasPendingReconciliation) {
+        this.hasPendingReconciliation = hasPendingReconciliation;
     }
 
     @Override
@@ -2028,7 +2039,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // This is key because partitions may need revocation, so we need to wait for the reconciliation check
         // that triggers commits and marks partitions as pending revocation, before we can
         // safely collect records from the buffer.
-        if (inflightPoll != null && !inflightPoll.isReconciliationCheckComplete()) {
+        if (hasPendingReconciliation && inflightPoll != null && !inflightPoll.isReconciliationCheckComplete()) {
             // If the background hasn't had the time to check for pending reconciliation,
             // we need to wait for that check before moving on (instead of returning empty right away,
             // which will lead to blocking on buffer data)

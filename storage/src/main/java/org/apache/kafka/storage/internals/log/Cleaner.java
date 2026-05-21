@@ -196,9 +196,8 @@ public class Cleaner {
                 log.config().maxIndexSize,
                 cleanable.firstUncleanableOffset()
         );
-
         for (List<LogSegment> group : groupedSegments) {
-            cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, upperBoundOffset);
+            cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs);
         }
 
         // record buffer utilization
@@ -225,7 +224,6 @@ public class Cleaner {
      * @param transactionMetadata State of ongoing transactions which is carried between the cleaning
      *                            of the grouped segments
      * @param legacyDeleteHorizonMs The delete horizon used for tombstones whose version is less than 2
-     * @param upperBoundOffsetOfCleaningRound The upper bound offset of this round of cleaning
      */
     public void cleanSegments(UnifiedLog log,
                               List<LogSegment> segments,
@@ -233,10 +231,8 @@ public class Cleaner {
                               long currentTime,
                               CleanerStats stats,
                               CleanedTransactionMetadata transactionMetadata,
-                              long legacyDeleteHorizonMs,
-                              long upperBoundOffsetOfCleaningRound) throws IOException {
+                              long legacyDeleteHorizonMs) throws IOException {
         List<LogSegment> cleanedSegments = new ArrayList<>();
-
         // Create initial cleaned segment with the base offset of the first source segment
         LogSegment currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), segments.get(0).baseOffset());
         transactionMetadata.setCleanedIndex(Optional.of(currentCleaned.txnIndex()));
@@ -284,7 +280,7 @@ public class Cleaner {
                             log.config().maxMessageSize(),
                             transactionMetadata,
                             lastOffsetOfActiveProducers,
-                            upperBoundOffsetOfCleaningRound,
+                            log.highWatermark(),
                             stats,
                             currentTime
                     );
@@ -359,7 +355,8 @@ public class Cleaner {
      * @param maxLogMessageSize The maximum message size of the corresponding topic
      * @param transactionMetadata The state of ongoing transactions which is carried between the cleaning of the grouped segments
      * @param lastRecordsOfActiveProducers The active producers and its last data offset
-     * @param upperBoundOffsetOfCleaningRound Next offset of the last batch in the source segment
+     * @param highWatermark The high watermark of the log, used to retain the batch whose next offset equals
+     *                      the high watermark so that the last offset information is not lost after cleaning
      * @param stats Collector for cleaning statistics
      * @param currentTime The time at which the clean was initiated
      *
@@ -376,7 +373,7 @@ public class Cleaner {
                            int maxLogMessageSize,
                            CleanedTransactionMetadata transactionMetadata,
                            Map<Long, LastRecord> lastRecordsOfActiveProducers,
-                           long upperBoundOffsetOfCleaningRound,
+                           long highWatermark,
                            CleanerStats stats,
                            long currentTime) throws IOException {
         MemoryRecords.RecordFilter logCleanerFilter = new MemoryRecords.RecordFilter(currentTime, deleteRetentionMs) {
@@ -413,9 +410,9 @@ public class Cleaner {
                 BatchRetention batchRetention;
                 if (batch.hasProducerId() && isBatchLastRecordOfProducer)
                     batchRetention = BatchRetention.RETAIN_EMPTY;
-                else if (batch.nextOffset() == upperBoundOffsetOfCleaningRound) {
-                    // retain the last batch of the cleaning round, even if it's empty, so that last offset information
-                    // is not lost after cleaning.
+                else if (batch.nextOffset() == highWatermark) {
+                    // This is the last batch before the high watermark. Retain it even if empty, so that the last
+                    // offset information is not lost after cleaning.
                     batchRetention = BatchRetention.RETAIN_EMPTY;
                 } else if (discardBatchRecords)
                     batchRetention = BatchRetention.DELETE;

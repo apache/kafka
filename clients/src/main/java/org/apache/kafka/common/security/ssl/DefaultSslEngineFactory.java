@@ -460,7 +460,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
         private KeyStore createKeyStoreFromPem(String privateKeyPem, String certChainPem, char[] keyPassword) {
             try {
-                KeyStore ks = KeyStore.getInstance("PKCS12");
+                KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
                 ks.load(null, null);
                 Key key = privateKey(privateKeyPem, keyPassword);
                 Certificate[] certChain = certs(certChainPem);
@@ -473,7 +473,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
 
         private KeyStore createTrustStoreFromPem(String trustedCertsPem) {
             try {
-                KeyStore ts = KeyStore.getInstance("PKCS12");
+                KeyStore ts = KeyStore.getInstance(KeyStore.getDefaultType());
                 ts.load(null, null);
                 Certificate[] certs = certs(trustedCertsPem);
                 for (int i = 0; i < certs.length; i++) {
