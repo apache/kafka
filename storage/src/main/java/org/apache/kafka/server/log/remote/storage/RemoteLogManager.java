@@ -972,7 +972,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         private boolean eligibleUploadByTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
             try {
                 long segmentAgeMs = currentTimeMs - segment.largestTimestamp();
-                boolean eligibleUpload = segmentAgeMs >= copyLagMs;
+                boolean eligibleUpload = segmentAgeMs < 0 || segmentAgeMs >= copyLagMs;
                 if (logger.isTraceEnabled()) {
                     logger.trace("{} eligible for upload by time? {} (segment age {} ms, copy lag {} ms)",
                             segment, eligibleUpload, segmentAgeMs, copyLagMs);

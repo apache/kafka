@@ -735,6 +735,41 @@ public class RemoteLagCopyTest {
         assertEquals(expected, actual);
     }
 
+    @Test
+    public void testCandidateLogSegmentsUploadWhenLargestTimestampInFuture() throws IOException {
+        UnifiedLog log = mock(UnifiedLog.class);
+        LogSegment segment1 = mock(LogSegment.class);
+        LogSegment segment2 = mock(LogSegment.class);
+        LogSegment activeSegment = mock(LogSegment.class);
+
+        when(segment1.baseOffset()).thenReturn(5L);
+        when(segment2.baseOffset()).thenReturn(10L);
+        when(activeSegment.baseOffset()).thenReturn(15L);
+        when(segment1.size()).thenReturn(100);
+        when(segment2.size()).thenReturn(100);
+        when(activeSegment.size()).thenReturn(100);
+
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, 100L);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, -1L);
+        LogConfig logConfig = new LogConfig(logProps);
+        when(log.config()).thenReturn(logConfig);
+        when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
+
+        time.sleep(1000L);
+        // Simulate clock skew / bad timestamp: segment timestamp is in the future.
+        when(segment1.largestTimestamp()).thenReturn(time.milliseconds() + 100L);
+        when(segment2.largestTimestamp()).thenReturn(time.milliseconds() - 50L);
+        RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(
+                leaderTopicIdPartition, RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES);
+        List<RemoteLogManager.EnrichedLogSegment> expected = List.of(
+                new RemoteLogManager.EnrichedLogSegment(segment1, 10L)
+        );
+        List<RemoteLogManager.EnrichedLogSegment> actual = task.candidateLogSegments(log, 5L, 20L);
+        assertEquals(expected, actual);
+    }
+
     private void appendRLMConfig(Properties props) {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
