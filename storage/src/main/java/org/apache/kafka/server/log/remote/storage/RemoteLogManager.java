@@ -948,10 +948,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         private boolean isEligibleForUpload(LogConfig logConfig, LogSegment previousSeg, long currentTimeMs, long totalLogSize, long cumulativeSize) {
-            if (logConfig == null) {
-                return true;
-            }
-
             long copyLagMs = logConfig.remoteCopyLagMs();
             long copyLagBytes = logConfig.remoteCopyLagBytes();
             if (logger.isTraceEnabled()) {
@@ -966,19 +962,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             boolean limitedCopyLagMsCheck =  copyLagMs > 0;
             boolean limitedCopyLagSizeCheck = copyLagBytes > 0;
 
-            if (limitedCopyLagMsCheck) {
-                if (eligibleUploadByTime(previousSeg, currentTimeMs, copyLagMs)) {
-                    return true;
-                }
+            if (limitedCopyLagMsCheck && eligibleUploadByTime(previousSeg, currentTimeMs, copyLagMs)) {
+                return true;
             }
 
-            if (limitedCopyLagSizeCheck) {
-                if (eligibleUploadBySize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes)) {
-                    return true;
-                }
-            }
-
-            return false;
+            return limitedCopyLagSizeCheck && eligibleUploadBySize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes);
         }
 
         private boolean eligibleUploadByTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
