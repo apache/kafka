@@ -46,11 +46,11 @@ When the application instance starts running, the defined processor topology wil
 
 # Listeners and callbacks
 
-`KafkaStreams` provides several listeners and callbacks that let you observe the internal state and behavior of your application. All listeners must be set **before** calling `start()`. Attempting to set a listener after `start()` has been called will throw an `IllegalStateException`. Each listener can only be set once per `KafkaStreams` instance; setting a new listener replaces any previously set listener.
+`KafkaStreams` provides several listeners and callbacks that let you observe the internal state and behavior of your application. All listeners must be set **before** calling `start()`. Attempting to set a listener after `start()` has been called will throw an `IllegalStateException`. A setter may be called multiple times before `start()`. Only the most recent listener takes effect.
 
 ## State listener
 
-You can set a `KafkaStreams.StateListener` to be notified whenever the `KafkaStreams` instance transitions between states. The possible states are: `CREATED`, `REBALANCING`, `RUNNING`, `PENDING_SHUTDOWN`, `NOT_RUNNING`, `PENDING_ERROR`, and `ERROR`.
+You can set a `KafkaStreams.StateListener` to be notified whenever the `KafkaStreams` instance transitions between states. The possible states are: `CREATED`, `REBALANCING`, `RUNNING`, `PENDING_SHUTDOWN`, `NOT_RUNNING`, `PENDING_ERROR`, and `ERROR`. See the [`KafkaStreams.State`](/{version}/javadoc/org/apache/kafka/streams/KafkaStreams.State.html) javadocs for the meaning of each state and the allowed transitions.
 
     KafkaStreams streams = new KafkaStreams(topology, props);
 
@@ -154,7 +154,7 @@ Example:
         }
     });
 
-For more information about standby replicas, see [Standby Replicas](config-streams.html#num-standby-replicas).
+For more information about standby replicas, see [Standby Replicas](config-streams.md#num-standby-replicas).
 
 # Elastic scaling of your application
 
