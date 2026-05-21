@@ -17,14 +17,15 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Indicates that a topology description exceeds the size the streams group topology
- * description plugin is willing to store.
+ * Indicates that the streams group topology description plugin failed to process
+ * an UpdateStreamsGroupTopologyDescription request for a reason other than an
+ * invalid payload or a too-large description.
  */
-public class TopologyDescriptionTooLargeException extends ApiException {
+public class StreamsTopologyDescriptionUpdateFailedException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public TopologyDescriptionTooLargeException(String message) {
+    public StreamsTopologyDescriptionUpdateFailedException(String message) {
         super(message);
     }
 }

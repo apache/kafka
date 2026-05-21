@@ -94,7 +94,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
 
     /**
      * Sets whether {@link #setTopology} should fail specifically with
-     * {@link org.apache.kafka.common.errors.TopologyDescriptionTooLargeException}.
+     * {@link org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException}.
      * The broker treats this as a permanent failure and persists
      * {@code LastFailedTopologyEpoch}; integration tests use it to verify the
      * hot-loop ratchet.
@@ -154,7 +154,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
         setTopologyAttemptCount.incrementAndGet();
         if (failOnSetWithTooLarge) {
             return CompletableFuture.failedFuture(
-                new org.apache.kafka.common.errors.TopologyDescriptionTooLargeException("Simulated too-large"));
+                new org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException("Simulated too-large"));
         }
         if (failOnSet) {
             return CompletableFuture.failedFuture(new RuntimeException("Simulated plugin error"));

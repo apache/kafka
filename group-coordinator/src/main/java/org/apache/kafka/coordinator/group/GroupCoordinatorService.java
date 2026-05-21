@@ -1618,7 +1618,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         // Step 1: read which IDs in this partition are streams groups with a stored topology.
         // Step 2: for each such ID, call plugin.deleteTopology. Groups whose plugin call fails are
-        //         excluded from the tombstone write and reported as TOPOLOGY_DESCRIPTION_DELETE_FAILED.
+        //         excluded from the tombstone write and reported as STREAMS_TOPOLOGY_DESCRIPTION_DELETE_FAILED.
         // Step 3: issue the delete-groups write for the remaining group IDs and merge the results.
         return runtime.<Map<String, Integer>>scheduleReadOperation(
             "list-streams-stored-topology-epochs",
@@ -1643,7 +1643,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     if (pluginFailures.containsKey(groupId)) {
                         results.add(new DeleteGroupsResponseData.DeletableGroupResult()
                             .setGroupId(groupId)
-                            .setErrorCode(Errors.TOPOLOGY_DESCRIPTION_DELETE_FAILED.code()));
+                            .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_DELETE_FAILED.code()));
                     } else {
                         remaining.add(groupId);
                     }

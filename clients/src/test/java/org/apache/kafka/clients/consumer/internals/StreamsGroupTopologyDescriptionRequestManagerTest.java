@@ -188,8 +188,8 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
 
     @ParameterizedTest
     @EnumSource(value = Errors.class, names = {
-        "TOPOLOGY_DESCRIPTION_TOO_LARGE",
-        "TOPOLOGY_DESCRIPTION_UPDATE_FAILED",
+        "STREAMS_TOPOLOGY_DESCRIPTION_TOO_LARGE",
+        "STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED",
         "UNKNOWN_MEMBER_ID",
         "INVALID_GROUP_ID"
     })

@@ -43,11 +43,11 @@ public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, Aut
      * <ul>
      *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException} — payloads the
      *       plugin will not accept on semantic grounds; reported as {@code INVALID_REQUEST}.</li>
-     *   <li>{@link org.apache.kafka.common.errors.TopologyDescriptionTooLargeException} —
+     *   <li>{@link org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException} —
      *       descriptions larger than the plugin is willing to store; reported as
-     *       {@code TOPOLOGY_DESCRIPTION_TOO_LARGE}.</li>
+     *       {@code STREAMS_TOPOLOGY_DESCRIPTION_TOO_LARGE}.</li>
      *   <li>Any other exception — transient backend failure; reported as
-     *       {@code TOPOLOGY_DESCRIPTION_UPDATE_FAILED}.</li>
+     *       {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED}.</li>
      * </ul>
      *
      * The first two are treated as permanent at this topology epoch and no further push
@@ -60,7 +60,7 @@ public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, Aut
     /**
      * Remove any topology description stored for this group. Called when the group is
      * deleted or expires. A failure (future completed exceptionally) is reported to the
-     * caller of {@code DeleteGroups} as {@code TOPOLOGY_DESCRIPTION_DELETE_FAILED} on that
+     * caller of {@code DeleteGroups} as {@code STREAMS_TOPOLOGY_DESCRIPTION_DELETE_FAILED} on that
      * group's per-group result and the broker does not tombstone the group; a retry of
      * {@code DeleteGroups} re-invokes this method idempotently. The periodic-cleanup path
      * treats a failure identically — the group's tombstone is deferred to a future cycle.

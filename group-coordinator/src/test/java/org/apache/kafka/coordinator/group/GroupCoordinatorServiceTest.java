@@ -6296,7 +6296,7 @@ public class GroupCoordinatorServiceTest {
                 .setTopologyDescription(
                     new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of())))
             .get(5, TimeUnit.SECONDS);
-        assertEquals(Errors.TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), response.errorCode());
+        assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), response.errorCode());
 
         // Heartbeat right after the failure: gating says re-solicit (storedEpoch=-1, lastFailedEpoch=-1),
         // but the back-off (30 s) must suppress it.
@@ -6538,9 +6538,9 @@ public class GroupCoordinatorServiceTest {
 
     private static Stream<Arguments> setTopologyPluginFailures() {
         return Stream.of(
-            Arguments.of(new RuntimeException("Storage failure"), Errors.TOPOLOGY_DESCRIPTION_UPDATE_FAILED),
+            Arguments.of(new RuntimeException("Storage failure"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED),
             Arguments.of(new org.apache.kafka.common.errors.InvalidRequestException("bad payload"), Errors.INVALID_REQUEST),
-            Arguments.of(new org.apache.kafka.common.errors.TopologyDescriptionTooLargeException("too big"), Errors.TOPOLOGY_DESCRIPTION_TOO_LARGE)
+            Arguments.of(new org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException("too big"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_TOO_LARGE)
         );
     }
 
@@ -6667,7 +6667,7 @@ public class GroupCoordinatorServiceTest {
             .thenReturn(CompletableFuture.completedFuture(null));
         when(plugin.setTopology(eq("foo"), eq(4), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.failedFuture(
-                new org.apache.kafka.common.errors.TopologyDescriptionTooLargeException("too big")));
+                new org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException("too big")));
 
         UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
             requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
@@ -6676,7 +6676,7 @@ public class GroupCoordinatorServiceTest {
                 .setMemberId("member-1")
                 .setTopologyEpoch(4)
                 .setTopologyDescription(topoDesc)).get(5, TimeUnit.SECONDS);
-        assertEquals(Errors.TOPOLOGY_DESCRIPTION_TOO_LARGE.code(), response.errorCode());
+        assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_TOO_LARGE.code(), response.errorCode());
 
         // Permanent failure path writes LastFailedTopologyEpoch, NOT StoredTopologyEpoch.
         verify(runtime, times(1)).scheduleWriteOperation(
@@ -6867,7 +6867,7 @@ public class GroupCoordinatorServiceTest {
 
         Map<String, Short> codes = new HashMap<>();
         response.forEach(r -> codes.put(r.groupId(), r.errorCode()));
-        assertEquals(Errors.TOPOLOGY_DESCRIPTION_DELETE_FAILED.code(), codes.get("foo"));
+        assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_DELETE_FAILED.code(), codes.get("foo"));
         assertEquals(Errors.NONE.code(), codes.get("bar"));
 
         // Tombstone write was issued for bar only — never for foo.

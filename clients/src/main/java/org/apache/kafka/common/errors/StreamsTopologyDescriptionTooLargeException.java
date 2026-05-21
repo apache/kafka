@@ -17,15 +17,14 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Indicates that the streams group topology description plugin failed to delete
- * the description for a group during a DeleteGroups request. The group has not
- * been tombstoned; the caller may retry once the plugin recovers.
+ * Indicates that a topology description exceeds the size the streams group topology
+ * description plugin is willing to store.
  */
-public class TopologyDescriptionDeleteFailedException extends ApiException {
+public class StreamsTopologyDescriptionTooLargeException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public TopologyDescriptionDeleteFailedException(String message) {
+    public StreamsTopologyDescriptionTooLargeException(String message) {
         super(message);
     }
 }
