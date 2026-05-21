@@ -35,7 +35,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.api.TestKitDefaults;
-import org.apache.kafka.common.test.junit.RaftClusterInvocationContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.ThreadUtils;
@@ -76,6 +75,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
@@ -574,7 +574,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         controller.waitForReadyBrokers(brokers.size()).get();
 
         // make sure metadata cache in each broker server is up-to-date
-        RaftClusterInvocationContext.waitForCondition(() ->
+        waitForCondition(() ->
                 brokers.values().stream().map(BrokerServer::metadataCache)
                     .allMatch(cache -> brokers.values().stream().map(b -> b.config().brokerId()).allMatch(cache::hasAliveBroker)),
             "Failed to wait for publisher to publish the metadata update to each broker.");
@@ -770,8 +770,26 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
     }
 
+    private static void waitForCondition(Supplier<Boolean> testCondition,
+                                           String conditionDetails) throws InterruptedException {
+        long maxWaitMs = 15_000L;
+        long endTime = System.currentTimeMillis() + maxWaitMs;
+        Exception lastException = null;
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                if (testCondition.get()) return;
+            } catch (Exception e) {
+                lastException = e;
+            }
+            if (System.currentTimeMillis() < endTime) {
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+        }
+        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + conditionDetails, lastException);
+    }
+
     private void waitForAllThreads() throws InterruptedException {
-        RaftClusterInvocationContext.waitForCondition(() -> Thread.getAllStackTraces().keySet()
+        waitForCondition(() -> Thread.getAllStackTraces().keySet()
                     .stream().noneMatch(t -> threadFactory.getThreadIds().contains(t.getId())),
                 "Failed to wait for all threads to shut down.");
     }

@@ -52,7 +52,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -68,44 +67,12 @@ import java.util.stream.Stream;
  *     <li>ClusterInstance (includes methods to expose underlying SocketServer-s)</li>
  * </ul>
  */
-public class RaftClusterInvocationContext implements TestTemplateInvocationContext {
+class RaftClusterInvocationContext implements TestTemplateInvocationContext {
 
     private final String baseDisplayName;
     private final ClusterConfig clusterConfig;
     private final boolean isCombined;
 
-    /**
-     * Wait for condition to be met for at most 15 seconds and throw assertion failure otherwise.
-     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
-     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
-     * avoid transient failures due to slow or overloaded machines.
-     */
-    public static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
-                                        final String conditionDetails) throws InterruptedException {
-        waitForCondition(testCondition, 15_000L, conditionDetails);
-    }
-
-    /**
-     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
-     */
-    public static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
-                                        final long maxWaitMs,
-                                        final String conditionDetails) throws InterruptedException {
-        Exception lastException = null;
-        long endTime = System.currentTimeMillis() + maxWaitMs;
-        while (System.currentTimeMillis() < endTime) {
-            try {
-                if (testCondition.get()) return;
-            } catch (Exception e) {
-                lastException = e;
-            }
-
-            if (System.currentTimeMillis() < endTime) {
-                TimeUnit.MILLISECONDS.sleep(100);
-            }
-        }
-        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + conditionDetails, lastException);
-    }
 
     public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
         this.baseDisplayName = baseDisplayName;
