@@ -32,7 +32,6 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -91,7 +90,6 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients = createQuotaTestClients(topic1, leaderNode)
   }
 
-  @Flaky("KAFKA-8073")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testThrottledProducerConsumer(groupProtocol: String): Unit = {
@@ -198,6 +196,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
 object QuotaTestClients {
   val DefaultEntity: String = null
+  // Large enough to exceed the default producer byte-rate quota (8000 B/s) in a tight send loop.
+  val ProducePayloadSizeBytes: Int = 2048
 
   def metricValue(metric: Metric): Double = metric.metricValue().asInstanceOf[Double]
 }
@@ -219,13 +219,14 @@ abstract class QuotaTestClients(topic: String,
   def produceUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     var numProduced = 0
     var throttled = false
-    val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
+    val payload = new Array[Byte](QuotaTestClients.ProducePayloadSizeBytes)
     do {
-      val payload = numProduced.toString.getBytes
       val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload),
         new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
       do {
+        // Re-read the metric since it is registered lazily on the broker.
+        val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
         throttled = metric != null && metricValue(metric) > 0
       } while (!future.isDone && (!throttled || waitForRequestCompletion))
     } while (numProduced < maxRecords && !throttled)
@@ -261,11 +262,15 @@ abstract class QuotaTestClients(topic: String,
 
   private def verifyThrottleTimeRequestChannelMetric(apiKey: ApiKeys, metricNameSuffix: String,
                                                      clientId: String, expectThrottle: Boolean): Unit = {
-    val throttleTimeMs = brokerRequestMetricsThrottleTimeMs(apiKey, metricNameSuffix)
-    if (expectThrottle)
-      assertTrue(throttleTimeMs > 0, s"Client with id=$clientId should have been throttled, $throttleTimeMs")
-    else
+    if (expectThrottle) {
+      TestUtils.waitUntilTrue(
+        () => brokerRequestMetricsThrottleTimeMs(apiKey, metricNameSuffix) > 0,
+        s"Client with id=$clientId should have been throttled in RequestChannel metrics"
+      )
+    } else {
+      val throttleTimeMs = brokerRequestMetricsThrottleTimeMs(apiKey, metricNameSuffix)
       assertEquals(0.0, throttleTimeMs, 0.0, s"Client with id=$clientId should not have been throttled")
+    }
   }
 
   def verifyProduceThrottle(expectThrottle: Boolean, verifyClientMetric: Boolean = true,
