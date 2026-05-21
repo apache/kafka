@@ -2467,6 +2467,7 @@ project(':storage') {
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':storage:storage-api'))
+    testImplementation project(':metadata')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
@@ -2625,6 +2626,12 @@ project(':tools') {
 
   configurations {
     releaseOnly
+    // ApacheDS 2.0.0-M24 pulls in the stale bcprov-jdk15on:1.56, which ships the same
+    // RosstandartObjectIdentifiers class as the modern bcprov-jdk18on we already depend on
+    // but is missing fields referenced by bcpkix-jdk18on:1.84. When IntelliJ's test runner
+    // orders the old JAR first, BC provider registration fails with NoSuchFieldError. Drop it.
+    testCompileClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
+    testRuntimeClasspath.exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
   }
 
   dependencies {
