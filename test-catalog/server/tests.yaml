@@ -171,11 +171,48 @@ org.apache.kafka.server.DefaultApiVersionManagerTest:
 - testControllerApiIntersection
 - testDisabledApis
 - testEnvelopeDisabledForKRaftBroker
+org.apache.kafka.server.DefaultAutoTopicCreationManagerTest:
+- testBackoffAndInflightInteraction
+- testCreateNonInternalTopic
+- testCreateOffsetTopic
+- testCreateShareStateTopic
+- testCreateStreamsInternalTopics
+- testCreateStreamsInternalTopicsPassesRequestContext
+- testCreateStreamsInternalTopicsWithEmptyTopics
+- testCreateTxnTopic
+- testErrorCacheExpirationBasedEviction
+- testErrorCacheTTL
+- testGetTopicCreationErrorsWithMultipleTopics
+- testInflightTopicsAreNotRetriedConcurrently
+- testTopicCreationErrorCaching
+- testTopicCreationWithMetadataContext
+- testTopicsInBackoffAreNotRetried
+- testTopicsOutOfBackoffCanBeRetried
 org.apache.kafka.server.EligibleLeaderReplicasIntegrationTest:
 - testElrMemberCanBeElected
 - testElrMemberShouldBeKickOutWhenUncleanShutdown
 - testHighWatermarkShouldNotAdvanceIfUnderMinIsr
 - testLastKnownLeaderShouldBeElectedIfEmptyElr
+org.apache.kafka.server.ExpiringErrorCacheTest:
+- testCapacityEnforcement
+- testCapacityWithDifferentTTLs
+- testClearOperation
+- testConcurrentPutAndGet
+- testConcurrentPutOperations
+- testConcurrentUpdates
+- testEmptyCache
+- testEvictionOrder
+- testExpiredEntriesCleanedOnPut
+- testExpiredEntryNotReturned
+- testGetMultipleTopics
+- testGetNonExistentTopic
+- testMixedExpiredAndValidEntries
+- testPutAndGet
+- testSingleEntryCache
+- testStaleEntriesInQueueHandledCorrectly
+- testUpdateDoesNotLeaveStaleEntries
+- testUpdateExistingEntry
+- testZeroTTL
 org.apache.kafka.server.FetchSessionTest:
 - testCachedLeaderEpoch
 - testCachedPartitionEqualsAndHashCode

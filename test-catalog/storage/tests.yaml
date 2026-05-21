@@ -862,7 +862,8 @@ org.apache.kafka.storage.internals.utils.ThrottlerTest:
 - testThrottleDesiredRate
 - testUpdateThrottleDesiredRate
 org.apache.kafka.tiered.storage.integration.AlterLogDirTest:
-- executeTieredStorageTest
+- testAlterLogDirWithClassicGroupProtocol
+- testAlterLogDirWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.DeleteSegmentsByRetentionSizeTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.DeleteSegmentsByRetentionTimeTest:
