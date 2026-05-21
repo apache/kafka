@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 public final class AdminUtils {
@@ -77,8 +78,26 @@ public final class AdminUtils {
             }
         };
 
-        TestUtils.waitForCondition(condition, timeoutMs, "Timing out after %d ms since a leader was not elected for partition %s-%d".formatted(timeoutMs, topic, partitionNumber));
+        waitForCondition(condition, timeoutMs, "Timing out after %d ms since a leader was not elected for partition %s-%d".formatted(timeoutMs, topic, partitionNumber));
 
         return condition.leader;
+    }
+
+    private static void waitForCondition(Supplier<Boolean> testCondition,
+                                         long maxWaitMs,
+                                         String conditionDetails) throws InterruptedException {
+        Exception lastException = null;
+        long endTime = System.currentTimeMillis() + maxWaitMs;
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                if (testCondition.get()) return;
+            } catch (Exception e) {
+                lastException = e;
+            }
+            if (System.currentTimeMillis() < endTime) {
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+        }
+        throw new AssertionError("Condition not met after " + maxWaitMs + " ms: " + conditionDetails, lastException);
     }
 }
