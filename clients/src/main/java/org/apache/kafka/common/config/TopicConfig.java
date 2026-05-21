@@ -53,7 +53,7 @@ public class TopicConfig {
         "we would fsync after every message; if it were 5 we would fsync after every five messages. " +
         "In general we recommend you not set this and use replication for durability and allow the " +
         "operating system's background flush capabilities as it is more efficient. This setting can " +
-        "be overridden on a per-topic basis (see <a href=\"#topicconfigs\">the per-topic configuration section</a>).";
+        "be overridden on a per-topic basis (see <a href=\"https://kafka.apache.org/documentation/#topicconfigs\">the per-topic configuration section</a>).";
 
     public static final String FLUSH_MS_CONFIG = "flush.ms";
     public static final String FLUSH_MS_DOC = "This setting allows specifying a time interval at which we will " +
@@ -124,7 +124,7 @@ public class TopicConfig {
 
     public static final String DELETE_RETENTION_MS_CONFIG = "delete.retention.ms";
     public static final String DELETE_RETENTION_MS_DOC = "The amount of time to retain delete tombstone markers " +
-        "for <a href=\"#compaction\">log compacted</a> topics. This setting also gives a bound " +
+        "for <a href=\"https://kafka.apache.org/documentation/#compaction\">log compacted</a> topics. This setting also gives a bound " +
         "on the time in which a consumer must complete a read if they begin from offset 0 " +
         "to ensure that they get a valid snapshot of the final stage (otherwise delete " +
         "tombstones may be collected before they complete their scan).";
@@ -139,7 +139,7 @@ public class TopicConfig {
 
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +
-        "the log compactor will attempt to clean the log (assuming <a href=\"#compaction\">log " +
+        "the log compactor will attempt to clean the log (assuming <a href=\"https://kafka.apache.org/documentation/#compaction\">log " +
         "compaction</a> is enabled). By default we will avoid cleaning a log where more than " +
         "50% of the log has been compacted. This ratio bounds the maximum space wasted in " +
         "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
@@ -156,7 +156,7 @@ public class TopicConfig {
     public static final String CLEANUP_POLICY_DOC = "This config designates the retention policy to " +
         "use on log segments. The \"delete\" policy (which is the default) will discard old segments " +
         "when their retention time or size limit has been reached. The \"compact\" policy will enable " +
-        "<a href=\"#compaction\">log compaction</a>, which retains the latest value for each key. " +
+        "<a href=\"https://kafka.apache.org/documentation/#compaction\">log compaction</a>, which retains the latest value for each key. " +
         "It is also possible to specify both policies in a comma-separated list (e.g. \"delete,compact\"). " +
         "In this case, old segments will be discarded per the retention time and size configuration, " +
         "while retained segments will be compacted. " +
@@ -185,7 +185,7 @@ public class TopicConfig {
         "A typical scenario would be to create a topic with a replication factor of 3, " +
         "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
         "This ensures that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers." +
-        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
+        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"https://kafka.apache.org/documentation/#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +

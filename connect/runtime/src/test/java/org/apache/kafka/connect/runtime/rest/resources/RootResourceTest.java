@@ -17,8 +17,8 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;

@@ -162,7 +162,7 @@ public class ClientMetricsManager implements AutoCloseable {
         long now = time.milliseconds();
         Uuid clientInstanceId = Optional.ofNullable(request.data().clientInstanceId())
             .filter(id -> !id.equals(Uuid.ZERO_UUID))
-            .orElse(generateNewClientId());
+            .orElseGet(this::generateNewClientId);
 
         /*
          Get the client instance from the cache or create a new one. If subscription has changed
@@ -214,7 +214,7 @@ public class ClientMetricsManager implements AutoCloseable {
         if (metrics != null && metrics.limit() > 0) {
             try {
                 long exportTimeStartMs = time.hiResClockMs();
-                clientTelemetryExporterPlugin.exportMetrics(requestContext, request, clientInstance.pushIntervalMs());
+                clientTelemetryExporterPlugin.exportMetrics(requestContext, request, clientInstance.pushIntervalMs(), clientTelemetryMaxBytes);
                 clientMetricsStats.recordPluginExport(clientInstanceId, time.hiResClockMs() - exportTimeStartMs);
             } catch (Throwable exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);

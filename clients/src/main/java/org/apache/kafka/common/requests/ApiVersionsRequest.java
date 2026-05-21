@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollect
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 
 import java.util.regex.Pattern;
 

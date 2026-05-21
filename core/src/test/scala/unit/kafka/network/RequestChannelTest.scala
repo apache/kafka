@@ -18,9 +18,7 @@
 package kafka.network
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import kafka.network
 import kafka.server.EnvelopeUtils
-import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, SslConfigs, TopicConfig}
@@ -29,14 +27,14 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.message.{CreateTopicsRequestData, CreateTopicsResponseData, IncrementalAlterConfigsRequestData}
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AlterConfigsRequest._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
-import org.apache.kafka.common.utils.{SecurityUtils, Utils}
-import org.apache.kafka.network.RequestConvertToJson
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.SecurityUtils
+import org.apache.kafka.network.{Request, RequestConvertToJson}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
-import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
@@ -47,10 +45,10 @@ import java.io.IOException
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicReference
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
 
 class RequestChannelTest {
   private val requestChannelMetrics: RequestChannelMetrics = mock(classOf[RequestChannelMetrics])
@@ -80,7 +78,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = alterConfigsReq.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigsReq.header, alterConfigsReq.requestLog.toJava, alterConfigsReq.isForwarded).toString
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(alterConfigsReq.header, alterConfigsReq.requestLog, alterConfigsReq.isForwarded).toString
       assertFalse(alterConfigsDesc.contains(sensitiveValue), s"Sensitive config logged $alterConfigsDesc")
     }
 
@@ -154,7 +152,7 @@ class RequestChannelTest {
       val loggableAlterConfigs = req.loggableRequest.asInstanceOf[IncrementalAlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.data.resources.find(resource.`type`.id, resource.name).configs
       assertEquals(expectedValues, toMap(loggedConfig))
-      val alterConfigsDesc = RequestConvertToJson.requestDesc(req.header, req.requestLog.toJava, req.isForwarded).toString
+      val alterConfigsDesc = RequestConvertToJson.requestDesc(req.header, req.requestLog, req.isForwarded).toString
       assertFalse(alterConfigsDesc.contains(sensitiveValue), s"Sensitive config logged $alterConfigsDesc")
     }
 
@@ -199,7 +197,7 @@ class RequestChannelTest {
   @Test
   def testNonAlterRequestsNotTransformed(): Unit = {
     val metadataRequest = request(new MetadataRequest.Builder(util.List.of("topic"), true).build())
-    assertSame(metadataRequest.body[MetadataRequest], metadataRequest.loggableRequest)
+    assertSame(metadataRequest.body(classOf[MetadataRequest]), metadataRequest.loggableRequest)
   }
 
   @Test
@@ -257,16 +255,16 @@ class RequestChannelTest {
     )
     new CreateTopicsResponse(responseData)
   }
-
-  private def buildUnwrappedEnvelopeRequest(request: AbstractRequest): RequestChannel.Request = {
-    val wrappedRequest = TestUtils.buildEnvelopeRequest(
+  
+  private def buildUnwrappedEnvelopeRequest(request: AbstractRequest): Request = {
+    val wrappedRequest = buildEnvelopeRequest(
       request,
       principalSerde,
       requestChannelMetrics,
       System.nanoTime()
     )
 
-    val unwrappedRequest = new AtomicReference[RequestChannel.Request]()
+    val unwrappedRequest = new AtomicReference[Request]()
 
     EnvelopeUtils.handleEnvelopeRequest(
       wrappedRequest,
@@ -275,6 +273,46 @@ class RequestChannelTest {
     )
 
     unwrappedRequest.get()
+  }
+
+  def buildEnvelopeRequest(
+    request: AbstractRequest,
+    principalSerde: KafkaPrincipalSerde,
+    requestChannelMetrics: RequestChannelMetrics,
+    startTimeNanos: Long,
+    dequeueTimeNanos: Long = -1,
+    fromPrivilegedListener: Boolean = true
+  ): Request = {
+    val clientId = "id"
+    val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+
+    val requestHeader = new RequestHeader(request.apiKey, request.version, clientId, 0)
+    val requestBuffer = request.serializeWithHeader(requestHeader)
+
+    val envelopeHeader = new RequestHeader(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion(), clientId, 0)
+    val envelopeBuffer = new EnvelopeRequest.Builder(
+      requestBuffer,
+      principalSerde.serialize(KafkaPrincipal.ANONYMOUS),
+      InetAddress.getLocalHost.getAddress
+    ).build().serializeWithHeader(envelopeHeader)
+
+    RequestHeader.parse(envelopeBuffer)
+
+    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost, Optional.empty(),
+      KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
+      fromPrivilegedListener, Optional.of(principalSerde))
+
+    val envelopRequest = new Request(
+      1,
+      envelopeContext,
+      startTimeNanos,
+      MemoryPool.NONE,
+      envelopeBuffer,
+      requestChannelMetrics,
+      Optional.empty
+    )
+    envelopRequest.requestDequeueTimeNanos(dequeueTimeNanos)
+    envelopRequest
   }
 
   private def isValidJson(str: String): Boolean = {
@@ -287,16 +325,10 @@ class RequestChannelTest {
     }
   }
 
-  def request(req: AbstractRequest): RequestChannel.Request = {
+  def request(req: AbstractRequest): Request = {
     val buffer = req.serializeWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1))
     val requestContext = newRequestContext(buffer)
-    new network.RequestChannel.Request(processor = 1,
-      requestContext,
-      startTimeNanos = 0,
-      mock(classOf[MemoryPool]),
-      buffer,
-      mock(classOf[RequestChannelMetrics])
-    )
+    new Request(1, requestContext, 0, mock(classOf[MemoryPool]), buffer, mock(classOf[RequestChannelMetrics]))
   }
 
   private def newRequestContext(buffer: ByteBuffer): RequestContext = {
@@ -320,14 +352,14 @@ class RequestChannelTest {
   }
 
   private def buildEnvelopeResponse(
-    unwrapped: RequestChannel.Request,
+    unwrapped: Request,
     response: AbstractResponse
   ): EnvelopeResponse = {
-    assertTrue(unwrapped.envelope.isDefined)
+    assertTrue(unwrapped.envelope.isPresent)
     val envelope = unwrapped.envelope.get
 
     val send = unwrapped.buildResponseSend(response)
-    val sendBytes = test.TestUtils.toBuffer(send)
+    val sendBytes = ByteBufferChannel.toBuffer(send)
 
     // We need to read the size field before `parseResponse` below
     val size = sendBytes.getInt

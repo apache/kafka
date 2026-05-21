@@ -207,11 +207,6 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setMetadataLogDirectory(Optional<String> metadataLogDirectory) {
-        this.metadataLogDirectory = metadataLogDirectory;
-        return this;
-    }
-
     public Formatter setInitialControllers(DynamicVoters initialControllers) {
         this.initialControllers = Optional.of(initialControllers);
         return this;
@@ -511,7 +506,7 @@ public class Formatter {
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
             setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(MetadataRecordSerde.INSTANCE)) {
             writer.freeze();
         }
     }

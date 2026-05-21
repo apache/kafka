@@ -38,8 +38,8 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -911,7 +911,16 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                         .setCurrentLeaderEpoch(currentLeaderEpoch));
             }
         }
-        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap);
+        Set<TopicPartition> partitionsSkippedInRegroup = new HashSet<>();
+        Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> result =
+                offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap, partitionsSkippedInRegroup);
+        if (!partitionsSkippedInRegroup.isEmpty()) {
+            metadata.requestUpdate(false);
+            listOffsetsRequestState.ifPresent(state ->
+                    partitionsSkippedInRegroup.forEach(tp ->
+                            state.remainingToSearch.put(tp, timestampsToSearch.get(tp))));
+        }
+        return result;
     }
 
     // Visible for testing

@@ -72,15 +72,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import scala.jdk.javaapi.CollectionConverters;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -791,7 +788,7 @@ public class ConfigCommandTest {
         addedConfigs.put("delete.retention.ms", "1000000");
         addedConfigs.put("min.insync.replicas", "2");
         if (file) {
-            File f = kafka.utils.TestUtils.tempPropertiesFile(CollectionConverters.asScala(addedConfigs));
+            File f = ToolsTestUtils.tempPropertiesFile(addedConfigs);
             filePath = f.getPath();
         }
 
@@ -805,13 +802,6 @@ public class ConfigCommandTest {
             "--delete-config", "unclean.leader.election.enable"));
         AtomicBoolean alteredConfigs = new AtomicBoolean();
 
-        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
-        List<ConfigEntry> configEntries = List.of(newConfigEntry("min.insync.replicas", "1"), newConfigEntry("unclean.leader.election.enable", "1"));
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Map.of(resource, new Config(configEntries)));
-        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
-
         KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
         alterFuture.complete(null);
         AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
@@ -819,16 +809,6 @@ public class ConfigCommandTest {
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
-            @Override
-            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
-                assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
-                assertEquals(1, resources.size());
-                ConfigResource res = resources.iterator().next();
-                assertEquals(ConfigResource.Type.TOPIC, res.type());
-                assertEquals(resourceName, res.name());
-                return describeResult;
-            }
-
             @Override
             public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
                 assertEquals(1, configs.size());
@@ -858,11 +838,15 @@ public class ConfigCommandTest {
         };
         ConfigCommand.alterConfig(mockAdminClient, alterOpts);
         assertTrue(alteredConfigs.get());
-        verify(describeResult).all();
+        verify(alterResult).all();
     }
 
     public ConfigEntry newConfigEntry(String name, String value) {
         return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of());
+    }
+
+    private ConfigEntry newBrokerLoggerConfigEntry(String name, String value) {
+        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, false, false, List.of());
     }
 
     @Test
@@ -875,10 +859,10 @@ public class ConfigCommandTest {
             "--all"));
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Map.of(resource, new Config(List.of())));
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(new Config(List.of()));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
+        when(describeResult.values()).thenReturn(Map.of(resource, future));
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
@@ -890,16 +874,16 @@ public class ConfigCommandTest {
             }
         };
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
-        verify(describeResult).all();
+        verify(describeResult).values();
     }
 
     @Test
     public void shouldAddBrokerLoggerConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
-            new ConfigEntry("kafka.log.LogCleaner", "INFO"),
-            new ConfigEntry("kafka.server.ReplicaManager", "INFO"),
-            new ConfigEntry("kafka.server.KafkaApi", "INFO")
+            newBrokerLoggerConfigEntry("kafka.log.LogCleaner", "INFO"),
+            newBrokerLoggerConfigEntry("kafka.server.ReplicaManager", "INFO"),
+            newBrokerLoggerConfigEntry("kafka.server.KafkaApi", "INFO")
         ));
     }
 
@@ -963,24 +947,32 @@ public class ConfigCommandTest {
         Node node = new Node(1, "localhost", 9092);
         // verifyAlterBrokerLoggerConfig tries to alter kafka.log.LogCleaner, kafka.server.ReplicaManager and kafka.server.KafkaApi
         // yet, we make it so DescribeConfigs returns only one logger, implying that kafka.server.ReplicaManager and kafka.log.LogCleaner are invalid
-        assertThrows(InvalidConfigurationException.class, () -> verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
-            new ConfigEntry("kafka.server.KafkaApi", "INFO")
-        )));
+        InvalidConfigurationException exception = assertThrows(
+                InvalidConfigurationException.class,
+                () -> verifyAlterBrokerLoggerConfig(node, "1", "1", List.of(
+                        newBrokerLoggerConfigEntry("kafka.server.KafkaApi", "INFO")
+                ))
+        );
+        assertEquals(
+                "Invalid broker logger(s): kafka.server.ReplicaManager,kafka.log.LogCleaner",
+                exception.getMessage()
+        );
+
     }
 
     @Test
     public void shouldAddDefaultBrokerDynamicConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterBrokerConfig(node, "", List.of("--entity-default"));
+        verifyAlterBrokerConfig(node, List.of("--entity-default"));
     }
 
     @Test
     public void shouldAddBrokerDynamicConfig() throws Exception {
         Node node = new Node(1, "localhost", 9092);
-        verifyAlterBrokerConfig(node, "1", List.of("--entity-name", "1"));
+        verifyAlterBrokerConfig(node, List.of("--entity-name", "1"));
     }
 
-    public void verifyAlterBrokerConfig(Node node, String resourceName, List<String> resourceOpts) throws Exception {
+    public void verifyAlterBrokerConfig(Node node, List<String> resourceOpts) throws Exception {
         String[] optsList = toArray(List.of("--bootstrap-server", "localhost:9092",
             "--entity-type", "brokers",
             "--alter",
@@ -989,29 +981,12 @@ public class ConfigCommandTest {
         Map<String, String> brokerConfigs = new HashMap<>();
         brokerConfigs.put("num.io.threads", "5");
 
-        ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, resourceName);
-        List<ConfigEntry> configEntries = List.of(new ConfigEntry("num.io.threads", "5"));
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Map.of(resource, new Config(configEntries)));
-        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
-
         KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
         alterFuture.complete(null);
         AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
         when(alterResult.all()).thenReturn(alterFuture);
 
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
-            @Override
-            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
-                assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
-                assertEquals(1, resources.size());
-                ConfigResource res = resources.iterator().next();
-                assertEquals(ConfigResource.Type.BROKER, res.type());
-                assertEquals(resourceName, res.name());
-                return describeResult;
-            }
-
             @Override
             public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
                 assertEquals(1, configs.size());
@@ -1029,7 +1004,7 @@ public class ConfigCommandTest {
         expected.put("num.io.threads", "5");
         expected.put("leader.replication.throttled.rate", "10");
         assertEquals(expected, brokerConfigs);
-        verify(describeResult).all();
+        verify(alterResult).all();
     }
 
     @Test
@@ -1041,30 +1016,29 @@ public class ConfigCommandTest {
         String brokerDefaultEntityName = "";
         ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.BROKER, "1");
         ConfigResource resourceDefault = new ConfigResource(ConfigResource.Type.BROKER, brokerDefaultEntityName);
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
         Config emptyConfig = new Config(List.of());
-        Map<ConfigResource, Config> resultMap = new HashMap<>();
-        resultMap.put(resourceCustom, emptyConfig);
-        resultMap.put(resourceDefault, emptyConfig);
-        future.complete(resultMap);
+        KafkaFutureImpl<Config> customFuture = new KafkaFutureImpl<>();
+        customFuture.complete(emptyConfig);
+        KafkaFutureImpl<Config> defaultFuture = new KafkaFutureImpl<>();
+        defaultFuture.complete(emptyConfig);
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
         // make sure it will be called 2 times: (1) for broker "1" (2) for default broker ""
-        when(describeResult.all()).thenReturn(future);
+        when(describeResult.values()).thenReturn(Map.of(
+            resourceCustom, customFuture,
+            resourceDefault, defaultFuture
+        ));
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
             public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
                 assertTrue(options.includeSynonyms(), "Synonyms not requested");
-                ConfigResource resource = resources.iterator().next();
-                assertEquals(ConfigResource.Type.BROKER, resource.type());
-                assertTrue(Objects.equals(resourceCustom.name(), resource.name()) || Objects.equals(resourceDefault.name(), resource.name()));
-                assertEquals(1, resources.size());
+                assertEquals(Set.of(resourceCustom, resourceDefault), new HashSet<>(resources));
                 return describeResult;
             }
         };
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
-        verify(describeResult, times(2)).all();
+        verify(describeResult).values();
     }
 
     private void verifyAlterBrokerLoggerConfig(Node node, String resourceName, String entityName,
@@ -1158,7 +1132,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldNotUpdateConfigIfNonExistingConfigIsDeleted() {
+    public void shouldAllowDeletingNonExistingConfig() throws Exception {
         String resourceName = "my-topic";
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", resourceName,
@@ -1166,27 +1140,21 @@ public class ConfigCommandTest {
             "--alter",
             "--delete-config", "missing_config1, missing_config2"));
 
-        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
-        List<ConfigEntry> configEntries = List.of();
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Map.of(resource, new Config(configEntries)));
-        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.complete(null);
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
-            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
-                assertEquals(1, resources.size());
-                ConfigResource res = resources.iterator().next();
-                assertEquals(ConfigResource.Type.TOPIC, res.type());
-                assertEquals(resourceName, res.name());
-                return describeResult;
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+                return alterResult;
             }
         };
 
-        assertThrows(InvalidConfigurationException.class, () -> ConfigCommand.alterConfig(mockAdminClient, createOpts));
-        verify(describeResult).all();
+        ConfigCommand.alterConfig(mockAdminClient, createOpts);
+        verify(alterResult).all();
     }
 
     @Test
@@ -1207,31 +1175,12 @@ public class ConfigCommandTest {
                 "match=[client_software_name=kafka.python,client_software_version=1\\.2\\..*]"), resourceOpts);
         ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray(optsList));
 
-        ConfigResource resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resourceName);
-        List<ConfigEntry> configEntries = List.of(new ConfigEntry("interval.ms", "1000",
-            ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG, false, false, List.of(),
-            ConfigEntry.ConfigType.UNKNOWN, null));
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Map.of(resource, new Config(configEntries)));
-        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
-
         KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
         alterFuture.complete(null);
         AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
         when(alterResult.all()).thenReturn(alterFuture);
 
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
-            @Override
-            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
-                assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
-                assertEquals(1, resources.size());
-                ConfigResource res = resources.iterator().next();
-                assertEquals(ConfigResource.Type.CLIENT_METRICS, res.type());
-                assertEquals(resourceName, res.name());
-                return describeResult;
-            }
-
             @Override
             public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
                 assertEquals(1, configs.size());
@@ -1255,7 +1204,6 @@ public class ConfigCommandTest {
             }
         };
         ConfigCommand.alterConfig(mockAdminClient, alterOpts);
-        verify(describeResult).all();
         verify(alterResult).all();
     }
 
@@ -1267,9 +1215,10 @@ public class ConfigCommandTest {
 
         ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "1");
         ConfigEntry configEntry = new ConfigEntry("metrics", "*");
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(new Config(List.of(configEntry)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
+        when(describeResult.values()).thenReturn(Map.of(resourceCustom, future));
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
@@ -1280,14 +1229,13 @@ public class ConfigCommandTest {
                 ConfigResource resource = resources.iterator().next();
                 assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.type());
                 assertEquals(resourceCustom.name(), resource.name());
-                future.complete(Map.of(resourceCustom, new Config(List.of(configEntry))));
                 return describeResult;
             }
         };
         mockAdminClient.incrementalAlterConfigs(Map.of(resourceCustom,
             List.of(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
-        verify(describeResult).all();
+        verify(describeResult).values();
     }
 
     @Test
@@ -1317,31 +1265,12 @@ public class ConfigCommandTest {
             "--add-config", "consumer.heartbeat.interval.ms=6000"), resourceOpts);
         ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray(optsList));
 
-        ConfigResource resource = new ConfigResource(ConfigResource.Type.GROUP, resourceName);
-        List<ConfigEntry> configEntries = List.of(new ConfigEntry("consumer.session.timeout.ms", "45000",
-            ConfigEntry.ConfigSource.DYNAMIC_GROUP_CONFIG, false, false, List.of(),
-            ConfigEntry.ConfigType.UNKNOWN, null));
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
-        future.complete(Map.of(resource, new Config(configEntries)));
-        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
-
         KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
         alterFuture.complete(null);
         AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
         when(alterResult.all()).thenReturn(alterFuture);
 
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
-            @Override
-            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
-                assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
-                assertEquals(1, resources.size());
-                ConfigResource res = resources.iterator().next();
-                assertEquals(ConfigResource.Type.GROUP, res.type());
-                assertEquals(resourceName, res.name());
-                return describeResult;
-            }
-
             @Override
             public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
                 assertEquals(1, configs.size());
@@ -1364,7 +1293,6 @@ public class ConfigCommandTest {
             }
         };
         ConfigCommand.alterConfig(mockAdminClient, alterOpts);
-        verify(describeResult).all();
         verify(alterResult).all();
     }
 
@@ -1380,9 +1308,10 @@ public class ConfigCommandTest {
     private void verifyDescribeGroupConfig(ConfigCommand.ConfigCommandOptions describeOpts, String resourceName) throws Exception {
         ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.GROUP, resourceName);
         ConfigEntry configEntry = new ConfigEntry("consumer.heartbeat.interval.ms", "6000");
-        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(new Config(List.of(configEntry)));
         DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
-        when(describeResult.all()).thenReturn(future);
+        when(describeResult.values()).thenReturn(Map.of(resourceCustom, future));
 
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
@@ -1393,14 +1322,13 @@ public class ConfigCommandTest {
                 ConfigResource resource = resources.iterator().next();
                 assertEquals(ConfigResource.Type.GROUP, resource.type());
                 assertEquals(resourceCustom.name(), resource.name());
-                future.complete(Map.of(resourceCustom, new Config(List.of(configEntry))));
                 return describeResult;
             }
         };
         mockAdminClient.incrementalAlterConfigs(Map.of(resourceCustom,
             List.of(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions());
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
-        verify(describeResult).all();
+        verify(describeResult).values();
     }
 
     @Test
@@ -1518,7 +1446,6 @@ public class ConfigCommandTest {
             .forEach(e -> res.put(e.getKey(), e.getValue()));
         return res;
     }
-
 
     static class DummyAdminClient extends MockAdminClient {
         public DummyAdminClient(Node node) {

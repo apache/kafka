@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.common.utils.BytesTest;
-import org.apache.kafka.common.utils.internals.ByteUtilsTest;
 import org.apache.kafka.streams.kstream.internals.KTableKTableForeignKeyJoinScenarioTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySchemaTest;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ResponseJoinProcessorSupplierTest;
@@ -38,8 +36,6 @@ import org.junit.platform.suite.api.Suite;
  */
 @Suite
 @SelectClasses({
-    BytesTest.class,
-    ByteUtilsTest.class,
     KTableKTableForeignKeyInnerJoinMultiIntegrationTest.class,
     KTableKTableForeignKeyJoinIntegrationTest.class,
     KTableKTableForeignKeyJoinMaterializationIntegrationTest.class,
