@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -350,14 +350,14 @@ public class StreamsRebalanceData {
 
     private final AtomicBoolean topologyDescriptionRequired = new AtomicBoolean(false);
 
-    private final Optional<UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription> topologyDescription;
+    private final Optional<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription> topologyDescription;
 
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Optional<String> rackId,
                                 final Map<String, Subtopology> subtopologies,
                                 final Map<String, String> clientTags,
-                                final Optional<UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription> topologyDescription) {
+                                final Optional<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription> topologyDescription) {
         this.processId = Objects.requireNonNull(processId, "Process ID cannot be null");
         this.endpoint = Objects.requireNonNull(endpoint, "Endpoint cannot be null");
         this.rackId = Objects.requireNonNull(rackId, "Rack ID cannot be null");
@@ -457,7 +457,7 @@ public class StreamsRebalanceData {
     }
 
     /** The wire-format topology description to send to the broker when requested. Empty if topology description push is not enabled. */
-    public Optional<UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription> topologyDescription() {
+    public Optional<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription> topologyDescription() {
         return topologyDescription;
     }
 

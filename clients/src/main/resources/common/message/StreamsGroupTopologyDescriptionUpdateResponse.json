@@ -16,7 +16,7 @@
 {
   "apiKey": 93,
   "type": "response",
-  "name": "UpdateStreamsGroupTopologyDescriptionResponse",
+  "name": "StreamsGroupTopologyDescriptionUpdateResponse",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [

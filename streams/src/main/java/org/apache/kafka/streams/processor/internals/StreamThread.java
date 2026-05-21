@@ -43,7 +43,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
@@ -695,7 +695,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final Map<String, StreamsRebalanceData.Subtopology> subtopologies = initBrokerTopology(config, internalTopologyBuilder);
 
-        final Optional<UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription> topologyDescription;
+        final Optional<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription> topologyDescription;
         if (config.getBoolean(StreamsConfig.TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG) && internalTopologyBuilder != null) {
             topologyDescription = Optional.of(convertTopologyDescription(internalTopologyBuilder.describe()));
         } else {
@@ -716,39 +716,39 @@ public class StreamThread extends Thread implements ProcessingThread {
     private static final byte NODE_TYPE_PROCESSOR = 2;
     private static final byte NODE_TYPE_SINK = 3;
 
-    private static UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription convertTopologyDescription(
+    private static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription convertTopologyDescription(
             final TopologyDescription topoDesc) {
-        final List<UpdateStreamsGroupTopologyDescriptionRequestData.Subtopology> subtopologies =
+        final List<StreamsGroupTopologyDescriptionUpdateRequestData.Subtopology> subtopologies =
             new ArrayList<>();
 
         for (final TopologyDescription.Subtopology st : topoDesc.subtopologies()) {
-            final List<UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode> nodes =
+            final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode> nodes =
                 new ArrayList<>();
             for (final TopologyDescription.Node node : st.nodes()) {
                 nodes.add(convertNode(node));
             }
-            subtopologies.add(new UpdateStreamsGroupTopologyDescriptionRequestData.Subtopology()
+            subtopologies.add(new StreamsGroupTopologyDescriptionUpdateRequestData.Subtopology()
                 .setSubtopologyId(String.valueOf(st.id()))
                 .setNodes(nodes));
         }
 
-        final List<UpdateStreamsGroupTopologyDescriptionRequestData.GlobalStore> globalStores =
+        final List<StreamsGroupTopologyDescriptionUpdateRequestData.GlobalStore> globalStores =
             new ArrayList<>();
         for (final TopologyDescription.GlobalStore gs : topoDesc.globalStores()) {
-            globalStores.add(new UpdateStreamsGroupTopologyDescriptionRequestData.GlobalStore()
+            globalStores.add(new StreamsGroupTopologyDescriptionUpdateRequestData.GlobalStore()
                 .setSource(convertNode(gs.source()))
                 .setProcessor(convertNode(gs.processor())));
         }
 
-        return new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription()
+        return new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription()
             .setSubtopologies(subtopologies)
             .setGlobalStores(globalStores);
     }
 
-    private static UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode convertNode(
+    private static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode convertNode(
             final TopologyDescription.Node node) {
-        final UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode result =
-            new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode()
+        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode result =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode()
                 .setName(node.name());
 
         if (node instanceof TopologyDescription.Source) {

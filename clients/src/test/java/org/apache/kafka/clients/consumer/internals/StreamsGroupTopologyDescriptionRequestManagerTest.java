@@ -18,13 +18,13 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionRequest;
-import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionResponse;
+import org.apache.kafka.common.requests.StreamsGroupTopologyDescriptionUpdateRequest;
+import org.apache.kafka.common.requests.StreamsGroupTopologyDescriptionUpdateResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -55,8 +55,8 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
     private static final UUID PROCESS_ID = UUID.randomUUID();
     private static final long CURRENT_TIME_MS = 1000L;
 
-    private static final UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription TOPOLOGY_DESCRIPTION =
-        new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription()
+    private static final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription TOPOLOGY_DESCRIPTION =
+        new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription()
             .setSubtopologies(Collections.emptyList())
             .setGlobalStores(Collections.emptyList());
 
@@ -150,8 +150,8 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         final NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
         assertEquals(Optional.of(coordinatorNode), request.node());
-        final UpdateStreamsGroupTopologyDescriptionRequest built =
-            (UpdateStreamsGroupTopologyDescriptionRequest) request.requestBuilder().build();
+        final StreamsGroupTopologyDescriptionUpdateRequest built =
+            (StreamsGroupTopologyDescriptionUpdateRequest) request.requestBuilder().build();
         assertEquals(GROUP_ID, built.data().groupId());
     }
 
@@ -275,20 +275,20 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
 
         final NetworkClientDelegate.PollResult result = manager.poll(CURRENT_TIME_MS);
         assertEquals(1, result.unsentRequests.size());
-        final UpdateStreamsGroupTopologyDescriptionRequest.Builder builder =
-            (UpdateStreamsGroupTopologyDescriptionRequest.Builder) result.unsentRequests.get(0).requestBuilder();
+        final StreamsGroupTopologyDescriptionUpdateRequest.Builder builder =
+            (StreamsGroupTopologyDescriptionUpdateRequest.Builder) result.unsentRequests.get(0).requestBuilder();
         assertEquals(MEMBER_ID, builder.build().data().memberId());
     }
 
     private ClientResponse buildResponse(final Errors error, final String errorMessage) {
-        final UpdateStreamsGroupTopologyDescriptionResponseData responseData =
-            new UpdateStreamsGroupTopologyDescriptionResponseData()
+        final StreamsGroupTopologyDescriptionUpdateResponseData responseData =
+            new StreamsGroupTopologyDescriptionUpdateResponseData()
                 .setErrorCode(error.code());
         if (errorMessage != null) {
             responseData.setErrorMessage(errorMessage);
         }
         return new ClientResponse(
-            new RequestHeader(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION, (short) 0, "", 1),
+            new RequestHeader(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE, (short) 0, "", 1),
             null,
             "-1",
             CURRENT_TIME_MS,
@@ -296,13 +296,13 @@ class StreamsGroupTopologyDescriptionRequestManagerTest {
             false,
             null,
             null,
-            new UpdateStreamsGroupTopologyDescriptionResponse(responseData)
+            new StreamsGroupTopologyDescriptionUpdateResponse(responseData)
         );
     }
 
     private ClientResponse buildDisconnectedResponse() {
         return new ClientResponse(
-            new RequestHeader(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION, (short) 0, "", 1),
+            new RequestHeader(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE, (short) 0, "", 1),
             null,
             "-1",
             CURRENT_TIME_MS,

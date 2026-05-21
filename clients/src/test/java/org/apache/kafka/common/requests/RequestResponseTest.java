@@ -234,8 +234,8 @@ import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -1078,7 +1078,7 @@ public class RequestResponseTest {
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
-            case UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION: return createUpdateStreamsGroupTopologyDescriptionRequest(version);
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1174,7 +1174,7 @@ public class RequestResponseTest {
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
-            case UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION: return createUpdateStreamsGroupTopologyDescriptionResponse();
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3891,18 +3891,18 @@ public class RequestResponseTest {
         return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData());
     }
 
-    private AbstractRequest createUpdateStreamsGroupTopologyDescriptionRequest(final short version) {
-        return new UpdateStreamsGroupTopologyDescriptionRequest.Builder(
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+    private AbstractRequest createStreamsGroupTopologyDescriptionUpdateRequest(final short version) {
+        return new StreamsGroupTopologyDescriptionUpdateRequest.Builder(
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("test-group")
                 .setTopologyEpoch(1)
-                .setTopologyDescription(new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription())
+                .setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription())
         ).build(version);
     }
 
-    private AbstractResponse createUpdateStreamsGroupTopologyDescriptionResponse() {
-        return new UpdateStreamsGroupTopologyDescriptionResponse(
-            new UpdateStreamsGroupTopologyDescriptionResponseData()
+    private AbstractResponse createStreamsGroupTopologyDescriptionUpdateResponse() {
+        return new StreamsGroupTopologyDescriptionUpdateResponse(
+            new StreamsGroupTopologyDescriptionUpdateResponseData()
         );
     }
 

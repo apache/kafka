@@ -16,24 +16,24 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Map;
 
-public class UpdateStreamsGroupTopologyDescriptionResponse extends AbstractResponse {
+public class StreamsGroupTopologyDescriptionUpdateResponse extends AbstractResponse {
 
-    private final UpdateStreamsGroupTopologyDescriptionResponseData data;
+    private final StreamsGroupTopologyDescriptionUpdateResponseData data;
 
-    public UpdateStreamsGroupTopologyDescriptionResponse(UpdateStreamsGroupTopologyDescriptionResponseData data) {
-        super(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION);
+    public StreamsGroupTopologyDescriptionUpdateResponse(StreamsGroupTopologyDescriptionUpdateResponseData data) {
+        super(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE);
         this.data = data;
     }
 
     @Override
-    public UpdateStreamsGroupTopologyDescriptionResponseData data() {
+    public StreamsGroupTopologyDescriptionUpdateResponseData data() {
         return data;
     }
 
@@ -52,8 +52,8 @@ public class UpdateStreamsGroupTopologyDescriptionResponse extends AbstractRespo
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static UpdateStreamsGroupTopologyDescriptionResponse parse(Readable readable, short version) {
-        return new UpdateStreamsGroupTopologyDescriptionResponse(
-            new UpdateStreamsGroupTopologyDescriptionResponseData(readable, version));
+    public static StreamsGroupTopologyDescriptionUpdateResponse parse(Readable readable, short version) {
+        return new StreamsGroupTopologyDescriptionUpdateResponse(
+            new StreamsGroupTopologyDescriptionUpdateResponseData(readable, version));
     }
 }

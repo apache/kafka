@@ -38,7 +38,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, AlterShareGroupOffsetsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteShareGroupOffsetsRequestData, DeleteShareGroupStateRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeShareGroupOffsetsRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, InitializeShareGroupStateRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, OffsetFetchResponseData, ProduceRequestData, ReadShareGroupStateRequestData, ReadShareGroupStateSummaryRequestData, ShareAcknowledgeRequestData, ShareFetchRequestData, ShareGroupDescribeRequestData, ShareGroupHeartbeatRequestData, StreamsGroupDescribeRequestData, StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData, SyncGroupRequestData, UpdateStreamsGroupTopologyDescriptionRequestData, WriteShareGroupStateRequestData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, AlterShareGroupOffsetsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteShareGroupOffsetsRequestData, DeleteShareGroupStateRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeShareGroupOffsetsRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, InitializeShareGroupStateRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, OffsetFetchResponseData, ProduceRequestData, ReadShareGroupStateRequestData, ReadShareGroupStateSummaryRequestData, ShareAcknowledgeRequestData, ShareFetchRequestData, ShareGroupDescribeRequestData, ShareGroupHeartbeatRequestData, StreamsGroupDescribeRequestData, StreamsGroupHeartbeatRequestData, StreamsGroupHeartbeatResponseData, SyncGroupRequestData, StreamsGroupTopologyDescriptionUpdateRequestData, WriteShareGroupStateRequestData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.internal.{MemoryRecords, RecordBatch, SimpleRecord}
@@ -233,7 +233,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.STREAMS_GROUP_HEARTBEAT -> ((resp: StreamsGroupHeartbeatResponse) => Errors.forCode(resp.data.errorCode)),
     ApiKeys.STREAMS_GROUP_DESCRIBE -> ((resp: StreamsGroupDescribeResponse) =>
       Errors.forCode(resp.data.groups.asScala.find(g => streamsGroup == g.groupId).head.errorCode)),
-    ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION -> ((resp: UpdateStreamsGroupTopologyDescriptionResponse) =>
+    ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE -> ((resp: StreamsGroupTopologyDescriptionUpdateResponse) =>
       Errors.forCode(resp.data.errorCode))
   )
 
@@ -305,7 +305,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> (shareGroupReadAcl ++ topicReadAcl),
     ApiKeys.STREAMS_GROUP_HEARTBEAT -> (streamsGroupReadAcl ++ topicDescribeAcl),
     ApiKeys.STREAMS_GROUP_DESCRIBE -> (streamsGroupDescribeAcl ++ topicDescribeAcl),
-    ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION -> streamsGroupReadAcl,
+    ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE -> streamsGroupReadAcl,
   )
 
   private def createMetadataRequest(allowAutoTopicCreation: Boolean) = {
@@ -887,10 +887,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       .setGroupIds(List(streamsGroup).asJava)
       .setIncludeAuthorizedOperations(false)).build(ApiKeys.STREAMS_GROUP_DESCRIBE.latestVersion)
 
-  private def updateStreamsGroupTopologyDescriptionRequest = new UpdateStreamsGroupTopologyDescriptionRequest.Builder(
-    new UpdateStreamsGroupTopologyDescriptionRequestData()
+  private def streamsGroupTopologyDescriptionUpdateRequest = new StreamsGroupTopologyDescriptionUpdateRequest.Builder(
+    new StreamsGroupTopologyDescriptionUpdateRequestData()
       .setGroupId(streamsGroup)
-      .setTopologyEpoch(1).setTopologyDescription(new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription())).build(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION.latestVersion)
+      .setTopologyEpoch(1).setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription())).build(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE.latestVersion)
 
   private def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest], topicExists: Boolean = true,
                            topicNames: Map[Uuid, String] = getTopicNames()) = {
@@ -977,7 +977,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> alterShareGroupOffsetsRequest,
       ApiKeys.STREAMS_GROUP_HEARTBEAT -> streamsGroupHeartbeatRequest,
       ApiKeys.STREAMS_GROUP_DESCRIBE -> streamsGroupDescribeRequest,
-      ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION -> updateStreamsGroupTopologyDescriptionRequest,
+      ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE -> streamsGroupTopologyDescriptionUpdateRequest,
 
       // Delete the topic last
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
@@ -1013,7 +1013,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS -> describeShareGroupOffsetsRequest,
       ApiKeys.STREAMS_GROUP_HEARTBEAT -> streamsGroupHeartbeatRequest,
       ApiKeys.STREAMS_GROUP_DESCRIBE -> streamsGroupDescribeRequest,
-      ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION -> updateStreamsGroupTopologyDescriptionRequest
+      ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE -> streamsGroupTopologyDescriptionUpdateRequest
     )
 
     sendRequests(requestKeyToRequest, topicExists = false, topicNames)

@@ -16,9 +16,9 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, UpdateStreamsGroupTopologyDescriptionRequestData}
+import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, StreamsGroupTopologyDescriptionUpdateRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{UpdateStreamsGroupTopologyDescriptionRequest, UpdateStreamsGroupTopologyDescriptionResponse}
+import org.apache.kafka.common.requests.{StreamsGroupTopologyDescriptionUpdateRequest, StreamsGroupTopologyDescriptionUpdateResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -28,7 +28,7 @@ import java.util
 import scala.jdk.CollectionConverters._
 
 /**
- * Integration tests for UpdateStreamsGroupTopologyDescription when no plugin is configured.
+ * Integration tests for StreamsGroupTopologyDescriptionUpdate when no plugin is configured.
  * This is a separate class because @ClusterTestDefaults serverProperties merge with
  * per-test @ClusterTest serverProperties, so we cannot remove the plugin config per-test.
  */
@@ -40,24 +40,24 @@ import scala.jdk.CollectionConverters._
     new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0")
   )
 )
-class UpdateStreamsGroupTopologyDescriptionNoPluginRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+class StreamsGroupTopologyDescriptionUpdateNoPluginRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest
   def testUpdateTopologyDescriptionWithoutPlugin(): Unit = {
     createOffsetsTopic()
 
-    val requestData = new UpdateStreamsGroupTopologyDescriptionRequestData()
+    val requestData = new StreamsGroupTopologyDescriptionUpdateRequestData()
       .setGroupId("test-streams-group")
-      .setTopologyEpoch(1).setTopologyDescription(new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription())
+      .setTopologyEpoch(1).setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription())
       .setTopologyDescription(
-        new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription()
+        new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription()
           .setSubtopologies(util.Collections.emptyList())
           .setGlobalStores(util.Collections.emptyList()))
 
-    val request = new UpdateStreamsGroupTopologyDescriptionRequest.Builder(requestData)
-      .build(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION.latestVersion(isUnstableApiEnabled))
+    val request = new StreamsGroupTopologyDescriptionUpdateRequest.Builder(requestData)
+      .build(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE.latestVersion(isUnstableApiEnabled))
 
-    val response = connectAndReceive[UpdateStreamsGroupTopologyDescriptionResponse](request)
+    val response = connectAndReceive[StreamsGroupTopologyDescriptionUpdateResponse](request)
     assertEquals(Errors.INVALID_REQUEST.code, response.data.errorCode,
       s"Expected INVALID_REQUEST but got ${Errors.forCode(response.data.errorCode)}: ${response.data.errorMessage}")
   }

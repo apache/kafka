@@ -48,8 +48,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
@@ -262,13 +262,13 @@ public interface GroupCoordinator {
      * Update the topology description for a streams group.
      *
      * @param context           The coordinator request context.
-     * @param request           The UpdateStreamsGroupTopologyDescriptionRequest data.
+     * @param request           The StreamsGroupTopologyDescriptionUpdateRequest data.
      *
      * @return  A future yielding the response.
      */
-    CompletableFuture<UpdateStreamsGroupTopologyDescriptionResponseData> updateStreamsGroupTopologyDescription(
+    CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> streamsGroupTopologyDescriptionUpdate(
         AuthorizableRequestContext context,
-        UpdateStreamsGroupTopologyDescriptionRequestData request
+        StreamsGroupTopologyDescriptionUpdateRequestData request
     );
 
     /**

@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionRequest;
-import org.apache.kafka.common.requests.UpdateStreamsGroupTopologyDescriptionResponse;
+import org.apache.kafka.common.requests.StreamsGroupTopologyDescriptionUpdateRequest;
+import org.apache.kafka.common.requests.StreamsGroupTopologyDescriptionUpdateResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 
@@ -31,7 +31,7 @@ import java.util.Objects;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
- * Sends {@code UpdateStreamsGroupTopologyDescription} requests to the group coordinator when the
+ * Sends {@code StreamsGroupTopologyDescriptionUpdate} requests to the group coordinator when the
  * broker signals (via {@code TopologyDescriptionRequired=true} in a heartbeat response) that it
  * needs the topology description for this group.
  *
@@ -98,15 +98,15 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
         }
 
         final int topologyEpoch = streamsRebalanceData.topologyEpoch();
-        final UpdateStreamsGroupTopologyDescriptionRequestData requestData =
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        final StreamsGroupTopologyDescriptionUpdateRequestData requestData =
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setTopologyEpoch(topologyEpoch)
                 .setTopologyDescription(streamsRebalanceData.topologyDescription().get());
 
         final NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new UpdateStreamsGroupTopologyDescriptionRequest.Builder(requestData),
+            new StreamsGroupTopologyDescriptionUpdateRequest.Builder(requestData),
             coordinatorRequestManager.coordinator()
         ).whenComplete((response, exception) -> {
             requestInFlight = false;
@@ -114,7 +114,7 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
                 log.warn("Failed to send topology description to coordinator, will retry on next heartbeat", exception);
                 // Flag stays — retry driven by broker re-requesting on next heartbeat.
             } else {
-                onResponse((UpdateStreamsGroupTopologyDescriptionResponse) response.responseBody(), time.milliseconds());
+                onResponse((StreamsGroupTopologyDescriptionUpdateResponse) response.responseBody(), time.milliseconds());
             }
         });
 
@@ -123,7 +123,7 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
         return new NetworkClientDelegate.PollResult(Collections.singletonList(request));
     }
 
-    private void onResponse(final UpdateStreamsGroupTopologyDescriptionResponse response, final long currentTimeMs) {
+    private void onResponse(final StreamsGroupTopologyDescriptionUpdateResponse response, final long currentTimeMs) {
         final Errors error = Errors.forCode(response.data().errorCode());
         final int throttleTimeMs = response.data().throttleTimeMs();
         if (throttleTimeMs > 0) {
@@ -151,13 +151,13 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
 
             case NOT_COORDINATOR:
             case COORDINATOR_NOT_AVAILABLE:
-                log.debug("UpdateStreamsGroupTopologyDescription failed with {}, rediscovering coordinator", error);
+                log.debug("StreamsGroupTopologyDescriptionUpdate failed with {}, rediscovering coordinator", error);
                 coordinatorRequestManager.markCoordinatorUnknown(response.data().errorMessage(), currentTimeMs);
                 // Flag stays — retry after coordinator is rediscovered.
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
-                log.debug("UpdateStreamsGroupTopologyDescription failed with {}, will retry on next heartbeat", error);
+                log.debug("StreamsGroupTopologyDescriptionUpdate failed with {}, will retry on next heartbeat", error);
                 // Flag stays — retry driven by broker re-requesting on next heartbeat.
                 break;
 
@@ -165,13 +165,13 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
                 // Group was deleted or this member is no longer in it. The membership manager
                 // detects the fence on the next heartbeat and triggers a clean rejoin; clearing
                 // the local flag here prevents another push at the (now-fenced) member id.
-                log.warn("UpdateStreamsGroupTopologyDescription was fenced (group deleted or member dropped): {}",
+                log.warn("StreamsGroupTopologyDescriptionUpdate was fenced (group deleted or member dropped): {}",
                     response.data().errorMessage());
                 streamsRebalanceData.setTopologyDescriptionRequired(false);
                 break;
 
             default:
-                log.warn("UpdateStreamsGroupTopologyDescription failed with unexpected error {}: {}",
+                log.warn("StreamsGroupTopologyDescriptionUpdate failed with unexpected error {}: {}",
                     error, response.data().errorMessage());
                 streamsRebalanceData.setTopologyDescriptionRequired(false);
                 break;

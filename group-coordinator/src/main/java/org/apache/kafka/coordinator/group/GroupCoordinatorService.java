@@ -59,8 +59,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -1439,23 +1439,23 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#updateStreamsGroupTopologyDescription(AuthorizableRequestContext, UpdateStreamsGroupTopologyDescriptionRequestData)}.
+     * See {@link GroupCoordinator#streamsGroupTopologyDescriptionUpdate(AuthorizableRequestContext, StreamsGroupTopologyDescriptionUpdateRequestData)}.
      */
     @Override
-    public CompletableFuture<UpdateStreamsGroupTopologyDescriptionResponseData> updateStreamsGroupTopologyDescription(
+    public CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> streamsGroupTopologyDescriptionUpdate(
         AuthorizableRequestContext context,
-        UpdateStreamsGroupTopologyDescriptionRequestData request
+        StreamsGroupTopologyDescriptionUpdateRequestData request
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
-                new UpdateStreamsGroupTopologyDescriptionResponseData()
+                new StreamsGroupTopologyDescriptionUpdateResponseData()
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             );
         }
 
         if (!topologyDescriptionManager.isPresent()) {
             return CompletableFuture.completedFuture(
-                new UpdateStreamsGroupTopologyDescriptionResponseData()
+                new StreamsGroupTopologyDescriptionUpdateResponseData()
                     .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
                     .setErrorMessage("No topology description plugin is configured on this broker.")
             );
@@ -1463,18 +1463,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         String groupId = request.groupId();
         String memberId = request.memberId();
-        UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription topoDesc = request.topologyDescription();
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription topoDesc = request.topologyDescription();
 
         if (topoDesc == null) {
             return CompletableFuture.completedFuture(
-                new UpdateStreamsGroupTopologyDescriptionResponseData()
+                new StreamsGroupTopologyDescriptionUpdateResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("TopologyDescription must not be null.")
             );
         }
         if (memberId == null || memberId.isEmpty()) {
             return CompletableFuture.completedFuture(
-                new UpdateStreamsGroupTopologyDescriptionResponseData()
+                new StreamsGroupTopologyDescriptionUpdateResponseData()
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("MemberId must be set.")
             );
@@ -1496,7 +1496,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "update-streams-group-topology-description",
             request,
             exception,
-            (error, message) -> new UpdateStreamsGroupTopologyDescriptionResponseData()
+            (error, message) -> new StreamsGroupTopologyDescriptionUpdateResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(message),
             log
@@ -2606,17 +2606,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private static final byte NODE_TYPE_SINK = 3;
 
     private static StreamsGroupTopologyDescription updateRequestToPojo(
-            final UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription wire) {
+            final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire) {
         final List<StreamsGroupTopologyDescription.Subtopology> subtopologies = new ArrayList<>(wire.subtopologies().size());
-        for (UpdateStreamsGroupTopologyDescriptionRequestData.Subtopology sub : wire.subtopologies()) {
+        for (StreamsGroupTopologyDescriptionUpdateRequestData.Subtopology sub : wire.subtopologies()) {
             final List<StreamsGroupTopologyDescription.Node> nodes = new ArrayList<>(sub.nodes().size());
-            for (UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode node : sub.nodes()) {
+            for (StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode node : sub.nodes()) {
                 nodes.add(updateRequestNode(node));
             }
             subtopologies.add(new StreamsGroupTopologyDescription.Subtopology(sub.subtopologyId(), nodes));
         }
         final List<StreamsGroupTopologyDescription.GlobalStore> globalStores = new ArrayList<>(wire.globalStores().size());
-        for (UpdateStreamsGroupTopologyDescriptionRequestData.GlobalStore gs : wire.globalStores()) {
+        for (StreamsGroupTopologyDescriptionUpdateRequestData.GlobalStore gs : wire.globalStores()) {
             globalStores.add(new StreamsGroupTopologyDescription.GlobalStore(
                 (StreamsGroupTopologyDescription.Source) updateRequestNode(gs.source()),
                 (StreamsGroupTopologyDescription.Processor) updateRequestNode(gs.processor())
@@ -2626,7 +2626,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private static StreamsGroupTopologyDescription.Node updateRequestNode(
-            final UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode node) {
+            final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode node) {
         final Set<String> successors = new LinkedHashSet<>(node.successors());
         switch (node.nodeType()) {
             case NODE_TYPE_SOURCE:

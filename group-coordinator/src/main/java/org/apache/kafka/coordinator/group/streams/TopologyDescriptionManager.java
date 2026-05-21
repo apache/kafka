@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -217,7 +217,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
      * {@code LastFailedTopologyEpoch = pushedEpoch}, back-off cleared (the ratchet takes over).
      * On any other exception: arm/extend the per-group back-off; no metadata write.
      */
-    public CompletableFuture<UpdateStreamsGroupTopologyDescriptionResponseData> handleSetTopology(
+    public CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> handleSetTopology(
         String groupId,
         int pushedEpoch,
         StreamsGroupTopologyDescription description
@@ -226,8 +226,8 @@ public class TopologyDescriptionManager implements AutoCloseable {
         StreamsGroupTopologyDescriptionPlugin p = plugin.orElseThrow(IllegalStateException::new);
         return p.setTopology(groupId, pushedEpoch, description)
             .handle((__, throwable) -> {
-                UpdateStreamsGroupTopologyDescriptionResponseData responseData =
-                    new UpdateStreamsGroupTopologyDescriptionResponseData();
+                StreamsGroupTopologyDescriptionUpdateResponseData responseData =
+                    new StreamsGroupTopologyDescriptionUpdateResponseData();
                 if (throwable != null) {
                     Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
                         ? throwable.getCause() : throwable;

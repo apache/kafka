@@ -17,7 +17,7 @@
   "apiKey": 93,
   "type": "request",
   "listeners": ["broker"],
-  "name": "UpdateStreamsGroupTopologyDescriptionRequest",
+  "name": "StreamsGroupTopologyDescriptionUpdateRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [

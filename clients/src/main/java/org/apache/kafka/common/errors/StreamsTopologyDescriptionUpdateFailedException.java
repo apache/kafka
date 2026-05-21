@@ -18,7 +18,7 @@ package org.apache.kafka.common.errors;
 
 /**
  * Indicates that the streams group topology description plugin failed to process
- * an UpdateStreamsGroupTopologyDescription request for a reason other than an
+ * an StreamsGroupTopologyDescriptionUpdate request for a reason other than an
  * invalid payload or a too-large description.
  */
 public class StreamsTopologyDescriptionUpdateFailedException extends ApiException {

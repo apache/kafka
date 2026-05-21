@@ -17,9 +17,9 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, UpdateStreamsGroupTopologyDescriptionRequestData}
+import org.apache.kafka.common.message.{StreamsGroupHeartbeatRequestData, StreamsGroupTopologyDescriptionUpdateRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{UpdateStreamsGroupTopologyDescriptionRequest, UpdateStreamsGroupTopologyDescriptionResponse}
+import org.apache.kafka.common.requests.{StreamsGroupTopologyDescriptionUpdateRequest, StreamsGroupTopologyDescriptionUpdateResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -39,7 +39,7 @@ import scala.jdk.CollectionConverters._
     new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0")
   )
 )
-class UpdateStreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   private def createStreamsGroup(groupId: String, topicName: String): Unit = {
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
@@ -65,10 +65,10 @@ class UpdateStreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance)
   }
 
   private def buildTopologyDescription(
-    subtopologies: List[UpdateStreamsGroupTopologyDescriptionRequestData.Subtopology] = List.empty,
-    globalStores: List[UpdateStreamsGroupTopologyDescriptionRequestData.GlobalStore] = List.empty
-  ): UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription = {
-    new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription()
+    subtopologies: List[StreamsGroupTopologyDescriptionUpdateRequestData.Subtopology] = List.empty,
+    globalStores: List[StreamsGroupTopologyDescriptionUpdateRequestData.GlobalStore] = List.empty
+  ): StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription = {
+    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription()
       .setSubtopologies(subtopologies.asJava)
       .setGlobalStores(globalStores.asJava)
   }
@@ -76,35 +76,35 @@ class UpdateStreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance)
   private def sendUpdateTopologyDescription(
     groupId: String,
     topologyEpoch: Int,
-    topoDesc: UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription
-  ): UpdateStreamsGroupTopologyDescriptionResponse = {
-    val requestData = new UpdateStreamsGroupTopologyDescriptionRequestData()
+    topoDesc: StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription
+  ): StreamsGroupTopologyDescriptionUpdateResponse = {
+    val requestData = new StreamsGroupTopologyDescriptionUpdateRequestData()
       .setGroupId(groupId)
-      .setTopologyEpoch(1).setTopologyDescription(new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription())
+      .setTopologyEpoch(1).setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription())
       .setTopologyDescription(topoDesc)
 
-    val request = new UpdateStreamsGroupTopologyDescriptionRequest.Builder(requestData)
-      .build(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION.latestVersion(isUnstableApiEnabled))
+    val request = new StreamsGroupTopologyDescriptionUpdateRequest.Builder(requestData)
+      .build(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE.latestVersion(isUnstableApiEnabled))
 
-    connectAndReceive[UpdateStreamsGroupTopologyDescriptionResponse](request)
+    connectAndReceive[StreamsGroupTopologyDescriptionUpdateResponse](request)
   }
 
-  private def simpleSubtopology(): List[UpdateStreamsGroupTopologyDescriptionRequestData.Subtopology] = {
-    val node = new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode()
+  private def simpleSubtopology(): List[StreamsGroupTopologyDescriptionUpdateRequestData.Subtopology] = {
+    val node = new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode()
       .setName("source-node")
       .setNodeType(1.toByte)
       .setSourceTopics(util.Arrays.asList("input-topic"))
       .setStores(util.Collections.emptyList())
       .setSuccessors(util.Arrays.asList("processor-node"))
 
-    val processorNode = new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode()
+    val processorNode = new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode()
       .setName("processor-node")
       .setNodeType(2.toByte)
       .setSourceTopics(util.Collections.emptyList())
       .setStores(util.Collections.emptyList())
       .setSuccessors(util.Collections.emptyList())
 
-    List(new UpdateStreamsGroupTopologyDescriptionRequestData.Subtopology()
+    List(new StreamsGroupTopologyDescriptionUpdateRequestData.Subtopology()
       .setSubtopologyId("subtopology-0")
       .setNodes(util.Arrays.asList(node, processorNode)))
   }
@@ -168,21 +168,21 @@ class UpdateStreamsGroupTopologyDescriptionRequestTest(cluster: ClusterInstance)
     createTopic(topicName, 1)
     createStreamsGroup(groupId, topicName)
 
-    val sourceNode = new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode()
+    val sourceNode = new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode()
       .setName("global-source")
       .setNodeType(1.toByte)
       .setSourceTopics(util.Arrays.asList("global-topic"))
       .setStores(util.Collections.emptyList())
       .setSuccessors(util.Arrays.asList("global-processor"))
 
-    val processorNode = new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyNode()
+    val processorNode = new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyNode()
       .setName("global-processor")
       .setNodeType(2.toByte)
       .setSourceTopics(util.Collections.emptyList())
       .setStores(util.Arrays.asList("global-store"))
       .setSuccessors(util.Collections.emptyList())
 
-    val globalStore = new UpdateStreamsGroupTopologyDescriptionRequestData.GlobalStore()
+    val globalStore = new StreamsGroupTopologyDescriptionUpdateRequestData.GlobalStore()
       .setSource(sourceNode)
       .setProcessor(processorNode)
 

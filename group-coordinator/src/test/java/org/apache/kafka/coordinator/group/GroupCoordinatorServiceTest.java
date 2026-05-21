@@ -72,8 +72,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionRequestData;
-import org.apache.kafka.common.message.UpdateStreamsGroupTopologyDescriptionResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -6287,14 +6287,14 @@ public class GroupCoordinatorServiceTest {
         when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("transient")));
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setMemberId("member-1")
                 .setTopologyEpoch(1)
                 .setTopologyDescription(
-                    new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of())))
+                    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of())))
             .get(5, TimeUnit.SECONDS);
         assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), response.errorCode());
 
@@ -6330,21 +6330,21 @@ public class GroupCoordinatorServiceTest {
         when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("transient")));
 
-        UpdateStreamsGroupTopologyDescriptionRequestData updateRequest =
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        StreamsGroupTopologyDescriptionUpdateRequestData updateRequest =
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setMemberId("member-1")
                 .setTopologyEpoch(1)
                 .setTopologyDescription(
-                    new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of()));
+                    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of()));
 
         // First transient failure → back-off ~30 s.
-        service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION), updateRequest).get(5, TimeUnit.SECONDS);
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), updateRequest).get(5, TimeUnit.SECONDS);
         time.sleep(30_001L);
         // Second transient failure (re-solicited after the first back-off elapsed) → back-off ~60 s.
-        service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION), updateRequest).get(5, TimeUnit.SECONDS);
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), updateRequest).get(5, TimeUnit.SECONDS);
 
         // After advancing only 30 s (not 60 s), the heartbeat must still be suppressed by the
         // now-doubled back-off.
@@ -6379,14 +6379,14 @@ public class GroupCoordinatorServiceTest {
         when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("transient")));
 
-        service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setMemberId("member-1")
                 .setTopologyEpoch(1)
                 .setTopologyDescription(
-                    new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of())))
+                    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of())))
             .get(5, TimeUnit.SECONDS);
 
         // Heartbeat at topologyEpoch=2 (epoch advanced) within the same 30 s window: the stale
@@ -6418,22 +6418,22 @@ public class GroupCoordinatorServiceTest {
         // Arm the back-off via one transient failure...
         when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("transient")));
-        UpdateStreamsGroupTopologyDescriptionRequestData updateRequest =
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        StreamsGroupTopologyDescriptionUpdateRequestData updateRequest =
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setMemberId("member-1")
                 .setTopologyEpoch(1)
                 .setTopologyDescription(
-                    new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of()));
-        service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION), updateRequest).get(5, TimeUnit.SECONDS);
+                    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of()));
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), updateRequest).get(5, TimeUnit.SECONDS);
 
         // ...then a successful push (advance past the back-off so the next push is allowed).
         time.sleep(30_001L);
         when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.completedFuture(null));
-        service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION), updateRequest).get(5, TimeUnit.SECONDS);
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), updateRequest).get(5, TimeUnit.SECONDS);
 
         // The next heartbeat at the same epoch sees no stored field yet (storedEpoch=-1 in this mock setup)
         // and the back-off is cleared on success, so it re-solicits immediately.
@@ -6476,9 +6476,9 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setRuntime(runtime).setConfig(createConfig()).build(true);
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response =
-            service.updateStreamsGroupTopologyDescription(
-                requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
+        StreamsGroupTopologyDescriptionUpdateResponseData response =
+            service.streamsGroupTopologyDescriptionUpdate(
+                requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
                 updateRequest("foo", 1)).get();
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.errorCode());
     }
@@ -6490,7 +6490,7 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
 
-        var topoDesc = new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of());
+        var topoDesc = new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of());
         when(runtime.<Boolean>scheduleReadOperation(
             ArgumentMatchers.eq("validate-streams-group-member"),
             ArgumentMatchers.any(), ArgumentMatchers.any()))
@@ -6506,9 +6506,9 @@ public class GroupCoordinatorServiceTest {
         when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.completedFuture(null));
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setMemberId("member-1")
                 .setTopologyEpoch(1)
@@ -6525,9 +6525,9 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setTopologyEpoch(1)
                 .setTopologyDescription(null)).get(5, TimeUnit.SECONDS);
@@ -6552,7 +6552,7 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
 
-        var topoDesc = new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of());
+        var topoDesc = new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of());
         when(runtime.<Boolean>scheduleReadOperation(
             ArgumentMatchers.eq("validate-streams-group-member"),
             ArgumentMatchers.any(), ArgumentMatchers.any()))
@@ -6568,9 +6568,9 @@ public class GroupCoordinatorServiceTest {
         when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.failedFuture(pluginFailure));
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setMemberId("member-1")
                 .setTopologyEpoch(1)
@@ -6600,8 +6600,8 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(), ArgumentMatchers.any()))
             .thenReturn(CompletableFuture.failedFuture(validateError));
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
             updateRequest("x", 1)).get(5, TimeUnit.SECONDS);
         assertEquals(expected.code(), response.errorCode());
     }
@@ -6613,12 +6613,12 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setTopologyEpoch(1)
-                .setTopologyDescription(new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of())))
+                .setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of())))
             .get(5, TimeUnit.SECONDS);
         assertEquals(Errors.INVALID_REQUEST.code(), response.errorCode());
     }
@@ -6630,19 +6630,19 @@ public class GroupCoordinatorServiceTest {
             .setRuntime(runtime).setConfig(createConfig())
             .setTopologyDescriptionPlugin(mock(StreamsGroupTopologyDescriptionPlugin.class)).build();
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response =
-            service.updateStreamsGroupTopologyDescription(
-                requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
+        StreamsGroupTopologyDescriptionUpdateResponseData response =
+            service.streamsGroupTopologyDescriptionUpdate(
+                requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
                 updateRequest("foo", 1)).get();
         assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code(), response.errorCode());
     }
 
-    private static UpdateStreamsGroupTopologyDescriptionRequestData updateRequest(String groupId, int topologyEpoch) {
-        return new UpdateStreamsGroupTopologyDescriptionRequestData()
+    private static StreamsGroupTopologyDescriptionUpdateRequestData updateRequest(String groupId, int topologyEpoch) {
+        return new StreamsGroupTopologyDescriptionUpdateRequestData()
             .setGroupId(groupId)
             .setMemberId("member-1")
             .setTopologyEpoch(topologyEpoch)
-            .setTopologyDescription(new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription());
+            .setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
     }
 
     @Test
@@ -6652,7 +6652,7 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
 
-        var topoDesc = new UpdateStreamsGroupTopologyDescriptionRequestData.TopologyDescription().setSubtopologies(List.of());
+        var topoDesc = new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of());
         when(runtime.<Boolean>scheduleReadOperation(
             ArgumentMatchers.eq("validate-streams-group-member"),
             ArgumentMatchers.any(), ArgumentMatchers.any()))
@@ -6669,9 +6669,9 @@ public class GroupCoordinatorServiceTest {
             .thenReturn(CompletableFuture.failedFuture(
                 new org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException("too big")));
 
-        UpdateStreamsGroupTopologyDescriptionResponseData response = service.updateStreamsGroupTopologyDescription(
-            requestContext(ApiKeys.UPDATE_STREAMS_GROUP_TOPOLOGY_DESCRIPTION),
-            new UpdateStreamsGroupTopologyDescriptionRequestData()
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("foo")
                 .setMemberId("member-1")
                 .setTopologyEpoch(4)
