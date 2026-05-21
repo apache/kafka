@@ -94,7 +94,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testThrottledProducerConsumer(groupProtocol: String): Unit = {
     val numRecords = 1000
-    val produced = quotaTestClients.produceUntilThrottled(numRecords)
+    val produced = quotaTestClients.produceUntilThrottled(
+      numRecords, payloadSizeBytes = QuotaTestClients.ProducePayloadSizeBytes)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
 
     // Consumer should read in a bursty manner and get throttled immediately
@@ -216,11 +217,14 @@ abstract class QuotaTestClients(topic: String,
   protected def userPrincipal: KafkaPrincipal
   protected def quotaMetricTags(clientId: String): Map[String, String]
 
-  def produceUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
+  def produceUntilThrottled(maxRecords: Int,
+                            waitForRequestCompletion: Boolean = true,
+                            payloadSizeBytes: Int = 0): Int = {
     var numProduced = 0
     var throttled = false
-    val payload = new Array[Byte](QuotaTestClients.ProducePayloadSizeBytes)
     do {
+      val payload = if (payloadSizeBytes > 0) new Array[Byte](payloadSizeBytes)
+                    else numProduced.toString.getBytes
       val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload),
         new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
