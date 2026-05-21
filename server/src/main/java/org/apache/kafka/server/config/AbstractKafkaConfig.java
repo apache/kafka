@@ -349,20 +349,24 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      * <p>
      * This method exists to support migration from kafka.server.KafkaConfig (Scala/core) to AbstractKafkaConfig (Java/server).
      * When migrating code, replace KafkaConfig references with AbstractKafkaConfig.
+     * Subclasses should override this method to integrate with their dynamic configuration mechanism;
+     * the default implementation is a no-op.
      *
      * @param reconfigurable the component to register for configuration updates
      */
-    public abstract void addReconfigurable(Reconfigurable reconfigurable);
+    public void addReconfigurable(Reconfigurable reconfigurable) { }
 
     /**
      * Unregisters a component from dynamic reconfiguration notifications.
      * <p>
      * This method exists to support migration from kafka.server.KafkaConfig (Scala/core) to AbstractKafkaConfig (Java/server).
      * When migrating code, replace KafkaConfig references with AbstractKafkaConfig.
+     * Subclasses should override this method to integrate with their dynamic configuration mechanism;
+     * the default implementation is a no-op.
      *
      * @param reconfigurable the component to unregister
      */
-    public abstract void removeReconfigurable(Reconfigurable reconfigurable);
+    public void removeReconfigurable(Reconfigurable reconfigurable) { }
 
     /**
      * Determines whether a config entry might be sensitive based on its type.
