@@ -317,6 +317,9 @@ org.apache.kafka.server.UncleanLeaderElectionTest:
 - testUncleanLeaderElectionEnabledConsumer
 - testUncleanLeaderElectionInvalidTopicOverride
 org.apache.kafka.server.config.AbstractKafkaConfigTest:
+- testExtractGroupConfigMapExcludesInternalConfigWithUnconfiguredBrokerSynonym
+- testExtractGroupConfigMapIncludesInternalConfigWithConfiguredBrokerSynonym
+- testExtractGroupConfigMapIncludesNonInternalConfig
 - testPopulateSynonymsOnEmptyMap
 - testPopulateSynonymsOnMapWithoutBrokerId
 - testPopulateSynonymsOnMapWithoutNodeId
