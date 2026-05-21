@@ -16,9 +16,28 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+
 import java.util.List;
 
 public final class ReassignReplicaExpandTest extends BaseReassignReplicaTest {
+
+    private static List<ClusterConfig> clusterConfig() {
+        return BaseReassignReplicaTest.clusterConfig(ReassignReplicaExpandTest.class.getSimpleName());
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testReassignReplicaExpandWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeReassignReplicaTest(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testReassignReplicaExpandWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeReassignReplicaTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
 
     /**
      * Expand the replication factor of the topic by changing the replica list from 0 to 0, 1

@@ -16,9 +16,28 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+
 import java.util.List;
 
 public final class ReassignReplicaMoveTest extends BaseReassignReplicaTest {
+
+    private static List<ClusterConfig> clusterConfig() {
+        return BaseReassignReplicaTest.clusterConfig(ReassignReplicaMoveTest.class.getSimpleName());
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testReassignReplicaMoveWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeReassignReplicaTest(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testReassignReplicaMoveWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeReassignReplicaTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
 
     /**
      * Move the replica of the topic from broker0 to broker1
