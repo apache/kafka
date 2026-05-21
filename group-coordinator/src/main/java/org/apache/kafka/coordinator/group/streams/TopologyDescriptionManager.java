@@ -232,7 +232,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
                     Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
                         ? throwable.getCause() : throwable;
                     log.warn("Plugin operation failed for group {}", groupId, cause);
-                    metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_SET_ERROR_SENSOR_NAME);
+                    metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
                     Errors error;
                     boolean permanentFailure = false;
                     if (cause instanceof InvalidRequestException) {
@@ -254,7 +254,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
                     }
                 } else {
                     log.info("Plugin operation succeeded for group {}", groupId);
-                    metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME);
+                    metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
                     responseData.setErrorCode(Errors.NONE.code());
                     backoff.remove(groupId);
                     recordTopologyDescriptionStoredAsync(groupId, pushedEpoch);
@@ -379,11 +379,11 @@ public class TopologyDescriptionManager implements AutoCloseable {
         String groupId = describedGroup.groupId();
         if (throwable != null) {
             log.warn("Plugin getTopology failed for group {}", groupId, throwable);
-            metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME);
+            metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
             return;
         }
-        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_GET_SUCCESS_SENSOR_NAME);
+        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
         if (topology != null) {
             describedGroup.setTopologyDescription(pojoToDescribeResponse(topology));
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
@@ -477,10 +477,10 @@ public class TopologyDescriptionManager implements AutoCloseable {
                             ? throwable.getCause() : throwable;
                         log.warn("Plugin deleteTopology failed for group {} during DeleteGroups; group will not be tombstoned.",
                             groupId, cause);
-                        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME);
+                        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME);
                         failures.put(groupId, cause);
                     } else {
-                        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME);
+                        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME);
                     }
                     return null;
                 })
@@ -527,7 +527,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
             log.warn("Topology-description cleanup cycle skipped: previous cycle is still in flight.");
             return;
         }
-        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
+        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
         StreamsGroupTopologyDescriptionPlugin p = plugin.get();
         List<CompletableFuture<Set<String>>> partitionFutures = runtime.scheduleReadAllOperation(
             "list-streams-groups-needing-topology-cleanup",
@@ -543,17 +543,17 @@ public class TopologyDescriptionManager implements AutoCloseable {
                     return null;
                 }
                 if (groupIds == null || groupIds.isEmpty()) return null;
-                metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME, groupIds.size());
+                metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME, groupIds.size());
                 for (String groupId : groupIds) {
                     backoff.remove(groupId);
                     perGroupFutures.add(callDeleteTopology(p, groupId).handle((__, pluginEx) -> {
                         if (pluginEx != null) {
                             log.warn("Plugin deleteTopology failed for group {} during topology cleanup; will retry next cycle.",
                                 groupId, pluginEx);
-                            metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME);
+                            metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME);
                             return null;
                         }
-                        metrics.recordSensor(GroupCoordinatorMetrics.TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME);
+                        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME);
                         clearStoredTopologyEpochAsync(groupId);
                         return null;
                     }));

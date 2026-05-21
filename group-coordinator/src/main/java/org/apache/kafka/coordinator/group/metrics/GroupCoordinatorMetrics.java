@@ -85,14 +85,14 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String SHARE_GROUP_REBALANCES_SENSOR_NAME = "ShareGroupRebalances";
     public static final String STREAMS_GROUP_REBALANCES_SENSOR_NAME = "StreamsGroupRebalances";
 
-    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME = "TopologyDescriptionPluginSetSuccess";
-    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_SET_ERROR_SENSOR_NAME = "TopologyDescriptionPluginSetError";
-    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME = "TopologyDescriptionPluginDeleteSuccess";
-    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME = "TopologyDescriptionPluginDeleteError";
-    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_GET_SUCCESS_SENSOR_NAME = "TopologyDescriptionPluginGetSuccess";
-    public static final String TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME = "TopologyDescriptionPluginGetError";
-    public static final String TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME = "TopologyDescriptionCleanupCycleRuns";
-    public static final String TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME = "TopologyDescriptionCleanupEligibleGroups";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionSetSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionSetError";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteError";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionGetSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionGetError";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupCycleRuns";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupEligibleGroups";
 
     private final MetricName classicGroupCountMetricName;
     private final MetricName consumerGroupCountMetricName;
@@ -322,60 +322,60 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 METRICS_GROUP,
                 "The total number of streams group rebalances")));
 
-        Sensor tdSetSuccess = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME);
+        Sensor tdSetSuccess = metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME);
         tdSetSuccess.add(new Meter(
-            metrics.metricName("topology-description-plugin-set-success-rate", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-set-success-rate", METRICS_GROUP,
                 "The rate of successful topology description plugin setTopology calls"),
-            metrics.metricName("topology-description-plugin-set-success-count", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-set-success-count", METRICS_GROUP,
                 "The total number of successful topology description plugin setTopology calls")));
 
-        Sensor tdSetError = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_SET_ERROR_SENSOR_NAME);
+        Sensor tdSetError = metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
         tdSetError.add(new Meter(
-            metrics.metricName("topology-description-plugin-set-error-rate", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-set-error-rate", METRICS_GROUP,
                 "The rate of failed topology description plugin setTopology calls"),
-            metrics.metricName("topology-description-plugin-set-error-count", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-set-error-count", METRICS_GROUP,
                 "The total number of failed topology description plugin setTopology calls")));
 
-        Sensor tdDeleteSuccess = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME);
+        Sensor tdDeleteSuccess = metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME);
         tdDeleteSuccess.add(new Meter(
-            metrics.metricName("topology-description-plugin-delete-success-rate", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-delete-success-rate", METRICS_GROUP,
                 "The rate of successful topology description plugin deleteTopology calls"),
-            metrics.metricName("topology-description-plugin-delete-success-count", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-delete-success-count", METRICS_GROUP,
                 "The total number of successful topology description plugin deleteTopology calls")));
 
-        Sensor tdDeleteError = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME);
+        Sensor tdDeleteError = metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME);
         tdDeleteError.add(new Meter(
-            metrics.metricName("topology-description-plugin-delete-error-rate", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-delete-error-rate", METRICS_GROUP,
                 "The rate of failed topology description plugin deleteTopology calls"),
-            metrics.metricName("topology-description-plugin-delete-error-count", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-delete-error-count", METRICS_GROUP,
                 "The total number of failed topology description plugin deleteTopology calls")));
 
-        Sensor tdGetSuccess = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_GET_SUCCESS_SENSOR_NAME);
+        Sensor tdGetSuccess = metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
         tdGetSuccess.add(new Meter(
-            metrics.metricName("topology-description-plugin-get-success-rate", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-get-success-rate", METRICS_GROUP,
                 "The rate of successful topology description plugin getTopology calls"),
-            metrics.metricName("topology-description-plugin-get-success-count", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-get-success-count", METRICS_GROUP,
                 "The total number of successful topology description plugin getTopology calls")));
 
-        Sensor tdGetError = metrics.sensor(TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME);
+        Sensor tdGetError = metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
         tdGetError.add(new Meter(
-            metrics.metricName("topology-description-plugin-get-error-rate", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-get-error-rate", METRICS_GROUP,
                 "The rate of failed topology description plugin getTopology calls"),
-            metrics.metricName("topology-description-plugin-get-error-count", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-get-error-count", METRICS_GROUP,
                 "The total number of failed topology description plugin getTopology calls")));
 
-        Sensor tdCleanupRuns = metrics.sensor(TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
+        Sensor tdCleanupRuns = metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
         tdCleanupRuns.add(new Meter(
-            metrics.metricName("topology-description-cleanup-cycle-rate", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-cleanup-cycle-rate", METRICS_GROUP,
                 "The rate at which the topology-description cleanup cycle fires"),
-            metrics.metricName("topology-description-cleanup-cycle-count", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-cleanup-cycle-count", METRICS_GROUP,
                 "The total number of topology-description cleanup cycles that ran")));
 
-        Sensor tdCleanupEligible = metrics.sensor(TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME);
+        Sensor tdCleanupEligible = metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME);
         tdCleanupEligible.add(new Meter(
-            metrics.metricName("topology-description-cleanup-eligible-rate", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-cleanup-eligible-rate", METRICS_GROUP,
                 "The rate of streams groups identified as eligible for topology-description cleanup"),
-            metrics.metricName("topology-description-cleanup-eligible-count", METRICS_GROUP,
+            metrics.metricName("streams-group-topology-description-cleanup-eligible-count", METRICS_GROUP,
                 "The total number of streams groups identified as eligible for topology-description cleanup")));
 
         globalSensors = Collections.unmodifiableMap(Utils.mkMap(
@@ -386,14 +386,14 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Utils.mkEntry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor),
             Utils.mkEntry(SHARE_GROUP_REBALANCES_SENSOR_NAME, shareGroupRebalanceSensor),
             Utils.mkEntry(STREAMS_GROUP_REBALANCES_SENSOR_NAME, streamsGroupRebalanceSensor),
-            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_SET_SUCCESS_SENSOR_NAME, tdSetSuccess),
-            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_SET_ERROR_SENSOR_NAME, tdSetError),
-            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_SUCCESS_SENSOR_NAME, tdDeleteSuccess),
-            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_DELETE_ERROR_SENSOR_NAME, tdDeleteError),
-            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_GET_SUCCESS_SENSOR_NAME, tdGetSuccess),
-            Utils.mkEntry(TOPOLOGY_DESCRIPTION_PLUGIN_GET_ERROR_SENSOR_NAME, tdGetError),
-            Utils.mkEntry(TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME, tdCleanupRuns),
-            Utils.mkEntry(TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME, tdCleanupEligible)
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME, tdSetSuccess),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME, tdSetError),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME, tdDeleteSuccess),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME, tdDeleteError),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME, tdGetSuccess),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME, tdGetError),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME, tdCleanupRuns),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME, tdCleanupEligible)
         ));
     }
 
