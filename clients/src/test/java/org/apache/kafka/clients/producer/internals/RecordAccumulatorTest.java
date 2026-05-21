@@ -32,13 +32,13 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.AbstractRecords;
 import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.DefaultRecord;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -287,9 +287,9 @@ public class RecordAccumulatorTest {
         Deque<ProducerBatch> batches = accum.getDeque(tp1);
         assertEquals(1, batches.size());
         ProducerBatch producerBatch = batches.peek();
-        List<MutableRecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
+        List<RecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
         assertEquals(1, recordBatches.size());
-        MutableRecordBatch recordBatch = recordBatches.get(0);
+        RecordBatch recordBatch = recordBatches.get(0);
         assertEquals(0L, recordBatch.baseOffset());
         List<Record> records = TestUtils.toList(recordBatch);
         assertEquals(1, records.size());
@@ -325,9 +325,9 @@ public class RecordAccumulatorTest {
         Deque<ProducerBatch> batches = accum.getDeque(tp1);
         assertEquals(1, batches.size());
         ProducerBatch producerBatch = batches.peek();
-        List<MutableRecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
+        List<RecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
         assertEquals(1, recordBatches.size());
-        MutableRecordBatch recordBatch = recordBatches.get(0);
+        RecordBatch recordBatch = recordBatches.get(0);
         assertEquals(0L, recordBatch.baseOffset());
         List<Record> records = TestUtils.toList(recordBatch);
         assertEquals(1, records.size());
@@ -1815,7 +1815,7 @@ public class RecordAccumulatorTest {
             assertTrue(batch.recordCount <= 1, "All remaining batches should have at most 1 record");
 
             // Extract the record and its key
-            MemoryRecords batchRecords = batch.records();
+            AbstractRecords batchRecords = batch.records();
             Iterator<Record> recordIterator = batchRecords.records().iterator();
             Record singleRecord = recordIterator.next();
 
