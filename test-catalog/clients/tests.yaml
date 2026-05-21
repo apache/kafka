@@ -1495,11 +1495,15 @@ org.apache.kafka.clients.consumer.internals.ConsumerNetworkThreadTest:
 - testSendUnsentRequests
 - testStartupAndTearDown
 org.apache.kafka.clients.consumer.internals.ConsumerProtocolTest:
+- deserializeAssignmentThrowsSchemaExceptionForEveryTruncation
+- deserializeConsumerProtocolAssignmentThrowsSchemaExceptionForEveryTruncation
+- deserializeConsumerProtocolSubscriptionThrowsSchemaExceptionForEveryTruncation
 - deserializeFutureAssignmentVersion
 - deserializeFutureSubscriptionVersion
 - deserializeNewSubscriptionWithOldVersion
 - deserializeNullAssignmentUserData
 - deserializeOldSubscriptionVersion
+- deserializeSubscriptionThrowsSchemaExceptionForEveryTruncation
 - serializeDeserializeAssignment
 - serializeDeserializeAssignmentAllVersions
 - serializeDeserializeConsumerProtocolAssignmentAllVersions

@@ -305,6 +305,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testClassicGroupJoinInconsistentProtocolType
 - testClassicGroupJoinOnShareGroup
 - testClassicGroupJoinOnStreamsGroup
+- testClassicGroupJoinToConsumerGroupFailsOnMalformedSubscriptionMetadata
 - testClassicGroupJoinWithEmptyConsumerGroup
 - testClassicGroupJoinWithEmptyStreamsGroup
 - testClassicGroupJoinWithNonEmptyStreamsGroup
@@ -353,6 +354,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testConsumerGroupHeartbeatWithNonEmptyClassicGroup
 - testConsumerGroupHeartbeatWithPreparingRebalanceClassicGroup
 - testConsumerGroupHeartbeatWithStableClassicGroup
+- testConsumerGroupHeartbeatWithStableClassicGroupFailsOnMalformedProtocol
 - testConsumerGroupMaybeDelete
 - testConsumerGroupMemberClearsRegex
 - testConsumerGroupMemberEpochValidation
@@ -919,6 +921,7 @@ org.apache.kafka.coordinator.group.classic.ClassicGroupTest:
 - testCompleteAllSyncFutures
 - testCompleteJoinFuture
 - testCompleteSyncFuture
+- testComputeSubscribedTopicsHandlesMalformedMemberMetadata
 - testDeadToAwaitingRebalanceIllegalTransition
 - testDeadToDeadIllegalTransition
 - testDeadToPreparingRebalanceIllegalTransition
