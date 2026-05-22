@@ -489,6 +489,9 @@ public class KafkaStreams implements AutoCloseable {
             closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
+        // Use DEFAULT so the consumer layer decides: classic protocol maps to REMAIN_IN_GROUP
+        // (avoiding an unnecessary rebalance before the replacement thread joins), while Streams
+        // protocol adapts to static vs dynamic membership.
         deadThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
         addStreamThread();
         if (throwable instanceof RuntimeException) {
@@ -1460,7 +1463,9 @@ public class KafkaStreams implements AutoCloseable {
      * which adapts based on the active protocol:
      * <ul>
      *   <li>Classic protocol: the consumer remains in the group (no explicit leave).</li>
-     *   <li>Streams protocol ({@code group.protocol=streams}): the consumer leaves the group.</li>
+     *   <li>Streams protocol ({@code group.protocol=streams}): dynamic members leave the group;
+     *       static members (with {@code group.instance.id}) remain in the group and are removed
+     *       by the broker after the session timeout.</li>
      * </ul>
      */
     public void close() {
@@ -1612,7 +1617,9 @@ public class KafkaStreams implements AutoCloseable {
      * which adapts based on the active protocol:
      * <ul>
      *   <li>Classic protocol: the consumer remains in the group (no explicit leave).</li>
-     *   <li>Streams protocol ({@code group.protocol=streams}): the consumer leaves the group.</li>
+     *   <li>Streams protocol ({@code group.protocol=streams}): dynamic members leave the group;
+     *       static members (with {@code group.instance.id}) remain in the group and are removed
+     *       by the broker after the session timeout.</li>
      * </ul>
      *
      * @param timeout how long to wait for the threads to shut down

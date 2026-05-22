@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
@@ -269,7 +270,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
             assertEquals(0, result.unsentRequests.size());
-            verify(membershipManager).onHeartbeatRequestSkipped();
+            verify(membershipManager).onHeartbeatRequestSkipped(false);
             verify(pollTimer, never()).update();
         }
     }
@@ -285,7 +286,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
             assertEquals(0, result.unsentRequests.size());
-            verify(membershipManager).onHeartbeatRequestSkipped();
+            verify(membershipManager).onHeartbeatRequestSkipped(false);
             verify(pollTimer, never()).update();
         }
     }
@@ -300,7 +301,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
         assertEquals(0, result.unsentRequests.size());
-        verify(membershipManager).onHeartbeatRequestSkipped();
+        verify(membershipManager).onHeartbeatRequestSkipped(false);
         verify(backgroundEventHandler).add(argThat(
             errorEvent -> errorEvent instanceof ErrorEvent && ((ErrorEvent) errorEvent).error() == fatalError));
     }
@@ -330,6 +331,35 @@ class StreamsGroupHeartbeatRequestManagerTest {
             assertEquals(heartbeatIntervalMs, result.timeUntilNextPollMs);
             verify(pollTimer).update(time.milliseconds());
         }
+    }
+
+    @Test
+    public void testSkipLeaveHeartbeatForRemainInGroupWithDynamicMember() {
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+
+        final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+        assertEquals(0, result.unsentRequests.size());
+        verify(membershipManager).onHeartbeatRequestSkipped(true);
+    }
+
+    @Test
+    public void testSkipLeaveHeartbeatForStaticMemberWithDefaultOperation() {
+        // Static member with DEFAULT operation should skip leave heartbeat,
+        // paralleling REMAIN_IN_GROUP semantics for dynamic members under the classic protocol.
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.DEFAULT);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+        final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+        assertEquals(0, result.unsentRequests.size());
+        verify(membershipManager).onHeartbeatRequestSkipped(true);
     }
 
     @ParameterizedTest

@@ -1902,7 +1902,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             } else {
                 // DEFAULT: adapt to the active protocol
                 if (streamsRebalanceData.isPresent()) {
-                    // Streams protocol: leave the group (consistent with dynamic member behavior)
+                    // Streams protocol: delegate to the consumer, which adapts to static vs dynamic
                     membershipOperation = DEFAULT;
                 } else {
                     // Classic protocol: remain in the group (preserves existing behavior)

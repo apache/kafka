@@ -222,6 +222,7 @@ public class RequestManagers implements Closeable {
                     if (streamsRebalanceData.isPresent()) {
                         streamsMembershipManager = new StreamsMembershipManager(
                             groupRebalanceConfig.groupId,
+                            groupRebalanceConfig.groupInstanceId,
                             streamsRebalanceData.get(),
                             subscriptions,
                             backgroundEventHandler,

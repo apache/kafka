@@ -173,6 +173,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         // Classic + REMAIN_IN_GROUP: member must stay in group (no leave heartbeat).
         // The group should still have a member immediately after close because
         // the session timeout is set to Integer.MAX_VALUE.
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
@@ -187,6 +188,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
     @Test
     public void testCloseOptionsDefaultClassicProtocol() throws Exception {
         // Classic + DEFAULT: must behave like REMAIN_IN_GROUP (member stays in group).
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
@@ -231,10 +233,12 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
     @Test
     public void testCloseOptionsRemainInGroupStreamsProtocol() throws Exception {
         // Streams + REMAIN_IN_GROUP: member must stay in group (no leave heartbeat sent).
-        // The group should still have a member immediately after close because
-        // the session timeout is set to Integer.MAX_VALUE.
+        // The group should still have a member immediately after close because the streams group
+        // session timeout is set to Integer.MAX_VALUE, so the broker will not remove the member.
         streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
         streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        final String appID = streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
+        CLUSTER.setGroupSessionTimeout(appID, Integer.MAX_VALUE);
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);

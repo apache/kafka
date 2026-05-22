@@ -126,6 +126,7 @@ public class StreamsMembershipManagerTest {
     public void setup() {
         membershipManager = new StreamsMembershipManager(
             GROUP_ID,
+            Optional.empty(),
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"),
             time,
@@ -1406,7 +1407,7 @@ public class StreamsMembershipManagerTest {
         verify(backgroundEventHandler, never()).add(any(StreamsOnTasksRevokedCallbackNeededEvent.class));
 
         // Simulate StreamsGroupHeartbeatRequestManager detecting REMAIN_IN_GROUP and skipping the heartbeat.
-        membershipManager.onHeartbeatRequestSkipped();
+        membershipManager.onHeartbeatRequestSkipped(true);
 
         assertTrue(onGroupLeft.isDone());
         assertFalse(onGroupLeft.isCompletedExceptionally());
@@ -1443,7 +1444,7 @@ public class StreamsMembershipManagerTest {
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         CompletableFuture<Void> future = leaving();
 
-        membershipManager.onHeartbeatRequestSkipped();
+        membershipManager.onHeartbeatRequestSkipped(true);
 
         verifyInStateUnsubscribed(membershipManager);
         assertTrue(future.isDone());
