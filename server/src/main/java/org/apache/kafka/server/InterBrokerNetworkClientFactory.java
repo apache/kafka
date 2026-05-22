@@ -39,10 +39,10 @@ public class InterBrokerNetworkClientFactory {
     private InterBrokerNetworkClientFactory() {}
 
     public static NetworkClient create(String prefix,
-                                                   AbstractKafkaConfig config,
-                                                   Metrics metrics,
-                                                   Time time,
-                                                   LogContext logContext) {
+                                       AbstractKafkaConfig config,
+                                       Metrics metrics,
+                                       Time time,
+                                       LogContext logContext) {
         ChannelBuilder channelBuilder = ChannelBuilders.clientChannelBuilder(
             config.interBrokerSecurityProtocol(),
             JaasContext.Type.SERVER,
