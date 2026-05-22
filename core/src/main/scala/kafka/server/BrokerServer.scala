@@ -58,7 +58,7 @@ import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpState
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper, Timer}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
-import org.apache.kafka.server.{AssignmentsManager, AutoTopicCreationManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DefaultAutoTopicCreationManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, ForwardingManager, ForwardingManagerImpl, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
+import org.apache.kafka.server.{AssignmentsManager, AutoTopicCreationManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DefaultAutoTopicCreationManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, ForwardingManager, ForwardingManagerImpl, KRaftTopicCreator, InterBrokerNetworkClientFactory, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager => JLogManager}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -314,7 +314,7 @@ class BrokerServer(
       alterPartitionManager.start()
 
       val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
-      val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
+      val addPartitionsToTxnNetworkClient = InterBrokerNetworkClientFactory.create("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
       val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
         config,
         addPartitionsToTxnNetworkClient,
@@ -672,7 +672,7 @@ class BrokerServer(
   private def createPartitionMetadataClient(metadataCache: MetadataCache): PartitionMetadataClient = {
     new NetworkPartitionMetadataClient(
       metadataCache,
-      () => NetworkUtils.buildNetworkClient(
+      () => InterBrokerNetworkClientFactory.create(
         "NetworkPartitionMetadataClient",
         config,
         metrics,
@@ -754,7 +754,7 @@ class BrokerServer(
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
       if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
         DefaultStatePersister.instance(
-          NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
+          InterBrokerNetworkClientFactory.create("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
           new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
           Time.SYSTEM,
           shareGroupTimer

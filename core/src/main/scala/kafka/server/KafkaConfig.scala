@@ -307,8 +307,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       Set.empty[String]
   }
 
-  def saslMechanismInterBrokerProtocol = getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG)
-
   /** ********* Fetch Configuration **************/
   val maxIncrementalFetchSessionCacheSlots = getInt(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG)
   val fetchMaxBytes = getInt(ServerConfigs.FETCH_MAX_BYTES_CONFIG)

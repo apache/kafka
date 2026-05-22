@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ManualMetadataUpdater;
@@ -30,13 +30,16 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.server.config.AbstractKafkaConfig;
 
 import java.util.Map;
 
-public class NetworkUtils {
+public class InterBrokerNetworkClientFactory {
 
-    public static NetworkClient buildNetworkClient(String prefix,
-                                                   KafkaConfig config,
+    private InterBrokerNetworkClientFactory() {}
+
+    public static NetworkClient create(String prefix,
+                                                   AbstractKafkaConfig config,
                                                    Metrics metrics,
                                                    Time time,
                                                    LogContext logContext) {
