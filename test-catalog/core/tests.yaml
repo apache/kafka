@@ -926,6 +926,8 @@ kafka.log.LogConfigTest:
 - testGetConfigValue
 - testInvalidCompactionLagConfig
 - testInvalidLocalLogRetentionProps
+- testInvalidRemoteCopyLagBytesWhenGreaterThanEffectiveLocalRetentionBytes
+- testInvalidRemoteCopyLagMsWhenGreaterThanEffectiveLocalRetentionMs
 - testKafkaConfigToProps
 - testLocalLogRetentionDerivedDefaultProps
 - testLocalLogRetentionDerivedProps
@@ -937,6 +939,8 @@ kafka.log.LogConfigTest:
 - testToRst
 - testTopicCreationWithInvalidRetentionSize
 - testTopicCreationWithInvalidRetentionTime
+- testValidRemoteCopyLagMinusOneResolvesToLocalRetention
+- testValidRemoteCopyLagWhenBothLagChecksAreDisabled
 - testValidRemoteLogCopyDisabled
 - testValidRemoteLogDeleteOnDisable
 - testValidateBrokerLogConfigs
@@ -1495,6 +1499,7 @@ kafka.server.DynamicBrokerConfigTest:
 - testDynamicLogLocalRetentionSizeConfig
 - testDynamicLogLocalRetentionSkipsOnInvalidConfig
 - testDynamicLogLocalRetentionThrowsOnIncorrectConfig
+- testDynamicRemoteCopyLagThrowsOnIncorrectConfig
 - testDynamicRemoteFetchMaxWaitMsConfig
 - testDynamicRemoteListOffsetsRequestTimeoutMsConfig
 - testDynamicRemoteLogManagerFollowerThreadPoolSizeConfig
