@@ -144,7 +144,7 @@ import static org.mockito.Mockito.when;
 
 public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
 
-    public static final Uuid REPLICA_DIRECTORY_ID = Uuid.randomUuid();
+    private static final Uuid REPLICA_DIRECTORY_ID = Uuid.randomUuid();
 
     @Test
     public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
