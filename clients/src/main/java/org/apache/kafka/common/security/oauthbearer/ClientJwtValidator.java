@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,9 +109,12 @@ public class ClientJwtValidator implements JwtValidator {
         Object scopeRaw = getClaim(payload, scopeClaimName);
         Collection<String> scopeRawCollection;
 
-        if (scopeRaw instanceof String)
-            scopeRawCollection = OAuthBearerScopeClaimUtils.parseSpaceDelimitedScopeClaim((String) scopeRaw);
-        else if (scopeRaw instanceof Collection)
+        if (scopeRaw instanceof String) {
+            String scopeRawString = (String) scopeRaw;
+            scopeRawCollection = scopeRawString.trim().isEmpty()
+                ? Collections.singletonList(scopeRawString)
+                : OAuthBearerScopeClaimUtils.parseSpaceDelimitedScopeClaim(scopeRawString);
+        } else if (scopeRaw instanceof Collection)
             scopeRawCollection = (Collection<String>) scopeRaw;
         else
             scopeRawCollection = Set.of();

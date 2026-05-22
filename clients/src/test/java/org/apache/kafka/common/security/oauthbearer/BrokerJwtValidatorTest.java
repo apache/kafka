@@ -285,7 +285,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
     }
 
     @Test
-    public void testSpaceDelimitedStringScopesProcessedAccordingToRfc8693() throws Exception {
+    public void testSpaceDelimitedStringScopesProcessedAccordingToRfc6749() throws Exception {
         OAuthBearerToken token = validateTokenWithScope("email profile phone address");
 
         assertEquals(Set.of("email", "profile", "phone", "address"), token.scope());

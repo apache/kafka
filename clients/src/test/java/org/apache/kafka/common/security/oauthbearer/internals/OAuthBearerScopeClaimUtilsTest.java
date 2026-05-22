@@ -50,7 +50,7 @@ public class OAuthBearerScopeClaimUtilsTest {
     }
 
     @Test
-    public void testParseSpaceDelimitedScopeClaimPreservesBlankClaimForCallerValidation() {
-        assertEquals(List.of("   "), OAuthBearerScopeClaimUtils.parseSpaceDelimitedScopeClaim("   "));
+    public void testParseSpaceDelimitedScopeClaimReturnsEmptyListForBlankClaim() {
+        assertEquals(List.of(), OAuthBearerScopeClaimUtils.parseSpaceDelimitedScopeClaim("   "));
     }
 }

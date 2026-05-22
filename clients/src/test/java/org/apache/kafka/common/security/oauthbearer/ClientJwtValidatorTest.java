@@ -61,7 +61,7 @@ public class ClientJwtValidatorTest extends JwtValidatorTest {
     }
 
     @Test
-    void testSpaceDelimitedStringScopesProcessedAccordingToRfc8693() throws Exception {
+    void testSpaceDelimitedStringScopesProcessedAccordingToRfc6749() throws Exception {
         OAuthBearerToken token = validateTokenWithScope("email profile phone address");
 
         assertEquals(Set.of("email", "profile", "phone", "address"), token.scope());

@@ -31,7 +31,7 @@ public final class OAuthBearerScopeClaimUtils {
     public static List<String> parseSpaceDelimitedScopeClaim(String scopeClaim) {
         String trimmedScopeClaim = scopeClaim.trim();
         if (trimmedScopeClaim.isEmpty())
-            return List.of(scopeClaim);
+            return List.of();
 
         return Arrays.asList(trimmedScopeClaim.split(" +"));
     }
