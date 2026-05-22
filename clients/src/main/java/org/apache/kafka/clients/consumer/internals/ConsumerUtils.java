@@ -265,14 +265,14 @@ public final class ConsumerUtils {
     }
 
     /**
-     * {@code true} iff the error names topics disjoint from {@code currentTopics} — used
+     * {@code true} if the error names topics disjoint from {@code currentTopics} — used
      * to drop exceptions captured before {@code assign()}/{@code subscribe()} from leaking
      * to a new scope. Conservative on unknown types and empty {@code currentTopics}.
      */
     public static boolean isErrorProvablyUnrelated(Throwable t, Set<String> currentTopics) {
         Throwable error = t;
         if (error instanceof CompletionException) {
-            error = t.getCause();
+            error = error.getCause();
         }
         Set<String> errorTopics = Collections.emptySet();
         if (error instanceof TopicAuthorizationException)

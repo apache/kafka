@@ -450,7 +450,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         if (metadataError.isEmpty())
             return false;
 
-        if (isErrorProvablyUnrelated(metadataError.get(), applicationEventProcessor.currentlyRelevantTopics()))
+        if (isErrorProvablyUnrelated(metadataError.get(), applicationEventProcessor.subscribedAndAssignedTopics()))
             return false;
 
         filteredEvents.forEach(e -> e.onMetadataError(metadataError.get()));

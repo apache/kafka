@@ -358,10 +358,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       topic2RecordConsumed = true
       false
     }
-    // pollTimeoutMs must outlast the metadata refresh: an empty poll result would fail
+    // Must outlast the metadata refresh: an empty poll result would fail the
     // verifyNoRecords {tp2} partition assertion before the auth exception is thrown.
+    val authFailurePollTimeoutMs = 200
     assertThrows(classOf[TopicAuthorizationException],
-      () => TestUtils.pollRecordsUntilTrue(consumer, verifyNoRecords, "Consumer didn't fail with authorization exception within timeout", pollTimeoutMs = 200))
+      () => TestUtils.pollRecordsUntilTrue(consumer, verifyNoRecords, "Consumer didn't fail with authorization exception within timeout", pollTimeoutMs = authFailurePollTimeoutMs))
 
     // Add ACLs and verify successful produce/consume/describe on first topic
     setReadAndWriteAcls(tp)

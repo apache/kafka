@@ -853,7 +853,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         };
     }
 
-    public Set<String> currentlyRelevantTopics() {
+    public Set<String> subscribedAndAssignedTopics() {
         return Stream.concat(
                 subscriptions.subscription().stream(),
                 subscriptions.assignedPartitions().stream().map(TopicPartition::topic)
