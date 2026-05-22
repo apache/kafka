@@ -82,7 +82,6 @@ public final class ReassignReplicaMoveAndExpandTest {
         final int partitionCount = 1;
         final int replicationFactor = 1;
         final int maxBatchCountPerSegment = 1;
-        final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
         final List<Integer> metadataPartitions = new ArrayList<>();
         for (int i = 0; i < NUM_REMOTE_LOG_METADATA_PARTITIONS; i++) {
@@ -96,7 +95,7 @@ public final class ReassignReplicaMoveAndExpandTest {
                 // TBRLMM able to handle the assignment of the newly created replica to one of the already assigned
                 // metadata partition
                 .createTopic(topicA, 50, 2, maxBatchCountPerSegment,
-                        replicaAssignment, enableRemoteLogStorage)
+                        null, enableRemoteLogStorage)
                 .expectUserTopicMappedToMetadataPartitions(topicA, metadataPartitions)
                 // create topicB with 1 partition and 1 RF
                 .createTopic(topicB, partitionCount, replicationFactor, maxBatchCountPerSegment,
