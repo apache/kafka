@@ -222,6 +222,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return interBrokerListenerNameAndSecurityProtocol().getValue();
     }
 
+
     public ListenerName mirrorAdminListenerName() {
         String mirrorAdminListenerName = getString(ReplicationConfigs.MIRROR_ADMIN_LISTENER_NAME_CONFIG);
         if (mirrorAdminListenerName == null) {
