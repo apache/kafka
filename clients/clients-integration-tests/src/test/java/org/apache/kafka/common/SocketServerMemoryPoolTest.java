@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.common;
 
-import kafka.network.SocketServer;
-
 import org.apache.kafka.common.message.ProduceRequestData;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestUtils;
@@ -66,6 +63,7 @@ public class SocketServerMemoryPoolTest {
         byte[] rawRequestBytes = buffer.array();
 
         // corrupt body but leave header valid
+        assertTrue(rawRequestBytes.length > header.size(), "must have body bytes to corrupt");
         for (int i = header.size(); i < rawRequestBytes.length; i++) {
             rawRequestBytes[i] = (byte) 0xFF;
         }
@@ -75,7 +73,7 @@ public class SocketServerMemoryPoolTest {
     private void sendAndAssert(ClusterInstance clusterInstance, byte[] rawRequestBytes) throws Exception {
         long initialMemoryPoolAvailable = getMemoryPoolAvailable(clusterInstance);
 
-        try (Socket socket = IntegrationTestUtils.connect(getBrokerBoundPort(clusterInstance))) {
+        try (Socket socket = IntegrationTestUtils.connect(clusterInstance.brokerBoundPorts().get(0))) {
             socket.setSoTimeout(/* readTimeoutMs */ 5_000);
             IntegrationTestUtils.sendRequest(socket, rawRequestBytes);
             assertTrue(drainUntilClosed(socket.getInputStream()), "expected connection closed");
@@ -86,16 +84,8 @@ public class SocketServerMemoryPoolTest {
         assertEquals(initialMemoryPoolAvailable, finalMemoryPoolAvailable);
     }
 
-    private SocketServer getSocketServer(ClusterInstance clusterInstance) {
-        return clusterInstance.brokers().get(TestKitDefaults.BROKER_ID_OFFSET).socketServer();
-    }
-
-    private int getBrokerBoundPort(ClusterInstance clusterInstance) {
-        return getSocketServer(clusterInstance).boundPort(ListenerName.normalised(TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME));
-    }
-
     private long getMemoryPoolAvailable(ClusterInstance clusterInstance) {
-        return getSocketServer(clusterInstance).memoryPool().availableMemory();
+        return clusterInstance.brokers().get(TestKitDefaults.BROKER_ID_OFFSET).socketServer().memoryPool().availableMemory();
     }
 
     /*
