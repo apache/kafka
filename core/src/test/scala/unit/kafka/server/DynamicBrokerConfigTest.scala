@@ -771,9 +771,9 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testDynamicRemoteCopyLagThrowsOnIncorrectConfig(): Unit = {
-    // remote copy lag ms cannot exceed effective local retention ms
-    verifyIncorrectRemoteCopyLagProps(
+  def testDynamicLogRemoteCopyLagThrowsOnIncorrectConfig(): Unit = {
+    // log remote copy lag ms cannot exceed effective log local retention ms
+    verifyIncorrectLogRemoteCopyLagProps(
       retentionMs = 1000L,
       logLocalRetentionMs = -2L,
       logRemoteCopyLagMs = 1001L,
@@ -782,8 +782,8 @@ class DynamicBrokerConfigTest {
       logRemoteCopyLagBytes = 100L
     )
 
-    // remote copy lag bytes cannot exceed effective local retention bytes
-    verifyIncorrectRemoteCopyLagProps(
+    // log remote copy lag bytes cannot exceed effective log local retention bytes
+    verifyIncorrectLogRemoteCopyLagProps(
       retentionMs = 1000L,
       logLocalRetentionMs = -2L,
       logRemoteCopyLagMs = 100L,
@@ -794,12 +794,12 @@ class DynamicBrokerConfigTest {
 
   }
 
-  def verifyIncorrectRemoteCopyLagProps(retentionMs: Long,
-                                        logLocalRetentionMs: Long,
-                                        logRemoteCopyLagMs: Long,
-                                        retentionBytes: Long,
-                                        logLocalRetentionBytes: Long,
-                                        logRemoteCopyLagBytes: Long): Unit = {
+  def verifyIncorrectLogRemoteCopyLagProps(retentionMs: Long,
+                                           logLocalRetentionMs: Long,
+                                           logRemoteCopyLagMs: Long,
+                                           retentionBytes: Long,
+                                           logLocalRetentionBytes: Long,
+                                           logRemoteCopyLagBytes: Long): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, retentionMs.toString)
     props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, retentionBytes.toString)
