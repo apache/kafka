@@ -262,8 +262,8 @@ public class LogConfig extends AbstractConfig {
     public final Set<String> overriddenConfigs;
 
     /*
-     * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
-     * should also be in `KafkaConfig#extractLogConfigMap`.
+     * Important note: Any configuration parameter that is passed along from AbstractKafkaConfig to
+     * LogConfig should also be in `AbstractKafkaConfig#extractLogConfigMap`.
      */
     private final int segmentSize;
     private final Integer internalSegmentSize;
