@@ -19,6 +19,7 @@ package org.apache.kafka.common.compress;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ChunkedBytesStream;
@@ -54,9 +55,14 @@ public class Lz4Compression implements Compression {
 
     @Override
     public InputStream wrapForInput(ByteBuffer inputBuffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+        return wrapForInput(new ByteBufferInputStream(inputBuffer), messageVersion, decompressionBufferSupplier);
+    }
+
+    @Override
+    public InputStream wrapForInput(ByteBufferInputStream bufferStream, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
             return new ChunkedBytesStream(
-                    new Lz4BlockInputStream(inputBuffer, decompressionBufferSupplier, messageVersion == RecordBatch.MAGIC_VALUE_V0),
+                    new Lz4BlockInputStream(bufferStream, decompressionBufferSupplier, messageVersion == RecordBatch.MAGIC_VALUE_V0),
                     decompressionBufferSupplier, decompressionOutputSize(), true);
         } catch (Throwable e) {
             throw new KafkaException(e);

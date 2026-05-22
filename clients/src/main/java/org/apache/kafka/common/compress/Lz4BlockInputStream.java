@@ -65,9 +65,11 @@ public final class Lz4BlockInputStream extends InputStream {
         BROKEN_LZ4_EXCEPTION = exception;
     }
 
-    private final ByteBuffer in;
+    private final InputStream inStream;
     private final boolean ignoreFlagDescriptorChecksum;
     private final BufferSupplier bufferSupplier;
+    // Per-block staging buffer. Holds one block plus its optional 4-byte checksum.
+    private final ByteBuffer staging;
     private final ByteBuffer decompressionBuffer;
     // `flg` and `maxBlockSize` are effectively final, they are initialised in the `readHeader` method that is only
     // invoked from the constructor
@@ -80,130 +82,134 @@ public final class Lz4BlockInputStream extends InputStream {
     private boolean finished;
 
     /**
-     * Create a new {@link InputStream} that will decompress data using the LZ4 algorithm.
-     *
-     * @param in The byte buffer to decompress
+     * @param in The input stream supplying LZ4-compressed bytes
      * @param ignoreFlagDescriptorChecksum for compatibility with old kafka clients, ignore incorrect HC byte
-     * @throws IOException
      */
-    public Lz4BlockInputStream(ByteBuffer in, BufferSupplier bufferSupplier, boolean ignoreFlagDescriptorChecksum) throws IOException {
+    public Lz4BlockInputStream(InputStream in, BufferSupplier bufferSupplier, boolean ignoreFlagDescriptorChecksum) throws IOException {
         if (BROKEN_LZ4_EXCEPTION != null) {
             throw BROKEN_LZ4_EXCEPTION;
         }
+        this.inStream = in;
         this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
-        this.in = in.duplicate().order(ByteOrder.LITTLE_ENDIAN);
         this.bufferSupplier = bufferSupplier;
         readHeader();
-        decompressionBuffer = bufferSupplier.get(maxBlockSize);
-        finished = false;
+        this.staging = bufferSupplier.get(maxBlockSize + 4).order(ByteOrder.LITTLE_ENDIAN);
+        this.decompressionBuffer = bufferSupplier.get(maxBlockSize);
+        this.finished = false;
     }
 
     /**
-     * Check whether KafkaLZ4BlockInputStream is configured to ignore the
-     * Frame Descriptor checksum, which is useful for compatibility with
-     * old client implementations that use incorrect checksum calculations.
+     * Check whether this stream is configured to ignore the Frame Descriptor checksum, which is useful for
+     * compatibility with old client implementations that use incorrect checksum calculations.
      */
     public boolean ignoreFlagDescriptorChecksum() {
         return this.ignoreFlagDescriptorChecksum;
     }
 
     /**
-     * Reads the magic number and frame descriptor from input buffer.
-     *
-     * @throws IOException
+     * Reads magic and frame descriptor from {@code inStream} into a 15-byte temporary array — the maximum
+     * possible header size (4 magic + 1 FLG + 1 BD + 8 optional content size + 1 HC).
      */
     private void readHeader() throws IOException {
-        // read first 6 bytes into buffer to check magic and FLG/BD descriptor flags
-        if (in.remaining() < 6) {
-            throw new IOException(PREMATURE_EOS);
-        }
-
-        if (MAGIC != in.getInt()) {
+        byte[] hdr = new byte[15];
+        // Need 6 bytes to know whether the content-size field is present
+        readFully(hdr, 0, 6);
+        int magic = ByteBuffer.wrap(hdr, 0, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        if (magic != MAGIC) {
             throw new IOException(NOT_SUPPORTED);
         }
-        // mark start of data to checksum
-        in.mark();
+        flg = FLG.fromByte(hdr[4]);
+        maxBlockSize = BD.fromByte(hdr[5]).getBlockMaximumSize();
 
-        flg = FLG.fromByte(in.get());
-        maxBlockSize = BD.fromByte(in.get()).getBlockMaximumSize();
-
+        int descLen;
         if (flg.isContentSizeSet()) {
-            if (in.remaining() < 8) {
-                throw new IOException(PREMATURE_EOS);
-            }
-            in.position(in.position() + 8);
+            // 8 content-size bytes + 1 HC byte
+            readFully(hdr, 6, 9);
+            descLen = 10;
+        } else {
+            // just the HC byte
+            readFully(hdr, 6, 1);
+            descLen = 2;
         }
 
-        // Final byte of Frame Descriptor is HC checksum
-
-        // Old implementations produced incorrect HC checksums
         if (ignoreFlagDescriptorChecksum) {
-            in.position(in.position() + 1);
             return;
         }
-
-        int len = in.position() - in.reset().position();
-
-        int hash = CHECKSUM.hash(in, in.position(), len, 0);
-        in.position(in.position() + len);
-        if (in.get() != (byte) ((hash >> 8) & 0xFF)) {
+        int hash = CHECKSUM.hash(hdr, 4, descLen, 0);
+        if (hdr[4 + descLen] != (byte) ((hash >> 8) & 0xFF)) {
             throw new IOException(DESCRIPTOR_HASH_MISMATCH);
         }
     }
 
     /**
-     * Decompresses (if necessary) buffered data, optionally computes and validates a XXHash32 checksum, and writes the
-     * result to a buffer.
-     *
-     * @throws IOException
+     * Decodes the next block, populating {@link #decompressedBuffer} (or sets {@link #finished} on end-mark).
      */
     private void readBlock() throws IOException {
-        if (in.remaining() < 4) {
-            throw new IOException(PREMATURE_EOS);
-        }
-
-        int blockSize = in.getInt();
-        boolean compressed = (blockSize & LZ4_FRAME_INCOMPRESSIBLE_MASK) == 0;
-        blockSize &= ~LZ4_FRAME_INCOMPRESSIBLE_MASK;
+        int rawBlockSize = readFrameInt();
+        boolean compressed = (rawBlockSize & LZ4_FRAME_INCOMPRESSIBLE_MASK) == 0;
+        int blockSize = rawBlockSize & ~LZ4_FRAME_INCOMPRESSIBLE_MASK;
 
         // Check for EndMark
         if (blockSize == 0) {
             finished = true;
-            if (flg.isContentChecksumSet())
-                in.getInt(); // TODO: verify this content checksum
+            if (flg.isContentChecksumSet()) {
+                readFrameInt(); // TODO: verify this content checksum
+            }
             return;
-        } else if (blockSize > maxBlockSize) {
+        }
+        if (blockSize > maxBlockSize) {
             throw new IOException(String.format("Block size %d exceeded max: %d", blockSize, maxBlockSize));
         }
 
-        if (in.remaining() < blockSize) {
-            throw new IOException(PREMATURE_EOS);
-        }
+        fillStaging(blockSize);
 
         if (compressed) {
             try {
-                final int bufferSize = DECOMPRESSOR.decompress(in, in.position(), blockSize, decompressionBuffer, 0,
-                    maxBlockSize);
+                int sz = DECOMPRESSOR.decompress(staging, 0, blockSize, decompressionBuffer, 0, maxBlockSize);
                 decompressionBuffer.position(0);
-                decompressionBuffer.limit(bufferSize);
+                decompressionBuffer.limit(sz);
                 decompressedBuffer = decompressionBuffer;
             } catch (LZ4Exception e) {
                 throw new IOException(e);
             }
         } else {
-            decompressedBuffer = in.slice();
-            decompressedBuffer.limit(blockSize);
+            // Copy into decompressionBuffer because `staging` is reused for the next block, which would corrupt a slice.
+            decompressionBuffer.clear();
+            decompressionBuffer.put(staging.array(), staging.arrayOffset(), blockSize);
+            decompressionBuffer.flip();
+            decompressedBuffer = decompressionBuffer;
         }
 
-        // verify checksum
+        // Hash before the next readFrameInt overwrites staging.
         if (flg.isBlockChecksumSet()) {
-            int hash = CHECKSUM.hash(in, in.position(), blockSize, 0);
-            in.position(in.position() + blockSize);
-            if (hash != in.getInt()) {
+            int computedHash = CHECKSUM.hash(staging, 0, blockSize, 0);
+            if (computedHash != readFrameInt()) {
                 throw new IOException(BLOCK_HASH_MISMATCH);
             }
-        } else {
-            in.position(in.position() + blockSize);
+        }
+    }
+
+    private int readFrameInt() throws IOException {
+        fillStaging(4);
+        return staging.getInt(0);
+    }
+
+    // Refill the staging buffer with exactly `count` bytes from the input stream. On return, staging is in
+    // read mode: position=0, limit=count.
+    private void fillStaging(int count) throws IOException {
+        readFully(staging.array(), staging.arrayOffset(), count);
+        staging.position(0);
+        staging.limit(count);
+    }
+
+    private void readFully(byte[] dst, int off, int len) throws IOException {
+        int read = 0;
+        while (read < len) {
+            int n = inStream.read(dst, off + read, len - read);
+            if (n < 0) {
+                throw new IOException(PREMATURE_EOS);
+            }
+            read += n;
         }
     }
 
@@ -218,7 +224,6 @@ public final class Lz4BlockInputStream extends InputStream {
         if (finished) {
             return -1;
         }
-
         return decompressedBuffer.get() & 0xFF;
     }
 
@@ -235,7 +240,6 @@ public final class Lz4BlockInputStream extends InputStream {
             return -1;
         }
         len = Math.min(len, available());
-
         decompressedBuffer.get(b, off, len);
         return len;
     }
@@ -263,7 +267,12 @@ public final class Lz4BlockInputStream extends InputStream {
 
     @Override
     public void close() {
-        bufferSupplier.release(decompressionBuffer);
+        if (staging != null) {
+            bufferSupplier.release(staging);
+        }
+        if (decompressionBuffer != null) {
+            bufferSupplier.release(decompressionBuffer);
+        }
     }
 
     @Override

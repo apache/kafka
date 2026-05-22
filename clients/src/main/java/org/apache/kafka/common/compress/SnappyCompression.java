@@ -51,10 +51,15 @@ public class SnappyCompression implements Compression {
 
     @Override
     public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+        return wrapForInput(new ByteBufferInputStream(buffer), messageVersion, decompressionBufferSupplier);
+    }
+
+    @Override
+    public InputStream wrapForInput(ByteBufferInputStream bufferStream, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         // SnappyInputStream uses default implementation of InputStream for skip. Default implementation of
         // SnappyInputStream allocates a new skip buffer every time, hence, we prefer our own implementation.
         try {
-            return new ChunkedBytesStream(new SnappyInputStream(new ByteBufferInputStream(buffer)),
+            return new ChunkedBytesStream(new SnappyInputStream(bufferStream),
                                           decompressionBufferSupplier,
                                           decompressionOutputSize(),
                                           false);

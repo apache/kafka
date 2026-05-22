@@ -17,6 +17,7 @@
 package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ChunkedBytesStream;
@@ -209,7 +210,7 @@ public class Lz4CompressionTest {
     }
 
     private Lz4BlockInputStream makeInputStream(ByteBuffer buffer, boolean ignoreFlagDescriptorChecksum) throws IOException {
-        return new Lz4BlockInputStream(buffer, BufferSupplier.create(), ignoreFlagDescriptorChecksum);
+        return new Lz4BlockInputStream(new ByteBufferInputStream(buffer), BufferSupplier.create(), ignoreFlagDescriptorChecksum);
     }
 
     @ParameterizedTest
