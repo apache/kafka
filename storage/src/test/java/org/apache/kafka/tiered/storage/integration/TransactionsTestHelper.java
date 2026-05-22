@@ -923,7 +923,9 @@ public class TransactionsTestHelper {
         long producerId;
         int initialProducerEpoch;
 
-        try (var producer1 = createTransactionalProducer(clusterInstance, "transactional-producer")) {
+        // Use a shorter request timeout to bound the graceful close delay when the fencing probe leaves producer1 in an empty transaction.
+        try (var producer1 = createTransactionalProducer(
+                clusterInstance, "transactional-producer", 60000, 60000, 120000, 1000)) {
             producer1.initTransactions();
 
             producer1.beginTransaction();
