@@ -271,15 +271,15 @@
     <suppress checks="CyclomaticComplexity"
               files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorRecordSerde|GroupMetadataManagerTestContext|GroupConfigTest).java"/>
     <suppress checks="(NPathComplexity|MethodLength)"
-              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GroupCoordinatorShard).java"/>
+              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerConsumerGroupTest|GroupMetadataManagerClassicGroupTest|GroupMetadataManagerShareGroupTest|GroupMetadataManagerStreamsGroupTest|GroupMetadataManagerTestContext|GroupCoordinatorShard).java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GroupCoordinatorService|GroupCoordinatorServiceTest).java"/>
+              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerConsumerGroupTest|GroupMetadataManagerClassicGroupTest|GroupMetadataManagerShareGroupTest|GroupMetadataManagerStreamsGroupTest|GroupMetadataManagerTestContext|GroupCoordinatorService|GroupCoordinatorServiceTest).java"/>
     <suppress checks="ParameterNumber"
               files="(ConsumerGroupMember|GroupMetadataManager).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupCoordinatorService|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest|GroupCoordinatorRecordSerde|StreamsGroupTest).java"/>
+              files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupCoordinatorService|GroupMetadataManagerTest|GroupMetadataManagerConsumerGroupTest|GroupMetadataManagerClassicGroupTest|GroupMetadataManagerShareGroupTest|GroupMetadataManagerStreamsGroupTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest|GroupCoordinatorRecordSerde|StreamsGroupTest).java"/>
     <suppress checks="JavaNCSS"
-              files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
+              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerConsumerGroupTest|GroupMetadataManagerClassicGroupTest|GroupMetadataManagerShareGroupTest|GroupMetadataManagerStreamsGroupTest).java"/>
 
     <!-- coordinator-common -->
     <suppress checks="JavaNCSS"
