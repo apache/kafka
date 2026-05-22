@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MockClient;
@@ -31,6 +33,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DuplicateVoterException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -40,25 +43,36 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.VoterNotFoundException;
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AddRaftVoterResponseData;
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBroker;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
+import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.DescribeClusterRequest;
 import org.apache.kafka.common.requests.DescribeClusterResponse;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
+import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.ListConfigResourcesRequest;
 import org.apache.kafka.common.requests.ListConfigResourcesResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -66,6 +80,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RemoveRaftVoterRequest;
 import org.apache.kafka.common.requests.RemoveRaftVoterResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
+import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
@@ -84,7 +99,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
+import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -93,6 +110,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -106,6 +124,7 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -123,8 +142,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
-@Timeout(120)
 public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
+
+    public static final Uuid REPLICA_DIRECTORY_ID = Uuid.randomUuid();
 
     @Test
     public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
@@ -1465,5 +1485,274 @@ public class KafkaAdminClientTest extends KafkaAdminClientTestBase {
 
             TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
         }
+    }
+
+    private void verifyUnreachableBootstrapServer(MetadataRecoveryStrategy metadataRecoveryStrategy) throws Exception {
+        // This tests the scenario in which the bootstrap server is unreachable for a short while,
+        // which prevents AdminClient from being able to send the initial metadata request
+
+        Cluster cluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 8121)));
+        Map<Node, Long> unreachableNodes = Collections.singletonMap(cluster.nodes().get(0), 200L);
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
+                AdminClientUnitTestEnv.clientConfigs(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, metadataRecoveryStrategy.name), unreachableNodes)) {
+            Cluster discoveredCluster = mockCluster(3, 0);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+                    RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                            1, Collections.emptyList()));
+            if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
+                env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(),
+                                discoveredCluster.clusterResource().clusterId(), 1, Collections.emptyList()));
+            }
+            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
+                prepareCreateTopicsResponse("myTopic", Errors.NONE));
+
+            KafkaFuture<Void> future = env.adminClient().createTopics(
+                    singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
+
+            future.get();
+        }
+    }
+
+    private void callAdminClientApisAndExpectAnAuthenticationError(AdminClientUnitTestEnv env) {
+        ExecutionException e = assertThrows(ExecutionException.class, () -> env.adminClient().createTopics(
+            singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
+            new CreateTopicsOptions().timeoutMs(10000)).all().get());
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
+            "Expected an authentication error, but got " + Utils.stackTrace(e));
+
+        Map<String, NewPartitions> counts = new HashMap<>();
+        counts.put("my_topic", NewPartitions.increaseTo(3));
+        counts.put("other_topic", NewPartitions.increaseTo(3, asList(singletonList(2), singletonList(3))));
+        e = assertThrows(ExecutionException.class, () -> env.adminClient().createPartitions(counts).all().get());
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
+            "Expected an authentication error, but got " + Utils.stackTrace(e));
+
+        e = assertThrows(ExecutionException.class, () -> env.adminClient().createAcls(asList(ACL1, ACL2)).all().get());
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
+            "Expected an authentication error, but got " + Utils.stackTrace(e));
+
+        e = assertThrows(ExecutionException.class, () -> env.adminClient().describeAcls(FILTER1).values().get());
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
+            "Expected an authentication error, but got " + Utils.stackTrace(e));
+
+        e = assertThrows(ExecutionException.class, () -> env.adminClient().deleteAcls(asList(FILTER1, FILTER2)).all().get());
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
+            "Expected an authentication error, but got " + Utils.stackTrace(e));
+
+        e = assertThrows(ExecutionException.class, () -> env.adminClient().describeConfigs(
+            singleton(new ConfigResource(ConfigResource.Type.BROKER, "0"))).all().get());
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
+            "Expected an authentication error, but got " + Utils.stackTrace(e));
+    }
+
+    private void callClientQuotasApisAndExpectAnAuthenticationError(AdminClientUnitTestEnv env) {
+        ExecutionException e = assertThrows(ExecutionException.class,
+            () -> env.adminClient().describeClientQuotas(ClientQuotaFilter.all()).entities().get());
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
+            "Expected an authentication error, but got " + Utils.stackTrace(e));
+
+        ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
+        ClientQuotaAlteration alteration = new ClientQuotaAlteration(entity, singletonList(new ClientQuotaAlteration.Op("consumer_byte_rate", 1000.0)));
+        e = assertThrows(ExecutionException.class,
+            () -> env.adminClient().alterClientQuotas(singletonList(alteration)).all().get());
+
+        assertInstanceOf(AuthenticationException.class, e.getCause(),
+            "Expected an authentication error, but got " + Utils.stackTrace(e));
+    }
+
+    private static AdminClientConfig newConfMap(String... vals) {
+        return new AdminClientConfig(newStrMap(vals));
+    }
+
+    private static Cluster mockBootstrapCluster() {
+        return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
+                singletonList("localhost:8121"), ClientDnsLookup.USE_ALL_DNS_IPS));
+    }
+
+    private Map<String, FeatureUpdate> makeTestFeatureUpdates() {
+        return Map.of(
+            "test_feature_1", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE),
+            "test_feature_2", new FeatureUpdate((short) 3,  FeatureUpdate.UpgradeType.SAFE_DOWNGRADE));
+    }
+
+    private void testUpdateFeatures(Map<String, FeatureUpdate> featureUpdates,
+                                    ApiError topLevelError,
+                                    Set<String> updates) throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponse(
+                body -> body instanceof UpdateFeaturesRequest,
+                UpdateFeaturesResponse.createWithErrors(topLevelError, updates, 0));
+            final Map<String, KafkaFuture<Void>> futures = env.adminClient().updateFeatures(
+                featureUpdates,
+                new UpdateFeaturesOptions().timeoutMs(10000)).values();
+            for (final Map.Entry<String, KafkaFuture<Void>> entry : futures.entrySet()) {
+                final KafkaFuture<Void> future = entry.getValue();
+                if (topLevelError.error() == Errors.NONE) {
+                    // Since the top level error was NONE, each future should be successful.
+                    future.get();
+                } else {
+                    final ExecutionException e = assertThrows(ExecutionException.class, future::get);
+                    assertEquals(e.getCause().getClass(), topLevelError.exception().getClass());
+                    assertEquals(e.getCause().getMessage(), topLevelError.exception().getMessage());
+                }
+            }
+        }
+    }
+
+    private void testApiTimeout(int requestTimeoutMs,
+                                int defaultApiTimeoutMs,
+                                OptionalInt overrideApiTimeoutMs) throws Exception {
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        MockTime time = new MockTime();
+        Node node0 = new Node(0, "localhost", 8121);
+        nodes.put(0, node0);
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+                singletonList(new PartitionInfo("foo", 0, node0, new Node[]{node0}, new Node[]{node0})),
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
+
+        final int retryBackoffMs = 100;
+        final int effectiveTimeoutMs = overrideApiTimeoutMs.orElse(defaultApiTimeoutMs);
+        assertEquals(2 * requestTimeoutMs, effectiveTimeoutMs,
+            "This test expects the effective timeout to be twice the request timeout");
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs),
+                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, String.valueOf(requestTimeoutMs),
+                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeoutMs))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            ListTopicsOptions options = new ListTopicsOptions();
+            overrideApiTimeoutMs.ifPresent(options::timeoutMs);
+
+            final ListTopicsResult result = env.adminClient().listTopics(options);
+
+            // Wait until the first attempt has been sent, then advance the time
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(),
+                    "Timed out waiting for Metadata request to be sent");
+            time.sleep(requestTimeoutMs + 1);
+
+            // Wait for the request to be timed out before backing off
+            TestUtils.waitForCondition(() -> !env.kafkaClient().hasInFlightRequests(),
+                    "Timed out waiting for inFlightRequests to be timed out");
+
+            // Since api timeout bound is not hit, AdminClient should retry
+            TestUtils.waitForCondition(() -> {
+                boolean hasInflightRequests = env.kafkaClient().hasInFlightRequests();
+                if (!hasInflightRequests)
+                    time.sleep(retryBackoffMs);
+                return hasInflightRequests;
+            }, "Timed out waiting for Metadata request to be sent");
+            time.sleep(requestTimeoutMs + 1);
+
+            TestUtils.assertFutureThrows(TimeoutException.class, result.future);
+        }
+    }
+
+    private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {
+        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
+                .setThrottleTimeMs(throttleTimeMs));
+    }
+
+    private static ListConfigResourcesResponse prepareListClientMetricsResourcesResponse(Errors error) {
+        return new ListConfigResourcesResponse(new ListConfigResourcesResponseData()
+                .setErrorCode(error.code()));
+    }
+
+    private static FeatureMetadata defaultFeatureMetadata() {
+        return new FeatureMetadata(
+            Map.of("test_feature_1", new FinalizedVersionRange((short) 2, (short) 2)),
+            Optional.of(1L),
+            Map.of("test_feature_1", new SupportedVersionRange((short) 1, (short) 5)));
+    }
+
+    private static Features<org.apache.kafka.common.feature.SupportedVersionRange> convertSupportedFeaturesMap(Map<String, SupportedVersionRange> features) {
+        final Map<String, org.apache.kafka.common.feature.SupportedVersionRange> featuresMap = new HashMap<>();
+        for (final Map.Entry<String, SupportedVersionRange> entry : features.entrySet()) {
+            final SupportedVersionRange versionRange = entry.getValue();
+            featuresMap.put(
+                entry.getKey(),
+                new org.apache.kafka.common.feature.SupportedVersionRange(versionRange.minVersion(),
+                                                                          versionRange.maxVersion()));
+        }
+
+        return Features.supportedFeatures(featuresMap);
+    }
+
+    private static ApiVersionsResponse prepareApiVersionsResponseForDescribeFeatures(Errors error) {
+        if (error == Errors.NONE) {
+            return new ApiVersionsResponse.Builder().
+                setApiVersions(ApiVersionsResponse.filterApis(
+                    ApiMessageType.ListenerType.BROKER, false, false)).
+                setSupportedFeatures(
+                    convertSupportedFeaturesMap(defaultFeatureMetadata().supportedFeatures())).
+                setFinalizedFeatures(
+                    Collections.singletonMap("test_feature_1", (short) 2)).
+                setFinalizedFeaturesEpoch(
+                    defaultFeatureMetadata().finalizedFeaturesEpoch().get()).
+                build();
+        }
+        return new ApiVersionsResponse(
+            new ApiVersionsResponseData()
+                .setThrottleTimeMs(0)
+                .setErrorCode(error.code()));
+    }
+
+    private static QuorumInfo defaultQuorumInfo(boolean emptyOptionals) {
+        return new QuorumInfo(1, 1, 1L,
+                singletonList(new QuorumInfo.ReplicaState(1,
+                        emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID,
+                        100,
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
+                singletonList(new QuorumInfo.ReplicaState(1,
+                        emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID,
+                        100,
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
+                singletonMap(1, new QuorumInfo.Node(1, Collections.emptyList())));
+    }
+
+    private static DescribeQuorumResponse prepareDescribeQuorumResponse(
+            Errors topLevelError,
+            Errors partitionLevelError,
+            Boolean topicCountError,
+            Boolean topicNameError,
+            Boolean partitionCountError,
+            Boolean partitionIndexError,
+            Boolean emptyOptionals) {
+        String topicName = topicNameError ? "RANDOM" : Topic.CLUSTER_METADATA_TOPIC_NAME;
+        int partitionIndex = partitionIndexError ? 1 : Topic.CLUSTER_METADATA_TOPIC_PARTITION.partition();
+        List<DescribeQuorumResponseData.TopicData> topics = new ArrayList<>();
+        List<DescribeQuorumResponseData.PartitionData> partitions = new ArrayList<>();
+        for (int i = 0; i < (partitionCountError ? 2 : 1); i++) {
+            DescribeQuorumResponseData.ReplicaState replica = new DescribeQuorumResponseData.ReplicaState()
+                    .setReplicaId(1)
+                    .setReplicaDirectoryId(emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID)
+                    .setLogEndOffset(100);
+            replica.setLastFetchTimestamp(emptyOptionals ? -1 : 1000);
+            replica.setLastCaughtUpTimestamp(emptyOptionals ? -1 : 1000);
+            partitions.add(new DescribeQuorumResponseData.PartitionData().setPartitionIndex(partitionIndex)
+                    .setLeaderId(1)
+                    .setLeaderEpoch(1)
+                    .setHighWatermark(1)
+                    .setCurrentVoters(singletonList(replica))
+                    .setObservers(singletonList(replica))
+                    .setErrorCode(partitionLevelError.code())
+                    .setErrorMessage(partitionLevelError.message()));
+        }
+        for (int i = 0; i < (topicCountError ? 2 : 1); i++) {
+            topics.add(new DescribeQuorumResponseData.TopicData().setTopicName(topicName).setPartitions(partitions));
+        }
+        return new DescribeQuorumResponse(new DescribeQuorumResponseData()
+            .setTopics(topics)
+            .setErrorCode(topLevelError.code())
+            .setErrorMessage(topLevelError.message())
+            .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)))));
     }
 }

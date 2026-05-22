@@ -49,9 +49,21 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.CreatePartitionsResponseData;
+import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResultCollection;
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResultCollection;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
+import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition;
@@ -66,9 +78,15 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.On
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
+import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
+import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
+import org.apache.kafka.common.requests.DeleteTopicsRequest;
+import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeTopicPartitionsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
@@ -84,9 +102,11 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -97,6 +117,8 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -111,7 +133,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(120)
 public class KafkaAdminClientTopicTest extends KafkaAdminClientTestBase {
 
     @Test
@@ -2664,5 +2685,280 @@ public class KafkaAdminClientTopicTest extends KafkaAdminClientTestBase {
             assertInstanceOf(TimeoutException.class, exception.getCause());
             assertTrue(duration >= 150L && duration < 30000);
         }
+    }
+
+    private MockClient.RequestMatcher expectCreateTopicsRequestWithTopics(final String... topics) {
+        return body -> {
+            if (body instanceof CreateTopicsRequest) {
+                CreateTopicsRequest request = (CreateTopicsRequest) body;
+                for (String topic : topics) {
+                    if (request.data().topics().find(topic) == null)
+                        return false;
+                }
+                return topics.length == request.data().topics().size();
+            }
+            return false;
+        };
+    }
+
+    private MockClient.RequestMatcher expectDeleteTopicsRequestWithTopics(final String... topics) {
+        return body -> {
+            if (body instanceof DeleteTopicsRequest) {
+                DeleteTopicsRequest request = (DeleteTopicsRequest) body;
+                return request.topicNames().equals(asList(topics));
+            }
+            return false;
+        };
+    }
+
+    private MockClient.RequestMatcher expectDeleteTopicsRequestWithTopicIds(final Uuid... topicIds) {
+        return body -> {
+            if (body instanceof DeleteTopicsRequest) {
+                DeleteTopicsRequest request = (DeleteTopicsRequest) body;
+                return request.topicIds().equals(asList(topicIds));
+            }
+            return false;
+        };
+    }
+
+    private void addPartitionToDescribeTopicPartitionsResponse(
+        DescribeTopicPartitionsResponseData data,
+        String topicName,
+        Uuid topicId,
+        List<Integer> partitions) {
+        List<DescribeTopicPartitionsResponsePartition> addingPartitions = new ArrayList<>();
+        partitions.forEach(partition ->
+            addingPartitions.add(new DescribeTopicPartitionsResponsePartition()
+                .setIsrNodes(singletonList(0))
+                .setErrorCode((short) 0)
+                .setLeaderEpoch(0)
+                .setLeaderId(0)
+                .setEligibleLeaderReplicas(singletonList(1))
+                .setLastKnownElr(singletonList(2))
+                .setPartitionIndex(partition)
+                .setReplicaNodes(asList(0, 1, 2)))
+        );
+        data.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 0)
+                .setTopicId(topicId)
+                .setName(topicName)
+                .setIsInternal(false)
+                .setPartitions(addingPartitions));
+    }
+
+    private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag) {
+        return prepareDescribeLogDirsResponse(error, logDir,
+                prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false));
+    }
+
+    private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag, long totalBytes, long usableBytes) {
+        return prepareDescribeLogDirsResponse(error, logDir,
+                prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false), totalBytes, usableBytes, false);
+    }
+
+    private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag, long totalBytes, long usableBytes, boolean isCordoned) {
+        return prepareDescribeLogDirsResponse(error, logDir,
+                prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false), totalBytes, usableBytes, isCordoned);
+    }
+
+    private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir,
+                                                                   List<DescribeLogDirsTopic> topics) {
+        return new DescribeLogDirsResponse(
+                new DescribeLogDirsResponseData().setResults(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                        .setErrorCode(error.code())
+                        .setLogDir(logDir)
+                        .setTopics(topics)
+                )));
+    }
+
+    private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir,
+                                                                          List<DescribeLogDirsTopic> topics,
+                                                                          long totalBytes, long usableBytes,
+                                                                          boolean isCordoned) {
+        return new DescribeLogDirsResponse(
+                new DescribeLogDirsResponseData().setResults(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                        .setErrorCode(error.code())
+                        .setLogDir(logDir)
+                        .setTopics(topics)
+                        .setTotalBytes(totalBytes)
+                        .setUsableBytes(usableBytes)
+                        .setIsCordoned(isCordoned)
+                )));
+    }
+
+    private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {
+        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData()
+            .setResults(Collections.singletonList(
+                new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                    .setErrorCode(error.code())
+                    .setLogDir(logDir))));
+    }
+
+    private static List<DescribeLogDirsTopic> prepareDescribeLogDirsTopics(
+            long partitionSize, long offsetLag, String topic, int partition, boolean isFuture) {
+        return singletonList(new DescribeLogDirsTopic()
+                .setName(topic)
+                .setPartitions(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsPartition()
+                        .setPartitionIndex(partition)
+                        .setPartitionSize(partitionSize)
+                        .setIsFutureKey(isFuture)
+                        .setOffsetLag(offsetLag))));
+    }
+
+    private static DescribeLogDirsResponse prepareEmptyDescribeLogDirsResponse(Optional<Errors> error) {
+        DescribeLogDirsResponseData data = new DescribeLogDirsResponseData();
+        error.ifPresent(e -> data.setErrorCode(e.code()));
+        return new DescribeLogDirsResponse(data);
+    }
+
+    private static void assertDescriptionContains(Map<String, LogDirDescription> descriptionsMap, String logDir,
+                                           TopicPartition tp, long partitionSize, long offsetLag) {
+        assertDescriptionContains(descriptionsMap, logDir, tp, partitionSize, offsetLag, OptionalLong.empty(), OptionalLong.empty());
+    }
+
+    private static void assertDescriptionContains(Map<String, LogDirDescription> descriptionsMap, String logDir,
+                                                  TopicPartition tp, long partitionSize, long offsetLag, OptionalLong totalBytes, OptionalLong usableBytes) {
+        assertNotNull(descriptionsMap);
+        assertEquals(singleton(logDir), descriptionsMap.keySet());
+        assertNull(descriptionsMap.get(logDir).error());
+        Map<TopicPartition, ReplicaInfo> descriptionsReplicaInfos = descriptionsMap.get(logDir).replicaInfos();
+        assertEquals(singleton(tp), descriptionsReplicaInfos.keySet());
+        assertEquals(partitionSize, descriptionsReplicaInfos.get(tp).size());
+        assertEquals(offsetLag, descriptionsReplicaInfos.get(tp).offsetLag());
+        assertFalse(descriptionsReplicaInfos.get(tp).isFuture());
+        assertEquals(totalBytes, descriptionsMap.get(logDir).totalBytes());
+        assertEquals(usableBytes, descriptionsMap.get(logDir).usableBytes());
+        assertFalse(descriptionsMap.get(logDir).isCordoned());
+    }
+
+    private static DescribeLogDirsResponseData.DescribeLogDirsResult prepareDescribeLogDirsResult(TopicPartitionReplica tpr, String logDir, int partitionSize, int offsetLag, boolean isFuture) {
+        return new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                .setErrorCode(Errors.NONE.code())
+                .setLogDir(logDir)
+                .setTopics(prepareDescribeLogDirsTopics(partitionSize, offsetLag, tpr.topic(), tpr.partition(), isFuture));
+    }
+
+    private MockClient.RequestMatcher expectCreatePartitionsRequestWithTopics(final String... topics) {
+        return body -> {
+            if (body instanceof CreatePartitionsRequest) {
+                CreatePartitionsRequest request = (CreatePartitionsRequest) body;
+                for (String topic : topics) {
+                    if (request.data().topics().find(topic) == null)
+                        return false;
+                }
+                return topics.length == request.data().topics().size();
+            }
+            return false;
+        };
+    }
+
+    private static Stream<Arguments> listOffsetsMetadataNonRetriableErrors() {
+        return Stream.of(
+                Arguments.of(
+                        Errors.TOPIC_AUTHORIZATION_FAILED,
+                        Errors.TOPIC_AUTHORIZATION_FAILED,
+                        TopicAuthorizationException.class
+                ),
+                Arguments.of(
+                        // We fail fast when the entire topic is unknown...
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        Errors.NONE,
+                        UnknownTopicOrPartitionException.class
+                ),
+                Arguments.of(
+                        // ... even if a partition in the topic is also somehow reported as unknown...
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        UnknownTopicOrPartitionException.class
+                ),
+                Arguments.of(
+                        // ... or a partition in the topic has a different, otherwise-retriable error
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        Errors.LEADER_NOT_AVAILABLE,
+                        UnknownTopicOrPartitionException.class
+                )
+        );
+    }
+
+    private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error, int... partitions) {
+        env.kafkaClient().prepareResponseFrom(
+            prepareAlterLogDirsResponse(error, "topic", partitions), node);
+    }
+
+    private AlterReplicaLogDirsResponse prepareAlterLogDirsResponse(Errors error, String topic, int... partitions) {
+        return new AlterReplicaLogDirsResponse(
+            new AlterReplicaLogDirsResponseData().setResults(singletonList(
+                new AlterReplicaLogDirTopicResult()
+                    .setTopicName(topic)
+                    .setPartitions(Arrays.stream(partitions).boxed().map(partitionId ->
+                        new AlterReplicaLogDirPartitionResult()
+                            .setPartitionIndex(partitionId)
+                            .setErrorCode(error.code())).collect(Collectors.toList())))));
+    }
+
+    public static DeleteTopicsResponse prepareDeleteTopicsResponse(int throttleTimeMs, DeletableTopicResult... topics) {
+        DeleteTopicsResponseData data = new DeleteTopicsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setResponses(new DeletableTopicResultCollection(Arrays.asList(topics)));
+        return new DeleteTopicsResponse(data);
+    }
+
+    private static DeleteTopicsResponse prepareDeleteTopicsResponse(String topicName, Errors error) {
+        DeleteTopicsResponseData data = new DeleteTopicsResponseData();
+        data.responses().add(new DeletableTopicResult()
+            .setName(topicName)
+            .setErrorCode(error.code()));
+        return new DeleteTopicsResponse(data);
+    }
+
+    private static DeleteTopicsResponse prepareDeleteTopicsResponseWithTopicId(Uuid id, Errors error) {
+        DeleteTopicsResponseData data = new DeleteTopicsResponseData();
+        data.responses().add(new DeletableTopicResult()
+                .setTopicId(id)
+                .setErrorCode(error.code()));
+        return new DeleteTopicsResponse(data);
+    }
+
+    private static CreateTopicsResponse prepareCreateTopicsResponse(int throttleTimeMs, CreatableTopicResult... topics) {
+        CreateTopicsResponseData data = new CreateTopicsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setTopics(new CreatableTopicResultCollection(Arrays.asList(topics)));
+        return new CreateTopicsResponse(data);
+    }
+
+    private static CreatableTopicResult creatableTopicResult(String name, Errors error) {
+        return new CreatableTopicResult()
+            .setName(name)
+            .setErrorCode(error.code());
+    }
+
+    private static DeletableTopicResult deletableTopicResult(String topicName, Errors error) {
+        return new DeletableTopicResult()
+            .setName(topicName)
+            .setErrorCode(error.code());
+    }
+
+    private static DeletableTopicResult deletableTopicResultWithId(Uuid topicId, Errors error) {
+        return new DeletableTopicResult()
+                .setTopicId(topicId)
+                .setErrorCode(error.code());
+    }
+
+    private static CreatePartitionsResponse prepareCreatePartitionsResponse(int throttleTimeMs, CreatePartitionsTopicResult... topics) {
+        CreatePartitionsResponseData data = new CreatePartitionsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setResults(asList(topics));
+        return new CreatePartitionsResponse(data);
+    }
+
+    private static CreatePartitionsTopicResult createPartitionsTopicResult(String name, Errors error) {
+        return createPartitionsTopicResult(name, error, null);
+    }
+
+    private static CreatePartitionsTopicResult createPartitionsTopicResult(String name, Errors error, String errorMessage) {
+        return new CreatePartitionsTopicResult()
+            .setName(name)
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
     }
 }

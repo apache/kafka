@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -44,6 +45,8 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -52,6 +55,8 @@ import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
+import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
 import org.apache.kafka.common.utils.MockTime;
@@ -59,7 +64,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -84,7 +88,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(120)
 public class KafkaAdminClientStreamsGroupTest extends KafkaAdminClientTestBase {
 
     @Test
@@ -1297,5 +1300,165 @@ public class KafkaAdminClientStreamsGroupTest extends KafkaAdminClientTestBase {
             TestUtils.assertFutureThrows(GroupAuthorizationException.class, errorResult.all());
             TestUtils.assertFutureThrows(GroupAuthorizationException.class, errorResult.partitionResult(tp1));
         }
+    }
+
+    private Map<String, ListStreamsGroupOffsetsSpec> batchedListStreamsGroupOffsetsSpec() {
+        Set<TopicPartition> groupAPartitions = Collections.singleton(new TopicPartition("A", 1));
+        Set<TopicPartition> groupBPartitions =  Collections.singleton(new TopicPartition("B", 2));
+
+        ListStreamsGroupOffsetsSpec groupASpec = new ListStreamsGroupOffsetsSpec().topicPartitions(groupAPartitions);
+        ListStreamsGroupOffsetsSpec groupBSpec = new ListStreamsGroupOffsetsSpec().topicPartitions(groupBPartitions);
+        return Map.of("groupA", groupASpec, "groupB", groupBSpec);
+    }
+
+    private void sendStreamsOffsetFetchResponse(MockClient mockClient, Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, boolean batched, Errors error) throws Exception {
+        waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
+
+        ClientRequest clientRequest = mockClient.requests().peek();
+        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
+
+        if (!batched) {
+            assertEquals(1, data.groups().size());
+        }
+
+        OffsetFetchResponseData response = new OffsetFetchResponseData()
+            .setGroups(data.groups().stream().map(group ->
+                new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(group.groupId())
+                    .setErrorCode(error.code())
+                    .setTopics(groupSpecs.get(group.groupId()).topicPartitions().stream()
+                        .collect(Collectors.groupingBy(TopicPartition::topic)).entrySet().stream().map(entry ->
+                            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                                .setName(entry.getKey())
+                                .setPartitions(entry.getValue().stream().map(partition ->
+                                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                        .setPartitionIndex(partition.partition())
+                                        .setCommittedOffset(10)
+                                ).collect(Collectors.toList()))
+                        ).collect(Collectors.toList()))
+            ).collect(Collectors.toList()));
+
+        mockClient.respond(new OffsetFetchResponse(response, ApiKeys.OFFSET_FETCH.latestVersion()));
+    }
+
+    private void verifyListStreamsOffsetsForMultipleGroups(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs,
+                                                           ListStreamsGroupOffsetsResult result) throws Exception {
+        assertEquals(groupSpecs.size(), result.all().get(10, TimeUnit.SECONDS).size());
+        for (Map.Entry<String, ListStreamsGroupOffsetsSpec> entry : groupSpecs.entrySet()) {
+            assertEquals(entry.getValue().topicPartitions(),
+                result.partitionsToOffsetAndMetadata(entry.getKey()).get().keySet());
+        }
+    }
+
+    private static StreamsGroupDescribeResponseData makeFullStreamsGroupDescribeResponse() {
+        StreamsGroupDescribeResponseData data;
+        StreamsGroupDescribeResponseData.TaskIds activeTasks1 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(0, 1, 2));
+        StreamsGroupDescribeResponseData.TaskIds standbyTasks1 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(3, 4, 5));
+        StreamsGroupDescribeResponseData.TaskIds warmupTasks1 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(6, 7, 8));
+        StreamsGroupDescribeResponseData.TaskIds activeTasks2 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(3, 4, 5));
+        StreamsGroupDescribeResponseData.TaskIds standbyTasks2 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(6, 7, 8));
+        StreamsGroupDescribeResponseData.TaskIds warmupTasks2 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(0, 1, 2));
+        StreamsGroupDescribeResponseData.Assignment memberAssignment = new StreamsGroupDescribeResponseData.Assignment()
+            .setActiveTasks(singletonList(activeTasks1))
+            .setStandbyTasks(singletonList(standbyTasks1))
+            .setWarmupTasks(singletonList(warmupTasks1));
+        StreamsGroupDescribeResponseData.Assignment targetAssignment = new StreamsGroupDescribeResponseData.Assignment()
+            .setActiveTasks(singletonList(activeTasks2))
+            .setStandbyTasks(singletonList(standbyTasks2))
+            .setWarmupTasks(singletonList(warmupTasks2));
+        StreamsGroupDescribeResponseData.Member memberOne = new StreamsGroupDescribeResponseData.Member()
+            .setMemberId("0")
+            .setMemberEpoch(1)
+            .setInstanceId("instance-id")
+            .setRackId("rack-id")
+            .setClientId("clientId0")
+            .setClientHost("clientHost")
+            .setTopologyEpoch(0)
+            .setProcessId("processId")
+            .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint()
+                .setHost("localhost")
+                .setPort(8080)
+            )
+            .setClientTags(Collections.singletonList(new StreamsGroupDescribeResponseData.KeyValue()
+                .setKey("key")
+                .setValue("value")
+            ))
+            .setTaskOffsets(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskOffset()
+                .setSubtopologyId("my_subtopology")
+                .setPartition(0)
+                .setOffset(0)
+            ))
+            .setTaskEndOffsets(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskOffset()
+                .setSubtopologyId("my_subtopology")
+                .setPartition(0)
+                .setOffset(1)
+            ))
+            .setAssignment(memberAssignment)
+            .setTargetAssignment(targetAssignment)
+            .setIsClassic(true);
+
+        StreamsGroupDescribeResponseData.Member memberTwo = new StreamsGroupDescribeResponseData.Member()
+            .setMemberId("1")
+            .setMemberEpoch(2)
+            .setInstanceId(null)
+            .setRackId(null)
+            .setClientId("clientId1")
+            .setClientHost("clientHost")
+            .setTopologyEpoch(1)
+            .setProcessId("processId2")
+            .setUserEndpoint(null)
+            .setClientTags(Collections.emptyList())
+            .setTaskOffsets(Collections.emptyList())
+            .setTaskEndOffsets(Collections.emptyList())
+            .setAssignment(new StreamsGroupDescribeResponseData.Assignment())
+            .setTargetAssignment(new StreamsGroupDescribeResponseData.Assignment())
+            .setIsClassic(false);
+
+        StreamsGroupDescribeResponseData.Subtopology subtopologyDescription = new StreamsGroupDescribeResponseData.Subtopology()
+            .setSubtopologyId("my_subtopology")
+            .setSourceTopics(Collections.singletonList("my_source_topic"))
+            .setRepartitionSinkTopics(Collections.singletonList("my_repartition_sink_topic"))
+            .setStateChangelogTopics(Collections.singletonList(
+                new StreamsGroupDescribeResponseData.TopicInfo()
+                    .setName("my_changelog_topic")
+                    .setPartitions(0)
+                    .setReplicationFactor((short) 3)
+                    .setTopicConfigs(Collections.singletonList(new StreamsGroupDescribeResponseData.KeyValue()
+                        .setKey("key1")
+                        .setValue("value1")
+                    ))
+            ))
+            .setRepartitionSourceTopics(Collections.singletonList(
+                new StreamsGroupDescribeResponseData.TopicInfo()
+                    .setName("my_repartition_topic")
+                    .setPartitions(99)
+                    .setReplicationFactor((short) 0)
+                    .setTopicConfigs(Collections.emptyList())
+            ));
+
+        data = new StreamsGroupDescribeResponseData();
+        data.groups().add(new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(GROUP_ID)
+            .setGroupState(GroupState.STABLE.toString())
+            .setMembers(asList(memberOne, memberTwo))
+            .setTopology(new StreamsGroupDescribeResponseData.Topology()
+                .setEpoch(1)
+                .setSubtopologies(Collections.singletonList(subtopologyDescription))
+            )
+            .setGroupEpoch(2)
+            .setAssignmentEpoch(1));
+        return data;
     }
 }

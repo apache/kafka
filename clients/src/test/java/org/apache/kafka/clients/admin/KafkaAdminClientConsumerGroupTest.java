@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -46,6 +47,7 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -54,6 +56,9 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
+import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopics;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -63,12 +68,15 @@ import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.MockTime;
@@ -77,7 +85,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -87,6 +94,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -103,11 +111,11 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.admin.KafkaAdminClient.DEFAULT_LEAVE_GROUP_REASON;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(120)
 public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase {
 
     @Test
@@ -3175,5 +3183,179 @@ public class KafkaAdminClientConsumerGroupTest extends KafkaAdminClientTestBase 
             TestUtils.assertFutureThrows(GroupAuthorizationException.class, errorResult.all());
             TestUtils.assertFutureThrows(GroupAuthorizationException.class, errorResult.partitionResult(tp1));
         }
+    }
+
+    private MockClient.RequestMatcher expectListGroupsRequestWithFilters(
+        Set<String> expectedStates,
+        Set<String> expectedTypes
+    ) {
+        return body -> {
+            if (body instanceof ListGroupsRequest) {
+                ListGroupsRequest request = (ListGroupsRequest) body;
+                return Objects.equals(new HashSet<>(request.data().statesFilter()), expectedStates)
+                    && Objects.equals(new HashSet<>(request.data().typesFilter()), expectedTypes);
+            }
+            return false;
+        };
+    }
+
+    private void verifyListConsumerGroupOffsetsOptions() throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRIES_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            final List<TopicPartition> partitions = Collections.singletonList(new TopicPartition("A", 0));
+            final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
+                    .requireStable(true)
+                    .timeoutMs(300);
+
+            final ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
+                    .topicPartitions(partitions);
+            env.adminClient().listConsumerGroupOffsets(Collections.singletonMap(GROUP_ID, groupSpec), options);
+
+            final MockClient mockClient = env.kafkaClient();
+            waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
+
+            ClientRequest clientRequest = mockClient.requests().peek();
+            assertNotNull(clientRequest);
+            assertEquals(300, clientRequest.requestTimeoutMs());
+            OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
+            assertTrue(data.requireStable());
+            assertEquals(Collections.singletonList(GROUP_ID),
+                    data.groups().stream().map(OffsetFetchRequestGroup::groupId).collect(Collectors.toList()));
+            assertEquals(Collections.singletonList("A"),
+                    data.groups().get(0).topics().stream().map(OffsetFetchRequestTopics::name).collect(Collectors.toList()));
+            assertEquals(Collections.singletonList(0),
+                    data.groups().get(0).topics().get(0).partitionIndexes());
+        }
+    }
+
+    private Map<String, ListConsumerGroupOffsetsSpec> batchedListConsumerGroupOffsetsSpec() {
+        Set<TopicPartition> groupAPartitions = Collections.singleton(new TopicPartition("A", 1));
+        Set<TopicPartition> groupBPartitions =  Collections.singleton(new TopicPartition("B", 2));
+
+        ListConsumerGroupOffsetsSpec groupASpec = new ListConsumerGroupOffsetsSpec().topicPartitions(groupAPartitions);
+        ListConsumerGroupOffsetsSpec groupBSpec = new ListConsumerGroupOffsetsSpec().topicPartitions(groupBPartitions);
+        return Map.of("groupA", groupASpec, "groupB", groupBSpec);
+    }
+
+    private void sendOffsetFetchResponse(MockClient mockClient, Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, boolean batched, Errors error) throws Exception {
+        waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
+
+        ClientRequest clientRequest = mockClient.requests().peek();
+        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
+
+        if (!batched) {
+            assertEquals(1, data.groups().size());
+        }
+
+        OffsetFetchResponseData response = new OffsetFetchResponseData()
+            .setGroups(data.groups().stream().map(group ->
+                new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                    .setGroupId(group.groupId())
+                    .setErrorCode(error.code())
+                    .setTopics(groupSpecs.get(group.groupId()).topicPartitions().stream()
+                        .collect(Collectors.groupingBy(TopicPartition::topic)).entrySet().stream().map(entry ->
+                            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                                .setName(entry.getKey())
+                                .setPartitions(entry.getValue().stream().map(partition ->
+                                    new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                                        .setPartitionIndex(partition.partition())
+                                        .setCommittedOffset(10)
+                                ).collect(Collectors.toList()))
+                        ).collect(Collectors.toList()))
+            ).collect(Collectors.toList()));
+
+        mockClient.respond(new OffsetFetchResponse(response, ApiKeys.OFFSET_FETCH.latestVersion()));
+    }
+
+    private void verifyListOffsetsForMultipleGroups(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs,
+                                                    ListConsumerGroupOffsetsResult result) throws Exception {
+        assertEquals(groupSpecs.size(), result.all().get(10, TimeUnit.SECONDS).size());
+        for (Map.Entry<String, ListConsumerGroupOffsetsSpec> entry : groupSpecs.entrySet()) {
+            assertEquals(entry.getValue().topicPartitions(),
+                    result.partitionsToOffsetAndMetadata(entry.getKey()).get().keySet());
+        }
+    }
+
+    private void testRemoveMembersFromGroup(String reason, String expectedReason) throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster)) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(body -> {
+                if (!(body instanceof LeaveGroupRequest)) {
+                    return false;
+                }
+                LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
+
+                return leaveGroupRequest.members().stream().allMatch(
+                    member -> member.reason().equals(expectedReason)
+                );
+            }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
+                asList(
+                    new MemberResponse().setGroupInstanceId("instance-1"),
+                    new MemberResponse().setGroupInstanceId("instance-2")
+                ))
+            ));
+
+            MemberToRemove memberToRemove1 = new MemberToRemove("instance-1");
+            MemberToRemove memberToRemove2 = new MemberToRemove("instance-2");
+
+            RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(asList(
+                memberToRemove1,
+                memberToRemove2
+            ));
+            options.reason(reason);
+
+            final RemoveMembersFromConsumerGroupResult result = env.adminClient().removeMembersFromConsumerGroup(
+                GROUP_ID,
+                options
+            );
+
+            assertNull(result.all().get());
+            assertNull(result.memberResult(memberToRemove1).get());
+            assertNull(result.memberResult(memberToRemove2).get());
+        }
+    }
+
+    private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,
+                                                                 MemberAssignment assignment) {
+        return new MemberDescription(member.memberId(),
+                                     Optional.ofNullable(member.groupInstanceId()),
+                                     Optional.empty(),
+                                     member.clientId(),
+                                     member.clientHost(),
+                                     assignment,
+                                     Optional.empty(),
+                                     Optional.empty(),
+                                     Optional.empty());
+    }
+
+    private static DescribeGroupsResponseData prepareDescribeGroupsResponseData(String groupId,
+                                                                                List<String> groupInstances,
+                                                                                List<TopicPartition> topicPartitions) {
+        final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
+        List<DescribedGroupMember> describedGroupMembers = groupInstances.stream().map(groupInstance -> DescribeGroupsResponse.groupMember(JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                groupInstance, "clientId0", "clientHost", new byte[memberAssignment.remaining()], null)).collect(Collectors.toList());
+        DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+        data.groups().add(DescribeGroupsResponse.groupMetadata(
+                groupId,
+                Errors.NONE,
+                "",
+                ConsumerProtocol.PROTOCOL_TYPE,
+                "",
+                describedGroupMembers,
+                Collections.emptySet()));
+        return data;
     }
 }

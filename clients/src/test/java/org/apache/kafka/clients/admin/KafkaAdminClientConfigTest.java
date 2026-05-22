@@ -59,7 +59,6 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -85,7 +84,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(120)
 public class KafkaAdminClientConfigTest extends KafkaAdminClientTestBase {
 
     @Test
@@ -768,5 +766,23 @@ public class KafkaAdminClientConfigTest extends KafkaAdminClientTestBase {
                 assertFalse(resultData.get(u).isCompletedExceptionally());
             });
         }
+    }
+
+    private ClientQuotaEntity newClientQuotaEntity(String... args) {
+        assertEquals(0, args.length % 2);
+
+        Map<String, String> entityMap = new HashMap<>(args.length / 2);
+        for (int index = 0; index < args.length; index += 2) {
+            entityMap.put(args[index], args[index + 1]);
+        }
+        return new ClientQuotaEntity(entityMap);
+    }
+
+    @SafeVarargs
+    private static <T> void assertCollectionIs(Collection<T> collection, T... elements) {
+        for (T element : elements) {
+            assertTrue(collection.contains(element), "Did not find " + element);
+        }
+        assertEquals(elements.length, collection.size(), "There are unexpected extra elements in the collection.");
     }
 }

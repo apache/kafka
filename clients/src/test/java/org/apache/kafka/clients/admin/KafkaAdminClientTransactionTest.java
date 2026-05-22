@@ -22,11 +22,15 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
+import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.message.MetadataResponseData;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
+import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
@@ -46,7 +50,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -71,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(120)
 public class KafkaAdminClientTransactionTest extends KafkaAdminClientTestBase {
 
     @Test
@@ -547,5 +549,94 @@ public class KafkaAdminClientTransactionTest extends KafkaAdminClientTestBase {
             assertEquals(4761, result.producerId(transactionalId).get());
             assertEquals((short) 489, result.epochId(transactionalId).get());
         }
+    }
+
+    private WriteTxnMarkersResponse writeTxnMarkersResponse(
+        AbortTransactionSpec abortSpec,
+        Errors error
+    ) {
+        WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult partitionResponse =
+            new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                .setPartitionIndex(abortSpec.topicPartition().partition())
+                .setErrorCode(error.code());
+
+        WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult topicResponse =
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+                .setName(abortSpec.topicPartition().topic());
+        topicResponse.partitions().add(partitionResponse);
+
+        WriteTxnMarkersResponseData.WritableTxnMarkerResult markerResponse =
+            new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+                .setProducerId(abortSpec.producerId());
+        markerResponse.topics().add(topicResponse);
+
+        WriteTxnMarkersResponseData response = new WriteTxnMarkersResponseData();
+        response.markers().add(markerResponse);
+
+        return new WriteTxnMarkersResponse(response);
+    }
+
+    private DescribeProducersResponse buildDescribeProducersResponse(
+        TopicPartition topicPartition,
+        List<ProducerState> producerStates
+    ) {
+        DescribeProducersResponseData response = new DescribeProducersResponseData();
+
+        DescribeProducersResponseData.TopicResponse topicResponse =
+            new DescribeProducersResponseData.TopicResponse()
+                .setName(topicPartition.topic());
+        response.topics().add(topicResponse);
+
+        DescribeProducersResponseData.PartitionResponse partitionResponse =
+            new DescribeProducersResponseData.PartitionResponse()
+                .setPartitionIndex(topicPartition.partition())
+                .setErrorCode(Errors.NONE.code());
+        topicResponse.partitions().add(partitionResponse);
+
+        partitionResponse.setActiveProducers(producerStates.stream().map(producerState ->
+            new DescribeProducersResponseData.ProducerState()
+                .setProducerId(producerState.producerId())
+                .setProducerEpoch(producerState.producerEpoch())
+                .setCoordinatorEpoch(producerState.coordinatorEpoch().orElse(-1))
+                .setLastSequence(producerState.lastSequence())
+                .setLastTimestamp(producerState.lastTimestamp())
+                .setCurrentTxnStartOffset(producerState.currentTransactionStartOffset().orElse(-1L))
+        ).collect(Collectors.toList()));
+
+        return new DescribeProducersResponse(response);
+    }
+
+    private void expectMetadataRequest(
+        AdminClientUnitTestEnv env,
+        TopicPartition topicPartition,
+        Node leader
+    ) {
+        MetadataResponseData.MetadataResponseTopicCollection responseTopics =
+            new MetadataResponseData.MetadataResponseTopicCollection();
+
+        MetadataResponseTopic responseTopic = new MetadataResponseTopic()
+            .setName(topicPartition.topic())
+            .setErrorCode(Errors.NONE.code());
+        responseTopics.add(responseTopic);
+
+        MetadataResponsePartition responsePartition = new MetadataResponsePartition()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionIndex(topicPartition.partition())
+            .setLeaderId(leader.id())
+            .setReplicaNodes(singletonList(leader.id()))
+            .setIsrNodes(singletonList(leader.id()));
+        responseTopic.partitions().add(responsePartition);
+
+        env.kafkaClient().prepareResponse(
+            request -> {
+                if (!(request instanceof MetadataRequest)) {
+                    return false;
+                }
+                MetadataRequest metadataRequest = (MetadataRequest) request;
+                return metadataRequest.topics().equals(singletonList(topicPartition.topic()));
+            },
+            new MetadataResponse(new MetadataResponseData().setTopics(responseTopics),
+                MetadataResponseData.HIGHEST_SUPPORTED_VERSION)
+        );
     }
 }

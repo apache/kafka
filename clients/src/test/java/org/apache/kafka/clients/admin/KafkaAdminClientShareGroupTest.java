@@ -57,7 +57,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,7 +81,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Timeout(120)
 public class KafkaAdminClientShareGroupTest extends KafkaAdminClientTestBase {
 
     @Test
@@ -975,5 +973,15 @@ public class KafkaAdminClientShareGroupTest extends KafkaAdminClientTestBase {
             assertThrows(IllegalArgumentException.class, () -> result.topicResult(barName));
             assertNull(result.topicResult(fooName).get());
         }
+    }
+
+    private static ShareMemberDescription convertToShareMemberDescriptions(ShareGroupDescribeResponseData.Member member,
+                                                                           ShareMemberAssignment assignment) {
+        return new ShareMemberDescription(member.memberId(),
+                                          Optional.ofNullable(member.rackId()),
+                                          member.clientId(),
+                                          member.clientHost(),
+                                          assignment,
+                                          member.memberEpoch());
     }
 }
