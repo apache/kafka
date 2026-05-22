@@ -261,6 +261,7 @@ public class RemoteLogManagerTest {
             }
         };
         doReturn(true).when(remoteLogMetadataManager).isReady(any(TopicIdPartition.class));
+        when(mockLog.config()).thenReturn(new LogConfig(new Properties()));
     }
 
     private RemoteLogManagerConfig configs(Properties props) {
@@ -2106,6 +2107,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testCandidateLogSegmentsSkipsActiveSegment() {
         UnifiedLog log = mock(UnifiedLog.class);
+        when(log.config()).thenReturn(new LogConfig(new Properties()));
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
         LogSegment activeSegment = mock(LogSegment.class);
@@ -2129,6 +2131,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset() {
         UnifiedLog log = mock(UnifiedLog.class);
+        when(log.config()).thenReturn(new LogConfig(new Properties()));
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
         LogSegment segment3 = mock(LogSegment.class);
