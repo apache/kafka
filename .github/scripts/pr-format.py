@@ -63,11 +63,12 @@ def write_commit(io: TextIO, title: str, body: str):
     io.flush()
 
 
-def parse_trailers(title, body) -> Dict:
+def parse_trailers_from_text(text: str) -> Dict:
     trailers = defaultdict(list)
 
     with tempfile.NamedTemporaryFile() as fp:
-        write_commit(fp, title, body)
+        fp.write(text.encode())
+        fp.flush()
         cmd = f"git interpret-trailers --trim-empty --parse {fp.name}"
         p = subprocess.run(shlex.split(cmd), capture_output=True)
         fp.close()
@@ -77,6 +78,13 @@ def parse_trailers(title, body) -> Dict:
         trailers[key].append(value.strip())
 
     return trailers
+
+
+def parse_trailers(title, body) -> Dict:
+    io = BytesIO()
+    write_commit(io, title, body)
+    io.seek(0)
+    return parse_trailers_from_text(io.read().decode())
 
 
 def split_paragraphs(text: str):
@@ -198,23 +206,121 @@ def resolve_reviewer(login: str) -> tuple:
     return (name, _usable_email(user.get("email")))
 
 
-def already_exists(identity: str, existing_reviewers: List[str]) -> bool:
-    """Check if a reviewer identity is already in the existing reviewers list.
+def split_reviewers(reviewer_values: List[str]) -> List[str]:
+    """Split Reviewers trailer values into individual reviewer entries."""
+    reviewers = []
+    for value in reviewer_values:
+        remaining = value.strip()
+        while remaining:
+            match = re.search(r"<[^>]+>|\(github:[^)]+\)", remaining, flags=re.IGNORECASE)
+            if not match:
+                reviewers.extend([reviewer.strip() for reviewer in remaining.split(",") if reviewer.strip()])
+                break
 
-    identity is the delimited token that uniquely identifies a reviewer, either
-    '<email>' (for the email form) or '(github:login)' (for the login fallback).
-    """
-    return identity.lower() in ", ".join(existing_reviewers).lower()
+            reviewer = remaining[:match.end()].strip()
+            if reviewer:
+                reviewers.append(reviewer)
+
+            remaining = remaining[match.end():].strip()
+            if remaining.startswith(","):
+                remaining = remaining[1:].strip()
+    return reviewers
+
+
+def reviewer_keys(reviewer: str) -> List[str]:
+    keys = [f"entry:{reviewer.strip().lower()}"]
+    keys.extend([f"email:{email.lower()}" for email in re.findall(r"<([^>]+)>", reviewer)])
+    keys.extend([
+        f"github:{login.lower()}"
+        for login in re.findall(r"\(github:([^)]+)\)", reviewer, flags=re.IGNORECASE)
+    ])
+    return keys
+
+
+def add_reviewer(reviewers: List[str], seen_keys: set, reviewer: str, extra_keys: Optional[List[str]] = None):
+    keys = reviewer_keys(reviewer)
+    if extra_keys:
+        keys.extend(extra_keys)
+    if any(key in seen_keys for key in keys):
+        return
+    reviewers.append(reviewer)
+    seen_keys.update(keys)
+
+
+def reviewer_logins_from_reviews(reviews, pr_author: Optional[str]) -> List[str]:
+    """Collect reviewer logins from all PR reviews, preserving first review order."""
+    logins = []
+    seen_logins = set()
+
+    for review in reviews:
+        author = review.get("author") or review.get("user") or {}
+        login = author.get("login")
+        if not login or (pr_author and login.lower() == pr_author.lower()):
+            continue
+        login_key = login.lower()
+        if login_key not in seen_logins:
+            seen_logins.add(login_key)
+            logins.append(login)
+
+    return logins
+
+
+def reviewer_entry(login: str) -> str:
+    name, email = resolve_reviewer(login)
+    if email:
+        identity = f"<{email}>"
+    else:
+        # Fall back to the GitHub handle without tagging the reviewer.
+        identity = f"(github:{login})"
+    return f"{name} {identity}"
+
+
+def merge_reviewers(existing_reviewers: List[str], reviewer_logins: List[str]) -> List[str]:
+    reviewers = []
+    seen_keys = set()
+
+    for reviewer in split_reviewers(existing_reviewers):
+        add_reviewer(reviewers, seen_keys, reviewer)
+
+    for login in reviewer_logins:
+        login_key = f"github:{login.lower()}"
+        if login_key in seen_keys:
+            continue
+        add_reviewer(reviewers, seen_keys, reviewer_entry(login), [login_key])
+
+    return reviewers
 
 
 def update_reviewers_trailer(body: str, trailer: str) -> str:
-    """Update the Reviewers trailer in the body using git interpret-trailers."""
+    """Replace all Reviewers trailers in the body using git interpret-trailers."""
+    updated_body = body.strip()
+    for _ in range(len(parse_trailers_from_text(updated_body).get("Reviewers", []))):
+        with tempfile.NamedTemporaryFile() as fp:
+            fp.write(updated_body.encode())
+            fp.write(b"\n")
+            fp.flush()
+            p = subprocess.run([
+                "git", "interpret-trailers",
+                "--trim-empty",
+                "--if-exists", "replace",
+                "--trailer", "Reviewers:",
+                fp.name,
+            ], capture_output=True)
+            fp.close()
+
+        if p.returncode != 0:
+            return body
+        updated_body = p.stdout.decode().strip()
+
     with tempfile.NamedTemporaryFile() as fp:
-        fp.write(body.strip().encode())
+        fp.write(updated_body.encode())
         fp.write(b"\n")
         fp.flush()
-        cmd = f"git interpret-trailers --if-exists replace --trailer {shlex.quote(trailer)} {fp.name}"
-        p = subprocess.run(shlex.split(cmd), capture_output=True)
+        p = subprocess.run([
+            "git", "interpret-trailers",
+            "--trailer", trailer,
+            fp.name,
+        ], capture_output=True)
         fp.close()
 
     if p.returncode == 0:
@@ -253,23 +359,21 @@ if __name__ == "__main__":
     body = gh_json["body"]
     reviews = gh_json["reviews"]
 
-    # Auto-fill reviewer from the current review event.
-    # Approvals are also review events, so approvers are automatically added.
+    # Auto-fill reviewers from the full PR review history. The current review
+    # event is kept as a fallback in case the review is not visible yet in the
+    # PR view response.
     reviewer_login = get_env("REVIEWER_LOGIN")
     pr_author = (gh_json.get("author") or {}).get("login")
-    if reviewer_login and reviewer_login != pr_author:
-        name, email = resolve_reviewer(reviewer_login)
-        if email:
-            identity = f"<{email}>"
-        else:
-            # Tier 4: fall back to the GitHub handle without tagging the reviewer.
-            identity = f"(github:{reviewer_login})"
-        resolved = f"{name} {identity}"
-        existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
-        if not already_exists(identity, existing_reviewers):
-            existing_value = ", ".join(existing_reviewers)
-            new_value = f"{existing_value}, {resolved}" if existing_value else resolved
-            body = update_reviewers_trailer(body, f"Reviewers: {new_value}")
+    reviewer_logins = reviewer_logins_from_reviews(reviews, pr_author)
+    reviewer_login_keys = {login.lower() for login in reviewer_logins}
+    if (reviewer_login and reviewer_login.lower() not in reviewer_login_keys and
+            not (pr_author and reviewer_login.lower() == pr_author.lower())):
+        reviewer_logins.append(reviewer_login)
+
+    existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
+    merged_reviewers = merge_reviewers(existing_reviewers, reviewer_logins)
+    if merged_reviewers:
+        body = update_reviewers_trailer(body, f"Reviewers: {', '.join(merged_reviewers)}")
 
     checks = [] # (bool (0=ok, 1=error), message)
 
