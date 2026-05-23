@@ -249,7 +249,7 @@ class DynamicBrokerConfigTest {
 
     val props3 = new Properties()
     props3.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "-1")
-    val err3 = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
+    val err3 = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props3, perBrokerConfig = true))
     assertTrue(err3.getMessage.contains("Value must be at least 1"))
     verifyNoMoreInteractions(remoteLogManager)
 
