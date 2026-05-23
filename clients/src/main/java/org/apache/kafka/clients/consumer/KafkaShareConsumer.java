@@ -837,6 +837,16 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
         delegate.wakeup();
     }
 
+    /**
+     * Returns a snapshot of the current share group membership metadata for this consumer.
+     * Pass to {@link org.apache.kafka.clients.producer.Producer#sendShareAcknowledgementsToTransaction}
+     * to atomically bind acknowledgments to a producer transaction (KIP-1289).
+     */
+    @Override
+    public ShareGroupMetadata shareGroupMetadata() {
+        return delegate.shareGroupMetadata();
+    }
+
     // Functions below are for testing only
     String clientId() {
         return delegate.clientId();

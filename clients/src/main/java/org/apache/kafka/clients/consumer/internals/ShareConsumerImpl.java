@@ -22,6 +22,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.ShareGroupMetadata;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -1112,6 +1113,13 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     @Override
     public void wakeup() {
         wakeupTrigger.wakeup();
+    }
+
+    @Override
+    public ShareGroupMetadata shareGroupMetadata() {
+        throw new UnsupportedOperationException(
+            "shareGroupMetadata() requires broker-side TxnShareAcknowledge support (KIP-1289). " +
+            "This will be wired in a follow-up phase.");
     }
 
     /**

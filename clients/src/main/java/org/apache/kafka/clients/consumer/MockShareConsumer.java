@@ -175,6 +175,11 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
         wakeup.set(true);
     }
 
+    @Override
+    public synchronized ShareGroupMetadata shareGroupMetadata() {
+        throw new UnsupportedOperationException("MockShareConsumer does not support shareGroupMetadata()");
+    }
+
     public synchronized void addRecord(ConsumerRecord<K, V> record) {
         ensureNotClosed();
         TopicPartition tp = new TopicPartition(record.topic(), record.partition());
