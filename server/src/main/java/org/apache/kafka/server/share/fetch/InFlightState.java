@@ -17,6 +17,9 @@
 package org.apache.kafka.server.share.fetch;
 
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.common.requests.TransactionResult;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +56,11 @@ public class InFlightState {
     // The boolean determines if the record has achieved a terminal state of ARCHIVED from which it cannot transition
     // to any other state. This could happen because of LSO movement etc.
     private boolean isTerminalState = false;
+
+    // Populated only when state == TX_PENDING; identifies the producer that staged this ack.
+    private long stagedProducerId = -1L;
+    private short stagedProducerEpoch = -1;
+    private byte stagedAckType = -1;
 
     // Visible for testing.
     public InFlightState(RecordState state, int deliveryCount, String memberId) {
@@ -243,6 +251,83 @@ public class InFlightState {
         rollbackState = null;
     }
 
+    /**
+     * @return The producer id staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
+     */
+    public long stagedProducerId() {
+        return stagedProducerId;
+    }
+
+    /**
+     * @return The producer epoch staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
+     */
+    public short stagedProducerEpoch() {
+        return stagedProducerEpoch;
+    }
+
+    /**
+     * @return The acknowledge type staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
+     */
+    public byte stagedAckType() {
+        return stagedAckType;
+    }
+
+    /**
+     * Stage this record into an open producer transaction. Transitions state from ACQUIRED to TX_PENDING,
+     * cancels the acquisition lock timer (transaction timeout governs the hold instead), and records the
+     * producer identity and ack type for later resolution by {@link #applyTxnMarker}.
+     * Only ACCEPT and REJECT are valid ack types inside a transaction.
+     */
+    public InFlightState stageTxnAcknowledge(long producerId, short producerEpoch, AcknowledgeType ackType) {
+        if (ackType != AcknowledgeType.ACCEPT && ackType != AcknowledgeType.REJECT) {
+            throw new IllegalArgumentException("Only ACCEPT or REJECT are valid inside a transaction, got: " + ackType);
+        }
+        try {
+            state = state.validateTransition(RecordState.TX_PENDING);
+            this.stagedProducerId = producerId;
+            this.stagedProducerEpoch = producerEpoch;
+            this.stagedAckType = ackType.id;
+            cancelAndClearAcquisitionLockTimeoutTask();
+            return this;
+        } catch (IllegalStateException e) {
+            log.error("Failed to stage transactional acknowledgment", e);
+            return null;
+        }
+    }
+
+    /**
+     * Apply a transaction commit or abort marker to a TX_PENDING record.
+     * On COMMIT: ACCEPT resolves to ACKNOWLEDGED, REJECT resolves to ARCHIVING.
+     * On ABORT: reverts to AVAILABLE so the record can be redelivered.
+     * Returns null if the state is not TX_PENDING or the producer identity does not match.
+     */
+    public InFlightState applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
+        if (state != RecordState.TX_PENDING) {
+            return null;
+        }
+        if (this.stagedProducerId != producerId || this.stagedProducerEpoch != producerEpoch) {
+            return null;
+        }
+        try {
+            if (result == TransactionResult.COMMIT) {
+                RecordState nextState = (stagedAckType == AcknowledgeType.ACCEPT.id)
+                    ? RecordState.ACKNOWLEDGED
+                    : RecordState.ARCHIVING;
+                state = state.validateTransition(nextState);
+            } else {
+                state = state.validateTransition(RecordState.AVAILABLE);
+                memberId = EMPTY_MEMBER_ID;
+            }
+            stagedProducerId = -1L;
+            stagedProducerEpoch = -1;
+            stagedAckType = -1;
+            return this;
+        } catch (IllegalStateException e) {
+            log.error("Failed to apply transaction marker", e);
+            return null;
+        }
+    }
+
     private int updatedDeliveryCount(DeliveryCountOps ops) {
         return switch (ops) {
             case INCREASE -> deliveryCount + 1;
@@ -254,7 +339,7 @@ public class InFlightState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(state, deliveryCount, memberId);
+        return Objects.hash(state, deliveryCount, memberId, stagedProducerId, stagedProducerEpoch, stagedAckType);
     }
 
     @Override
@@ -266,15 +351,23 @@ public class InFlightState {
             return false;
         }
         InFlightState that = (InFlightState) o;
-        return state == that.state && deliveryCount == that.deliveryCount && memberId.equals(that.memberId);
+        return state == that.state
+            && deliveryCount == that.deliveryCount
+            && memberId.equals(that.memberId)
+            && stagedProducerId == that.stagedProducerId
+            && stagedProducerEpoch == that.stagedProducerEpoch
+            && stagedAckType == that.stagedAckType;
     }
 
     @Override
     public String toString() {
         return "InFlightState(" +
-            "state=" + state.toString() +
+            "state=" + state +
             ", deliveryCount=" + deliveryCount +
             ", memberId=" + memberId +
+            ", stagedProducerId=" + stagedProducerId +
+            ", stagedProducerEpoch=" + stagedProducerEpoch +
+            ", stagedAckType=" + stagedAckType +
             ")";
     }
 
