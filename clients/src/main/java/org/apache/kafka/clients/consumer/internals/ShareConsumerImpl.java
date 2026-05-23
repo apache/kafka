@@ -46,6 +46,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEv
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.SharePollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareGroupMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
@@ -1117,9 +1118,17 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
     @Override
     public ShareGroupMetadata shareGroupMetadata() {
-        throw new UnsupportedOperationException(
-            "shareGroupMetadata() requires broker-side TxnShareAcknowledge support (KIP-1289). " +
-            "This will be wired in a follow-up phase.");
+        acquireAndEnsureOpen();
+        try {
+            ShareGroupMetadataEvent event = new ShareGroupMetadataEvent(
+                calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
+            applicationEventHandler.add(event);
+            return processBackgroundEvents(event.future(),
+                time.timer(defaultApiTimeoutMs),
+                e -> false);
+        } finally {
+            release();
+        }
     }
 
     /**

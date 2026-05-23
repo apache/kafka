@@ -23,6 +23,8 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ShareGroupMetadata;
+import org.apache.kafka.clients.consumer.internals.AcknowledgementBatch;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -48,7 +50,12 @@ import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData;
+import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData.TxnShareAcknowledgeBatch;
+import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData.TxnShareAcknowledgePartition;
+import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData.TxnShareAcknowledgeTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -70,6 +77,8 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
+import org.apache.kafka.common.requests.TxnShareAcknowledgeRequest;
+import org.apache.kafka.common.requests.TxnShareAcknowledgeResponse;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.internals.LogContext;
 
@@ -103,6 +112,9 @@ public class TransactionManager {
     private final TxnPartitionMap txnPartitionMap;
 
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
+
+    // Pending transactional share-group acks staged awaiting commit/abort marker (KIP-1289).
+    private final Map<TopicIdPartition, List<AcknowledgementBatch>> pendingTxnShareAcks;
 
     // If a batch bound for a partition expired locally after being sent at least once, the partition is considered
     // to have an unresolved state. We keep track of such partitions here, and cannot assign any more sequence numbers
@@ -211,7 +223,8 @@ public class TransactionManager {
         SEND("send"),
         BEGIN_TRANSACTION("beginTransaction"),
         PREPARE_TRANSACTION("prepareTransaction"),
-        SEND_OFFSETS_TO_TRANSACTION("sendOffsetsToTransaction");
+        SEND_OFFSETS_TO_TRANSACTION("sendOffsetsToTransaction"),
+        SEND_SHARE_ACKNOWLEDGEMENTS_TO_TRANSACTION("sendShareAcknowledgementsToTransaction");
         
         final String displayName;
 
@@ -242,6 +255,7 @@ public class TransactionManager {
         this.partitionsInTransaction = new HashSet<>();
         this.pendingRequests = new PriorityQueue<>(10, Comparator.comparingInt(o -> o.priority().priority));
         this.pendingTxnOffsetCommits = new HashMap<>();
+        this.pendingTxnShareAcks = new HashMap<>();
         this.partitionsWithUnresolvedSequences = new HashMap<>();
         this.partitionsToRewriteSequences = new HashSet<>();
         this.retryBackoffMs = retryBackoffMs;
@@ -449,6 +463,41 @@ public class TransactionManager {
                             .setGroupId(groupMetadata.groupId())
             );
             handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        }
+
+        enqueueRequest(handler);
+        return handler.result;
+    }
+
+    public synchronized TransactionalRequestResult sendShareAcknowledgementsToTransaction(
+            final Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
+            final ShareGroupMetadata groupMetadata) {
+        ensureTransactional();
+        throwIfPendingState(TransactionOperation.SEND_SHARE_ACKNOWLEDGEMENTS_TO_TRANSACTION);
+        maybeFailWithError();
+
+        if (currentState != State.IN_TRANSACTION) {
+            throw new IllegalStateException("Cannot send share acknowledgements if a transaction is not in progress " +
+                "(currentState= " + currentState + ")");
+        }
+
+        TxnRequestHandler handler;
+        if (isTransactionV2Enabled()) {
+            log.debug("Begin staging share acks {} for share group {} to transaction with transaction protocol V2",
+                acknowledgements, groupMetadata);
+            handler = txnShareAcknowledgeHandler(null, acknowledgements, groupMetadata);
+            transactionStarted = true;
+        } else {
+            log.debug("Begin staging share acks {} for share group {} to transaction",
+                acknowledgements, groupMetadata);
+            AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
+                new AddOffsetsToTxnRequestData()
+                    .setTransactionalId(transactionalId)
+                    .setProducerId(producerIdAndEpoch.producerId)
+                    .setProducerEpoch(producerIdAndEpoch.epoch)
+                    .setGroupId(groupMetadata.groupId())
+            );
+            handler = new AddShareAcksToTxnHandler(builder, acknowledgements, groupMetadata);
         }
 
         enqueueRequest(handler);
@@ -1973,6 +2022,184 @@ public class TransactionManager {
             } else {
                 // Retry the commits which failed with a retriable error
                 reenqueue();
+            }
+        }
+    }
+
+    private TxnShareAcknowledgeHandler txnShareAcknowledgeHandler(
+            TransactionalRequestResult result,
+            Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
+            ShareGroupMetadata groupMetadata) {
+        pendingTxnShareAcks.putAll(acknowledgements);
+
+        List<TxnShareAcknowledgeTopic> topics = new ArrayList<>();
+        Map<String, TxnShareAcknowledgeTopic> topicMap = new HashMap<>();
+
+        for (Map.Entry<TopicIdPartition, List<AcknowledgementBatch>> entry : acknowledgements.entrySet()) {
+            TopicIdPartition tip = entry.getKey();
+            String topicId = tip.topicId().toString();
+
+            TxnShareAcknowledgeTopic topic = topicMap.computeIfAbsent(topicId, k -> {
+                TxnShareAcknowledgeTopic t = new TxnShareAcknowledgeTopic().setTopicId(tip.topicId());
+                topics.add(t);
+                return t;
+            });
+
+            List<TxnShareAcknowledgeBatch> batches = new ArrayList<>();
+            for (AcknowledgementBatch b : entry.getValue()) {
+                for (byte ackType : b.acknowledgeTypes()) {
+                    batches.add(new TxnShareAcknowledgeBatch()
+                        .setFirstOffset(b.firstOffset())
+                        .setLastOffset(b.lastOffset())
+                        .setAcknowledgeType(ackType));
+                }
+            }
+
+            TxnShareAcknowledgePartition partition = new TxnShareAcknowledgePartition()
+                .setPartitionIndex(tip.partition())
+                .setAcknowledgementBatches(batches);
+            topic.partitions().add(partition);
+        }
+
+        TxnShareAcknowledgeRequestData data = new TxnShareAcknowledgeRequestData()
+            .setTransactionalId(transactionalId)
+            .setGroupId(groupMetadata.groupId())
+            .setProducerId(producerIdAndEpoch.producerId)
+            .setProducerEpoch(producerIdAndEpoch.epoch)
+            .setMemberId(groupMetadata.memberId())
+            .setMemberEpoch(groupMetadata.memberEpoch())
+            .setTopics(topics);
+
+        TxnShareAcknowledgeRequest.Builder builder = new TxnShareAcknowledgeRequest.Builder(data);
+        if (result == null) {
+            return new TxnShareAcknowledgeHandler(builder);
+        }
+        return new TxnShareAcknowledgeHandler(result, builder);
+    }
+
+    private class AddShareAcksToTxnHandler extends TxnRequestHandler {
+        private final AddOffsetsToTxnRequest.Builder builder;
+        private final Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements;
+        private final ShareGroupMetadata groupMetadata;
+
+        private AddShareAcksToTxnHandler(AddOffsetsToTxnRequest.Builder builder,
+                                         Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
+                                         ShareGroupMetadata groupMetadata) {
+            super("AddShareAcksToTxn");
+            this.builder = builder;
+            this.acknowledgements = acknowledgements;
+            this.groupMetadata = groupMetadata;
+        }
+
+        @Override
+        AddOffsetsToTxnRequest.Builder requestBuilder() {
+            return builder;
+        }
+
+        @Override
+        Priority priority() {
+            return Priority.ADD_PARTITIONS_OR_OFFSETS;
+        }
+
+        @Override
+        public void handleResponse(AbstractResponse response) {
+            AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
+            Errors error = Errors.forCode(addOffsetsToTxnResponse.data().errorCode());
+
+            if (error == Errors.NONE) {
+                log.debug("Successfully registered share group {} for transactional acks", builder.data.groupId());
+                pendingRequests.add(txnShareAcknowledgeHandler(result, acknowledgements, groupMetadata));
+                transactionStarted = true;
+            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
+                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+                reenqueue();
+            } else if (error.exception() instanceof RetriableException) {
+                reenqueue();
+            } else if (error == Errors.UNKNOWN_PRODUCER_ID) {
+                abortableErrorIfPossible(error.exception());
+            } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
+                fatalError(Errors.PRODUCER_FENCED.exception());
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                    || error == Errors.INVALID_TXN_STATE
+                    || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
+                fatalError(error.exception());
+            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
+            } else if (error == Errors.TRANSACTION_ABORTABLE) {
+                abortableError(error.exception());
+            } else {
+                fatalError(new KafkaException("Unexpected error in AddOffsetsToTxnResponse for share acks: " + error.message()));
+            }
+        }
+    }
+
+    private class TxnShareAcknowledgeHandler extends TxnRequestHandler {
+        private final TxnShareAcknowledgeRequest.Builder builder;
+
+        private TxnShareAcknowledgeHandler(TransactionalRequestResult result,
+                                           TxnShareAcknowledgeRequest.Builder builder) {
+            super(result);
+            this.builder = builder;
+        }
+
+        private TxnShareAcknowledgeHandler(TxnShareAcknowledgeRequest.Builder builder) {
+            super("TxnShareAcknowledgeHandler");
+            this.builder = builder;
+        }
+
+        @Override
+        TxnShareAcknowledgeRequest.Builder requestBuilder() {
+            return builder;
+        }
+
+        @Override
+        Priority priority() {
+            return Priority.ADD_PARTITIONS_OR_OFFSETS;
+        }
+
+        @Override
+        FindCoordinatorRequest.CoordinatorType coordinatorType() {
+            return FindCoordinatorRequest.CoordinatorType.GROUP;
+        }
+
+        @Override
+        String coordinatorKey() {
+            return builder.data.groupId();
+        }
+
+        @Override
+        public void handleResponse(AbstractResponse response) {
+            TxnShareAcknowledgeResponse txnShareAckResponse = (TxnShareAcknowledgeResponse) response;
+            Errors topLevelError = Errors.forCode(txnShareAckResponse.data().errorCode());
+
+            log.debug("Received TxnShareAcknowledge response for share group {}: errorCode={}",
+                builder.data.groupId(), topLevelError);
+
+            if (topLevelError == Errors.NONE) {
+                pendingTxnShareAcks.clear();
+                result.done();
+            } else if (topLevelError == Errors.COORDINATOR_NOT_AVAILABLE
+                    || topLevelError == Errors.NOT_COORDINATOR
+                    || topLevelError == Errors.REQUEST_TIMED_OUT) {
+                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.data.groupId());
+                reenqueue();
+            } else if (topLevelError.exception() instanceof RetriableException) {
+                reenqueue();
+            } else if (topLevelError == Errors.GROUP_AUTHORIZATION_FAILED) {
+                abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
+            } else if (topLevelError == Errors.TRANSACTION_ABORTABLE) {
+                abortableError(topLevelError.exception());
+            } else if (topLevelError == Errors.UNKNOWN_MEMBER_ID
+                    || topLevelError == Errors.STALE_MEMBER_EPOCH) {
+                abortableError(new CommitFailedException("Transactional share acknowledgement failed " +
+                    "due to share group membership mismatch: " + topLevelError.exception().getMessage()));
+            } else if (topLevelError == Errors.INVALID_PRODUCER_EPOCH
+                    || topLevelError == Errors.PRODUCER_FENCED) {
+                fatalError(Errors.PRODUCER_FENCED.exception());
+            } else if (topLevelError == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatalError(topLevelError.exception());
+            } else {
+                fatalError(new KafkaException("Unexpected error in TxnShareAcknowledgeResponse: " + topLevelError.message()));
             }
         }
     }

@@ -26,6 +26,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.ShareGroupMetadata;
+import org.apache.kafka.clients.consumer.internals.AcknowledgementBatch;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
@@ -777,6 +780,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             sender.wakeup();
             result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
             producerMetrics.recordSendOffsets(time.nanoseconds() - start);
+        }
+    }
+
+    @Override
+    public void sendShareAcknowledgementsToTransaction(
+            Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
+            ShareGroupMetadata groupMetadata) throws ProducerFencedException {
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+        throwIfInPreparedState();
+
+        if (!acknowledgements.isEmpty()) {
+            TransactionalRequestResult result =
+                transactionManager.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+            sender.wakeup();
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
         }
     }
 

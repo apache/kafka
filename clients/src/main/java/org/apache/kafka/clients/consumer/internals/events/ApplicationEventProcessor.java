@@ -91,6 +91,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((SharePollEvent) event);
                 return;
 
+            case SHARE_GROUP_METADATA:
+                process((ShareGroupMetadataEvent) event);
+                return;
+
             case COMMIT_ASYNC:
                 process((AsyncCommitEvent) event);
                 return;
@@ -617,6 +621,16 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
         ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
         manager.setAcknowledgementCommitCallbackRegistered(event.isCallbackRegistered());
+    }
+
+    private void process(final ShareGroupMetadataEvent event) {
+        requestManagers.shareMembershipManager.ifPresentOrElse(
+            mgr -> event.future().complete(
+                new org.apache.kafka.clients.consumer.ShareGroupMetadata(
+                    mgr.groupId(), mgr.memberId(), mgr.memberEpoch())),
+            () -> event.future().completeExceptionally(
+                new IllegalStateException("No share group membership manager available"))
+        );
     }
 
     private void process(final SeekUnvalidatedEvent event) {
