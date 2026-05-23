@@ -27,7 +27,6 @@ import tarfile
 import tempfile
 import zipfile
 from collections import defaultdict, namedtuple
-from textwrap import indent
 
 # Kafka-own jars carry the project's NOTICE already covered by the hand-written
 # header of NOTICE-binary, so we exclude them from the third-party scan.
@@ -83,8 +82,10 @@ def get_tarball_path(project_dir):
 
 def extract_tarball(tarball, extract_dir):
     with tarfile.open(tarball, "r:gz") as tar:
-        tar.extractall(path=extract_dir, filter=lambda tarinfo, dest: tarinfo)
-    print("Tarball extracted to:", extract_dir)
+        try:
+            tar.extractall(path=extract_dir, filter=lambda tarinfo, dest: tarinfo)
+        except TypeError:
+            tar.extractall(path=extract_dir)
 
 
 def classify_jars(libs_dir):
@@ -227,6 +228,28 @@ def print_sources(sources, indent_str):
         print(f"{indent_str}- {jar}  ({entry})")
 
 
+def print_section_header(title):
+    print()
+    print("=" * 78)
+    print(title)
+    print("=" * 78)
+
+
+def print_update_summary(unmatched, leftover):
+    if not unmatched and not leftover:
+        return
+
+    print("\nNOTICE-binary needs updates:")
+    step = 1
+    if unmatched:
+        print(f"  {step}. Copy {len(unmatched)} NOTICE text block(s) from "
+              "`ADD TO NOTICE-binary` into NOTICE-binary.")
+        step += 1
+    if leftover:
+        print(f"  {step}. Delete {len(leftover)} existing block(s) listed under "
+              "`REMOVE FROM NOTICE-binary`.")
+
+
 def print_jar_overview(third_party_jars, kafka_own_jars):
     print(f"\nKafka-own jars excluded by regex {KAFKA_JAR_PATTERN.pattern!r} "
           f"({len(kafka_own_jars)}):")
@@ -292,30 +315,54 @@ def print_matched(matched):
         print_sources(sources, "          ")
 
 
-def print_unmatched(unmatched, total_unique_notices):
-    print(f"\nUpstream NOTICEs NOT matched in NOTICE-binary "
-          f"({len(unmatched)} of {total_unique_notices} unique upstream NOTICEs):")
+def print_notices_to_add(unmatched):
     if not unmatched:
-        print("    <none>")
+        print_section_header("ADD TO NOTICE-binary")
+        print("No NOTICE text needs to be added.")
+        return
+
+    print_section_header(f"ADD TO NOTICE-binary ({len(unmatched)} NOTICE text block(s))")
+    print("For each item, source jar(s) are reference only.")
+    print("Copy only the text between COPY START and COPY END into NOTICE-binary.")
+
     for idx, (sources, text) in enumerate(unmatched, 1):
-        print("\n" + "-" * 78)
-        print(f"  [{idx:02d}] source(s):")
-        print_sources(sources, "          ")
-        print("-" * 78)
-        print(indent(text, "  | "))
+        print()
+        print(f"--- ACTION: ADD NOTICE TEXT [{idx:02d}] ------------------------------------------")
+        print()
+        print("Source jar(s) (reference only):")
+        print_sources(sources, "  ")
+        print()
+        print(f">>> COPY START: NOTICE TEXT [{idx:02d}]")
+        print()
+        print(text)
+        print()
+        print(f"<<< COPY END: NOTICE TEXT [{idx:02d}]")
 
 
-def print_leftover(regions):
-    print(f"\nLeftover content in NOTICE-binary, potentially stale "
-          f"({len(regions)} block(s)):")
+def print_blocks_to_remove(regions, notice_binary_label):
     if not regions:
-        print("    <none>")
-    for idx, (line_start, line_end, lines) in enumerate(regions, 1):
-        print("\n" + "-" * 78)
-        print(f"  [{idx:02d}] NOTICE-binary lines L{line_start}-L{line_end}")
-        print("-" * 78)
-        for offset, line in enumerate(lines):
-            print(f"  {line_start + offset:4d} | {line}")
+        print_section_header("REMOVE FROM NOTICE-binary")
+        print("No existing block needs to be removed.")
+        return
+
+    print_section_header(f"REMOVE FROM NOTICE-binary ({len(regions)} existing block(s))")
+    print("Delete these line ranges from NOTICE-binary:")
+    for idx, (line_start, line_end, _lines) in enumerate(regions, 1):
+        print(f"  [{idx:02d}] {notice_binary_label}:L{line_start}-L{line_end}")
+
+
+def print_notice_update_actions(unmatched, leftover, notice_binary_label):
+    print_update_summary(unmatched, leftover)
+
+    if unmatched or leftover:
+        if unmatched:
+            print_notices_to_add(unmatched)
+        if leftover:
+            print_blocks_to_remove(leftover, notice_binary_label)
+        print("\nRe-run `python committer-tools/verify_notice.py --skip-build` "
+              "after updating NOTICE-binary.")
+    else:
+        print("\nNOTICE-binary fully matches current third-party jar NOTICEs.")
 
 
 def main():
@@ -348,32 +395,21 @@ def main():
         extract_tarball(tarball, tmp_dir)
         libs_dir = os.path.join(tmp_dir, os.listdir(tmp_dir)[0], "libs")
 
-        third_party_jars, kafka_own_jars = classify_jars(libs_dir)
-        print_jar_overview(third_party_jars, kafka_own_jars)
+        third_party_jars, _ = classify_jars(libs_dir)
 
         index = collect_notices(third_party_jars)
-        print_notice_inventory(index)
 
         header, body = split_kafka_header(notice_binary_text)
         body_start = len(header)
-        body_first_line = notice_binary_text[:body_start].count("\n") + 1
-        print(f"\nNOTICE-binary header preserved ({len(header)} chars); "
-              f"third-party body to validate ({len(body)} chars, "
-              f"starting at line {body_first_line}).")
 
-        mask, matched, unmatched = match_notices(body, index)
-        print_matched(matched)
-        print_unmatched(unmatched, len(index.notice_to_jars))
-
+        mask, _matched, unmatched = match_notices(body, index)
         leftover = find_leftover_regions(body, mask, notice_binary_text, body_start)
-        print_leftover(leftover)
+
+        notice_binary_label = os.path.relpath(notice_binary_path, project_dir)
+        print_notice_update_actions(unmatched, leftover, notice_binary_label)
 
         if unmatched or leftover:
-            print("\nNOTICE-binary needs human review: upstream NOTICEs listed above "
-                  "must be added, and leftover blocks should be re-checked.")
             sys.exit(1)
-        else:
-            print("\nNOTICE-binary fully matches upstream jar NOTICEs.")
 
 
 if __name__ == "__main__":
