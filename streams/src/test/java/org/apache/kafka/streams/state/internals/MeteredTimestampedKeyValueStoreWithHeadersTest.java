@@ -23,10 +23,12 @@ import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
@@ -867,5 +869,22 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
         // The critical verification: key deserializer must have been called with HEADERS (not empty headers)
         verify(keyDeserializer).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @Test
+    public void shouldUseHeadersFromContextForPrefixSerialization() {
+        setUp();
+        metered = createStoreWithMockSerdes();
+        when(context.headers()).thenReturn(HEADERS);
+
+        final String prefix = "prefixString";
+        final byte[] serializedPrefix = prefix.getBytes();
+        final Serializer<String> prefixSerializer = mock(StringSerializer.class);
+        when(prefixSerializer.serialize(null, HEADERS, prefix)).thenReturn(serializedPrefix);
+
+        metered.prefixScan(prefix, prefixSerializer);
+
+        verify(prefixSerializer).serialize(null, HEADERS, prefix);
+        verify(inner).prefixScan(eq(serializedPrefix), any(ByteArraySerializer.class));
     }
 }
