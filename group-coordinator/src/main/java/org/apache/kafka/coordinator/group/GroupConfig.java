@@ -344,6 +344,15 @@ public final class GroupConfig extends AbstractConfig {
     );
 
     /**
+     * Returns {@code true} if the given config name is defined as internal in {@link #CONFIG_DEF}.
+     * Returns {@code false} for unknown names or non-internal configs.
+     */
+    public static boolean isInternal(String configName) {
+        ConfigDef.ConfigKey configKey = CONFIG_DEF.configKeys().get(configName);
+        return configKey != null && configKey.internalConfig;
+    }
+
+    /**
      * Returns the broker-level synonym config name for the given group config name,
      * or {@code Optional.empty()} if no broker-level synonym exists.
      *

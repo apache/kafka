@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.test.api.TestKitDefaults;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
@@ -162,6 +163,24 @@ public class TieredStorageTestUtils {
         overridingProps.setProperty(CleanerConfig.LOG_CLEANER_ENABLE_PROP, "false");
 
         return overridingProps;
+    }
+
+    public static Map<String, String> createServerPropsForRemoteStorage(
+            String testClassName, 
+            int brokerCount, 
+            int numRemoteLogMetadataPartitions
+    ) {
+        String storageDirPath = org.apache.kafka.test.TestUtils
+                .tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath();
+        Properties tieredProps = createPropsForRemoteStorage(
+                testClassName, storageDirPath, brokerCount, numRemoteLogMetadataPartitions, new Properties());
+        Map<String, String> serverProps = new HashMap<>();
+        tieredProps.forEach((k, v) -> serverProps.put(k.toString(), v.toString()));
+        serverProps.put(
+                REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+                TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME
+        );
+        return serverProps;
     }
 
     public static Map<String, String> createTopicConfigForRemoteStorage(boolean enableRemoteStorage,
