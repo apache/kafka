@@ -249,7 +249,7 @@ class DynamicBrokerConfigTest {
 
     val props3 = new Properties()
     props3.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "-1")
-    val err3 = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
+    val err3 = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props3, perBrokerConfig = true))
     assertTrue(err3.getMessage.contains("Value must be at least 1"))
     verifyNoMoreInteractions(remoteLogManager)
 
@@ -768,6 +768,55 @@ class DynamicBrokerConfigTest {
     verifyIncorrectLogLocalRetentionProps(-1, 1000L, 200, 100)
     // Check for incorrect case of logLocalRetentionBytes(-1 viz unlimited) > retentionBytes
     verifyIncorrectLogLocalRetentionProps(2000L, 1000L, -1, 100)
+  }
+
+  @Test
+  def testDynamicLogRemoteCopyLagThrowsOnIncorrectConfig(): Unit = {
+    // log remote copy lag ms cannot exceed effective log local retention ms
+    verifyIncorrectLogRemoteCopyLagProps(
+      retentionMs = 1000L,
+      logLocalRetentionMs = -2L,
+      logRemoteCopyLagMs = 1001L,
+      retentionBytes = 1000L,
+      logLocalRetentionBytes = -2L,
+      logRemoteCopyLagBytes = 100L
+    )
+
+    // log remote copy lag bytes cannot exceed effective log local retention bytes
+    verifyIncorrectLogRemoteCopyLagProps(
+      retentionMs = 1000L,
+      logLocalRetentionMs = -2L,
+      logRemoteCopyLagMs = 100L,
+      retentionBytes = 1000L,
+      logLocalRetentionBytes = -2L,
+      logRemoteCopyLagBytes = 1001L
+    )
+
+  }
+
+  def verifyIncorrectLogRemoteCopyLagProps(retentionMs: Long,
+                                           logLocalRetentionMs: Long,
+                                           logRemoteCopyLagMs: Long,
+                                           retentionBytes: Long,
+                                           logLocalRetentionBytes: Long,
+                                           logRemoteCopyLagBytes: Long): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, retentionMs.toString)
+    props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, retentionBytes.toString)
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes.toString)
+    // validate default config
+    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(newProps, perBrokerConfig = false))
+    // validate per broker config
+    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(newProps, perBrokerConfig = true))
   }
 
   @Test
