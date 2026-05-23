@@ -155,6 +155,7 @@ public class ServerLogConfigs {
     public static final int MIN_IN_SYNC_REPLICAS_DEFAULT = 1;
     public static final String MIN_IN_SYNC_REPLICAS_DOC = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC;
 
+    
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG = "create.topic.policy.class.name";
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_DOC = "The create topic policy class that should be used for validation. The class should " +
             "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface. " +
