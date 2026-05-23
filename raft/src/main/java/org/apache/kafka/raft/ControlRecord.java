@@ -46,7 +46,7 @@ public final class ControlRecord {
         return new ControlRecord(recordType, message);
     }
 
-    //this is for test only
+    // this is for test only
     public static ControlRecord of(ApiMessage message) {
         ControlRecordType recordType;
         if (message instanceof LeaderChangeMessage) {
