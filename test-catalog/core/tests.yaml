@@ -1499,7 +1499,7 @@ kafka.server.DynamicBrokerConfigTest:
 - testDynamicLogLocalRetentionSizeConfig
 - testDynamicLogLocalRetentionSkipsOnInvalidConfig
 - testDynamicLogLocalRetentionThrowsOnIncorrectConfig
-- testDynamicRemoteCopyLagThrowsOnIncorrectConfig
+- testDynamicLogRemoteCopyLagThrowsOnIncorrectConfig
 - testDynamicRemoteFetchMaxWaitMsConfig
 - testDynamicRemoteListOffsetsRequestTimeoutMsConfig
 - testDynamicRemoteLogManagerFollowerThreadPoolSizeConfig

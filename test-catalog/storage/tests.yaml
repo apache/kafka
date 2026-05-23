@@ -907,10 +907,11 @@ org.apache.kafka.tiered.storage.integration.OffloadAndTxnConsumeFromLeaderTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.PartitionsExpandTest:
 - executeTieredStorageTest
-org.apache.kafka.tiered.storage.integration.ReassignReplicaExpandTest:
-- executeTieredStorageTest
-org.apache.kafka.tiered.storage.integration.ReassignReplicaMoveTest:
-- executeTieredStorageTest
+org.apache.kafka.tiered.storage.integration.ReassignReplicaMoveAndExpandTest:
+- testReassignReplicaExpandWithClassicGroupProtocol
+- testReassignReplicaExpandWithConsumerGroupProtocol
+- testReassignReplicaMoveWithClassicGroupProtocol
+- testReassignReplicaMoveWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.ReassignReplicaShrinkTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.RollAndOffloadActiveSegmentTest:
