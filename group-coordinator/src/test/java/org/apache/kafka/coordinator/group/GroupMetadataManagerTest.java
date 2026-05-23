@@ -3902,6 +3902,174 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStaticMemberCanRejoinWhenConsumerGroupIsFull() {
+        String groupId = "fooup";
+        String instanceId = "instance-id";
+        String oldMemberId = "old-member-id";
+        String newMemberId = "new-member-id";
+        int groupMaxSize = 1;
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 1)
+                .buildCoordinatorMetadataImage();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+                newMemberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0))))));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+                .withMetadataImage(metadataImage)
+                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, groupMaxSize)
+                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                        .withMember(new ConsumerGroupMember.Builder(oldMemberId)
+                                .setState(MemberState.STABLE)
+                                .setInstanceId(instanceId)
+                                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                                .setPreviousMemberEpoch(9)
+                                .setRebalanceTimeoutMs(5000)
+                                .setSubscribedTopicNames(List.of("foo", "bar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 0)), 10))
+                                .build())
+                        .withAssignment(oldMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                        .withAssignmentEpoch(10)
+                        .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)))))
+                .build();
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setInstanceId(instanceId)
+                .setMemberId(newMemberId)
+                .setMemberEpoch(0)
+                .setServerAssignor("range")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo"))
+                .setTopicPartitions(List.of()));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(newMemberId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(0))
+                    ))),
+            result.response()
+        );
+    }
+
+    @Test
+    public void testStaticMemberRejoinWithUnreleasedInstanceIdFailsWhenConsumerGroupIsFull() {
+        String groupId = "fooup";
+        String instanceId = "instance-id";
+        String oldMemberId = "old-member-id";
+        String newMemberId = "new-member-id";
+        int groupMaxSize = 1;
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 1)
+                .buildCoordinatorMetadataImage();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+                oldMemberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0))))));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+                .withMetadataImage(metadataImage)
+                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, groupMaxSize)
+                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                        .withMember(new ConsumerGroupMember.Builder(oldMemberId)
+                                .setState(MemberState.STABLE)
+                                .setInstanceId(instanceId)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setRebalanceTimeoutMs(5000)
+                                .setSubscribedTopicNames(List.of("foo", "bar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 0)), 10))
+                                .build())
+                        .withAssignment(oldMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                        .withAssignmentEpoch(10)
+                        .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)))))
+                .build();
+
+        assertThrows(UnreleasedInstanceIdException.class, () -> context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setInstanceId(instanceId)
+                        .setMemberId(newMemberId)
+                        .setMemberEpoch(0)
+                        .setServerAssignor("range")
+                        .setRebalanceTimeoutMs(5000)
+                        .setSubscribedTopicNames(List.of("foo"))
+                        .setTopicPartitions(List.of())));
+    }
+
+    @Test
+    public void testNewStaticMemberIsRejectedWhenConsumerGroupIsFull() {
+        String groupId = "fooup";
+        String instanceId = "instance-id";
+        String otherInstanceId = "other-instance-id";
+        String oldMemberId = "old-member-id";
+        String newMemberId = "new-member-id";
+        int groupMaxSize = 1;
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 1)
+                .buildCoordinatorMetadataImage();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+                oldMemberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0))))));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+                .withMetadataImage(metadataImage)
+                .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, groupMaxSize)
+                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                        .withMember(new ConsumerGroupMember.Builder(oldMemberId)
+                                .setState(MemberState.STABLE)
+                                .setInstanceId(instanceId)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setRebalanceTimeoutMs(5000)
+                                .setSubscribedTopicNames(List.of("foo", "bar"))
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 0)), 10))
+                                .build())
+                        .withAssignment(oldMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                        .withAssignmentEpoch(10)
+                        .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)))))
+                .build();
+
+        assertThrows(GroupMaxSizeReachedException.class, () -> context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setInstanceId(otherInstanceId)
+                        .setMemberId(newMemberId)
+                        .setMemberEpoch(0)
+                        .setServerAssignor("range")
+                        .setRebalanceTimeoutMs(5000)
+                        .setSubscribedTopicNames(List.of("foo"))
+                        .setTopicPartitions(List.of())));
+    }
+
+    @Test
     public void testConsumerGroupStates() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
