@@ -95,8 +95,8 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
             return false;
         }
         Object isEnabled = props.get(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
-        if (isEnabled instanceof Boolean) {
-            return (boolean) isEnabled;
+        if (isEnabled instanceof String) {
+            return Boolean.parseBoolean((String) isEnabled);
         }
         return false;
     }

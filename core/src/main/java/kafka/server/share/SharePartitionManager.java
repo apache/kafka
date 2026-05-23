@@ -41,6 +41,7 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
 import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey;
@@ -154,6 +155,8 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final Supplier<Boolean> shareGroupDlqEnableSupplier;
 
+    private ShareGroupDLQManager dlqManager;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -249,6 +252,10 @@ public class SharePartitionManager implements AutoCloseable {
         this.brokerTopicStats = brokerTopicStats;
         this.cache.registerShareGroupListener(new ShareGroupListenerImpl());
         this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+    }
+
+    public void dlqManager(ShareGroupDLQManager dlqManager) {
+        this.dlqManager = dlqManager;
     }
 
     /**
@@ -720,7 +727,7 @@ public class SharePartitionManager implements AutoCloseable {
                     // to identify the respective share partition.
                     SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager, partitionCache);
                     replicaManager.maybeAddListener(sharePartitionKey.topicIdPartition().topicPartition(), listener);
-                    return new SharePartition(
+                    SharePartition sp = new SharePartition(
                             sharePartitionKey.groupId(),
                             sharePartitionKey.topicIdPartition(),
                             leaderEpoch,
@@ -735,6 +742,8 @@ public class SharePartitionManager implements AutoCloseable {
                             listener,
                             shareGroupDlqEnableSupplier
                     );
+                    sp.dlqManager(this.dlqManager);
+                    return sp;
                 });
     }
 

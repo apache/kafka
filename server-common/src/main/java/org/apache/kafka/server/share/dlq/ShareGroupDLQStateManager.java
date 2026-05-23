@@ -250,7 +250,7 @@ public class ShareGroupDLQStateManager {
 
             MemoryRecords records = MemoryRecords.withRecords(
                 Compression.NONE,
-                simpleRecords.toArray(new SimpleRecord[0])
+                simpleRecords.toArray(new SimpleRecord[]{})
             );
 
             ProduceRequestData data = new ProduceRequestData()
@@ -284,6 +284,9 @@ public class ShareGroupDLQStateManager {
             headers.add(new RecordHeader("__dlq.errors.group", param.groupId().getBytes(StandardCharsets.UTF_8)));
             param.deliveryCount().ifPresent(deliveryCount -> headers.add(
                 new RecordHeader("__dlq.errors.delivery.count", Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8))));
+            param.cause().ifPresent(cause -> headers.add(
+                new RecordHeader("__dlq.errors.cause", cause.toString().getBytes(StandardCharsets.UTF_8))
+            ));
 
             return headers.toArray(new Header[0]);
         }
@@ -386,7 +389,7 @@ public class ShareGroupDLQStateManager {
                     String errorMessage = topicResult.errorMessage();
                     switch (error) {
                         case NONE:
-                            // Replace with enqueue post PRODUCE implementation
+                            sender.enqueue(this);
                             break;
 
                         case TOPIC_ALREADY_EXISTS:
@@ -429,6 +432,7 @@ public class ShareGroupDLQStateManager {
         private void handleProduceResponse(ClientResponse response) {
             log.info("Received ProduceResponse {}", response);
             log.info("DLQ produce response {} {}", response.responseBody().data(), response.responseBody().errorCounts());
+            result.complete(null);
         }
     }
 

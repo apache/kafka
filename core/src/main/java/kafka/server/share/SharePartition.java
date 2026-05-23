@@ -332,7 +332,7 @@ public class SharePartition {
     /**
      * Reference to the dlq manager implementation.
      */
-    private final ShareGroupDLQManager shareGroupDLQ = new NoOpShareGroupDLQManager();
+    private ShareGroupDLQManager shareGroupDLQ;
 
     /**
      * Supplier to toggle dlq support.
@@ -403,6 +403,10 @@ public class SharePartition {
         this.registerGaugeMetrics();
         this.deliveryCompleteCount = new AtomicInteger(0);
         this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+    }
+
+    void dlqManager(ShareGroupDLQManager dlqManager) {
+        this.shareGroupDLQ = dlqManager;
     }
 
     /**

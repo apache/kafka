@@ -37,8 +37,7 @@ public interface ShareGroupDLQMetadataCacheHelper {
         String topicName,
         Optional<Integer> numPartitions,
         Optional<Uuid> topicId,
-        List<Node> partitionLeaderNodes,
-        TopicConfig topicConfig
+        List<Node> partitionLeaderNodes
     ) {
     }
 
