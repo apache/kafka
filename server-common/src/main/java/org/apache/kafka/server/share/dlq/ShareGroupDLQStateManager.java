@@ -31,6 +31,7 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
+import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
+import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.config.ServerConfigs;
@@ -145,7 +147,10 @@ public class ShareGroupDLQStateManager {
         private final ShareGroupDLQRecordParameter param;
         private static final Logger LOG = LoggerFactory.getLogger(ShareGroupDLQStateManager.ProduceRequestHandler.class);
         private final ExponentialBackoffManager createTopicsBackoff;
+        private final ExponentialBackoffManager produceRequestBackoff;
         private Node dlqPartitionLeaderNode;
+        private int dlqDestinationPartition;
+        private ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
 
         public ProduceRequestHandler(
             ShareGroupDLQRecordParameter param,
@@ -157,6 +162,13 @@ public class ShareGroupDLQStateManager {
             this.param = param;
             this.result = result;
             this.createTopicsBackoff = new ExponentialBackoffManager(
+                maxRPCRetryAttempts,
+                backoffMs,
+                RETRY_BACKOFF_EXP_BASE,
+                backoffMaxMs,
+                RETRY_BACKOFF_JITTER
+            );
+            this.produceRequestBackoff = new ExponentialBackoffManager(
                 maxRPCRetryAttempts,
                 backoffMs,
                 RETRY_BACKOFF_EXP_BASE,
@@ -235,12 +247,14 @@ public class ShareGroupDLQStateManager {
                 throw new ConfigException(String.format("DLQ topic partition leaders for share group %s with DLQ topic %s could not be found.", param.groupId(), dlqTopic.get()));
             }
 
-            int dlqDestinationPartition = param.topicIdPartition().partition() % tpData.numPartitions().get();
+            this.dlqDestinationPartition = param.topicIdPartition().partition() % tpData.numPartitions().get();
             this.dlqPartitionLeaderNode = tpData.partitionLeaderNodes().get(dlqDestinationPartition);
 
-            if (this.dlqPartitionLeaderNode == null) {
+            if (this.dlqPartitionLeaderNode == null || this.dlqPartitionLeaderNode.equals(Node.noNode())) {
                 throw new ConfigException(String.format("DLQ topic partition leader node for share group %s with DLQ topic %s and partition %d could not be found.", param.groupId(), dlqTopic.get(), dlqDestinationPartition));
             }
+
+            this.dlqTopicPartitionData = tpData;
 
             List<SimpleRecord> simpleRecords = new ArrayList<>();
             for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
@@ -273,7 +287,7 @@ public class ShareGroupDLQStateManager {
         }
 
         public Node dlqPartitionLeaderNode() {
-            return dlqPartitionLeaderNode;
+            return this.dlqPartitionLeaderNode;
         }
 
         private Header[] headers(long offset) {
@@ -285,7 +299,7 @@ public class ShareGroupDLQStateManager {
             param.deliveryCount().ifPresent(deliveryCount -> headers.add(
                 new RecordHeader("__dlq.errors.delivery.count", Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8))));
             param.cause().ifPresent(cause -> headers.add(
-                new RecordHeader("__dlq.errors.cause", cause.toString().getBytes(StandardCharsets.UTF_8))
+                new RecordHeader("__dlq.errors.message", cause.getMessage().getBytes(StandardCharsets.UTF_8))
             ));
 
             return headers.toArray(new Header[0]);
@@ -430,9 +444,87 @@ public class ShareGroupDLQStateManager {
         }
 
         private void handleProduceResponse(ClientResponse response) {
-            log.info("Received ProduceResponse {}", response);
-            log.info("DLQ produce response {} {}", response.responseBody().data(), response.responseBody().errorCounts());
-            result.complete(null);
+            LOG.debug("Received ProduceRequestResponse {}", response);
+            produceRequestBackoff.incrementAttempt();
+            Errors clientResponseError = checkResponseError(response).orElse(Errors.NONE);
+            String clientResponseErrorMessage = clientResponseError.message();
+
+            switch (clientResponseError) {
+                case NONE:
+                    // Produce response received
+                    ProduceResponse produceResponse = ((ProduceResponse) response.responseBody());
+                    ProduceResponseData.TopicProduceResponseCollection produceResponseCollection = produceResponse.data().responses();
+                    if (produceResponseCollection.isEmpty()) {
+                        LOG.error("Received empty produce response for {} to dlq topic node {}.", param, dlqPartitionLeaderNode());
+                        requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception());
+                        break;
+                    }
+
+                    ProduceResponseData.TopicProduceResponse topicProduceResponse = produceResponseCollection.find(
+                        new ProduceResponseData.TopicProduceResponse()
+                            .setTopicId(dlqTopicPartitionData.topicId().get())
+                    );
+                    if (topicProduceResponse == null ||
+                        topicProduceResponse.partitionResponses().isEmpty() ||
+                        topicProduceResponse.partitionResponses().size() < dlqDestinationPartition
+                    ) {
+                        LOG.error("Received empty topic produce response {} to dlq topic node {}.", param, dlqPartitionLeaderNode());
+                        requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception());
+                        break;
+                    }
+
+                    List<ProduceResponseData.PartitionProduceResponse> partitionResponses = topicProduceResponse.partitionResponses();
+                    ProduceResponseData.PartitionProduceResponse partitionResponse = partitionResponses.get(dlqDestinationPartition);
+                    if (partitionResponse == null) {
+                        LOG.error("Received empty partition produce response {} to dlq topic node {}.", param, dlqPartitionLeaderNode());
+                        requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception());
+                        break;
+                    }
+
+                    Errors error = Errors.forCode(partitionResponse.errorCode());
+                    String errorMessage = partitionResponse.errorMessage();
+                    switch (error) {
+                        case NONE:
+                            LOG.debug("Successfully produced records {} to dlq topic node {}", param, dlqPartitionLeaderNode());
+                            this.result.complete(null);
+                            break;
+
+                        case NOT_LEADER_OR_FOLLOWER:
+                            LOG.debug("Received retriable error produce response for {} to dlq topic node {} - {}", param, dlqPartitionLeaderNode(), errorMessage);
+                            if (!produceRequestBackoff.canAttempt()) {
+                                LOG.error("Exhausted max retries to produce {} to  DLQ topic node {}.", param, dlqPartitionLeaderNode());
+                                requestErrorResponse(new Exception("Exhausted max retries to produce to DLQ topic without success."));
+                                break;
+                            }
+                            timer.add(new ShareGroupDLQTimerTask(produceRequestBackoff.backOff(), this));
+                            break;
+
+                        default:
+                            LOG.error("Unable to produce {} to DLQ topic node {} - {}", param, dlqPartitionLeaderNode(), errorMessage);
+                            partitionResponse.recordErrors().forEach(recordError ->
+                                LOG.error("Records with errors {} - {}", recordError.batchIndex(), recordError.batchIndexErrorMessage()));
+                            requestErrorResponse(error.exception());
+                    }
+                    break;
+
+                case NETWORK_EXCEPTION: // Retriable client response error codes.
+                case REQUEST_TIMED_OUT:
+                    LOG.debug("Received retriable error produce client response for {} for DLQ node {} due to {}.",
+                        param, dlqPartitionLeaderNode(), clientResponseErrorMessage);
+                    if (!produceRequestBackoff.canAttempt()) {
+                        LOG.error("Exhausted max retries to produce {} to  DLQ topic node {} due to client response error {}.",
+                            param, dlqPartitionLeaderNode(), clientResponseErrorMessage);
+                        requestErrorResponse(clientResponseError.exception());
+                        break;
+                    }
+                    timer.add(new ShareGroupDLQTimerTask(produceRequestBackoff.backOff(), this));
+                    break;
+
+                default:
+                    LOG.error("Unable to produce {} to DLQ topic node {} due to client response error {}",
+                        param, dlqPartitionLeaderNode(), clientResponseErrorMessage);
+                    requestErrorResponse(clientResponseError.exception());
+            }
         }
     }
 
