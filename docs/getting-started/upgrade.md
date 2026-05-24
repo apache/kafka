@@ -34,6 +34,7 @@ type: docs
 
   * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
   * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.   
+  * New configs have been introduced: remote.copy.lag.bytes, remote.copy.lag.ms and their corresponding broker-level configurations. They allow tiered storage redundancy reduced with delayed upload. For further details, please refer to [KIP-1241](https://cwiki.apache.org/confluence/x/A4LMFw).
 
 ## Upgrading to 4.3.0
 
