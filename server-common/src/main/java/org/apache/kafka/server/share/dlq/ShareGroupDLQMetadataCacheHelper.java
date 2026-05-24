@@ -19,9 +19,6 @@ package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.requests.MetadataResponse;
 
 import java.util.List;
 import java.util.Optional;
