@@ -38,7 +38,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
 public final class ReassignReplicaMoveAndExpandTest {
-    private static final int BROKER_COUNT = 3;
+    private static final int BROKER_COUNT = 2;
     private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 2;
 
     private static final Integer BROKER_0 = 0;
