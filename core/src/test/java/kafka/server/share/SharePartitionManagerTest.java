@@ -49,6 +49,7 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
@@ -3022,6 +3023,48 @@ public class SharePartitionManagerTest {
         cache.connectionDisconnectListener().onDisconnect(CONNECTION_ID);
         // Verify that the listener is called for the group.
         Mockito.verify(partitionCache, times(1)).topicIdPartitionsForGroup(groupId);
+    }
+
+    @Test
+    public void testAcknowledgeTransactionalDelegatesToSharePartition() {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+        TopicIdPartition tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartition sp = mock(SharePartition.class);
+        when(sp.stageTxnAcknowledge(ArgumentMatchers.eq(memberId), ArgumentMatchers.eq(100L), ArgumentMatchers.eq((short) 1), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.put(new SharePartitionKey(groupId, tp), sp);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCache(partitionCache).withBrokerTopicStats(brokerTopicStats).build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> ackTopics = Map.of(
+            tp, List.of(new ShareAcknowledgementBatch(10, 14, List.of((byte) 1))));
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result =
+            sharePartitionManager.acknowledgeTransactional(memberId, groupId, 100L, (short) 1, ackTopics).join();
+
+        assertEquals(Errors.NONE.code(), result.get(tp).errorCode());
+        Mockito.verify(sp).stageTxnAcknowledge(ArgumentMatchers.eq(memberId), ArgumentMatchers.eq(100L), ArgumentMatchers.eq((short) 1), any());
+    }
+
+    @Test
+    public void testApplyTxnMarkerBroadcastsToAllSharePartitions() {
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.put(new SharePartitionKey("grp", tp1), sp1);
+        partitionCache.put(new SharePartitionKey("grp", tp2), sp2);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCache(partitionCache).withBrokerTopicStats(brokerTopicStats).build();
+
+        sharePartitionManager.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+
+        Mockito.verify(sp1).applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+        Mockito.verify(sp2).applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
     }
 
     private Timer systemTimerReaper() {

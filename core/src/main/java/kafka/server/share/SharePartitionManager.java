@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
@@ -351,6 +352,36 @@ public class SharePartitionManager implements AutoCloseable {
         });
 
         return mapAcknowledgementFutures(futures, Optional.of(failedShareAcknowledgeMetricsHandler()));
+    }
+
+    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> acknowledgeTransactional(
+        String memberId,
+        String groupId,
+        long producerId,
+        short producerEpoch,
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics
+    ) {
+        log.trace("Txn acknowledge request for topicIdPartitions: {} groupId: {} producerId={}",
+            acknowledgeTopics.keySet(), groupId, producerId);
+        Map<TopicIdPartition, CompletableFuture<Throwable>> futures = new HashMap<>();
+        acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
+            SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
+            SharePartition sharePartition = partitionCache.get(sharePartitionKey);
+            if (sharePartition == null) {
+                futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+                return;
+            }
+            CompletableFuture<Throwable> future = new CompletableFuture<>();
+            sharePartition.stageTxnAcknowledge(memberId, producerId, producerEpoch, acknowledgePartitionBatches)
+                .whenComplete((result, throwable) -> future.complete(throwable));
+            futures.put(topicIdPartition, future);
+        });
+        return mapAcknowledgementFutures(futures, Optional.empty());
+    }
+
+    public void applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
+        log.debug("Broadcasting txn marker producerId={} epoch={} result={}", producerId, producerEpoch, result);
+        partitionCache.values().forEach(sp -> sp.applyTxnMarker(producerId, producerEpoch, result));
     }
 
     /**
