@@ -34,12 +34,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
 public final class DeleteSegmentsTest {
 
-    private static final int BROKER_COUNT = 1;
+    private static final int BROKER_COUNT = 3;
     private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 5;
 
     private static final Map<String, String> RETENTION_SIZE_CONFIG =
@@ -87,6 +89,9 @@ public final class DeleteSegmentsTest {
         final int partitionCount = 1;
         final int replicationFactor = 1;
         final int maxBatchCountPerSegment = 1;
+        // Pin the partition to broker 0 so the broker0-based expectations are deterministic
+        // regardless of how many brokers the cluster has.
+        final Map<Integer, List<Integer>> replicaAssignment = mkMap(mkEntry(p0, List.of(broker0)));
         final boolean enableRemoteLogStorage = true;
         final int beginEpoch = 0;
         final long startOffset = 3;
@@ -94,7 +99,7 @@ public final class DeleteSegmentsTest {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
 
         // Create topicA with 1 partition, 1 RF and enabled with remote storage.
-        builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, null,
+        builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
                 // produce events to partition 0 and expect 3 segments to be offloaded
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
