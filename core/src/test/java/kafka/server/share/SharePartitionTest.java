@@ -49,6 +49,7 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -13303,6 +13304,69 @@ public class SharePartitionTest {
         Mockito.when(configProvider.partitionMaxRecordLocksOrDefault(GROUP_ID, DEFAULT_MAX_IN_FLIGHT_RECORDS)).thenReturn(DEFAULT_MAX_IN_FLIGHT_RECORDS);
         Mockito.when(configProvider.deliveryCountLimitOrDefault(GROUP_ID, DEFAULT_MAX_DELIVERY_COUNT)).thenReturn(DEFAULT_MAX_DELIVERY_COUNT);
         return configProvider;
+    }
+
+    @Test
+    public void testStageTxnAcknowledgeAcceptThenCommitMarkerTransitionsToAcknowledged() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        CompletableFuture<Void> stage = sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id))));
+        assertNull(stage.join());
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+
+        sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(10L).batchState());
+    }
+
+    @Test
+    public void testStageTxnAcknowledgeAcceptThenAbortMarkerTransitionsToAvailable() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 200L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+
+        sharePartition.applyTxnMarker(200L, (short) 1, TransactionResult.ABORT);
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
+    }
+
+    @Test
+    public void testStageTxnAcknowledgeRejectsReleaseType() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        CompletableFuture<Void> stage = sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.RELEASE.id))));
+        assertTrue(stage.isCompletedExceptionally());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+    }
+
+    @Test
+    public void testApplyTxnMarkerWithMismatchedProducerIsNoop() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+
+        sharePartition.applyTxnMarker(999L, (short) 1, TransactionResult.COMMIT);
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+    }
+
+    @Test
+    public void testApplyTxnMarkerForCommitRejectTransitionsToArchiving() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.REJECT.id)))).join();
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+
+        sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+        assertEquals(RecordState.ARCHIVING, sharePartition.cachedState().get(10L).batchState());
     }
 
     private static class SharePartitionBuilder {

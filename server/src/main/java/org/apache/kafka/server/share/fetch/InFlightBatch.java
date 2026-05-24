@@ -170,6 +170,14 @@ public class InFlightBatch {
      * @return {@code InFlightState} if update succeeds, null otherwise. Returning state helps update chaining.
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
+    public InFlightState stageBatchTxnAcknowledge(long producerId, short producerEpoch, org.apache.kafka.clients.consumer.AcknowledgeType ackType) {
+        return inFlightState().stageTxnAcknowledge(producerId, producerEpoch, ackType);
+    }
+
+    public InFlightState applyBatchTxnMarker(long producerId, short producerEpoch, org.apache.kafka.common.requests.TransactionResult result) {
+        return inFlightState().applyTxnMarker(producerId, producerEpoch, result);
+    }
+
     public InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId, boolean dlqSupportEnabled) {
         return inFlightState().tryUpdateState(newState, ops, maxDeliveryCount, newMemberId, dlqSupportEnabled);
     }

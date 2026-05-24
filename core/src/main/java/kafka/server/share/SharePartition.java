@@ -27,6 +27,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -1049,6 +1050,116 @@ public class SharePartition {
         // and update the cached state for start offset. Else rollback the state transition.
         rollbackOrProcessStateUpdates(future, throwable, persisterBatches);
         return future;
+    }
+
+    public CompletableFuture<Void> stageTxnAcknowledge(
+        String memberId,
+        long producerId,
+        short producerEpoch,
+        List<ShareAcknowledgementBatch> acknowledgementBatches
+    ) {
+        log.trace("Txn stage request for share partition: {}-{} producerId={}", groupId, topicIdPartition, producerId);
+
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        Throwable throwable = null;
+        lock.writeLock().lock();
+        try {
+            for (ShareAcknowledgementBatch batch : acknowledgementBatches) {
+                Map<Long, Byte> ackTypeMap;
+                try {
+                    ackTypeMap = fetchAckTypeMapForBatch(batch);
+                } catch (IllegalArgumentException e) {
+                    throwable = new InvalidRequestException("Invalid acknowledge type: " + batch.acknowledgeTypes());
+                    break;
+                }
+
+                for (Byte ackType : ackTypeMap.values()) {
+                    if (ackType != AcknowledgeType.ACCEPT.id && ackType != AcknowledgeType.REJECT.id) {
+                        throwable = new InvalidRequestException("Only ACCEPT or REJECT permitted in transactional ack");
+                        break;
+                    }
+                }
+                if (throwable != null) break;
+
+                if (batch.lastOffset() < startOffset) continue;
+
+                NavigableMap<Long, InFlightBatch> subMap;
+                try {
+                    subMap = fetchSubMapForAcknowledgementBatch(batch);
+                } catch (InvalidRecordStateException | InvalidRequestException e) {
+                    throwable = e;
+                    break;
+                }
+
+                throwable = stageBatchTxnRecords(memberId, producerId, producerEpoch, batch, ackTypeMap, subMap);
+                if (throwable != null) break;
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+        if (throwable != null) future.completeExceptionally(throwable);
+        else future.complete(null);
+        return future;
+    }
+
+    private Throwable stageBatchTxnRecords(
+        String memberId,
+        long producerId,
+        short producerEpoch,
+        ShareAcknowledgementBatch batch,
+        Map<Long, Byte> ackTypeMap,
+        NavigableMap<Long, InFlightBatch> subMap
+    ) {
+        for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
+            InFlightBatch inFlightBatch = entry.getValue();
+            if (inFlightBatch.lastOffset() < startOffset) continue;
+
+            if (inFlightBatch.offsetState() == null) {
+                Optional<Throwable> memberCheck = validateAcknowledgementBatchMemberId(memberId, inFlightBatch);
+                if (memberCheck.isPresent()) return memberCheck.get();
+
+                byte ackType = ackTypeMap.get(batch.firstOffset());
+                InFlightState staged = inFlightBatch.stageBatchTxnAcknowledge(
+                    producerId, producerEpoch, AcknowledgeType.forId(ackType));
+                if (staged == null) {
+                    return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
+                }
+            } else {
+                for (Map.Entry<Long, InFlightState> os : inFlightBatch.offsetState().entrySet()) {
+                    if (os.getKey() < batch.firstOffset() || os.getKey() < startOffset) continue;
+                    if (os.getKey() > batch.lastOffset()) break;
+
+                    if (!os.getValue().memberId().equals(memberId)) {
+                        return new InvalidRecordStateException("Member is not the owner of offset");
+                    }
+                    byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(os.getKey()) : batch.acknowledgeTypes().get(0);
+                    InFlightState staged = os.getValue().stageTxnAcknowledge(
+                        producerId, producerEpoch, AcknowledgeType.forId(ackType));
+                    if (staged == null) {
+                        return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public void applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
+        lock.writeLock().lock();
+        try {
+            for (InFlightBatch batch : cachedState.values()) {
+                if (batch.offsetState() == null) {
+                    batch.applyBatchTxnMarker(producerId, producerEpoch, result);
+                } else {
+                    for (InFlightState state : batch.offsetState().values()) {
+                        state.applyTxnMarker(producerId, producerEpoch, result);
+                    }
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**
