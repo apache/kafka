@@ -25,6 +25,20 @@ import java.util.Collection;
 public interface RecordBatchingStateRestoreCallback extends BatchingStateRestoreCallback {
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records);
 
+    /**
+     * Invoked by the framework before each {@link #restoreBatch(Collection)} call so stores can
+     * react to a restore window opening (e.g. suppress changelog logging during replay) without
+     * managing the lifecycle inline. Default no-op keeps existing implementations source-compatible.
+     */
+    default void onRestoreStart() {}
+
+    /**
+     * Invoked by the framework after each {@link #restoreBatch(Collection)} call, including when
+     * {@code restoreBatch} throws. Implementations must tolerate being called even if
+     * {@link #onRestoreStart()} did not complete successfully.
+     */
+    default void onRestoreEnd() {}
+
     @Override
     default void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
         throw new UnsupportedOperationException();

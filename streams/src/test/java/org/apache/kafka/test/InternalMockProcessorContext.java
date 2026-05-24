@@ -484,12 +484,22 @@ public class InternalMockProcessorContext<KOut, VOut>
         for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
             records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
         }
-        restoreCallback.restoreBatch(records);
+        try {
+            restoreCallback.onRestoreStart();
+            restoreCallback.restoreBatch(records);
+        } finally {
+            restoreCallback.onRestoreEnd();
+        }
     }
 
     public void restoreWithHeaders(final String storeName, final List<ConsumerRecord<byte[], byte[]>> changeLog) {
         final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreFuncs.get(storeName));
-        restoreCallback.restoreBatch(changeLog);
+        try {
+            restoreCallback.onRestoreStart();
+            restoreCallback.restoreBatch(changeLog);
+        } finally {
+            restoreCallback.onRestoreEnd();
+        }
     }
 
     public void addChangelogForStore(final String storeName, final String changelogTopic) {

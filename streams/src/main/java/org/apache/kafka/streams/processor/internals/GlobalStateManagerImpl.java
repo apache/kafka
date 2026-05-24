@@ -509,7 +509,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
                 offset = getGlobalConsumerOffset(topicPartition);
 
-                stateRestoreAdapter.restoreBatch(restoreRecords);
+                try {
+                    stateRestoreAdapter.onRestoreStart();
+                    stateRestoreAdapter.restoreBatch(restoreRecords);
+                } finally {
+                    stateRestoreAdapter.onRestoreEnd();
+                }
                 stateRestoreListener.onBatchRestored(topicPartition, storeMetadata.stateStore.name(), offset, restoreRecords.size());
                 restoreCount += restoreRecords.size();
             }
