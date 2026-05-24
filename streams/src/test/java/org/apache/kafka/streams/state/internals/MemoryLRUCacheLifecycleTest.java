@@ -31,13 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Verifies that {@link MemoryLRUCache} reacts correctly to the
- * {@link RecordBatchingStateRestoreCallback} lifecycle hooks driven by
- * the framework: the {@code restoring} flag is flipped in step with
- * {@code onRestoreStart} / {@code onRestoreEnd}, and the eviction
- * listener is suppressed only while a restore window is open.
- */
 public class MemoryLRUCacheLifecycleTest {
 
     private MemoryLRUCache cache;
@@ -54,19 +47,17 @@ public class MemoryLRUCacheLifecycleTest {
 
     @Test
     public void restoringFlagFollowsLifecycleHooks() {
-        assertFalse(cache.isRestoring(), "flag must default to false before any restore");
+        assertFalse(cache.isRestoring());
 
         callback.onRestoreStart();
-        assertTrue(cache.isRestoring(), "onRestoreStart must set the flag");
+        assertTrue(cache.isRestoring());
 
         callback.onRestoreEnd();
-        assertFalse(cache.isRestoring(), "onRestoreEnd must clear the flag");
+        assertFalse(cache.isRestoring());
     }
 
     @Test
     public void onRestoreEndClearsFlagWhenStartWasNeverCalled() {
-        // Models the framework's finally branch when onRestoreStart itself threw:
-        // onRestoreEnd is still invoked and must leave the store in a usable state.
         callback.onRestoreEnd();
         assertFalse(cache.isRestoring());
     }
@@ -76,17 +67,15 @@ public class MemoryLRUCacheLifecycleTest {
         final AtomicInteger evictions = new AtomicInteger();
         cache.setWhenEldestRemoved((k, v) -> evictions.incrementAndGet());
 
-        // Inside a restore window: evictions are silent.
         callback.onRestoreStart();
         cache.put(Bytes.wrap(new byte[]{1}), new byte[]{1});
         cache.put(Bytes.wrap(new byte[]{2}), new byte[]{2});
-        cache.put(Bytes.wrap(new byte[]{3}), new byte[]{3}); // evicts key 1, listener must NOT fire
-        assertEquals(0, evictions.get(), "eviction listener must be suppressed during restore");
+        cache.put(Bytes.wrap(new byte[]{3}), new byte[]{3});
+        assertEquals(0, evictions.get());
         callback.onRestoreEnd();
 
-        // Outside the window: the next eviction fires the listener.
-        cache.put(Bytes.wrap(new byte[]{4}), new byte[]{4}); // evicts key 2
-        assertEquals(1, evictions.get(), "eviction listener must fire after restore ends");
+        cache.put(Bytes.wrap(new byte[]{4}), new byte[]{4});
+        assertEquals(1, evictions.get());
     }
 
     @Test
@@ -95,7 +84,7 @@ public class MemoryLRUCacheLifecycleTest {
         cache.setWhenEldestRemoved((k, v) -> evictions.incrementAndGet());
 
         callback.onRestoreStart();
-        callback.restoreBatch(Collections.emptyList()); // empty batch is a valid lifecycle event
+        callback.restoreBatch(Collections.emptyList());
         callback.onRestoreEnd();
 
         assertEquals(0, evictions.get());
