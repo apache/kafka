@@ -87,9 +87,6 @@ public final class DeleteSegmentsTest {
         final int partitionCount = 1;
         final int replicationFactor = 1;
         final int maxBatchCountPerSegment = 1;
-        // Pin the partition to broker 0 so the broker0-based expectations are deterministic
-        // regardless of how many brokers the cluster has.
-        final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
         final int beginEpoch = 0;
         final long startOffset = 3;
@@ -97,7 +94,7 @@ public final class DeleteSegmentsTest {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
 
         // Create topicA with 1 partition, 1 RF and enabled with remote storage.
-        builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
+        builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, null,
                         enableRemoteLogStorage)
                 // produce events to partition 0 and expect 3 segments to be offloaded
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
