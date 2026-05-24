@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.config;
 
-import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.raft.KRaftConfigs;
@@ -101,13 +100,7 @@ public class AbstractKafkaConfigTest {
             ConfigDef configDef = new ConfigDef().define(TEST_INTERNAL_GROUP_CONFIG_BROKER_SYNONYM, ConfigDef.Type.STRING,
                 "default-value", ConfigDef.Importance.LOW, "test broker synonym");
 
-            AbstractKafkaConfig kafkaConfig = new AbstractKafkaConfig(configDef, new HashMap<>(brokerProps), Map.of(), false) {
-                @Override
-                public void addReconfigurable(Reconfigurable reconfigurable) { }
-
-                @Override
-                public void removeReconfigurable(Reconfigurable reconfigurable) { }
-            };
+            AbstractKafkaConfig kafkaConfig = new AbstractKafkaConfig(configDef, new HashMap<>(brokerProps), Map.of(), false) { };
 
             return kafkaConfig.extractGroupConfigMap();
         }
