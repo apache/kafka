@@ -2047,12 +2047,10 @@ public class TransactionManager {
 
             List<TxnShareAcknowledgeBatch> batches = new ArrayList<>();
             for (AcknowledgementBatch b : entry.getValue()) {
-                for (byte ackType : b.acknowledgeTypes()) {
-                    batches.add(new TxnShareAcknowledgeBatch()
-                        .setFirstOffset(b.firstOffset())
-                        .setLastOffset(b.lastOffset())
-                        .setAcknowledgeType(ackType));
-                }
+                batches.add(new TxnShareAcknowledgeBatch()
+                    .setFirstOffset(b.firstOffset())
+                    .setLastOffset(b.lastOffset())
+                    .setAcknowledgeTypes(b.acknowledgeTypes()));
             }
 
             TxnShareAcknowledgePartition partition = new TxnShareAcknowledgePartition()
