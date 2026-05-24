@@ -91,7 +91,7 @@ public final class DeleteSegmentsTest {
         final int maxBatchCountPerSegment = 1;
         // Pin the partition to broker 0 so the broker0-based expectations are deterministic
         // regardless of how many brokers the cluster has.
-        final Map<Integer, List<Integer>> replicaAssignment = mkMap(mkEntry(p0, List.of(broker0)));
+        final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
         final int beginEpoch = 0;
         final long startOffset = 3;
