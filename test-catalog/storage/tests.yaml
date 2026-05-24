@@ -885,12 +885,13 @@ org.apache.kafka.storage.internals.utils.ThrottlerTest:
 org.apache.kafka.tiered.storage.integration.AlterLogDirTest:
 - testAlterLogDirWithClassicGroupProtocol
 - testAlterLogDirWithConsumerGroupProtocol
-org.apache.kafka.tiered.storage.integration.DeleteSegmentsByRetentionSizeTest:
-- executeTieredStorageTest
-org.apache.kafka.tiered.storage.integration.DeleteSegmentsByRetentionTimeTest:
-- executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.DeleteSegmentsDueToLogStartOffsetBreachTest:
 - executeTieredStorageTest
+org.apache.kafka.tiered.storage.integration.DeleteSegmentsTest:
+- testDeleteSegmentsByRetentionSizeWithClassicGroupProtocol
+- testDeleteSegmentsByRetentionSizeWithConsumerGroupProtocol
+- testDeleteSegmentsByRetentionTimeWithClassicGroupProtocol
+- testDeleteSegmentsByRetentionTimeWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.DeleteTopicTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.DisableRemoteLogOnTopicTest:
