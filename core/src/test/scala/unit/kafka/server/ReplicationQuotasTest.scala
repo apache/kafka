@@ -120,6 +120,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
           Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
             QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG -> entry,
             QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG -> entry).asJava).asJava,
+          false,
           false
         ).get()
       }

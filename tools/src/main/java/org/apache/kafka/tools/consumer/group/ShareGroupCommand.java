@@ -44,7 +44,7 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.OffsetsUtils;
+import org.apache.kafka.tools.GroupOffsetsResetter;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectWriter;
@@ -106,7 +106,7 @@ public class ShareGroupCommand {
                     String exported = shareGroupService.exportOffsetsToCsv(offsetsToReset);
                     System.out.println(exported);
                 } else {
-                    OffsetsUtils.printOffsetsToReset(offsetsToReset);
+                    GroupOffsetsResetter.printOffsetsToReset(offsetsToReset);
                 }
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
                 shareGroupService.deleteOffsets();
@@ -138,7 +138,7 @@ public class ShareGroupCommand {
     static class ShareGroupService implements AutoCloseable {
         final ShareGroupCommandOptions opts;
         private final Admin adminClient;
-        private final OffsetsUtils offsetsUtils;
+        private final GroupOffsetsResetter groupOffsetsResetter;
 
         public ShareGroupService(ShareGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
@@ -147,18 +147,18 @@ public class ShareGroupCommand {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
         public ShareGroupService(ShareGroupCommandOptions opts, Admin adminClient) {
             this.opts = opts;
             this.adminClient = adminClient;
-            this.offsetsUtils = new OffsetsUtils(adminClient, opts.parser, getOffsetsUtilsOptions(opts));
+            this.groupOffsetsResetter = new GroupOffsetsResetter(adminClient, opts.parser, getGroupOffsetsResetterOptions(opts));
         }
 
-        private OffsetsUtils.OffsetsUtilsOptions getOffsetsUtilsOptions(ShareGroupCommandOptions opts) {
+        private GroupOffsetsResetter.GroupOffsetsResetterOptions getGroupOffsetsResetterOptions(ShareGroupCommandOptions opts) {
             return
-                new OffsetsUtils.OffsetsUtilsOptions(opts.options.valuesOf(opts.groupOpt),
+                new GroupOffsetsResetter.GroupOffsetsResetterOptions(opts.options.valuesOf(opts.groupOpt),
                     opts.options.valuesOf(opts.resetToOffsetOpt),
                     opts.options.valuesOf(opts.resetFromFileOpt),
                     opts.options.valuesOf(opts.resetToDatetimeOpt),
@@ -436,13 +436,19 @@ public class ShareGroupCommand {
                 if (!(GroupState.EMPTY.equals(shareGroupDescription.groupState()) || GroupState.DEAD.equals(shareGroupDescription.groupState()))) {
                     CommandLineUtils.printErrorAndExit(String.format("Share group '%s' is not empty.", groupId));
                 }
-                result.put(groupId, resetOffsetsForInactiveGroup(groupId));
+                Map<TopicPartition, OffsetAndMetadata> offsetsToReset = resetOffsetsForInactiveGroup(groupId);
+                if (!offsetsToReset.isEmpty()) {
+                    result.put(groupId, offsetsToReset);
+                }
             } catch (InterruptedException ie) {
                 throw new RuntimeException(ie);
             } catch (ExecutionException ee) {
                 Throwable cause = ee.getCause();
                 if (cause instanceof GroupIdNotFoundException) {
-                    result.put(groupId, resetOffsetsForInactiveGroup(groupId));
+                    Map<TopicPartition, OffsetAndMetadata> offsetsToReset = resetOffsetsForInactiveGroup(groupId);
+                    if (!offsetsToReset.isEmpty()) {
+                        result.put(groupId, offsetsToReset);
+                    }
                 } else if (cause instanceof KafkaException) {
                     CommandLineUtils.printErrorAndExit(cause.getMessage());
                 } else {
@@ -484,7 +490,7 @@ public class ShareGroupCommand {
             Collection<TopicPartition> partitionsToReset;
 
             if (opts.options.has(opts.topicOpt)) {
-                partitionsToReset = offsetsUtils.parseTopicPartitionsToReset(opts.options.valuesOf(opts.topicOpt));
+                partitionsToReset = groupOffsetsResetter.parseTopicPartitionsToReset(opts.options.valuesOf(opts.topicOpt));
             } else {
                 Map<String, ListShareGroupOffsetsSpec> groupSpecs = Map.of(groupId, new ListShareGroupOffsetsSpec());
                 Map<TopicPartition, SharePartitionOffsetInfo> offsetsByTopicPartitions = adminClient.listShareGroupOffsets(
@@ -516,20 +522,20 @@ public class ShareGroupCommand {
         }
 
         private Map<TopicPartition, OffsetAndMetadata> prepareOffsetsToReset(String groupId, Collection<TopicPartition> partitionsToReset) {
-            offsetsUtils.checkAllTopicPartitionsValid(partitionsToReset);
+            groupOffsetsResetter.checkAllTopicPartitionsValid(partitionsToReset);
             if (opts.options.has(opts.resetToOffsetOpt)) {
-                return offsetsUtils.resetToOffset(partitionsToReset);
+                return groupOffsetsResetter.resetToOffset(partitionsToReset);
             } else if (opts.options.has(opts.resetToEarliestOpt)) {
-                return offsetsUtils.resetToEarliest(partitionsToReset);
+                return groupOffsetsResetter.resetToEarliest(partitionsToReset);
             } else if (opts.options.has(opts.resetToLatestOpt)) {
-                return offsetsUtils.resetToLatest(partitionsToReset);
+                return groupOffsetsResetter.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
-                return offsetsUtils.resetToDateTime(partitionsToReset);
+                return groupOffsetsResetter.resetToDateTime(partitionsToReset);
             } else if (opts.options.has(opts.resetFromFileOpt)) {
-                return offsetsUtils.resetFromFile(groupId);
+                return groupOffsetsResetter.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
                 Map<TopicPartition, SharePartitionOffsetInfo> currentOffsets = getOffsetInfo(groupId);
-                return offsetsUtils.resetToCurrentForShareGroup(partitionsToReset, currentOffsets);
+                return groupOffsetsResetter.resetToCurrentForShareGroup(partitionsToReset, currentOffsets);
             }
             CommandLineUtils
                 .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetsScenarioOpts));

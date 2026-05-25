@@ -236,8 +236,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val replicaSelectorClassName = Option(getString(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG))
 
   /** ********* Replication configuration ***********/
-  val controllerSocketTimeoutMs: Int = getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG)
-  val defaultReplicationFactor: Int = getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)
   val replicaLagTimeMaxMs = getLong(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG)
   val replicaSocketTimeoutMs = getInt(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG)
   val replicaSocketReceiveBufferBytes = getInt(ReplicationConfigs.REPLICA_SOCKET_RECEIVE_BUFFER_BYTES_CONFIG)
@@ -362,22 +360,47 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
     val controllerListenersValue = controllerListeners
 
-    controllerListenerNames.asScala.flatMap { name =>
+    def nameToEndpoint(name: String, isDefault: Boolean): Option[Endpoint] = {
       controllerAdvertisedListeners
         .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
-        .orElse(
-          // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
-          // which match listener names in controller.listener.names.
-          // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
-          // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+        .orElse {
           controllerListenersValue
             .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
-            .map(endpoint => if (endpoint.host == "0.0.0.0") {
-              new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
-            } else {
-              endpoint
-            })
-        )
+            .map { endpoint =>
+              val voterListenerOverride = {
+                // the user did not provide an advertised listener for the default controller listener;
+                // if controller.quorum.voters defines an endpoint for this node, use that as the advertised listener
+                if (isDefault && (endpoint.host == null || endpoint.host == "0.0.0.0")) {
+                  val votersAddress = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId())
+                  votersAddress.map { socketAddress =>
+                    new Endpoint(
+                      endpoint.listener,
+                      endpoint.securityProtocol,
+                      socketAddress.getHostString,
+                      socketAddress.getPort
+                    )
+                  }
+                } else {
+                  None
+                }
+              }
+              voterListenerOverride.getOrElse {
+                // Removing "0.0.0.0" host to avoid validation errors.
+                // This is to be compatible with the old behavior before 3.9.
+                // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+                if (endpoint.host == "0.0.0.0") {
+                  new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
+                } else {
+                  endpoint
+                }
+              }
+            }
+        }
+    }
+
+    controllerListenerNames.asScala.toList match {
+      case Nil => Nil
+      case head :: tail => nameToEndpoint(head, true).toList ++ tail.flatMap(nameToEndpoint(_, false))
     }
   }
 
@@ -399,7 +422,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       require(cordonedLogDirs.size == 1, s"When ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} is set to ${ServerLogConfigs.CORDONED_LOG_DIRS_ALL}, it must not contain other values")
     } else {
       val unknownLogDirs = cordonedLogDirs.asScala.filter(!logDirs().contains(_))
-      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be present in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entries : ${unknownLogDirs.mkString(", ")}")
+      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be present in ${ServerLogConfigs.LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entries : ${unknownLogDirs.mkString(", ")}")
     }
   }
 
@@ -605,6 +628,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteLogManagerConfig.logRemoteCopyLagMs: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig.logRemoteCopyLagBytes: java.lang.Long)
     logProps
   }
 }

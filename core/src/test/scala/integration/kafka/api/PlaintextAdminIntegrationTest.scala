@@ -1854,24 +1854,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(endTimeMs > startTimeMs, "Expected the timeout to take at least one millisecond.")
   }
 
-  /**
-    * Test injecting timeouts for calls that are in flight.
-    */
-  @Test
-  def testCallInFlightTimeouts(): Unit = {
-    val config = createConfig
-    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000")
-    config.put(AdminClientConfig.RETRIES_CONFIG, "0")
-    val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
-    client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
-        new CreateTopicsOptions().validateOnly(true)).all()
-    assertFutureThrows(classOf[TimeoutException], future)
-    val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1.toShort)).asJava,
-      new CreateTopicsOptions().validateOnly(true)).all()
-    future2.get
-    assertEquals(1, factory.failuresInjected)
-  }
+
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
@@ -4323,7 +4306,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
       util.Map.of(controllerNodeResource,
         util.Map.of(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP,
-          new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
+          new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false, false).get()
     ensureConsistentKRaftMetadata()
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(

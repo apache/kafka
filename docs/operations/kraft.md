@@ -142,9 +142,17 @@ bin/kafka-storage.sh format --cluster-id ${CLUSTER_ID} \
 
 This command is similar to the standalone version but the snapshot at 00000000000000000000-0000000000.checkpoint will instead contain a VotersRecord that includes information for all of the controllers specified in --initial-controllers. It is important that the value of this flag is the same in all of the controllers with the same cluster id. In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the replica id, 3Db5QLSqSZieL3rJBUUegA is the replica directory id, controller-0 is the replica's host and 1234 is the replica's port. 
 
-### Formatting Brokers and New Controllers
+### Formatting New Brokers
 
-When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the `kafka-storage.sh format` command with the --no-initial-controllers flag. 
+When provisioning new broker nodes that we want to add to an existing Kafka cluster, use the `kafka-storage.sh format` command with no additional flags.
+
+```bash
+$ bin/kafka-storage.sh format --cluster-id <CLUSTER_ID> --config config/server.properties
+```
+
+### Formatting New Controllers
+
+When provisioning new controller nodes that we want to add to an existing Kafka cluster, use the `kafka-storage.sh format` command with the --no-initial-controllers flag. 
 
 ```bash
 $ bin/kafka-storage.sh format --cluster-id <CLUSTER_ID> --config config/server.properties --no-initial-controllers

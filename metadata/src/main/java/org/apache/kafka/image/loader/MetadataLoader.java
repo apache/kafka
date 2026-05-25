@@ -451,8 +451,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     }
 
     /**
-     * Load a snapshot. This is relatively straightforward since we don't track as many things as
-     * we do in loadLogDelta. The main complication here is that we have to maintain an index
+     * Load a snapshot.
+     * The main complication here is that we have to maintain an index
      * of what record we are processing so that we can give useful error messages.
      *
      * @param delta     The metadata delta we are preparing.

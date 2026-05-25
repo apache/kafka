@@ -18,12 +18,16 @@
 package kafka.server.share;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
 import org.slf4j.Logger;
@@ -33,23 +37,27 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 
-public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper {
+public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper, ShareGroupDLQMetadataCacheHelper {
     private final MetadataCache metadataCache;
     private final Function<SharePartitionKey, Integer> keyToPartitionMapper;
     private final ListenerName interBrokerListenerName;
+    private final GroupConfigManager groupConfigManager;
     private final Logger log = LoggerFactory.getLogger(ShareCoordinatorMetadataCacheHelperImpl.class);
 
     public ShareCoordinatorMetadataCacheHelperImpl(
         MetadataCache metadataCache,
         Function<SharePartitionKey, Integer> keyToPartitionMapper,
-        ListenerName interBrokerListenerName
+        ListenerName interBrokerListenerName,
+        GroupConfigManager groupConfigManager
     ) {
         this.metadataCache = Objects.requireNonNull(metadataCache, "metadataCache must not be null");
         this.keyToPartitionMapper = Objects.requireNonNull(keyToPartitionMapper, "keyToPartitionMapper must not be null");
         this.interBrokerListenerName = Objects.requireNonNull(interBrokerListenerName, "interBrokerListenerName must not be null");
+        this.groupConfigManager = Objects.requireNonNull(groupConfigManager, "groupConfigManager must not be null");
     }
 
     @Override
@@ -60,6 +68,41 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
             log.warn("Exception checking {} in metadata cache", topic, e);
         }
         return false;
+    }
+
+    @Override
+    public Optional<String> shareGroupDlqTopic(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::errorsDLQTopicName);
+    }
+
+    @Override
+    public boolean isDlqAutoTopicCreateEnabled() {
+        return groupConfigManager.isDlqAutoTopicCreateEnabled();
+    }
+
+    @Override
+    public Optional<String> shareGroupDlqTopicPrefix() {
+        return groupConfigManager.shareGroupDlqTopicPrefix();
+    }
+
+    @Override
+    public boolean isDlqEnabledOnTopic(String topic) {
+        Properties props = metadataCache.topicConfig(topic);
+        if (props == null || props.isEmpty()) {
+            return false;
+        }
+        Object isEnabled = props.get(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+        if (isEnabled instanceof Boolean) {
+            return (boolean) isEnabled;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isShareGroupDlqCopyRecordEnabled(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::errorsDLQCopyRecordEnable).orElse(false);
     }
 
     @Override

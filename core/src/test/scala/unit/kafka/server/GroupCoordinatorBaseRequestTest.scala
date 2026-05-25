@@ -258,6 +258,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
      producerEpoch: Short,
      transactionalId: String,
      topic: String,
+     topicId: Uuid,
      partition: Int,
      offset: Long,
      expectedError: Errors,
@@ -267,12 +268,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       new TxnOffsetCommitRequestData()
         .setGroupId(groupId)
         .setMemberId(memberId)
-        .setGenerationId(generationId)
+        .setGenerationIdOrMemberEpoch(generationId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
         .setTransactionalId(transactionalId)
         .setTopics(List(
           new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+            .setTopicId(topicId)
             .setName(topic)
             .setPartitions(List(
               new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
@@ -286,7 +288,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val expectedResponse = new TxnOffsetCommitResponseData()
       .setTopics(List(
         new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
-          .setName(topic)
+          .setTopicId(if (version >= 6) topicId else Uuid.ZERO_UUID)
+          .setName(if (version < 6) topic else "")
           .setPartitions(List(
             new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
               .setPartitionIndex(partition)
