@@ -78,6 +78,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -3012,13 +3013,14 @@ public class TaskManagerTest {
             () -> taskManager.handleRevocation(taskId00Partitions));
 
         assertInstanceOf(TaskMigratedException.class, thrown);
+        assertEquals(Optional.of(taskId00), thrown.taskId());
 
         verify(task00).suspend();
         verify(task00, never()).postCommit(anyBoolean());
     }
 
     @Test
-    public void shouldAttachSuppressedExceptionsWhenMultiplePhasesFailDuringRevocation() {
+    public void shouldAttachSuppressedExceptionWhenPrepareCommitAndSuspendBothFailDuringRevocation() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
             .inState(State.RUNNING)
