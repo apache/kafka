@@ -79,10 +79,10 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     private void validateLogLocalRetentionMs(AbstractKafkaConfig config) {
         long logRetentionMs = config.logRetentionTimeMillis();
         long logLocalRetentionMs = config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
-        if (logRetentionMs != -1L && logLocalRetentionMs != -2L) {
-            if (logLocalRetentionMs == -1L) {
+        if (logRetentionMs != LogConfig.NO_RETENTION_LIMIT && logLocalRetentionMs != LogConfig.DEFAULT_LOCAL_RETENTION_MS) {
+            if (logLocalRetentionMs == LogConfig.NO_RETENTION_LIMIT) {
                 throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs,
-                    "Value must not be -1 as " + ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG + " value is set as " + logRetentionMs + ".");
+                    "Value must not be " + LogConfig.NO_RETENTION_LIMIT + " as " + ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG + " value is set as " + logRetentionMs + ".");
             }
             if (logLocalRetentionMs > logRetentionMs) {
                 throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs,
@@ -94,10 +94,10 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     private void validateLogLocalRetentionBytes(AbstractKafkaConfig config) {
         long logRetentionBytes = config.logRetentionBytes();
         long logLocalRetentionBytes = config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP);
-        if (logRetentionBytes > -1L && logLocalRetentionBytes != -2L) {
-            if (logLocalRetentionBytes == -1L) {
+        if (logRetentionBytes > LogConfig.NO_RETENTION_LIMIT && logLocalRetentionBytes != LogConfig.DEFAULT_LOCAL_RETENTION_BYTES) {
+            if (logLocalRetentionBytes == LogConfig.NO_RETENTION_LIMIT) {
                 throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
-                    "Value must not be -1 as " + ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG + " value is set as " + logRetentionBytes + ".");
+                    "Value must not be " + LogConfig.NO_RETENTION_LIMIT + " as " + ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG + " value is set as " + logRetentionBytes + ".");
             }
             if (logLocalRetentionBytes > logRetentionBytes) {
                 throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
@@ -109,7 +109,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     private void validateLogRemoteCopyLagMs(AbstractKafkaConfig config) {
         long logRetentionMs = config.logRetentionTimeMillis();
         long logLocalRetentionMs = config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
-        long effectiveLocalRetentionMs = logLocalRetentionMs == -2L ? logRetentionMs : logLocalRetentionMs;
+        long effectiveLocalRetentionMs = logLocalRetentionMs == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? logRetentionMs : logLocalRetentionMs;
         long logRemoteCopyLagMs = config.getLong(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP);
         if (logRemoteCopyLagMs > 0L && effectiveLocalRetentionMs >= 0L && logRemoteCopyLagMs > effectiveLocalRetentionMs) {
             throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs,
@@ -121,7 +121,7 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     private void validateLogRemoteCopyLagBytes(AbstractKafkaConfig config) {
         long logRetentionBytes = config.logRetentionBytes();
         long logLocalRetentionBytes = config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP);
-        long effectiveLocalRetentionBytes = logLocalRetentionBytes == -2L ? logRetentionBytes : logLocalRetentionBytes;
+        long effectiveLocalRetentionBytes = logLocalRetentionBytes == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? logRetentionBytes : logLocalRetentionBytes;
         long logRemoteCopyLagBytes = config.getLong(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP);
         if (logRemoteCopyLagBytes > 0L && effectiveLocalRetentionBytes >= 0L && logRemoteCopyLagBytes > effectiveLocalRetentionBytes) {
             throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes,

@@ -141,6 +141,7 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
     public static final boolean DEFAULT_REMOTE_LOG_COPY_DISABLE = false;
     public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE = false;
+    public static final long NO_RETENTION_LIMIT = -1L; // It indicates no retention limit
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
@@ -204,7 +205,7 @@ public class LogConfig extends AbstractConfig {
                 // can be negative. See kafka.log.LogManager.cleanupSegmentsToMaintainSize
                 .define(TopicConfig.RETENTION_BYTES_CONFIG, LONG, ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT, MEDIUM, TopicConfig.RETENTION_BYTES_DOC)
                 // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
-                .define(TopicConfig.RETENTION_MS_CONFIG, LONG, DEFAULT_RETENTION_MS, atLeast(-1), MEDIUM,
+                .define(TopicConfig.RETENTION_MS_CONFIG, LONG, DEFAULT_RETENTION_MS, atLeast(NO_RETENTION_LIMIT), MEDIUM,
                         TopicConfig.RETENTION_MS_DOC)
                 .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, atLeast(0), MEDIUM,
                         TopicConfig.MAX_MESSAGE_BYTES_DOC)
@@ -594,10 +595,10 @@ public class LogConfig extends AbstractConfig {
     private static void validateRemoteStorageRetentionSize(Map<String, ?> props) {
         Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
         Long localRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-        if (retentionBytes > -1 && localRetentionBytes != -2) {
-            if (localRetentionBytes == -1) {
-                String message = String.format("Value must not be -1 as %s value is set as %d.",
-                        TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
+        if (retentionBytes > NO_RETENTION_LIMIT && localRetentionBytes != DEFAULT_LOCAL_RETENTION_BYTES) {
+            if (localRetentionBytes == NO_RETENTION_LIMIT) {
+                String message = String.format("Value must not be %d as %s value is set as %d.",
+                        NO_RETENTION_LIMIT, TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
                 throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes, message);
             }
             if (localRetentionBytes > retentionBytes) {
@@ -611,10 +612,10 @@ public class LogConfig extends AbstractConfig {
     private static void validateRemoteStorageRetentionTime(Map<String, ?> props) {
         Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
         Long localRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
-        if (retentionMs != -1 && localRetentionMs != -2) {
-            if (localRetentionMs == -1) {
-                String message = String.format("Value must not be -1 as %s value is set as %d.",
-                        TopicConfig.RETENTION_MS_CONFIG, retentionMs);
+        if (retentionMs != NO_RETENTION_LIMIT && localRetentionMs != DEFAULT_LOCAL_RETENTION_MS) {
+            if (localRetentionMs == NO_RETENTION_LIMIT) {
+                String message = String.format("Value must not be %d as %s value is set as %d.",
+                        NO_RETENTION_LIMIT, TopicConfig.RETENTION_MS_CONFIG, retentionMs);
                 throw new ConfigException(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs, message);
             }
             if (localRetentionMs > retentionMs) {
@@ -629,7 +630,7 @@ public class LogConfig extends AbstractConfig {
         Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
         Long localRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
         Long remoteCopyLagMs = (Long) props.get(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG);
-        long effectiveLocalRetentionMs = localRetentionMs == -2 ? retentionMs : localRetentionMs;
+        long effectiveLocalRetentionMs = localRetentionMs == DEFAULT_LOCAL_RETENTION_MS ? retentionMs : localRetentionMs;
         if (remoteCopyLagMs > 0 && effectiveLocalRetentionMs >= 0
                 && remoteCopyLagMs > effectiveLocalRetentionMs) {
             String message = String.format("Value must not exceed %s (effective value: %d)",
@@ -642,7 +643,7 @@ public class LogConfig extends AbstractConfig {
         Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
         Long localRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         Long remoteCopyLagBytes = (Long) props.get(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG);
-        long effectiveLocalRetentionBytes = localRetentionBytes == -2 ? retentionBytes : localRetentionBytes;
+        long effectiveLocalRetentionBytes = localRetentionBytes == DEFAULT_LOCAL_RETENTION_BYTES ? retentionBytes : localRetentionBytes;
         if (remoteCopyLagBytes > 0 && effectiveLocalRetentionBytes >= 0
                 && remoteCopyLagBytes > effectiveLocalRetentionBytes) {
             String message = String.format("Value must not exceed %s (effective value: %d)",
