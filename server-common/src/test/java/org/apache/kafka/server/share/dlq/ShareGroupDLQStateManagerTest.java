@@ -1,0 +1,608 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.kafka.server.share.dlq;
+
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.CreateTopicsRequest;
+import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.ProduceRequest;
+import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper.TopicPartitionData;
+import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.timer.MockTimer;
+import org.apache.kafka.server.util.timer.Timer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+class ShareGroupDLQStateManagerTest {
+    private static final MockTime MOCK_TIME = new MockTime();
+    private static final String HOST = "localhost";
+    private static final int PORT = 9092;
+    private static final String GROUP_ID = "test-group";
+    private static final String DLQ_TOPIC = "dlq-topic";
+    private static final Uuid DLQ_TOPIC_ID = Uuid.randomUuid();
+    private static final Uuid SOURCE_TOPIC_ID = Uuid.randomUuid();
+    private static final Node DEFAULT_LEADER = new Node(0, HOST, PORT);
+
+    private final MockTimer mockTimer = new MockTimer(MOCK_TIME);
+    private ShareGroupDLQStateManager stateManager;
+
+    @AfterEach
+    public void tearDown() throws Exception {
+        if (stateManager != null) {
+            stateManager.stop();
+        }
+    }
+
+    private final class Builder {
+        private KafkaClient client;
+        private Time time = MOCK_TIME;
+        private Timer timer;
+        private ShareGroupDLQMetadataCacheHelper cacheHelper;
+
+        Builder withClient(KafkaClient client) {
+            this.client = client;
+            return this;
+        }
+
+        Builder withCacheHelper(ShareGroupDLQMetadataCacheHelper cacheHelper) {
+            this.cacheHelper = cacheHelper;
+            return this;
+        }
+
+        Builder withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        Builder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
+        ShareGroupDLQStateManager build() {
+            return new ShareGroupDLQStateManager(
+                client != null ? client : new MockClient(MOCK_TIME),
+                cacheHelper != null ? cacheHelper : happyCacheHelper(DEFAULT_LEADER),
+                time,
+                timer != null ? timer : mockTimer
+            );
+        }
+    }
+
+    private Builder builder() {
+        return new Builder();
+    }
+
+    private static ShareGroupDLQRecordParameter param() {
+        return new ShareGroupDLQRecordParameter(
+            GROUP_ID,
+            new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
+            0L,
+            2L,
+            Optional.of((short) 1),
+            Optional.of(new RuntimeException("simulated cause")),
+            false
+        );
+    }
+
+    private static ShareGroupDLQMetadataCacheHelper happyCacheHelper(Node leader) {
+        ShareGroupDLQMetadataCacheHelper helper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(helper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(helper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(helper.containsTopic(DLQ_TOPIC)).thenReturn(true);
+        when(helper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
+        when(helper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+        when(helper.getClusterNodes()).thenReturn(List.of(leader));
+        when(helper.topicName(SOURCE_TOPIC_ID)).thenReturn(Optional.of("source-topic"));
+        when(helper.topicPartitionData(DLQ_TOPIC)).thenReturn(new TopicPartitionData(
+            DLQ_TOPIC,
+            Optional.of(1),
+            Optional.of(DLQ_TOPIC_ID),
+            List.of(leader)
+        ));
+        return helper;
+    }
+
+    private static Throwable getCause(CompletableFuture<Void> future) {
+        try {
+            future.get(5, TimeUnit.SECONDS);
+            fail("Expected the future to complete exceptionally");
+            return null;
+        } catch (ExecutionException ee) {
+            return ee.getCause();
+        } catch (InterruptedException | TimeoutException e) {
+            fail("Future did not complete", e);
+            return null;
+        }
+    }
+
+    // ---- Constructor null-check tests ----
+
+    @Test
+    public void testConstructorRejectsNullClient() {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ShareGroupDLQStateManager(null, cacheHelper, MOCK_TIME, mockTimer));
+    }
+
+    @Test
+    public void testConstructorRejectsNullCacheHelper() {
+        KafkaClient client = mock(KafkaClient.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ShareGroupDLQStateManager(client, null, MOCK_TIME, mockTimer));
+    }
+
+    @Test
+    public void testConstructorRejectsNullTime() {
+        KafkaClient client = mock(KafkaClient.class);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, null, mockTimer));
+    }
+
+    @Test
+    public void testConstructorRejectsNullTimer() {
+        KafkaClient client = mock(KafkaClient.class);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, null));
+    }
+
+    // ---- Lifecycle tests ----
+
+    @Test
+    public void testStartIsIdempotent() {
+        stateManager = builder().build();
+
+        stateManager.start();
+        stateManager.start();
+        // tearDown will call stateManager.stop() and must not throw.
+    }
+
+    @Test
+    public void testStopWithoutStartIsNoOp() {
+        stateManager = builder().build();
+        // tearDown will call stateManager.stop() without a prior start() and must not throw.
+    }
+
+    // ---- DLQ topic validation tests (no thread start required) ----
+
+    @Test
+    public void testDlqEmptyTopicNameFailsValidation() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.empty());
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("empty"));
+    }
+
+    @Test
+    public void testDlqTopicStartingWithUnderscoreFailsValidation() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of("__internal_dlq"));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("__"));
+    }
+
+    @Test
+    public void testDlqExistingTopicWithoutDlqConfigFailsValidation() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(false);
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("DLQ is not enabled"));
+    }
+
+    @Test
+    public void testDlqTopicMissingAndAutoCreateDisabledFailsValidation() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(false);
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("auto create is disabled"));
+    }
+
+    @Test
+    public void testDlqTopicPrefixMismatchFailsValidation() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of("required-prefix-"));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        assertTrue(cause.getMessage().contains("does not comply with the DLQ topic prefix"));
+    }
+
+    @Test
+    public void testDlqValidationFailureCompletesFutureBeforeStart() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.empty());
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+
+        // validateDlqTopic runs synchronously inside dlq(), so it should fail without the sender thread.
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        CompletableFuture<Void> result = stateManager.dlq(param());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertFalse(result.isCancelled());
+    }
+
+    // ---- Full integration tests ----
+
+    @Test
+    public void testDlqHappyPathExistingTopic() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        client.prepareResponseFrom(
+            body -> body instanceof ProduceRequest,
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        stateManager = builder().withClient(client).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testDlqTopicPrefixEmptyStringSkipsPrefixCheck() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.of(""));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+        when(cacheHelper.topicName(SOURCE_TOPIC_ID)).thenReturn(Optional.of("source-topic"));
+        when(cacheHelper.topicPartitionData(DLQ_TOPIC)).thenReturn(new TopicPartitionData(
+            DLQ_TOPIC,
+            Optional.of(1),
+            Optional.of(DLQ_TOPIC_ID),
+            List.of(DEFAULT_LEADER)
+        ));
+        when(cacheHelper.getClusterNodes()).thenReturn(List.of(DEFAULT_LEADER));
+
+        MockClient client = new MockClient(MOCK_TIME);
+        client.prepareResponseFrom(
+            body -> body instanceof ProduceRequest,
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        stateManager = builder()
+            .withClient(client)
+            .withCacheHelper(cacheHelper)
+            .build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testDlqCreateTopicThenProduceSucceeds() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+        when(cacheHelper.getClusterNodes()).thenReturn(List.of(DEFAULT_LEADER));
+        when(cacheHelper.topicName(SOURCE_TOPIC_ID)).thenReturn(Optional.of("source-topic"));
+        when(cacheHelper.topicPartitionData(DLQ_TOPIC)).thenReturn(new TopicPartitionData(
+            DLQ_TOPIC,
+            Optional.of(1),
+            Optional.of(DLQ_TOPIC_ID),
+            List.of(DEFAULT_LEADER)
+        ));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+
+        MockClient client = new MockClient(MOCK_TIME);
+        client.prepareResponseFrom(
+            body -> body instanceof CreateTopicsRequest,
+            successfulCreateTopicsResponse(),
+            DEFAULT_LEADER
+        );
+        client.prepareResponseFrom(
+            body -> body instanceof ProduceRequest,
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        stateManager = builder()
+            .withClient(client)
+            .withCacheHelper(cacheHelper)
+            .build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testDlqCreateTopicFatalErrorFailsFuture() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+        when(cacheHelper.getClusterNodes()).thenReturn(List.of(DEFAULT_LEADER));
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+
+        MockClient client = new MockClient(MOCK_TIME);
+        client.prepareResponseFrom(
+            body -> body instanceof CreateTopicsRequest,
+            createTopicsResponse(Errors.INVALID_REPLICATION_FACTOR),
+            DEFAULT_LEADER
+        );
+
+        stateManager = builder()
+            .withClient(client)
+            .withCacheHelper(cacheHelper)
+            .build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertNotNull(cause);
+        assertEquals(Errors.INVALID_REPLICATION_FACTOR.exception().getClass(), cause.getClass());
+    }
+
+    @Test
+    public void testDlqCreateTopicNoClusterNodesFailsFuture() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+        when(cacheHelper.getClusterNodes()).thenReturn(List.of());
+
+        stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertNotNull(cause);
+        assertEquals(Errors.BROKER_NOT_AVAILABLE.exception().getClass(), cause.getClass());
+    }
+
+    @Test
+    public void testDlqProduceFatalErrorFailsFuture() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        client.prepareResponseFrom(
+            body -> body instanceof ProduceRequest,
+            produceResponseWithError(Errors.INVALID_TOPIC_EXCEPTION),
+            DEFAULT_LEADER
+        );
+
+        stateManager = builder().withClient(client).build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertNotNull(cause);
+        assertEquals(Errors.INVALID_TOPIC_EXCEPTION.exception().getClass(), cause.getClass());
+    }
+
+    @Test
+    public void testDlqProduceEmptyResponseFailsFuture() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        client.prepareResponseFrom(
+            body -> body instanceof ProduceRequest,
+            new ProduceResponse(new ProduceResponseData()),
+            DEFAULT_LEADER
+        );
+
+        stateManager = builder().withClient(client).build();
+        stateManager.start();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertNotNull(cause);
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.exception().getClass(), cause.getClass());
+    }
+
+    @Test
+    public void testDlqProduceDisconnectIsRetriedNotImmediatelyFailed() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        // Null response body + disconnected=true triggers the wasDisconnected() branch in
+        // ShareGroupDLQStateManager#checkResponseError. Since the disconnect is retriable, the
+        // future must NOT complete on the first attempt - we just verify the retry was scheduled
+        // rather than waiting for full retry exhaustion (which can take ~30s due to the
+        // hard-coded exponential backoff in ShareGroupDLQStateManager).
+        client.prepareResponseFrom(
+            body -> body instanceof ProduceRequest,
+            null,
+            DEFAULT_LEADER,
+            true
+        );
+
+        stateManager = builder().withClient(client).build();
+        stateManager.start();
+        CompletableFuture<Void> result = stateManager.dlq(param());
+        // Brief wait so the disconnect response can be processed; the future should remain
+        // pending because the retry has been scheduled rather than completing exceptionally.
+        try {
+            result.get(500, TimeUnit.MILLISECONDS);
+            fail("Expected the future to remain incomplete while retry is pending");
+        } catch (TimeoutException expected) {
+            assertFalse(result.isDone());
+        }
+    }
+
+    @Test
+    public void testDlqTwoEnqueuedRecordsBothComplete() throws Exception {
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+        when(cacheHelper.getClusterNodes()).thenReturn(List.of(DEFAULT_LEADER));
+        when(cacheHelper.topicName(SOURCE_TOPIC_ID)).thenReturn(Optional.of("source-topic"));
+        when(cacheHelper.topicPartitionData(DLQ_TOPIC)).thenReturn(new TopicPartitionData(
+            DLQ_TOPIC,
+            Optional.of(2),
+            Optional.of(DLQ_TOPIC_ID),
+            List.of(DEFAULT_LEADER, DEFAULT_LEADER)
+        ));
+
+        // Whether the two handlers end up coalesced into a single produce request or are sent as
+        // two separate requests depends on internal scheduling. Provide a multi-partition response
+        // that satisfies either case: each request will see partition indices 0 and 1 in the
+        // response, and the handler picks out the index that matches its destination partition.
+        ProduceResponseData.TopicProduceResponse topicResp = new ProduceResponseData.TopicProduceResponse()
+            .setTopicId(DLQ_TOPIC_ID)
+            .setPartitionResponses(List.of(
+                new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(0)
+                    .setErrorCode(Errors.NONE.code()),
+                new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(1)
+                    .setErrorCode(Errors.NONE.code())
+            ));
+        ProduceResponseData.TopicProduceResponseCollection collection =
+            new ProduceResponseData.TopicProduceResponseCollection();
+        collection.add(topicResp);
+
+        MockClient client = new MockClient(MOCK_TIME);
+        // Two identical responses cover the non-coalesced path.
+        client.prepareResponseFrom(body -> body instanceof ProduceRequest,
+            new ProduceResponse(new ProduceResponseData().setResponses(collection.duplicate())),
+            DEFAULT_LEADER);
+        client.prepareResponseFrom(body -> body instanceof ProduceRequest,
+            new ProduceResponse(new ProduceResponseData().setResponses(collection.duplicate())),
+            DEFAULT_LEADER);
+
+        stateManager = builder()
+            .withClient(client)
+            .withCacheHelper(cacheHelper)
+            .build();
+        stateManager.start();
+        ShareGroupDLQRecordParameter p0 = new ShareGroupDLQRecordParameter(
+            GROUP_ID,
+            new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
+            0L, 0L,
+            Optional.empty(), Optional.empty(), false);
+        ShareGroupDLQRecordParameter p1 = new ShareGroupDLQRecordParameter(
+            GROUP_ID,
+            new TopicIdPartition(SOURCE_TOPIC_ID, 1, "source-topic"),
+            0L, 0L,
+            Optional.empty(), Optional.empty(), false);
+
+        CompletableFuture<Void> r0 = stateManager.dlq(p0);
+        CompletableFuture<Void> r1 = stateManager.dlq(p1);
+
+        assertNull(r0.get(10, TimeUnit.SECONDS));
+        assertNull(r1.get(10, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testDlqResolvesSourceTopicNameViaCacheHelperWhenMissing() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        client.prepareResponseFrom(
+            body -> body instanceof ProduceRequest,
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        stateManager = builder().withClient(client).build();
+        stateManager.start();
+        ShareGroupDLQRecordParameter p = new ShareGroupDLQRecordParameter(
+            GROUP_ID,
+            new TopicIdPartition(SOURCE_TOPIC_ID, 0, null),
+            0L, 0L,
+            Optional.empty(), Optional.empty(), false);
+        assertNull(stateManager.dlq(p).get(10, TimeUnit.SECONDS));
+    }
+
+    // ---- Response builder helpers ----
+
+    private static ProduceResponse successfulProduceResponse(int partition) {
+        return produceResponseFor(partition, Errors.NONE);
+    }
+
+    private static ProduceResponse produceResponseWithError(Errors error) {
+        return produceResponseFor(0, error);
+    }
+
+    private static ProduceResponse produceResponseFor(int partition, Errors error) {
+        // Don't set name: the manager looks up the TopicProduceResponse using only topicId, which
+        // implies the lookup-key name is the default empty string.
+        ProduceResponseData.TopicProduceResponse topicResp = new ProduceResponseData.TopicProduceResponse()
+            .setTopicId(DLQ_TOPIC_ID)
+            .setPartitionResponses(List.of(
+                new ProduceResponseData.PartitionProduceResponse()
+                    .setIndex(partition)
+                    .setErrorCode(error.code())
+                    .setErrorMessage(error.message())
+            ));
+        ProduceResponseData.TopicProduceResponseCollection collection =
+            new ProduceResponseData.TopicProduceResponseCollection();
+        collection.add(topicResp);
+        return new ProduceResponse(new ProduceResponseData().setResponses(collection));
+    }
+
+    private static CreateTopicsResponse successfulCreateTopicsResponse() {
+        return createTopicsResponse(Errors.NONE);
+    }
+
+    private static CreateTopicsResponse createTopicsResponse(Errors error) {
+        CreateTopicsResponseData data = new CreateTopicsResponseData();
+        data.topics().add(new CreateTopicsResponseData.CreatableTopicResult()
+            .setName(DLQ_TOPIC)
+            .setTopicId(DLQ_TOPIC_ID)
+            .setNumPartitions(1)
+            .setReplicationFactor((short) 1)
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message()));
+        return new CreateTopicsResponse(data);
+    }
+}

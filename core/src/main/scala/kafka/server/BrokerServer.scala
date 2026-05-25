@@ -62,7 +62,6 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager => JLogManager}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.server.partition.{AlterPartitionManager, DefaultAlterPartitionManager}
-import org.apache.kafka.server.share.dlq.{DefaultShareGroupDLQManager, ShareGroupDLQManager}
 
 import java.time.Duration
 import java.util
@@ -168,8 +167,6 @@ class BrokerServer(
   var sharePartitionManager: SharePartitionManager = _
 
   var persister: Persister = _
-
-  var dlqManager: ShareGroupDLQManager = _
 
   private var shareGroupTimer: Timer = _
 
@@ -389,8 +386,6 @@ class BrokerServer(
       /* create persister */
       persister = createShareStatePersister()
 
-      dlqManager = createDLQManager()
-
       partitionMetadataClient = createPartitionMetadataClient(metadataCache)
 
       groupCoordinator = createGroupCoordinator()
@@ -470,8 +465,6 @@ class BrokerServer(
         brokerTopicStats,
         () => ShareVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)).supportsShareGroupDLQ()
       )
-
-      sharePartitionManager.shareGroupDLQManager(dlqManager)
 
       dataPlaneRequestProcessor = new KafkaApis(
         requestChannel = socketServer.dataPlaneRequestChannel,
@@ -755,15 +748,6 @@ class BrokerServer(
       info("Using no-op persister")
       new NoOpStatePersister()
     }
-  }
-
-  private def createDLQManager(): ShareGroupDLQManager = {
-    DefaultShareGroupDLQManager.instance(
-      NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
-      new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
-      Time.SYSTEM,
-      shareGroupTimer
-    )
   }
 
   protected def createRemoteLogManager(listenerInfo: ListenerInfo): Option[RemoteLogManager] = {

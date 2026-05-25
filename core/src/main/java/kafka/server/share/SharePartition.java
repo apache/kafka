@@ -45,7 +45,6 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQRecordParameter;
-import org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimeoutHandler;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -333,7 +332,7 @@ public class SharePartition {
     /**
      * Reference to the dlq manager implementation.
      */
-    private ShareGroupDLQManager shareGroupDLQ;
+    private final ShareGroupDLQManager shareGroupDLQ = new NoOpShareGroupDLQManager();
 
     /**
      * Supplier to toggle dlq support.
@@ -404,10 +403,6 @@ public class SharePartition {
         this.registerGaugeMetrics();
         this.deliveryCompleteCount = new AtomicInteger(0);
         this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
-    }
-
-    public void dlqManager(ShareGroupDLQManager shareGroupDLQManager) {
-        this.shareGroupDLQ = shareGroupDLQManager;
     }
 
     /**
