@@ -147,9 +147,11 @@ public class DynamicLogConfig implements BrokerReconfigurable {
         logManager.brokerConfigUpdated();
         for (UnifiedLog unifiedLog : logManager.allLogs()) {
             Map<String, Object> props = new HashMap<>(newBrokerDefaults);
-            unifiedLog.config().originals().entrySet().stream()
-                .filter(entry -> unifiedLog.config().overriddenConfigs.contains(entry.getKey()))
-                .forEach(entry -> props.put(entry.getKey(), entry.getValue()));
+            unifiedLog.config().originals().forEach((key, value) -> {
+                if (unifiedLog.config().overriddenConfigs.contains(key)) {
+                    props.put(key, value);
+                }
+            });
             unifiedLog.updateConfig(new LogConfig(props, unifiedLog.config().overriddenConfigs));
         }
     }
