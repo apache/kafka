@@ -107,6 +107,9 @@ public class ConsoleConsumer {
             ConsumerRecord<byte[], byte[]> msg;
             try {
                 msg = consumer.receive();
+                msg.headers().forEach(header -> {
+                    System.out.println(header.key() + ": " + new String(header.value()));
+                });
             } catch (WakeupException we) {
                 LOG.trace("Caught WakeupException because consumer is shutdown, ignore and terminate.");
                 // Consumer will be closed

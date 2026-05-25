@@ -23,6 +23,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
@@ -55,9 +56,14 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -80,6 +86,10 @@ public class ShareGroupDLQStateManager {
     private static final int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
     private static final double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
     private static final Logger log = LoggerFactory.getLogger(ShareGroupDLQStateManager.class);
+
+    private final Set<Node> inFlight = new HashSet<>();
+    private final Map<Node, List<ProduceRequestHandler>> nodeRPCMap = new HashMap<>();
+    private final Object nodeMapLock = new Object();
 
     public ShareGroupDLQStateManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
         if (client == null) {
@@ -143,6 +153,17 @@ public class ShareGroupDLQStateManager {
         sender.enqueue(requestHandler);
     }
 
+    private void addRequestToNodeMap(Node node, ProduceRequestHandler handler) {
+        if (!handler.isBatchable()) {
+            return;
+        }
+        synchronized (nodeMapLock) {
+            nodeRPCMap.computeIfAbsent(node, k -> new LinkedList<>())
+                .add(handler);
+        }
+        sender.wakeup();
+    }
+
     private class ProduceRequestHandler implements RequestCompletionHandler {
         private final CompletableFuture<Void> result;
         private final ShareGroupDLQRecordParameter param;
@@ -200,6 +221,10 @@ public class ShareGroupDLQStateManager {
             return "ProduceRequestHandler";
         }
 
+        boolean isBatchable() {
+            return true;
+        }
+
         public void requestErrorResponse(Throwable exception) {
             this.result.completeExceptionally(exception);
         }
@@ -228,7 +253,11 @@ public class ShareGroupDLQStateManager {
                 .setTopics(topicCollection));
         }
 
-        public AbstractRequest.Builder<ProduceRequest> createProduceRequest() throws ConfigException {
+        public AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
+            throw new RuntimeException("Produce requests are batchable, hence individual requests not needed.");
+        }
+
+        public void populateDLQTopicData() throws ConfigException {
             Optional<String> dlqTopic = cacheHelper.shareGroupDlqTopic(param.groupId());
             if (dlqTopic.isEmpty()) {
                 throw new ConfigException(String.format("DLQ topic is not configured for share group %s.", param.groupId()));
@@ -256,7 +285,9 @@ public class ShareGroupDLQStateManager {
             }
 
             this.dlqTopicPartitionData = tpData;
+        }
 
+        public ProduceRequestData.TopicProduceData topicProduceData() {
             List<SimpleRecord> simpleRecords = new ArrayList<>();
             for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
                 long timestamp = time.hiResClockMs();
@@ -268,52 +299,18 @@ public class ShareGroupDLQStateManager {
                 simpleRecords.toArray(new SimpleRecord[]{})
             );
 
-            ProduceRequestData data = new ProduceRequestData()
-                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-                    List.of(
-                        new ProduceRequestData.TopicProduceData()
-                            .setName(dlqTopic.get())
-                            .setTopicId(tpData.topicId().get())
-                            .setPartitionData(List.of(
-                                new ProduceRequestData.PartitionProduceData()
-                                    .setIndex(dlqDestinationPartition)  // partition
-                                    .setRecords(records)
-                            ))
-                    ).iterator()
-                ))
-                .setAcks((short) -1)  // all replicas
-                .setTimeoutMs(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT);
-
-            return new ProduceRequest.Builder(ApiKeys.PRODUCE.latestVersion(), ApiKeys.PRODUCE.latestVersion(), data);
+            return new ProduceRequestData.TopicProduceData()
+                .setName(dlqTopicPartitionData.topicName())
+                .setTopicId(dlqTopicPartitionData.topicId().get())
+                .setPartitionData(List.of(
+                    new ProduceRequestData.PartitionProduceData()
+                        .setIndex(dlqDestinationPartition)  // partition
+                        .setRecords(records)
+                ));
         }
 
         public Node dlqPartitionLeaderNode() {
             return this.dlqPartitionLeaderNode;
-        }
-
-        private Header[] headers(long offset) {
-            List<Header> headers = new ArrayList<>();
-            headers.add(new RecordHeader("__dlq.errors.topic", recordTopic().getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader("__dlq.errors.partition", Integer.toString(param.topicIdPartition().partition()).getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader("__dlq.errors.offset", Long.toString(offset).getBytes(StandardCharsets.UTF_8)));
-            headers.add(new RecordHeader("__dlq.errors.group", param.groupId().getBytes(StandardCharsets.UTF_8)));
-            param.deliveryCount().ifPresent(deliveryCount -> headers.add(
-                new RecordHeader("__dlq.errors.delivery.count", Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8))));
-            param.cause().ifPresent(cause -> headers.add(
-                new RecordHeader("__dlq.errors.message", cause.getMessage().getBytes(StandardCharsets.UTF_8))
-            ));
-
-            return headers.toArray(new Header[0]);
-        }
-
-        private String recordTopic() {
-            TopicIdPartition topicIdPartition = param.topicIdPartition();
-            String recordTopicName = param.topicIdPartition().topic();
-            if (recordTopicName == null || recordTopicName.isEmpty()) {
-                // If topic name lookup fails, use topic id as a String in the header.
-                recordTopicName = cacheHelper.topicName(param.topicIdPartition().topicId()).orElse(topicIdPartition.topicId().toString());
-            }
-            return recordTopicName;
         }
 
         public Optional<Throwable> validateDlqTopic() {
@@ -350,7 +347,51 @@ public class ShareGroupDLQStateManager {
 
         public boolean dlqTopicExists() {
             Optional<String> shareGroupDlqTopic = cacheHelper.shareGroupDlqTopic(param.groupId());
-            return shareGroupDlqTopic.filter(cacheHelper::containsTopic).isPresent();
+            boolean isDlqTopicPresent = shareGroupDlqTopic.filter(cacheHelper::containsTopic).isPresent();
+            if (isDlqTopicPresent) {
+                try {
+                    populateDLQTopicData();
+                } catch (ConfigException e) {
+                    return false;
+                }
+                addRequestToNodeMap(dlqPartitionLeaderNode, this);
+            }
+            return isDlqTopicPresent;
+        }
+
+        @Override
+        public String toString() {
+            return "ProduceRequestHandler(" +
+                "param: " + param + "\n" +
+                "dlqTopicData: " + dlqTopicPartitionData + "\n" +
+                ")";
+        }
+
+        private Header[] headers(long offset) {
+            List<Header> headers = new ArrayList<>();
+            headers.add(new RecordHeader("__dlq.errors.topic", recordTopic().getBytes(StandardCharsets.UTF_8)));
+            headers.add(new RecordHeader("__dlq.errors.partition", Integer.toString(param.topicIdPartition().partition()).getBytes(StandardCharsets.UTF_8)));
+            headers.add(new RecordHeader("__dlq.errors.offset", Long.toString(offset).getBytes(StandardCharsets.UTF_8)));
+            headers.add(new RecordHeader("__dlq.errors.group", param.groupId().getBytes(StandardCharsets.UTF_8)));
+            param.deliveryCount().ifPresent(deliveryCount -> headers.add(
+                new RecordHeader("__dlq.errors.delivery.count", Short.toString(deliveryCount).getBytes(StandardCharsets.UTF_8))));
+            param.cause().ifPresent(cause -> {
+                if (cause.getMessage() != null) {
+                    headers.add(new RecordHeader("__dlq.errors.message", cause.getMessage().getBytes(StandardCharsets.UTF_8)));
+                }
+            });
+
+            return headers.toArray(new Header[0]);
+        }
+
+        private String recordTopic() {
+            TopicIdPartition topicIdPartition = param.topicIdPartition();
+            String recordTopicName = param.topicIdPartition().topic();
+            if (recordTopicName == null || recordTopicName.isEmpty()) {
+                // If topic name lookup fails, use topic id as a String in the header.
+                recordTopicName = cacheHelper.topicName(param.topicIdPartition().topicId()).orElse(topicIdPartition.topicId().toString());
+            }
+            return recordTopicName;
         }
 
         // Visibility for testing
@@ -404,7 +445,23 @@ public class ShareGroupDLQStateManager {
                     String errorMessage = topicResult.errorMessage();
                     switch (error) {
                         case NONE:
-                            sender.enqueue(this);
+                            try {
+                                populateDLQTopicData();
+                                createTopicsBackoff.resetAttempts();
+                                if (this.isBatchable()) {
+                                    addRequestToNodeMap(this.dlqPartitionLeaderNode, this);
+                                } else {
+                                    enqueue(this);
+                                }
+                            } catch (ConfigException e) {
+                                LOG.error("Error enqueueing after DLQ create topic response {}.", this, e);
+                                if (!createTopicsBackoff.canAttempt()) {
+                                    LOG.error("Exhausted max retries while populating DLQ topic for {} using DLQ topic {} without success.", name(), dlqTopicName);
+                                    requestErrorResponse(new Exception("Exhausted max retries while populating DLQ topic without success."));
+                                    break;
+                                }
+                                timer.add(new ShareGroupDLQTimerTask(createTopicsBackoff.backOff(), this));
+                            }
                             break;
 
                         case TOPIC_ALREADY_EXISTS:
@@ -456,7 +513,7 @@ public class ShareGroupDLQStateManager {
                     ProduceResponse produceResponse = ((ProduceResponse) response.responseBody());
                     ProduceResponseData.TopicProduceResponseCollection produceResponseCollection = produceResponse.data().responses();
                     if (produceResponseCollection.isEmpty()) {
-                        LOG.error("Received empty produce response for {} to dlq topic node {}.", param, dlqPartitionLeaderNode());
+                        LOG.error("Received empty produce response for {} to dlq topic node {}.", this, dlqPartitionLeaderNode());
                         requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception());
                         break;
                     }
@@ -466,18 +523,20 @@ public class ShareGroupDLQStateManager {
                             .setTopicId(dlqTopicPartitionData.topicId().get())
                     );
                     if (topicProduceResponse == null ||
-                        topicProduceResponse.partitionResponses().isEmpty() ||
-                        topicProduceResponse.partitionResponses().size() < dlqDestinationPartition
+                        topicProduceResponse.partitionResponses().isEmpty()
                     ) {
-                        LOG.error("Received empty topic produce response {} to dlq topic node {}.", param, dlqPartitionLeaderNode());
+                        LOG.error("Received empty topic produce response {} to dlq topic node {}.", this, dlqPartitionLeaderNode());
                         requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception());
                         break;
                     }
 
                     List<ProduceResponseData.PartitionProduceResponse> partitionResponses = topicProduceResponse.partitionResponses();
-                    ProduceResponseData.PartitionProduceResponse partitionResponse = partitionResponses.get(dlqDestinationPartition);
+                    ProduceResponseData.PartitionProduceResponse partitionResponse = partitionResponses.stream().filter(res -> res.index() == dlqDestinationPartition)
+                        .findFirst()
+                        .orElse(null);
+
                     if (partitionResponse == null) {
-                        LOG.error("Received empty partition produce response {} to dlq topic node {}.", param, dlqPartitionLeaderNode());
+                        LOG.error("Received empty partition produce response {} to dlq topic node {}.", this, dlqPartitionLeaderNode());
                         requestErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception());
                         break;
                     }
@@ -486,14 +545,15 @@ public class ShareGroupDLQStateManager {
                     String errorMessage = partitionResponse.errorMessage();
                     switch (error) {
                         case NONE:
-                            LOG.debug("Successfully produced records {} to dlq topic node {}", param, dlqPartitionLeaderNode());
+                            LOG.debug("Successfully produced records {} to dlq topic node {}", this, dlqPartitionLeaderNode());
+                            produceRequestBackoff.resetAttempts();
                             this.result.complete(null);
                             break;
 
                         case NOT_LEADER_OR_FOLLOWER:
-                            LOG.debug("Received retriable error produce response for {} to dlq topic node {} - {}", param, dlqPartitionLeaderNode(), errorMessage);
+                            LOG.debug("Received retriable error produce response for {} to dlq topic node {} - {}", this, dlqPartitionLeaderNode(), errorMessage);
                             if (!produceRequestBackoff.canAttempt()) {
-                                LOG.error("Exhausted max retries to produce {} to  DLQ topic node {}.", param, dlqPartitionLeaderNode());
+                                LOG.error("Exhausted max retries to produce {} to  DLQ topic node {}.", this, dlqPartitionLeaderNode());
                                 requestErrorResponse(new Exception("Exhausted max retries to produce to DLQ topic without success."));
                                 break;
                             }
@@ -501,7 +561,7 @@ public class ShareGroupDLQStateManager {
                             break;
 
                         default:
-                            LOG.error("Unable to produce {} to DLQ topic node {} - {}", param, dlqPartitionLeaderNode(), errorMessage);
+                            LOG.error("Unable to produce {} to DLQ topic node {} - {}", this, dlqPartitionLeaderNode(), errorMessage);
                             partitionResponse.recordErrors().forEach(recordError ->
                                 LOG.error("Records with errors {} - {}", recordError.batchIndex(), recordError.batchIndexErrorMessage()));
                             requestErrorResponse(error.exception());
@@ -540,6 +600,8 @@ public class ShareGroupDLQStateManager {
 
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
+            List<RequestAndCompletionHandler> requests = new ArrayList<>();
+
             if (!queue.isEmpty()) {
                 ShareGroupDLQStateManager.ProduceRequestHandler handler = queue.poll();
                 // At this point either a correctly named and configured DLQ topic exists or
@@ -549,7 +611,7 @@ public class ShareGroupDLQStateManager {
                     // We need to send RPC to create the topic
                     Node randomNode = randomNode();
                     if (randomNode == Node.noNode()) {
-                        log.error("Unable to find node to send create topic request.");
+                        log.error("Unable to find node to send create topic request for handler {}.", handler);
                         // fatal failure, cannot retry or progress
                         // fail the RPC
                         handler.requestErrorResponse(Errors.BROKER_NOT_AVAILABLE.exception());
@@ -565,25 +627,61 @@ public class ShareGroupDLQStateManager {
                             handler
                         ));
                     } catch (ConfigException exp) {
-                        log.error("Unable to create topic request.", exp);
+                        log.error("Unable to create topic request for handler {}.", handler, exp);
                         handler.requestErrorResponse(Errors.INVALID_CONFIG.exception());
                     }
                 } else {
-                    try {
-                        AbstractRequest.Builder<ProduceRequest> builder = handler.createProduceRequest();
-                        return List.of(new RequestAndCompletionHandler(
+                    if (!handler.isBatchable()) {
+                        requests.add(new RequestAndCompletionHandler(
                             time.milliseconds(),
                             handler.dlqPartitionLeaderNode(),
-                            builder,
+                            handler.requestBuilder(),
                             handler
                         ));
-                    } catch (ConfigException exp) {
-                        log.error("Unable to create topic request.", exp);
-                        handler.requestErrorResponse(Errors.INVALID_CONFIG.exception());
                     }
                 }
             }
-            return List.of();
+
+            final Set<Node> sending = new HashSet<>();
+            final Set<Node> emptyNodes = new HashSet<>();   // Nodes for which no coalesced handler was found
+            synchronized (nodeMapLock) {
+                nodeRPCMap.forEach((destNode, handlers) -> {
+                    // this condition causes requests of same type and same destination node
+                    // to not be sent immediately but get batched
+                    if (!inFlight.contains(destNode)) {
+                        CoalesceResults results = coalesceProduceRequests(handlers);
+                        if (results.liveHandlers.isEmpty()) {
+                            emptyNodes.add(destNode);
+                            return;
+                        }
+                        requests.add(new RequestAndCompletionHandler(
+                            time.milliseconds(),
+                            destNode,
+                            results.request,
+                            response -> {
+                                inFlight.remove(destNode);
+
+                                // now the combined request has completed
+                                // we need to create responses for individual
+                                // requests which composed the combined request
+                                results.liveHandlers.forEach(handler -> handler.onComplete(response));
+                                wakeup();
+                            }));
+                        sending.add(destNode);
+                    }
+                });
+
+                emptyNodes.forEach(nodeRPCMap::remove);
+                sending.forEach(node -> {
+                    // we need to add these nodes to inFlight
+                    inFlight.add(node);
+
+                    // remove from nodeMap
+                    nodeRPCMap.remove(node);
+                });
+            } // close of synchronized context
+
+            return requests;
         }
 
         public void enqueue(ShareGroupDLQStateManager.ProduceRequestHandler handler) {
@@ -618,5 +716,40 @@ public class ShareGroupDLQStateManager {
             sender.enqueue(handler);
             sender.wakeup();
         }
+    }
+
+    private record CoalesceResults(
+        AbstractRequest.Builder<? extends AbstractRequest> request,
+        List<ProduceRequestHandler> liveHandlers
+    ) {
+    }
+
+    private static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers) {
+        Map<Uuid, ProduceRequestData.TopicProduceData> produceHandlerMap = new HashMap<>();
+        List<ProduceRequestHandler> liveHandlers = new ArrayList<>(handlers.size());
+        handlers.forEach(handler -> {
+            try {
+                ProduceRequestData.TopicProduceData topicProduceData = handler.topicProduceData();
+                produceHandlerMap.computeIfAbsent(topicProduceData.topicId(), topicId ->
+                    new ProduceRequestData.TopicProduceData()
+                        .setName(topicProduceData.name())
+                        .setTopicId(topicId)
+                ).partitionData().addAll(topicProduceData.partitionData());
+                liveHandlers.add(handler);
+            } catch (Exception exception) {
+                log.error("Unable to coalesce ProduceRequestData for handler {}. It will be skipped from DLQ", handler, exception);
+                handler.requestErrorResponse(exception);
+            }
+        });
+
+        ProduceRequestData data = new ProduceRequestData()
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(produceHandlerMap.values().iterator()))
+            .setAcks((short) -1)  // all replicas
+            .setTimeoutMs(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT);
+
+        return new CoalesceResults(
+            new ProduceRequest.Builder(ApiKeys.PRODUCE.latestVersion(), ApiKeys.PRODUCE.latestVersion(), data),
+            liveHandlers
+        );
     }
 }
