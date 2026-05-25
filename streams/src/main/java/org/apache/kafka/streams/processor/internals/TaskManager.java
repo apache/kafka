@@ -1060,7 +1060,7 @@ public class TaskManager {
 
         // even if prepare, commit, or postCommit failed, we must still suspend revoked tasks and unlock,
         // so we use try-finally to guarantee that. Exceptions are captured and rethrown at the end.
-        // Tasks that failed during prepare/commit and should skip postCommit
+        final Set<Task> dirtyTasks = new TreeSet<>(Comparator.comparing(Task::id));
         final Set<Task> tasksToSkipPostCommit = new TreeSet<>(Comparator.comparing(Task::id));
         boolean prepareCommitSucceeded = false;
         try {
@@ -1090,24 +1090,24 @@ public class TaskManager {
                          e.corruptedTasks());
 
                 // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
-                tasksToSkipPostCommit.addAll(tasks.initializedTasks(e.corruptedTasks()));
-                closeDirtyAndRevive(tasksToSkipPostCommit, true);
+                dirtyTasks.addAll(tasks.initializedTasks(e.corruptedTasks()));
+                closeDirtyAndRevive(dirtyTasks, true);
             } catch (final TimeoutException e) {
                 log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
 
                 // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
-                tasksToSkipPostCommit.addAll(consumedOffsetsPerTask.keySet());
-                closeDirtyAndRevive(tasksToSkipPostCommit, false);
+                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+                closeDirtyAndRevive(dirtyTasks, false);
             } catch (final RuntimeException e) {
                 log.error("Exception caught while committing those revoked tasks {}", revokedActiveTasks, e);
                 maybeSetFirstException(false, e, firstException);
-                tasksToSkipPostCommit.addAll(consumedOffsetsPerTask.keySet());
+                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
             }
 
             // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
             // going to be closed we would checkpoint by then
             for (final Task task : revokedActiveTasks) {
-                if (!tasksToSkipPostCommit.contains(task)) {
+                if (!dirtyTasks.contains(task) && !tasksToSkipPostCommit.contains(task)) {
                     try {
                         task.postCommit(true);
                     } catch (final RuntimeException e) {
@@ -1119,7 +1119,7 @@ public class TaskManager {
 
             if (revokedTasksNeedCommit) {
                 for (final Task task : commitNeededActiveTasks) {
-                    if (!tasksToSkipPostCommit.contains(task)) {
+                    if (!dirtyTasks.contains(task) && !tasksToSkipPostCommit.contains(task)) {
                         try {
                             // for non-revoking active tasks, we should not enforce checkpoint
                             // since if it is EOS enabled, no checkpoint should be written while
@@ -1142,7 +1142,12 @@ public class TaskManager {
                 }
             }
 
-            maybeUnlockTasks(lockedTaskIds);
+            try {
+                maybeUnlockTasks(lockedTaskIds);
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while unlocking tasks {}", lockedTaskIds, e);
+                maybeSetFirstException(false, e, firstException);
+            }
         }
 
         if (firstException.get() != null) {
@@ -2061,7 +2066,9 @@ public class TaskManager {
                                         final AtomicReference<RuntimeException> firstException) {
         if (!ignoreTaskMigrated || !(exception instanceof TaskMigratedException)) {
             if (!firstException.compareAndSet(null, exception)) {
-                firstException.get().addSuppressed(exception);
+                if (exception != firstException.get()) {
+                    firstException.get().addSuppressed(exception);
+                }
             }
         }
     }
