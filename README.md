@@ -9,14 +9,12 @@ This repository hardens the replication core to enforce dynamic state validation
 
 ---
 
-### 1.1 Project Repository & Core Codebase Links
+### 1.1 Project Repository & Code Review Links
 
-The complete source codebase has been successfully published to a personal tracking repository. To evaluate the architectural changes and hardening enhancements without wading through framework boilerplate, please use the direct file tracking links below:
+In compliance with the project specifications, the complete hardened source codebase and granular line-by-line architectural modifications can be reviewed via the public tracking links below:
 
-* **Hardened Kafka Repository Home:** [https://github.com/rajabhishekmaurya/kafka](https://github.com/rajabhishekmaurya/kafka)
-* **Custom MirrorMaker 2 Logic:** [MirrorSourceTask.java Core Implementation](https://github.com/rajabhishekmaurya/kafka/blob/main/kafka-fork/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorSourceTask.java)
-* **Automated Verification Harness:** [run_challenge.sh Test Suite Script](https://github.com/rajabhishekmaurya/kafka/blob/main/run_challenge.sh)
-* **Cluster Deployment Layout:** [docker-compose.yml Infrastructure Specification](https://github.com/rajabhishekmaurya/kafka/blob/main/docker-compose.yml)
+* **Hardened Kafka Fork Repository:** [https://github.com/rajabhishekmaurya/kafka](https://github.com/rajabhishekmaurya/kafka)
+* **Feature Implementation Pull Request:** [Official Apache Upstream Code Review View (PR #22367)](https://github.com/apache/kafka/pull/22367)
   
   
 ## 2. Design Rationale & MM2 Enhancements
