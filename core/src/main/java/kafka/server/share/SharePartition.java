@@ -1062,6 +1062,7 @@ public class SharePartition {
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         Throwable throwable = null;
+        List<InFlightState> stagedThisCall = new ArrayList<>();
         lock.writeLock().lock();
         try {
             for (ShareAcknowledgementBatch batch : acknowledgementBatches) {
@@ -1091,8 +1092,14 @@ public class SharePartition {
                     break;
                 }
 
-                throwable = stageBatchTxnRecords(memberId, producerId, producerEpoch, batch, ackTypeMap, subMap);
+                throwable = stageBatchTxnRecords(memberId, producerId, producerEpoch, batch, ackTypeMap, subMap, stagedThisCall);
                 if (throwable != null) break;
+            }
+
+            if (throwable != null) {
+                for (InFlightState s : stagedThisCall) {
+                    s.revertStagedTxnAcknowledge(producerId, producerEpoch);
+                }
             }
         } finally {
             lock.writeLock().unlock();
@@ -1109,7 +1116,8 @@ public class SharePartition {
         short producerEpoch,
         ShareAcknowledgementBatch batch,
         Map<Long, Byte> ackTypeMap,
-        NavigableMap<Long, InFlightBatch> subMap
+        NavigableMap<Long, InFlightBatch> subMap,
+        List<InFlightState> stagedThisCall
     ) {
         for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
             InFlightBatch inFlightBatch = entry.getValue();
@@ -1125,6 +1133,7 @@ public class SharePartition {
                 if (staged == null) {
                     return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
                 }
+                stagedThisCall.add(staged);
             } else {
                 for (Map.Entry<Long, InFlightState> os : inFlightBatch.offsetState().entrySet()) {
                     if (os.getKey() < batch.firstOffset() || os.getKey() < startOffset) continue;
@@ -1139,6 +1148,7 @@ public class SharePartition {
                     if (staged == null) {
                         return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
                     }
+                    stagedThisCall.add(staged);
                 }
             }
         }

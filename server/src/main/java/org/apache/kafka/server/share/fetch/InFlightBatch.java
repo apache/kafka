@@ -178,6 +178,14 @@ public class InFlightBatch {
         return inFlightState().applyTxnMarker(producerId, producerEpoch, result);
     }
 
+    public boolean revertBatchStagedTxnAcknowledge(long producerId, short producerEpoch) {
+        return inFlightState().revertStagedTxnAcknowledge(producerId, producerEpoch);
+    }
+
+    public long batchStagedProducerId() {
+        return inFlightState().stagedProducerId();
+    }
+
     public InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId, boolean dlqSupportEnabled) {
         return inFlightState().tryUpdateState(newState, ops, maxDeliveryCount, newMemberId, dlqSupportEnabled);
     }

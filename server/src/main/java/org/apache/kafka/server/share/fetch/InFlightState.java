@@ -295,6 +295,20 @@ public class InFlightState {
         }
     }
 
+    public boolean revertStagedTxnAcknowledge(long producerId, short producerEpoch) {
+        if (state != RecordState.TX_PENDING) {
+            return false;
+        }
+        if (this.stagedProducerId != producerId || this.stagedProducerEpoch != producerEpoch) {
+            return false;
+        }
+        state = RecordState.ACQUIRED;
+        stagedProducerId = -1L;
+        stagedProducerEpoch = -1;
+        stagedAckType = -1;
+        return true;
+    }
+
     /**
      * Apply a transaction commit or abort marker to a TX_PENDING record.
      * On COMMIT: ACCEPT resolves to ACKNOWLEDGED, REJECT resolves to ARCHIVING.

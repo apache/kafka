@@ -13357,6 +13357,48 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testStageTxnAcknowledgeRollsBackEarlierBatchesOnLaterBatchFailure() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        CompletableFuture<Void> stage = sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(
+                new ShareAcknowledgementBatch(10, 12, List.of(AcknowledgeType.ACCEPT.id)),
+                new ShareAcknowledgementBatch(13, 14, List.of(AcknowledgeType.RELEASE.id))
+            ));
+
+        assertTrue(stage.isCompletedExceptionally());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(-1L, sharePartition.cachedState().get(10L).batchStagedProducerId());
+    }
+
+    @Test
+    public void testRevertStagedTxnAcknowledgeRestoresAcquired() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+
+        assertTrue(sharePartition.cachedState().get(10L).revertBatchStagedTxnAcknowledge(100L, (short) 1));
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(-1L, sharePartition.cachedState().get(10L).batchStagedProducerId());
+    }
+
+    @Test
+    public void testRevertStagedTxnAcknowledgeRejectsMismatchedProducer() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+
+        assertFalse(sharePartition.cachedState().get(10L).revertBatchStagedTxnAcknowledge(999L, (short) 1));
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+    }
+
+    @Test
     public void testApplyTxnMarkerForCommitRejectTransitionsToArchiving() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
