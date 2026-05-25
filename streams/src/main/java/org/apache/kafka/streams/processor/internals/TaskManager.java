@@ -1035,35 +1035,34 @@ public class TaskManager {
         final Set<TaskId> lockedTaskIds = activeRunningTaskIterable().stream().map(Task::id).collect(Collectors.toSet());
         maybeLockTasks(lockedTaskIds);
 
-        boolean revokedTasksNeedCommit = false;
-        for (final StreamTask task : activeRunningTaskIterable()) {
-            if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
-                // when the task input partitions are included in the revoked list,
-                // this is an active task and should be revoked
-
-                revokedActiveTasks.add(task);
-                remainingRevokedPartitions.removeAll(task.inputPartitions());
-
-                revokedTasksNeedCommit |= task.commitNeeded();
-            } else if (task.commitNeeded()) {
-                commitNeededActiveTasks.add(task);
-            }
-        }
-
-        revokeTasksInStateUpdater(remainingRevokedPartitions);
-
-        if (!remainingRevokedPartitions.isEmpty()) {
-            log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
-                          + "potentially be due to race condition of consumer detecting the heartbeat failure, or the tasks " +
-                         "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
-        }
-
-        // even if prepare, commit, or postCommit failed, we must still suspend revoked tasks and unlock,
-        // so we use try-finally to guarantee that. Exceptions are captured and rethrown at the end.
+        // After locking, everything must be inside try-finally to guarantee suspend and unlock.
         final Set<Task> dirtyTasks = new TreeSet<>(Comparator.comparing(Task::id));
         final Set<Task> tasksToSkipPostCommit = new TreeSet<>(Comparator.comparing(Task::id));
+        boolean revokedTasksNeedCommit = false;
         boolean prepareCommitSucceeded = false;
         try {
+            for (final StreamTask task : activeRunningTaskIterable()) {
+                if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
+                    // when the task input partitions are included in the revoked list,
+                    // this is an active task and should be revoked
+
+                    revokedActiveTasks.add(task);
+                    remainingRevokedPartitions.removeAll(task.inputPartitions());
+
+                    revokedTasksNeedCommit |= task.commitNeeded();
+                } else if (task.commitNeeded()) {
+                    commitNeededActiveTasks.add(task);
+                }
+            }
+
+            revokeTasksInStateUpdater(remainingRevokedPartitions);
+
+            if (!remainingRevokedPartitions.isEmpty()) {
+                log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
+                              + "potentially be due to race condition of consumer detecting the heartbeat failure, or the tasks " +
+                             "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
+            }
+
             if (revokedTasksNeedCommit) {
                 try {
                     prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
@@ -1123,7 +1122,7 @@ public class TaskManager {
                         try {
                             // for non-revoking active tasks, we should not enforce checkpoint
                             // since if it is EOS enabled, no checkpoint should be written while
-                            // the task is in RUNNING tate
+                            // the task is in RUNNING state
                             task.postCommit(false);
                         } catch (final RuntimeException e) {
                             log.error("Exception caught while post-committing task {}", task.id(), e);
