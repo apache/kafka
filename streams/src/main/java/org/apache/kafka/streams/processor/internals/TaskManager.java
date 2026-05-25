@@ -1070,7 +1070,7 @@ public class TaskManager {
                     prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
                     prepareCommitSucceeded = true;
                 } catch (final RuntimeException e) {
-                    log.error("Exception caught while preparing to commit revoked tasks {}", revokedActiveTasks, e);
+                    log.error("Exception caught while preparing to commit revoked tasks {} and commit-needed tasks {}", revokedActiveTasks, commitNeededActiveTasks, e);
                     maybeSetFirstException(false, e, firstException);
                     dirtyTasks.addAll(revokedActiveTasks);
                     dirtyTasks.addAll(commitNeededActiveTasks);
