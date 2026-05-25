@@ -1,0 +1,112 @@
+version: "3.9"
+
+services:
+  primary:
+    image: apache/kafka:4.0.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@primary:9093"
+
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://primary:9092"
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 1000
+      KAFKA_LOG_SEGMENT_DELETE_DELAY_MS: 1000
+      KAFKA_LOG_SEGMENT_MS: 1000
+      KAFKA_LOG_SEGMENT_BYTES: 1048576
+
+    ports:
+      - "9092:9092"
+
+  standby:
+    image: apache/kafka:4.0.0
+    environment:
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: "broker,controller"
+
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "2@standby:9093"
+
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093"
+
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://standby:9094"
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 1000
+      KAFKA_LOG_SEGMENT_DELETE_DELAY_MS: 1000
+      KAFKA_LOG_SEGMENT_MS: 1000
+      KAFKA_LOG_SEGMENT_BYTES: 1048576
+
+    ports:
+      - "9094:9094"
+
+  producer:
+    build: ./producer
+    depends_on:
+      - primary
+
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "primary:9092"
+
+    command:
+      [
+        "--count",
+        "1000",
+        "--bootstrap-servers",
+        "primary:9092",
+        "--topic",
+        "commit-log"
+      ]
+
+  mirror-maker:
+    build: ./kafka-fork
+
+    depends_on:
+      - primary
+      - standby
+
+    volumes:
+      - ./kafka-fork/mm2.properties:/opt/kafka/config/mm2.properties:ro
+
+    entrypoint:
+      [
+        "/opt/kafka/bin/connect-mirror-maker.sh",
+        "/opt/kafka/config/mm2.properties"
+      ]
+
+networks:
+  default:
+    name: kafka-challenge-net
