@@ -101,6 +101,22 @@ public class TopicConfig {
             "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
             "(i.e. retention.ms/bytes).";
 
+    public static final String REMOTE_COPY_LAG_MS_CONFIG = "remote.copy.lag.ms";
+    public static final String REMOTE_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
+            "When set to 0, immediate upload without any delay check. " +
+            "When set to a positive value (ms), a segment can't become eligible for upload until the time since the latest record in the segment reaches the value. " +
+            "The value should not exceed the real local retention ms except the latter is retained indefinitely (-1). " +
+            "When set to -1, resolves to the real local retention ms as maximum delay. " +
+            "For how the real local retention time is computed, see <code>local.retention.ms</code>.";
+
+    public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
+    public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
+            "When set to 0, immediate upload without any delay check. " +
+            "When set to a positive value (bytes), a segment can't become eligible for upload until the total bytes of log data after the segment reach the value. " +
+            "The value should not exceed the real local retention bytes except the latter is retained indefinitely (-1). " +
+            "When set to -1, resolves to the real local retention bytes as maximum delay. " +
+            "For how the real local retention size is computed, see <code>local.retention.bytes</code>.";
+
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
             "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +

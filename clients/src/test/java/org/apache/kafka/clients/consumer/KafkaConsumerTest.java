@@ -1407,8 +1407,9 @@ public class KafkaConsumerTest {
         assertNull(committed.get(tp1));
     }
 
+    // NOTE: the rebalance flow in prepareRebalance is specific to the CLASSIC consumer.
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);

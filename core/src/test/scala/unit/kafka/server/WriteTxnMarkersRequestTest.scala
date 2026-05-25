@@ -64,9 +64,9 @@ class WriteTxnMarkersRequestTest(cluster:ClusterInstance) extends GroupCoordinat
     assertNotEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, memberId)
     assertNotEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, memberEpoch)
 
-    createTopic(topic, 1)
+    val topicId = createTopic(topic, 1)
 
-    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(false)) {
+    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       val useTV2 = version > EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2
 
       // Initialize producer. Wait until the coordinator finishes loading.
@@ -124,6 +124,7 @@ class WriteTxnMarkersRequestTest(cluster:ClusterInstance) extends GroupCoordinat
         producerEpoch = if (useTV2) (producerIdAndEpoch.epoch + 1).toShort else producerIdAndEpoch.epoch,
         transactionalId = transactionalId,
         topic = topic,
+        topicId = topicId,
         partition = partition,
         offset = offset + version,
         expectedError = Errors.NONE,

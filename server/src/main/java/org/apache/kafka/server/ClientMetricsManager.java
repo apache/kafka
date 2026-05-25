@@ -214,7 +214,7 @@ public class ClientMetricsManager implements AutoCloseable {
         if (metrics != null && metrics.limit() > 0) {
             try {
                 long exportTimeStartMs = time.hiResClockMs();
-                clientTelemetryExporterPlugin.exportMetrics(requestContext, request, clientInstance.pushIntervalMs());
+                clientTelemetryExporterPlugin.exportMetrics(requestContext, request, clientInstance.pushIntervalMs(), clientTelemetryMaxBytes);
                 clientMetricsStats.recordPluginExport(clientInstanceId, time.hiResClockMs() - exportTimeStartMs);
             } catch (Throwable exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);

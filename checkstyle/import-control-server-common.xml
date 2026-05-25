@@ -134,6 +134,7 @@
 
             <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
             <allow class="org.apache.kafka.test.TestUtils" />
+            <allow class="org.apache.kafka.server.authorizer.Authorizer" />
             <!-- ServerTestUtils uses yammer metrics for test cleanup -->
             <allow pkg="org.apache.kafka.server.metrics" />
             <allow pkg="com.yammer.metrics.core" />

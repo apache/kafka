@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumE
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BeginQuorumEpochResponse, EndQuorumEpochResponse, FetchResponse, FetchSnapshotResponse, VoteResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.network.Request
 import org.apache.kafka.raft.RaftManager
 import org.apache.kafka.server.ApiVersionManager
 import org.apache.kafka.server.common.RequestLocal
@@ -39,7 +40,7 @@ class TestRaftRequestHandler(
   apiVersionManager: ApiVersionManager
 ) extends ApiRequestHandler with Logging {
 
-  override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  override def handle(request: Request, requestLocal: RequestLocal): Unit = {
     try {
       trace(s"Handling request:${request.requestDesc(true)} with context ${request.context}")
       request.header.apiKey match {
@@ -56,44 +57,44 @@ class TestRaftRequestHandler(
       case e: Throwable =>
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
           s"with context ${request.context}", e)
-        val errorResponse = request.body[AbstractRequest].getErrorResponse(e)
+        val errorResponse = request.body(classOf[AbstractRequest]).getErrorResponse(e)
         requestChannel.sendResponse(request, errorResponse, None)
     } finally {
       // The local completion time may be set while processing the request. Only record it if it's unset.
       if (request.apiLocalCompleteTimeNanos < 0)
-        request.apiLocalCompleteTimeNanos = time.nanoseconds
+        request.apiLocalCompleteTimeNanos(time.nanoseconds)
     }
   }
 
-  private def handleApiVersions(request: RequestChannel.Request): Unit = {
+  private def handleApiVersions(request: Request): Unit = {
     requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(0, request.header.apiVersion() < 4), None)
   }
 
-  private def handleVote(request: RequestChannel.Request): Unit = {
+  private def handleVote(request: Request): Unit = {
     handle(request, response => new VoteResponse(response.asInstanceOf[VoteResponseData]))
   }
 
-  private def handleBeginQuorumEpoch(request: RequestChannel.Request): Unit = {
+  private def handleBeginQuorumEpoch(request: Request): Unit = {
     handle(request, response => new BeginQuorumEpochResponse(response.asInstanceOf[BeginQuorumEpochResponseData]))
   }
 
-  private def handleEndQuorumEpoch(request: RequestChannel.Request): Unit = {
+  private def handleEndQuorumEpoch(request: Request): Unit = {
     handle(request, response => new EndQuorumEpochResponse(response.asInstanceOf[EndQuorumEpochResponseData]))
   }
 
-  private def handleFetch(request: RequestChannel.Request): Unit = {
+  private def handleFetch(request: Request): Unit = {
     handle(request, response => FetchResponse.of(response.asInstanceOf[FetchResponseData]))
   }
 
-  private def handleFetchSnapshot(request: RequestChannel.Request): Unit = {
+  private def handleFetchSnapshot(request: Request): Unit = {
     handle(request, response => new FetchSnapshotResponse(response.asInstanceOf[FetchSnapshotResponseData]))
   }
 
   private def handle(
-    request: RequestChannel.Request,
+    request: Request,
     buildResponse: ApiMessage => AbstractResponse
   ): Unit = {
-    val requestBody = request.body[AbstractRequest]
+    val requestBody = request.body(classOf[AbstractRequest])
 
     val future = raftManager.handleRequest(
       request.context,

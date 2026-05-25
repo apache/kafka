@@ -55,7 +55,7 @@ public final class OffloadAndTxnConsumeFromLeaderTest extends TieredStorageTestH
     }
 
     @Override
-    protected void overrideConsumerConfig(Properties consumerConfig) {
+    protected void overrideConsumerConfig(Map<String, Object> consumerConfig) {
         consumerConfig.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString());
     }
 
