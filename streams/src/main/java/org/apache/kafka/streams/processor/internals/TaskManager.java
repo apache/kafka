@@ -1060,7 +1060,8 @@ public class TaskManager {
 
         // even if prepare, commit, or postCommit failed, we must still suspend revoked tasks and unlock,
         // so we use try-finally to guarantee that. Exceptions are captured and rethrown at the end.
-        final Set<Task> dirtyTasks = new TreeSet<>(Comparator.comparing(Task::id));
+        // Tasks that failed during prepare/commit and should skip postCommit
+        final Set<Task> tasksToSkipPostCommit = new TreeSet<>(Comparator.comparing(Task::id));
         boolean prepareCommitSucceeded = false;
         try {
             if (revokedTasksNeedCommit) {
@@ -1072,8 +1073,8 @@ public class TaskManager {
                 } catch (final RuntimeException e) {
                     log.error("Exception caught while preparing to commit revoked tasks {} and commit-needed tasks {}", revokedActiveTasks, commitNeededActiveTasks, e);
                     maybeSetFirstException(false, e, firstException);
-                    dirtyTasks.addAll(revokedActiveTasks);
-                    dirtyTasks.addAll(commitNeededActiveTasks);
+                    tasksToSkipPostCommit.addAll(revokedActiveTasks);
+                    tasksToSkipPostCommit.addAll(commitNeededActiveTasks);
                 }
             }
 
@@ -1089,24 +1090,24 @@ public class TaskManager {
                          e.corruptedTasks());
 
                 // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
-                dirtyTasks.addAll(tasks.initializedTasks(e.corruptedTasks()));
-                closeDirtyAndRevive(dirtyTasks, true);
+                tasksToSkipPostCommit.addAll(tasks.initializedTasks(e.corruptedTasks()));
+                closeDirtyAndRevive(tasksToSkipPostCommit, true);
             } catch (final TimeoutException e) {
                 log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
 
                 // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
-                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
-                closeDirtyAndRevive(dirtyTasks, false);
+                tasksToSkipPostCommit.addAll(consumedOffsetsPerTask.keySet());
+                closeDirtyAndRevive(tasksToSkipPostCommit, false);
             } catch (final RuntimeException e) {
                 log.error("Exception caught while committing those revoked tasks {}", revokedActiveTasks, e);
                 maybeSetFirstException(false, e, firstException);
-                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+                tasksToSkipPostCommit.addAll(consumedOffsetsPerTask.keySet());
             }
 
             // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
             // going to be closed we would checkpoint by then
             for (final Task task : revokedActiveTasks) {
-                if (!dirtyTasks.contains(task)) {
+                if (!tasksToSkipPostCommit.contains(task)) {
                     try {
                         task.postCommit(true);
                     } catch (final RuntimeException e) {
@@ -1118,7 +1119,7 @@ public class TaskManager {
 
             if (revokedTasksNeedCommit) {
                 for (final Task task : commitNeededActiveTasks) {
-                    if (!dirtyTasks.contains(task)) {
+                    if (!tasksToSkipPostCommit.contains(task)) {
                         try {
                             // for non-revoking active tasks, we should not enforce checkpoint
                             // since if it is EOS enabled, no checkpoint should be written while
