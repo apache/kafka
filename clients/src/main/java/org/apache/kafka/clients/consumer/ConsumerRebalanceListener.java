@@ -46,7 +46,7 @@ import java.util.Collection;
  *
  * <h3>Common Use Cases</h3>
  *
- * <p>There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
+ * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
  * the {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} call we can ensure that any time partition assignment changes
  * the offset gets saved.
  * <p>
@@ -80,7 +80,7 @@ import java.util.Collection;
  * at that time.
  * <p>
  * During a rebalance event, the {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned} function will always be triggered exactly once when
- * the rebalance completes. That is, even if there is no newly assigned partitions for a consumer member, its {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned}
+ * the rebalance completes. That is, even if there are no newly assigned partitions for a consumer member, its {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned}
  * will still be triggered with an empty collection of partitions. As a result this function can be used also to notify when a rebalance event has happened.
  * With eager rebalancing, {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} will always be called at the start of a rebalance. On the other hand, {@link #onPartitionsLost(Collection, RebalanceConsumer)}
  * will only be called when there were non-empty partitions that were lost.
@@ -114,7 +114,7 @@ import java.util.Collection;
  *       }
  *
  *       @Override
- *       public void onPartitionsLost(Collection<TopicPartition> partitions) {
+ *       public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // do not need to save the offsets since these partitions are probably owned by other consumers already
  *       }
  *
