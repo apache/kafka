@@ -16,38 +16,53 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
-public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
+public final class ReassignReplicaShrinkTest {
+    private static final int BROKER_COUNT = 3;
+    private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 2;
 
-    /**
-     * Cluster of two brokers
-     * @return number of brokers in the cluster
-     */
-    @Override
-    public int brokerCount() {
-        return 2;
+    @SuppressWarnings("unused")
+    private static List<ClusterConfig> clusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        ReassignReplicaShrinkTest.class.getSimpleName().toLowerCase(Locale.ROOT),
+                        BROKER_COUNT,
+                        NUM_REMOTE_LOG_METADATA_PARTITIONS))
+                .build());
     }
 
-    /**
-     * Number of partitions in the '__remote_log_metadata' topic
-     * @return number of partitions in the '__remote_log_metadata' topic
-     */
-    @Override
-    public int numRemoteLogMetadataPartitions() {
-        return 2;
+    @ClusterTemplate("clusterConfig")
+    public void testReassignReplicaShrinkWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeReassignReplicaShrinkTest(clusterInstance, GroupProtocol.CLASSIC);
     }
 
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
+    @ClusterTemplate("clusterConfig")
+    public void testReassignReplicaShrinkWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeReassignReplicaShrinkTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void executeReassignReplicaShrinkTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
         final int broker0 = 0;
         final int broker1 = 1;
         final String topicA = "topicA";
@@ -62,7 +77,7 @@ public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
                 mkEntry(p1, List.of(broker1, broker0))
         );
 
-        builder
+        final TieredStorageTestBuilder builder = new TieredStorageTestBuilder()
                 // create topicA with 2 partitions and 2 RF
                 .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment,
                         replicaAssignment, enableRemoteLogStorage)
@@ -100,5 +115,18 @@ public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
                 .consume(topicA, p0, 0L, 4, 3)
                 .expectFetchFromTieredStorage(broker0, topicA, p1, 3)
                 .consume(topicA, p1, 0L, 4, 3);
+
+        final Map<String, Object> extraConsumerProps = Map.of(
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
+        );
+        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
+            try {
+                for (TieredStorageTestAction action : builder.complete()) {
+                    action.execute(context);
+                }
+            } finally {
+                context.printReport(System.out);
+            }
+        }
     }
 }
