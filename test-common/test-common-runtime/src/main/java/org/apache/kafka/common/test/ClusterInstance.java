@@ -35,13 +35,10 @@ import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -68,7 +65,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -150,7 +146,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaProducer<>(setClientSaslConfig(props));
+        return new KafkaProducer<>(setClientSaslConfig(setClientSslConfig(props)));
     }
 
     default <K, V> Producer<K, V> producer() {
@@ -164,7 +160,7 @@ public interface ClusterInstance {
         props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaConsumer<>(setClientSaslConfig(props));
+        return new KafkaConsumer<>(setClientSaslConfig(setClientSslConfig(props)));
     }
 
     default <K, V> Consumer<K, V> consumer() {
@@ -189,7 +185,7 @@ public interface ClusterInstance {
         }
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        return new KafkaShareConsumer<>(setClientSaslConfig(props), keyDeserializer, valueDeserializer);
+        return new KafkaShareConsumer<>(setClientSaslConfig(setClientSslConfig(props)), keyDeserializer, valueDeserializer);
     }
 
     default Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
@@ -201,7 +197,7 @@ public interface ClusterInstance {
             props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
             props.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         }
-        return Admin.create(setClientSaslConfig(props));
+        return Admin.create(setClientSaslConfig(setClientSslConfig(props)));
     }
 
     default Map<String, Object> setClientSaslConfig(Map<String, Object> configs) {
@@ -219,6 +215,8 @@ public interface ClusterInstance {
         }
         return props;
     }
+
+    Map<String, Object> setClientSslConfig(Map<String, Object> configs);
 
     default Admin admin(Map<String, Object> configs) {
         return admin(configs, false);
@@ -412,48 +410,5 @@ public interface ClusterInstance {
                     .findFirst()
                     .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
-    }
-
-    /**
-     * Wait for a leader to be elected or changed using the provided admin client.
-     */
-    default int waitUntilLeaderIsElectedOrChangedWithAdmin(Admin admin,
-                                                           String topic,
-                                                           int partitionNumber,
-                                                           long timeoutMs) throws Exception {
-        long startTime = System.currentTimeMillis();
-        TopicPartition topicPartition = new TopicPartition(topic, partitionNumber);
-
-        while (System.currentTimeMillis() < startTime + timeoutMs) {
-            try {
-                TopicDescription topicDescription = admin.describeTopics(List.of(topic))
-                        .allTopicNames().get().get(topic);
-
-                Optional<Integer> leader = topicDescription.partitions().stream()
-                        .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
-                        .findFirst()
-                        .map(partitionInfo -> {
-                            int leaderId = partitionInfo.leader().id();
-                            return leaderId == Node.noNode().id() ? null : leaderId;
-                        });
-
-                if (leader.isPresent()) {
-                    return leader.get();
-                }
-            } catch (ExecutionException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof UnknownTopicOrPartitionException ||
-                        cause instanceof LeaderNotAvailableException) {
-                    continue;
-                } else {
-                    throw e;
-                }
-            }
-
-            TimeUnit.MILLISECONDS.sleep(Math.min(100L, timeoutMs));
-        }
-
-        throw new AssertionError("Timing out after " + timeoutMs +
-                " ms since a leader was not elected for partition " + topicPartition);
     }
 }

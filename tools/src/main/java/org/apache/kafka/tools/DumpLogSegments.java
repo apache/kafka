@@ -731,13 +731,12 @@ public class DumpLogSegments {
     }
 
     private static class ClusterMetadataLogMessageParser implements MessageParser<String, String> {
-        private final MetadataRecordSerde metadataRecordSerde = new MetadataRecordSerde();
 
         @Override
         public ParseResult<String, String> parse(Record record) {
             String output;
             try {
-                ApiMessageAndVersion messageAndVersion = metadataRecordSerde.read(
+                ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(
                     new ByteBufferAccessor(record.value()), record.valueSize());
                 ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
                 json.set("type", new TextNode(

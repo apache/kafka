@@ -17,61 +17,28 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.metadata.authorizer.StandardAcl;
-import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
 @Timeout(value = 40)
 public class AclsImageTest {
-    public static final AclsImage IMAGE1;
+    public static final AclsImage IMAGE1 = AclsImageFixtures.IMAGE1;
 
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = AclsImageFixtures.DELTA1_RECORDS;
 
-    static final AclsDelta DELTA1;
+    static final AclsDelta DELTA1 = AclsImageFixtures.DELTA1;
 
-    static final AclsImage IMAGE2;
-
-    static {
-        Map<Uuid, StandardAcl> map = new HashMap<>();
-        for (int i = 0; i < 4; i++) {
-            StandardAclWithId aclWithId = TEST_ACLS.get(i);
-            map.put(aclWithId.id(), aclWithId.acl());
-        }
-        IMAGE1 = new AclsImage(map);
-
-        DELTA1_RECORDS = new ArrayList<>();
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveAccessControlEntryRecord().
-            setId(Uuid.fromString("QZDDv-R7SyaPgetDPGd0Mw")), (short) 0));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(TEST_ACLS.get(4).toRecord(), (short) 0));
-
-        DELTA1 = new AclsDelta(IMAGE1);
-        RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
-
-
-        Map<Uuid, StandardAcl> map2 = new HashMap<>();
-        for (int i = 1; i < 5; i++) {
-            StandardAclWithId aclWithId = TEST_ACLS.get(i);
-            map2.put(aclWithId.id(), aclWithId.acl());
-        }
-        IMAGE2 = new AclsImage(map2);
-    }
+    static final AclsImage IMAGE2 = AclsImageFixtures.IMAGE2;
 
     @Test
     public void testEmptyImageRoundTrip() {

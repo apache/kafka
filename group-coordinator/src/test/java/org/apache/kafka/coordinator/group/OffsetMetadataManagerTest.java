@@ -167,7 +167,6 @@ public class OffsetMetadataManagerTest {
                     .withTime(time)
                     .withLogContext(logContext)
                     .withSnapshotRegistry(snapshotRegistry)
-                    .withMetadataImage(metadataImage)
                     .withGroupMetadataManager(groupMetadataManager)
                     .withGroupCoordinatorConfig(config)
                     .withGroupCoordinatorMetricsShard(metrics)
@@ -1641,8 +1640,9 @@ public class OffsetMetadataManagerTest {
         );
     }
 
-    @Test
-    public void testConsumerGroupTransactionalOffsetCommit() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testConsumerGroupTransactionalOffsetCommit(Uuid topicId) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
@@ -1658,7 +1658,7 @@ public class OffsetMetadataManagerTest {
             .build()
         );
 
-        verifyTransactionalOffsetCommit(context);
+        verifyTransactionalOffsetCommit(topicId, context);
     }
 
     @ParameterizedTest
@@ -1694,6 +1694,7 @@ public class OffsetMetadataManagerTest {
             .setMemberId("member")
             .setTopics(List.of(
                 new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+                    .setTopicId(barTopicId)
                     .setName(barTopicName)
                     .setPartitions(List.of(
                         new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
@@ -1719,6 +1720,7 @@ public class OffsetMetadataManagerTest {
             new TxnOffsetCommitResponseData()
                 .setTopics(List.of(
                     new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                        .setTopicId(barTopicId)
                         .setName(barTopicName)
                         .setPartitions(List.of(
                             new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
@@ -1730,8 +1732,9 @@ public class OffsetMetadataManagerTest {
         );
     }
 
-    @Test
-    public void testStreamsGroupTransactionalOffsetCommit() {
+    @ParameterizedTest
+    @MethodSource("uuids")
+    public void testStreamsGroupTransactionalOffsetCommit(Uuid topicId) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
@@ -1746,10 +1749,10 @@ public class OffsetMetadataManagerTest {
             .build()
         );
 
-        verifyTransactionalOffsetCommit(context);
+        verifyTransactionalOffsetCommit(topicId, context);
     }
 
-    private static void verifyTransactionalOffsetCommit(OffsetMetadataManagerTestContext context) {
+    private static void verifyTransactionalOffsetCommit(Uuid topicId, OffsetMetadataManagerTestContext context) {
         CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> result = context.commitTransactionalOffset(
             new TxnOffsetCommitRequestData()
                 .setGroupId("foo")
@@ -1758,6 +1761,7 @@ public class OffsetMetadataManagerTest {
                 .setTopics(List.of(
                     new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                         .setName("bar")
+                        .setTopicId(topicId)
                         .setPartitions(List.of(
                             new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
                                 .setPartitionIndex(0)
@@ -1773,6 +1777,7 @@ public class OffsetMetadataManagerTest {
                 .setTopics(List.of(
                     new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
                         .setName("bar")
+                        .setTopicId(topicId)
                         .setPartitions(List.of(
                             new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                                 .setPartitionIndex(0)
@@ -1793,7 +1798,7 @@ public class OffsetMetadataManagerTest {
                     "metadata",
                     context.time.milliseconds(),
                     OptionalLong.empty(),
-                    Uuid.ZERO_UUID
+                    topicId
                 )
             )),
             result.records()
@@ -1892,43 +1897,6 @@ public class OffsetMetadataManagerTest {
         );
 
         verifyTransactionalOffsetCommitWithStaleMemberEpoch(context, version);
-    }
-
-    @Test
-    public void testConsumerGroupTransactionalOffsetCommitWithUnresolvedTopicId() {
-        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        Uuid topicId = Uuid.randomUuid();
-
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
-            "foo",
-            true
-        );
-
-        group.updateMember(new ConsumerGroupMember.Builder("member")
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(10)
-            .setAssignedPartitions(mkAssignmentWithEpochs(
-                mkTopicAssignmentWithEpochs(topicId, 5, 0)))
-            .build()
-        );
-
-        // When topicId couldn't be resolved and fall back to ZERO_UUID, since NO_OP validator is not used,
-        // ILLEGAL_GENERATION is thrown.
-        assertThrows(IllegalGenerationException.class, () -> context.commitTransactionalOffset(
-            new TxnOffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(7)
-                .setTopics(List.of(
-                    new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
-        ));
     }
 
     @ParameterizedTest

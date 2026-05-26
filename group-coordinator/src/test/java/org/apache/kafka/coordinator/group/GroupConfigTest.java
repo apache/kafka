@@ -731,7 +731,7 @@ public class GroupConfigTest {
 
     /**
      * Data source for configs with min-only evaluation (no max bound enforced by evaluate).
-     * Each entry: (configKey, tooLow, expectedMax).
+     * Each entry: (configKey, tooLow, expectedMin).
      */
     private static Stream<Arguments> minBoundedConfigs() {
         return Stream.of(
