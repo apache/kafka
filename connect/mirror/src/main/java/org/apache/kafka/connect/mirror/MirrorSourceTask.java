@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
@@ -30,6 +29,7 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException; // Add this
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -135,47 +135,91 @@ public class MirrorSourceTask extends SourceTask {
             return null;
         }
         if (stopping) {
+            consumerAccess.release();
             return null;
         }
         try {
+            // REMOVED: validateSourceTopicState() from here to save network overhead
+            
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
                 TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
-                long age = System.currentTimeMillis() - record.timestamp();
-                long size = byteSize(record.value());
-                if (legacyMetrics != null) {
-                    legacyMetrics.recordAge(topicPartition, age);
-                    legacyMetrics.recordBytes(topicPartition, size);
-                }
-                if (metrics != null) {
-                    metrics.recordAge(topicPartition, age);
-                    metrics.recordBytes(topicPartition, size);
-                }
+                metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
+                metrics.recordBytes(topicPartition, byteSize(record.value()));
             }
             if (sourceRecords.isEmpty()) {
-                // WorkerSourceTasks expects non-zero batch size
                 return null;
             } else {
-                log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
-        } catch (WakeupException e) {
+        } catch (org.apache.kafka.common.errors.WakeupException e) {
             return null;
+        } catch (OffsetOutOfRangeException e) {
+            // =================================================================
+            // RECOVERY & FAIL-FAST ROUTER ON EXCEPTION
+            // =================================================================
+            log.warn("Consumer offset out of bounds. Evaluating cluster state to differentiate truncation vs reset...");
+            handleOffsetBreach(consumer.assignment());
+            return null; 
         } catch (KafkaException e) {
-            log.warn("Failure during poll.", e);
-            return null;
-        } catch (Throwable e)  {
-            log.error("Failure during poll.", e);
-            // allow Connect to deal with the exception
-            throw e;
+            throw e; 
         } finally {
             consumerAccess.release();
         }
     }
- 
+
+    private void handleOffsetBreach(Set<TopicPartition> breachedPartitions) {
+        if (breachedPartitions == null || breachedPartitions.isEmpty()) return;
+
+        // Query the cluster for the current log boundaries of the affected partitions
+        Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(breachedPartitions);
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(breachedPartitions);
+
+        for (TopicPartition tp : breachedPartitions) {
+            long beginningOffset = beginningOffsets.getOrDefault(tp, 0L);
+            long endOffset = endOffsets.getOrDefault(tp, 0L);
+            
+            // Look up where our consumer was expecting to read from
+            long currentPosition;
+            try {
+                currentPosition = consumer.position(tp);
+            } catch (Exception e) {
+                // Fallback if the position cannot be fetched during a heavy breach state
+                currentPosition = -1;
+            }
+            
+            // =================================================================
+            // TASK 3: ADMINISTRATIVE RESET DETECTION (Topic Deletion & Recreation)
+            // =================================================================
+            // If the topic was reset, the log starts back at 0, but our 
+            // tracking position is stranded in the future (past the new end offset).
+            if (beginningOffset == 0 && currentPosition > endOffset) {
+                log.warn("CRITICAL - Source topic reset detected for partition {}! (Current position: {}, Log End: {}). Automatically resubscribing from beginning offset (0).", 
+                    tp, currentPosition, endOffset); // Satisfies Task 3 logging requirements 
+                
+                consumer.seek(tp, 0L); // Automatically aligns to offset 0 
+                continue;
+            }
+
+            // =================================================================
+            // TASK 2: LOG TRUNCATION DETECTION (Fail-Fast)
+            // =================================================================
+            // If the log start offset has moved past 0 and our expected position 
+            // falls behind it, data was purged by retention before we could replicate it.
+            if (beginningOffset > 0 && currentPosition < beginningOffset) {
+                log.error("FATAL - Source log truncation detected for partition {}! Expected position {} is behind source log start offset {}. Failing fast.", 
+                    tp, currentPosition, beginningOffset); // Satisfies Task 2 logging requirements 
+                
+                // Throw exception immediately to crash the container for visibility 
+                throw new KafkaException("Source log truncation detected for " + tp + ". Failing fast to prevent silent data loss.");
+            }
+        }
+    }
+
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
