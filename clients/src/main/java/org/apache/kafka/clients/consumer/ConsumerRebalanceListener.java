@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
 import java.util.Collection;
 
 /**
@@ -58,7 +59,7 @@ import java.util.Collection;
  * partition is reassigned it may want to automatically trigger a flush of this cache, before the new owner takes over
  * consumption.
  * <p>
- * This callback will only execute in the user thread as part of the {@link Consumer#poll(java.time.Duration) poll(long)} call
+ * This callback will only execute in the user thread as part of the {@link KafkaConsumer#poll(java.time.Duration) poll(Duration)} call
  * whenever partition assignment changes.
  * <p>
  * Under normal conditions, if a partition is reassigned from one consumer to another, then the old consumer will
@@ -193,8 +194,8 @@ public interface ConsumerRebalanceListener {
      *                   It will only include the subset to revoke under the Classic/Cooperative and Consumer protocols.
      * @param consumer   A restricted view of the {@link Consumer} that is only valid for the duration of this callback.
      *                   See {@link RebalanceConsumer} for the set of permitted operations.
-     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
-     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
+     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link RebalanceConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link RebalanceConsumer}
      *
      * @see #onPartitionsRevoked(Collection)
      * @see RebalanceConsumer
@@ -208,7 +209,7 @@ public interface ConsumerRebalanceListener {
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
      * partition re-assignment. This method will be called after the partition re-assignment completes (even if no new
      * partitions were assigned to the consumer), and before the consumer starts fetching data,
-     * and only as the result of a {@link Consumer#poll(java.time.Duration) poll(long)} call.
+     * and only as the result of a {@link KafkaConsumer#poll(Duration) poll(Duration)} call.
      * <p>
      * It is guaranteed that under normal conditions all the processes in a consumer group will execute their
      * {@link #onPartitionsRevoked(Collection)} callback before any instance executes this onPartitionsAssigned callback.
@@ -250,8 +251,8 @@ public interface ConsumerRebalanceListener {
      *                   will be received under the Classic/Eager protocol.
      * @param consumer   A restricted view of the {@link Consumer} that is only valid for the duration of this callback.
      *                   See {@link RebalanceConsumer} for the set of permitted operations.
-     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link KafkaConsumer}
-     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
+     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link RebalanceConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link RebalanceConsumer}
      *
      * @see #onPartitionsAssigned(Collection)
      * @see RebalanceConsumer
@@ -335,8 +336,8 @@ public interface ConsumerRebalanceListener {
      *                   all partitions that were previously assigned to the consumer.
      * @param consumer   A restricted view of the {@link Consumer} that is only valid for the duration of this callback.
      *                   See {@link RebalanceConsumer} for the set of permitted operations.
-     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link KafkaConsumer}
-     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
+     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link RebalanceConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link RebalanceConsumer}
      *
      * @see #onPartitionsLost(Collection)
      * @see RebalanceConsumer
