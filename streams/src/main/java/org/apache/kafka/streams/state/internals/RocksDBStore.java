@@ -129,6 +129,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private Cache cache;
     private BloomFilter filter;
     private Statistics statistics;
+    // Options for the offsets column family, kept on a field so close() can release the
+    // native resources (notably the BlockBasedTableFactory's default LRUCache) that the
+    // RocksDB C++ side auto-allocates when a ColumnFamilyOptions is constructed.
+    private ColumnFamilyOptions offsetsCfOptions;
 
     private RocksDBConfigSetter configSetter;
     private boolean userSpecifiedStatistics = false;
@@ -316,14 +320,23 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
      * need the heavyweight options used for the data CF (large write buffers, bloom filters,
      * aggressive compaction). Sharing the data CF's options causes unnecessary write amplification
      * and compaction pressure that can contribute to RocksDB write stalls under heavy restore I/O.
+     *
+     * <p>The returned {@code ColumnFamilyOptions} is stored on {@link #offsetsCfOptions} so that
+     * {@link #close()} can release it. Constructing a {@code ColumnFamilyOptions} on the JNI side
+     * auto-allocates a default {@code BlockBasedTableFactory} and its {@code LRUCache}; if the
+     * options object is never closed, that native cache leaks. We also explicitly disable the block
+     * cache for this CF because the offsets metadata is tiny and benefits nothing from caching.
      */
-    protected static ColumnFamilyOptions createOffsetsCFOptions() {
-        final ColumnFamilyOptions offsetsCFOptions = new ColumnFamilyOptions();
-        offsetsCFOptions.setCompressionType(CompressionType.NO_COMPRESSION);
-        offsetsCFOptions.setCompactionStyle(CompactionStyle.LEVEL);
-        offsetsCFOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
-        offsetsCFOptions.setMaxWriteBufferNumber(2);
-        return offsetsCFOptions;
+    protected ColumnFamilyOptions createOffsetsCFOptions() {
+        offsetsCfOptions = new ColumnFamilyOptions();
+        offsetsCfOptions.setCompressionType(CompressionType.NO_COMPRESSION);
+        offsetsCfOptions.setCompactionStyle(CompactionStyle.LEVEL);
+        offsetsCfOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
+        offsetsCfOptions.setMaxWriteBufferNumber(2);
+        final BlockBasedTableConfig offsetsTableConfig = new BlockBasedTableConfig();
+        offsetsTableConfig.setNoBlockCache(true);
+        offsetsCfOptions.setTableFormatConfig(offsetsTableConfig);
+        return offsetsCfOptions;
     }
 
     void openRocksDB(final DBOptions dbOptions,
@@ -811,6 +824,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         dbAccessor.close();
         db.close();
         userSpecifiedOptions.close();
+        if (offsetsCfOptions != null) {
+            offsetsCfOptions.close();
+        }
         wOptions.close();
         fOptions.close();
         filter.close();
@@ -822,6 +838,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         cfAccessor = null;
         dbAccessor = null;
         userSpecifiedOptions = null;
+        offsetsCfOptions = null;
         wOptions = null;
         fOptions = null;
         db = null;
@@ -865,6 +882,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (userSpecifiedOptions != null) {
             userSpecifiedOptions.close();
             userSpecifiedOptions = null;
+        }
+        if (offsetsCfOptions != null) {
+            offsetsCfOptions.close();
+            offsetsCfOptions = null;
         }
         if (wOptions != null) {
             wOptions.close();
@@ -1165,8 +1186,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
-            super.close(accessor);
-            columnFamily.close();
+            try {
+                super.close(accessor);
+            } finally {
+                columnFamily.close();
+            }
+        }
+
+        // Visible for testing
+        ColumnFamilyHandle columnFamily() {
+            return columnFamily;
         }
     }
 
