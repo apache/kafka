@@ -47,7 +47,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
     private final AtomicInteger setTopologyCount = new AtomicInteger(0);
     private final AtomicInteger getTopologyCount = new AtomicInteger(0);
     private volatile boolean failOnSet = false;
-    private volatile boolean failOnSetWithTooLarge = false;
+    private volatile boolean failOnSetPermanent = false;
     private volatile boolean failOnGet = false;
 
     private static class TopologyEntry {
@@ -94,13 +94,13 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
 
     /**
      * Sets whether {@link #setTopology} should fail specifically with
-     * {@link org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException}.
+     * {@link org.apache.kafka.coordinator.group.api.streams.PluginPermanentFailureException}.
      * The broker treats this as a permanent failure and persists
      * {@code LastFailedTopologyEpoch}; integration tests use it to verify the
      * hot-loop ratchet.
      */
-    public void setFailOnSetWithTooLarge(boolean fail) {
-        this.failOnSetWithTooLarge = fail;
+    public void setFailOnSetPermanent(boolean fail) {
+        this.failOnSetPermanent = fail;
     }
 
     /**
@@ -120,7 +120,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
 
     /**
      * Returns the total number of times {@link #setTopology} was invoked, including attempts that
-     * failed because of {@link #setFailOnSet} or {@link #setFailOnSetWithTooLarge}. Integration tests
+     * failed because of {@link #setFailOnSet} or {@link #setFailOnSetPermanent}. Integration tests
      * use this to verify that the broker stops re-soliciting after a permanent failure.
      */
     public int getSetTopologyAttemptCount() {
@@ -152,9 +152,9 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
     public CompletableFuture<Void> setTopology(String groupId, int topologyEpoch,
                                                 StreamsGroupTopologyDescription description) {
         setTopologyAttemptCount.incrementAndGet();
-        if (failOnSetWithTooLarge) {
+        if (failOnSetPermanent) {
             return CompletableFuture.failedFuture(
-                new org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException("Simulated too-large"));
+                new org.apache.kafka.coordinator.group.api.streams.PluginPermanentFailureException("Simulated permanent failure"));
         }
         if (failOnSet) {
             return CompletableFuture.failedFuture(new RuntimeException("Simulated plugin error"));

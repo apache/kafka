@@ -176,9 +176,8 @@ public class StreamsGroup implements Group {
 
     /**
      * The topology epoch whose description push the plugin permanently rejected
-     * ({@code StreamsTopologyDescriptionTooLargeException} / {@code InvalidRequestException}),
-     * or {@code -1} if none. Heartbeat-path solicitation is suppressed while this equals the
-     * current topology epoch.
+     * ({@code PluginPermanentFailureException}), or {@code -1} if none. Heartbeat-path
+     * solicitation is suppressed while this equals the current topology epoch.
      */
     private final TimelineInteger lastFailedTopologyEpoch;
 

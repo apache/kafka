@@ -17,14 +17,15 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Indicates that a topology description exceeds the size the streams group topology
- * description plugin is willing to store.
+ * Indicates that a delete operation could not complete for the affected group or
+ * resource. The accompanying error message describes the underlying cause; the
+ * caller may retry once the underlying condition is resolved.
  */
-public class StreamsTopologyDescriptionTooLargeException extends ApiException {
+public class DeleteFailedException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public StreamsTopologyDescriptionTooLargeException(String message) {
+    public DeleteFailedException(String message) {
         super(message);
     }
 }

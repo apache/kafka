@@ -273,7 +273,7 @@ public class TopologyDescriptionPluginIntegrationTest {
         CLUSTER.createTopic(inputTopic, 1, 1);
 
         final InMemoryTopologyDescriptionPlugin plugin = getPlugin();
-        plugin.setFailOnSetWithTooLarge(true);
+        plugin.setFailOnSetPermanent(true);
         try {
             final int attemptsBefore = plugin.getSetTopologyAttemptCount();
 
@@ -299,7 +299,7 @@ public class TopologyDescriptionPluginIntegrationTest {
                 "Broker re-solicited at the same epoch after a permanent (TooLarge) plugin failure — "
                     + "LastFailedTopologyEpoch ratchet is not preventing the hot loop");
         } finally {
-            plugin.setFailOnSetWithTooLarge(false);
+            plugin.setFailOnSetPermanent(false);
         }
     }
 

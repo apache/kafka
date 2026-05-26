@@ -17,8 +17,6 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
@@ -30,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard;
+import org.apache.kafka.coordinator.group.api.streams.PluginPermanentFailureException;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
@@ -67,11 +66,10 @@ public class TopologyDescriptionManager implements AutoCloseable {
 
     /**
      * Per-group back-off after an unsuccessful solicitation — either a transient
-     * {@code setTopology} failure (anything other than {@code StreamsTopologyDescriptionTooLargeException}
-     * or {@code InvalidRequestException}) or a heartbeat-side solicitation that never produced
-     * a successful push within the previous back-off window (e.g. a client with
-     * {@code topology.description.push.enabled=false}, or one that is unreachable).
-     * Doubles per consecutive solicitation from 30 s up to 1 h.
+     * {@code setTopology} failure (anything other than {@code PluginPermanentFailureException}) or
+     * a heartbeat-side solicitation that never produced a successful push within the previous
+     * back-off window (e.g. a client with {@code topology.description.push.enabled=false}, or one
+     * that is unreachable). Doubles per consecutive solicitation from 30 s up to 1 h.
      */
     private static final ExponentialBackoff RETRY_BACKOFF =
         new ExponentialBackoff(30_000L, 2, 3_600_000L, 0.0);
@@ -213,9 +211,11 @@ public class TopologyDescriptionManager implements AutoCloseable {
     /**
      * Invokes {@code plugin.setTopology} and persists the result via the appropriate broker-side
      * tagged field. On success: {@code StoredTopologyEpoch = pushedEpoch}, back-off cleared.
-     * On {@code InvalidRequestException} / {@code StreamsTopologyDescriptionTooLargeException}:
-     * {@code LastFailedTopologyEpoch = pushedEpoch}, back-off cleared (the ratchet takes over).
+     * On {@code PluginPermanentFailureException}: {@code LastFailedTopologyEpoch = pushedEpoch},
+     * back-off cleared (the ratchet takes over).
      * On any other exception: arm/extend the per-group back-off; no metadata write.
+     * The wire response always carries {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED} with the
+     * exception's message; the permanent-vs-transient split is reflected only in broker-side state.
      */
     public CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> handleSetTopology(
         String groupId,
@@ -233,18 +233,8 @@ public class TopologyDescriptionManager implements AutoCloseable {
                         ? throwable.getCause() : throwable;
                     log.warn("Plugin operation failed for group {}", groupId, cause);
                     metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
-                    Errors error;
-                    boolean permanentFailure = false;
-                    if (cause instanceof InvalidRequestException) {
-                        error = Errors.INVALID_REQUEST;
-                        permanentFailure = true;
-                    } else if (cause instanceof StreamsTopologyDescriptionTooLargeException) {
-                        error = Errors.STREAMS_TOPOLOGY_DESCRIPTION_TOO_LARGE;
-                        permanentFailure = true;
-                    } else {
-                        error = Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED;
-                    }
-                    responseData.setErrorCode(error.code());
+                    boolean permanentFailure = cause instanceof PluginPermanentFailureException;
+                    responseData.setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code());
                     responseData.setErrorMessage(cause.getMessage());
                     if (permanentFailure) {
                         backoff.remove(groupId);
@@ -457,7 +447,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
      * plugin call has settled, resolving to a map from {@code groupId} to the failure cause for
      * groups whose plugin call failed. Groups not present in the map succeeded (or had no stored
      * topology). The service uses the map to skip the tombstone for failed groups and report
-     * {@code STREAMS_TOPOLOGY_DESCRIPTION_DELETE_FAILED} on the per-group result.
+     * {@code DELETE_FAILED} on the per-group result, with the cause string in {@code ErrorMessage}.
      */
     public CompletableFuture<Map<String, Throwable>> deleteBeforeGroupDelete(
         Map<String, Integer> storedEpochs

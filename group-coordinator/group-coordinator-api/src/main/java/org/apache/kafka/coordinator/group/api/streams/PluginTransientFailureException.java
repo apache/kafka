@@ -14,18 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.coordinator.group.api.streams;
+
+import org.apache.kafka.common.errors.ApiException;
 
 /**
- * Indicates that the streams group topology description plugin failed to delete
- * the description for a group during a DeleteGroups request. The group has not
- * been tombstoned; the caller may retry once the plugin recovers.
+ * Signalled by a {@link StreamsGroupTopologyDescriptionPlugin} to indicate that the
+ * push failed for a transient reason and may succeed on a future attempt. The
+ * broker arms or extends the per-group back-off and re-solicits the push on a later
+ * heartbeat. The caller receives {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED}
+ * with this exception's message. Plugins that throw any other (non-permanent)
+ * exception are treated identically; this class is provided as the canonical signal.
  */
-public class StreamsTopologyDescriptionDeleteFailedException extends ApiException {
+public class PluginTransientFailureException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public StreamsTopologyDescriptionDeleteFailedException(String message) {
+    public PluginTransientFailureException(String message) {
         super(message);
+    }
+
+    public PluginTransientFailureException(String message, Throwable cause) {
+        super(message, cause);
     }
 }

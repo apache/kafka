@@ -136,15 +136,11 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
                 streamsRebalanceData.setTopologyDescriptionRequired(false);
                 break;
 
-            case STREAMS_TOPOLOGY_DESCRIPTION_TOO_LARGE:
-                log.warn("Topology description is too large for the plugin");
-                streamsRebalanceData.setTopologyDescriptionRequired(false);
-                break;
-
             case STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED:
-                // The broker treats this as transient and will re-solicit via a future heartbeat
-                // once its back-off elapses. Clearing the flag here just stops the local retry loop.
-                log.warn("Topology description push failed transiently; broker will re-request on a later heartbeat: {}",
+                // Covers both transient and permanent plugin failures; the broker drives any
+                // re-solicitation via a future heartbeat. Clearing the flag here just stops the
+                // local retry loop.
+                log.warn("Topology description push failed; broker may re-request on a later heartbeat: {}",
                     response.data().errorMessage());
                 streamsRebalanceData.setTopologyDescriptionRequired(false);
                 break;

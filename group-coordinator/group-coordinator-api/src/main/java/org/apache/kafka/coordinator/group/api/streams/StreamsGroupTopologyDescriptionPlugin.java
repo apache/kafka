@@ -37,22 +37,21 @@ public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, Aut
      *
      * <p>The returned future completes when the topology has been persisted or forwarded.
      * Failures must be signalled by completing the future exceptionally — implementations
-     * must not throw synchronously. The completion exception maps to the client-visible
-     * error code:
+     * must not throw synchronously. The completion exception drives broker-side behaviour:
      *
      * <ul>
-     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException} — payloads the
-     *       plugin will not accept on semantic grounds; reported as {@code INVALID_REQUEST}.</li>
-     *   <li>{@link org.apache.kafka.common.errors.StreamsTopologyDescriptionTooLargeException} —
-     *       descriptions larger than the plugin is willing to store; reported as
-     *       {@code STREAMS_TOPOLOGY_DESCRIPTION_TOO_LARGE}.</li>
-     *   <li>Any other exception — transient backend failure; reported as
-     *       {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED}.</li>
+     *   <li>{@link PluginPermanentFailureException} — the description will never be accepted
+     *       at this topology epoch (e.g. too large, semantically rejected). The broker
+     *       ratchets {@code LastFailedTopologyEpoch} and stops re-soliciting until the
+     *       epoch advances.</li>
+     *   <li>{@link PluginTransientFailureException} or any other exception — treated as
+     *       transient. The broker arms or extends the per-group back-off (30 s → 1 h,
+     *       exponential) and re-solicits on a later heartbeat.</li>
      * </ul>
      *
-     * The first two are treated as permanent at this topology epoch and no further push
-     * will be solicited until the epoch advances. The third is treated as transient and
-     * may be retried.
+     * In both cases the caller receives error code
+     * {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED} with the exception's message in
+     * {@code ErrorMessage}; the permanent-vs-transient split is broker-internal state.
      */
     CompletableFuture<Void> setTopology(String groupId, int topologyEpoch,
                                         StreamsGroupTopologyDescription description);
@@ -60,10 +59,11 @@ public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, Aut
     /**
      * Remove any topology description stored for this group. Called when the group is
      * deleted or expires. A failure (future completed exceptionally) is reported to the
-     * caller of {@code DeleteGroups} as {@code STREAMS_TOPOLOGY_DESCRIPTION_DELETE_FAILED} on that
-     * group's per-group result and the broker does not tombstone the group; a retry of
-     * {@code DeleteGroups} re-invokes this method idempotently. The periodic-cleanup path
-     * treats a failure identically — the group's tombstone is deferred to a future cycle.
+     * caller of {@code DeleteGroups} as {@code DELETE_FAILED} with the exception message
+     * in the per-group {@code ErrorMessage}, and the broker does not tombstone the group;
+     * a retry of {@code DeleteGroups} re-invokes this method idempotently. The
+     * periodic-cleanup path treats a failure identically — the group's tombstone is
+     * deferred to a future cycle.
      */
     CompletableFuture<Void> deleteTopology(String groupId);
 
