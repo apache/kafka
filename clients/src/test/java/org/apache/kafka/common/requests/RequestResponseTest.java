@@ -866,7 +866,7 @@ public class RequestResponseTest {
         UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
             new UnregisterBrokerRequestData()
         ).build((short) 0);
-        String customerErrorMessage = "customer error message";
+        String customerErrorMessage = "custom error message";
 
         UnregisterBrokerResponse response = request.getErrorResponse(
             0,
@@ -883,7 +883,7 @@ public class RequestResponseTest {
         UnregisterControllerRequest request = new UnregisterControllerRequest.Builder(
             new UnregisterControllerRequestData()
         ).build((short) 0);
-        String customerErrorMessage = "customer error message";
+        String customerErrorMessage = "custom error message";
 
         UnregisterControllerResponse response = request.getErrorResponse(
             0,

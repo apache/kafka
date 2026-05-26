@@ -57,7 +57,7 @@ public class MetadataQuorumCommandUnitTest {
                     "--controller-id", "2",
                     "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
                     "--dry-run"))).split("\n"));
-        assertTrue(outputs.contains("DRY RUN of removing  KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
+        assertTrue(outputs.contains("DRY RUN of removing KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
             "Failed to find expected output in stdout: " + outputs);
     }
 
@@ -71,9 +71,9 @@ public class MetadataQuorumCommandUnitTest {
                     "--controller-directory-id", "_KWDkTahTVaiVVVTaugNew",
                     "--dry-run",
                     "--unregister"))).split("\n"));
-        assertTrue(outputs.contains("DRY RUN of removing  KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
+        assertTrue(outputs.contains("DRY RUN of removing KRaft controller 2 with directory id _KWDkTahTVaiVVVTaugNew"),
             "Failed to find expected output in stdout: " + outputs);
-        assertTrue(outputs.contains("DRY RUN of unregistering  KRaft controller 2"),
+        assertTrue(outputs.contains("DRY RUN of unregistering KRaft controller 2"),
             "Failed to find expected unregister output in stdout: " + outputs);
     }
 
@@ -326,10 +326,10 @@ public class MetadataQuorumCommandUnitTest {
             assertDoesNotThrow(() ->
                 MetadataQuorumCommand.handleRemoveController(admin, REMOVE_CONTROLLER_ID,
                     REMOVE_DIRECTORY_ID_STRING, false, true)));
-        assertTrue(stdout.contains("Removed  KRaft controller " + REMOVE_CONTROLLER_ID
+        assertTrue(stdout.contains("Removed KRaft controller " + REMOVE_CONTROLLER_ID
                 + " with directory id " + REMOVE_DIRECTORY_ID_STRING),
             "Expected 'Removed' line in stdout: " + stdout);
-        assertTrue(stdout.contains("Unregistered  KRaft controller " + REMOVE_CONTROLLER_ID),
+        assertTrue(stdout.contains("Unregistered KRaft controller " + REMOVE_CONTROLLER_ID),
             "Expected 'Unregistered' line in stdout: " + stdout);
     }
 
@@ -343,7 +343,7 @@ public class MetadataQuorumCommandUnitTest {
                 REMOVE_DIRECTORY_ID_STRING, false, true));
         assertTrue(e.getMessage().contains("Failed to remove KRaft voter " + REMOVE_CONTROLLER_ID),
             "Expected removal-failure prefix; got: " + e.getMessage());
-        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --controller-id "
+        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --id "
                 + REMOVE_CONTROLLER_ID),
             "Expected kafka-cluster.sh hint; got: " + e.getMessage());
     }
@@ -358,7 +358,7 @@ public class MetadataQuorumCommandUnitTest {
                 REMOVE_DIRECTORY_ID_STRING, false, true));
         assertTrue(e.getMessage().contains("Failed to remove KRaft voter " + REMOVE_CONTROLLER_ID),
             "Expected removal-failure prefix; got: " + e.getMessage());
-        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --controller-id "
+        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --id "
                 + REMOVE_CONTROLLER_ID),
             "Expected kafka-cluster.sh hint; got: " + e.getMessage());
     }
@@ -370,10 +370,9 @@ public class MetadataQuorumCommandUnitTest {
         TerseException e = assertThrows(TerseException.class,
             () -> MetadataQuorumCommand.handleRemoveController(admin, REMOVE_CONTROLLER_ID,
                 REMOVE_DIRECTORY_ID_STRING, false, true));
-        assertTrue(e.getMessage().contains("Removed KRaft voter " + REMOVE_CONTROLLER_ID
-                + " but failed to unregister it"),
+        assertTrue(e.getMessage().contains("Failed to unregister controller " + REMOVE_CONTROLLER_ID),
             "Expected post-removal failure prefix; got: " + e.getMessage());
-        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --controller-id "
+        assertTrue(e.getMessage().contains("kafka-cluster.sh unregister-controller --id "
                 + REMOVE_CONTROLLER_ID),
             "Expected kafka-cluster.sh hint; got: " + e.getMessage());
     }

@@ -98,7 +98,7 @@ public class ClusterTool {
                 .action(store())
                 .required(true)
                 .help("The ID of the broker to unregister.");
-        unregisterControllerParser.addArgument("--controller-id", "-i")
+        unregisterControllerParser.addArgument("--id", "-i")
                 .type(Integer.class)
                 .action(store())
                 .required(true)
@@ -139,7 +139,7 @@ public class ClusterTool {
             }
             case "unregister-controller": {
                 try (Admin adminClient = Admin.create(properties)) {
-                    unregisterControllerCommand(System.out, adminClient, namespace.getInt("controller_id"));
+                    unregisterControllerCommand(System.out, adminClient, namespace.getInt("id"));
                 }
                 break;
             }

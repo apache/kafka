@@ -99,6 +99,9 @@ class ControllerRegistrationManagerTest {
     failedAttempts.get(30, TimeUnit.SECONDS)
   }
 
+  // This method simulates a metadata update by applying the given registration
+  // and unregistration modifiers to the previous image, and then calling
+  // manager.onMetadataUpdate() with the resulting delta and new image.
   private def doMetadataUpdate(
     prevImage: MetadataImage,
     manager: ControllerRegistrationManager,

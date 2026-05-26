@@ -505,7 +505,7 @@ public class MetadataQuorumCommand {
         if (!dryRun) {
             removeRaftVoter(admin, controllerId, directoryId, unregister);
         }
-        System.out.printf("%s KRaft controller %d with directory id %s%n",
+        System.out.printf("%sKRaft controller %d with directory id %s%n",
             dryRun ? "DRY RUN of removing " : "Removed ",
             controllerId,
             directoryId);
@@ -513,7 +513,7 @@ public class MetadataQuorumCommand {
             if (!dryRun) {
                 unregisterController(admin, controllerId);
             }
-            System.out.printf("%s KRaft controller %d%n",
+            System.out.printf("%sKRaft controller %d%n",
                 dryRun ? "DRY RUN of unregistering " : "Unregistered ",
                 controllerId);
         }
@@ -534,7 +534,7 @@ public class MetadataQuorumCommand {
                 throw new TerseException("Failed to remove KRaft voter " + controllerId
                     + ": " + cause.getMessage()
                     + ". To unregister the controller from the cluster, run "
-                    + "`kafka-cluster.sh unregister-controller --controller-id "
+                    + "`kafka-cluster.sh unregister-controller --id "
                     + controllerId + "`.");
             }
             throw e;
@@ -547,11 +547,10 @@ public class MetadataQuorumCommand {
             admin.unregisterController(controllerId).all().get();
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
-            throw new TerseException("Removed KRaft voter " + controllerId
-                + " but failed to unregister it: "
-                + (cause != null ? cause.getMessage() : e.getMessage())
+            throw new TerseException("Failed to unregister controller " + controllerId
+                + ": " + (cause != null ? cause.getMessage() : e.getMessage())
                 + ". To unregister the controller from the cluster, run "
-                + "`kafka-cluster.sh unregister-controller --controller-id "
+                + "`kafka-cluster.sh unregister-controller --id "
                 + controllerId + "`.");
         }
     }
