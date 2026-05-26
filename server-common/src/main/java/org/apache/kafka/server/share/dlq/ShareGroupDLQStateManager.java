@@ -246,6 +246,15 @@ public class ShareGroupDLQStateManager {
             return "ProduceRequestHandler";
         }
 
+        /**
+         * This method helps determine if the handler could
+         * participate in batching (added to nodeMap). This will
+         * be helpful if the RPCs which cannot be batched are included in
+         * this class as well.
+         *
+         * @return Boolean indicating whether this handler can be coalesced with others
+         * to reduce number of RPCs sent.
+         */
         boolean isBatchable() {
             return true;
         }
