@@ -155,6 +155,9 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final Supplier<Boolean> shareGroupDlqEnableSupplier;
 
+    /**
+     * Reference to the DLQ manager implementation.
+     */
     private final ShareGroupDLQManager shareGroupDLQManager;
 
     public SharePartitionManager(

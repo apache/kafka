@@ -329,14 +329,14 @@ public class SharePartition {
     private long fetchLockIdleDurationMs;
 
     /**
-     * Reference to the dlq manager implementation.
-     */
-    private final ShareGroupDLQManager shareGroupDLQManager;
-
-    /**
-     * Supplier to toggle dlq support.
+     * Supplier to toggle DLQ support.
      */
     private final Supplier<Boolean> shareGroupDlqEnableSupplier;
+
+    /**
+     * Reference to the DLQ manager implementation.
+     */
+    private final ShareGroupDLQManager shareGroupDLQManager;
 
     @SuppressWarnings("ParameterNumber")
     SharePartition(
