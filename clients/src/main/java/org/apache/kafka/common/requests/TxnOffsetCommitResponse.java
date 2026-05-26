@@ -51,6 +51,10 @@ import java.util.function.Function;
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
 
+    public static boolean useTopicIds(short version) {
+        return version >= 6;
+    }
+
     public static Builder newBuilder(boolean useTopicIds) {
         if (useTopicIds) {
             return new TopicIdBuilder();

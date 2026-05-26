@@ -1260,6 +1260,34 @@ public class TransactionManagerTest {
         assertAbortableError(CommitFailedException.class);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"GROUP_ID_NOT_FOUND", "STALE_MEMBER_EPOCH"})
+    public void testGroupMetadataMismatchErrorInTxnOffsetCommit(Errors error) {
+        // GROUP_ID_NOT_FOUND and STALE_MEMBER_EPOCH from TxnOffsetCommit (v6+)
+        // must abort the transaction with a CommitFailedException, matching the
+        // behavior for ILLEGAL_GENERATION returned by older broker versions.
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            Map.of(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, Map.of(tp, error));
+
+        runUntil(transactionManager::hasError);
+        assertInstanceOf(CommitFailedException.class, transactionManager.lastError());
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertInstanceOf(CommitFailedException.class, sendOffsetsResult.error());
+        assertAbortableError(CommitFailedException.class);
+    }
+
     @Test
     public void testLookupCoordinatorOnDisconnectAfterSend() {
         // This is called from the initTransactions method in the producer as the first order of business.

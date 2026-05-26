@@ -36,7 +36,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -60,32 +59,11 @@ public class MetadataCacheTest {
     protected static final long BROKER_EPOCH = 0L;
 
     public static MetadataCache createCache() {
-        return new KRaftMetadataCache(1, () -> KRaftVersion.KRAFT_VERSION_0);
+        return MetadataCacheFixtures.createCache();
     }
 
     public static void updateCache(MetadataCache cache, List<ApiMessage> records) {
-        if (cache instanceof KRaftMetadataCache c) {
-            MetadataImage image = c.currentImage();
-            MetadataImage partialImage = new MetadataImage(
-                new MetadataProvenance(100L, 10, 1000L, true),
-                image.features(),
-                image.cluster(),
-                image.topics(),
-                image.configs(),
-                image.clientQuotas(),
-                image.producerIds(),
-                image.acls(),
-                image.scram(),
-                image.delegationTokens()
-            );
-            MetadataDelta delta = new MetadataDelta.Builder().setImage(partialImage).build();
-            for (ApiMessage record : records) {
-                delta.replay(record);
-            }
-            c.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L, true)));
-        } else {
-            throw new RuntimeException("Unsupported cache type");
-        }
+        MetadataCacheFixtures.updateCache(cache, records);
     }
 
     @Test

@@ -53,12 +53,12 @@ public class ClientTelemetryExporterPlugin {
         exporters.add(exporter);
     }
 
-    public DefaultClientTelemetryPayload getPayLoad(PushTelemetryRequest request) {
-        return new DefaultClientTelemetryPayload(request);
+    public DefaultClientTelemetryPayload getPayLoad(PushTelemetryRequest request, int maxDecompressedBytes) {
+        return new DefaultClientTelemetryPayload(request, maxDecompressedBytes);
     }
 
-    public void exportMetrics(RequestContext context, PushTelemetryRequest request, int pushIntervalMs) {
-        DefaultClientTelemetryPayload payload = getPayLoad(request);
+    public void exportMetrics(RequestContext context, PushTelemetryRequest request, int pushIntervalMs, int maxDecompressedBytes) {
+        DefaultClientTelemetryPayload payload = getPayLoad(request, maxDecompressedBytes);
 
         // Export to deprecated receivers
         for (ClientTelemetryReceiver receiver : receivers) {

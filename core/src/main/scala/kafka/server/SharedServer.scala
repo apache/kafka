@@ -294,7 +294,7 @@ class SharedServer(
           clusterId,
           sharedServerConfig,
           metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
-          new MetadataRecordSerde,
+          MetadataRecordSerde.INSTANCE,
           KafkaRaftServer.MetadataPartition,
           KafkaRaftServer.MetadataTopicId,
           time,

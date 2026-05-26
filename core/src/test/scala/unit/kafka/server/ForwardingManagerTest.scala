@@ -20,8 +20,6 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicReference
-import kafka.network
-import kafka.network.RequestChannel
 import org.apache.kafka.clients.{MockClient, NodeApiVersions}
 import org.apache.kafka.clients.MockClient.RequestMatcher
 import org.apache.kafka.common.Node
@@ -35,6 +33,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AlterConfigsRequest, AlterConfigsResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.network.Request
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.ControllerInformation
@@ -269,7 +268,7 @@ class ForwardingManagerTest {
     )
     val buffer = body.serializeWithHeader(header)
 
-    // Fast-forward buffer to start of the request as `RequestChannel.Request` expects
+    // Fast-forward buffer to start of the request as `Request` expects
     RequestHeader.parse(buffer)
 
     (header, buffer)
@@ -279,7 +278,7 @@ class ForwardingManagerTest {
     requestHeader: RequestHeader,
     requestBuffer: ByteBuffer,
     principal: KafkaPrincipal
-  ): RequestChannel.Request = {
+  ): Request = {
     val requestContext = new RequestContext(
       requestHeader,
       "1",
@@ -293,14 +292,8 @@ class ForwardingManagerTest {
       Optional.of(principalBuilder)
     )
 
-    new network.RequestChannel.Request(
-      processor = 1,
-      context = requestContext,
-      startTimeNanos = time.nanoseconds(),
-      memoryPool = MemoryPool.NONE,
-      buffer = requestBuffer,
-      metrics = new RequestChannelMetrics(ListenerType.CONTROLLER),
-      envelope = None
+    new Request(1, requestContext, time.nanoseconds(),
+      MemoryPool.NONE, requestBuffer, new RequestChannelMetrics(ListenerType.CONTROLLER)
     )
   }
 
