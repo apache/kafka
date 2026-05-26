@@ -686,7 +686,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
     }
 
     @Test
-    public void testIsDlqEnabledOnTopicReturnsFalseValue() {
+    public void testIsDlqEnabledOnTopicReturnsFalse() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         Properties props = new Properties();
         props.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, false);

@@ -23,9 +23,13 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
@@ -42,13 +46,25 @@ import org.apache.kafka.server.util.timer.Timer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_DELIVERY_COUNT;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_GROUP;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_MESSAGE;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_OFFSET;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_PARTITION;
+import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_TOPIC;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -160,6 +176,54 @@ class ShareGroupDLQStateManagerTest {
         } catch (InterruptedException | TimeoutException e) {
             fail("Future did not complete", e);
             return null;
+        }
+    }
+
+    /**
+     * Expected headers and offset range for one DLQ partition's records inside a captured produce
+     * request. {@code sharedHeaders} are expected to be identical on every record in that partition;
+     * the offset header is built per-record from {@code firstOffset}..{@code lastOffset}.
+     */
+    private record ExpectedDlqPartition(long firstOffset, long lastOffset, Map<String, String> sharedHeaders) {
+    }
+
+    /**
+     * Verifies record-level headers for every partition of the (single) topic in a captured produce
+     * request. Keys of {@code expectedByPartitionIndex} are DLQ partition indices (as reported by
+     * {@link ProduceRequestData.PartitionProduceData#index()}); the set of partitions present in the
+     * request must match the keys exactly.
+     */
+    private static void assertDlqProduceRecordHeaders(
+        ProduceRequest request,
+        Map<Integer, ExpectedDlqPartition> expectedByPartitionIndex
+    ) {
+        ProduceRequestData.TopicProduceData topic = request.data().topicData().iterator().next();
+        Set<Integer> actualPartitionIndices = topic.partitionData().stream()
+            .map(ProduceRequestData.PartitionProduceData::index)
+            .collect(Collectors.toSet());
+        assertEquals(expectedByPartitionIndex.keySet(), actualPartitionIndices,
+            "Unexpected set of DLQ partitions in produce request");
+
+        for (ProduceRequestData.PartitionProduceData partition : topic.partitionData()) {
+            ExpectedDlqPartition expected = expectedByPartitionIndex.get(partition.index());
+            MemoryRecords records = (MemoryRecords) partition.records();
+
+            long expectedOffset = expected.firstOffset();
+            int recordCount = 0;
+            for (Record record : records.records()) {
+                Map<String, String> actualHeaders = new HashMap<>();
+                for (Header h : record.headers()) {
+                    actualHeaders.put(h.key(), new String(h.value(), StandardCharsets.UTF_8));
+                }
+                Map<String, String> expectedHeaders = new HashMap<>(expected.sharedHeaders());
+                expectedHeaders.put(HEADER_DLQ_ERRORS_OFFSET, Long.toString(expectedOffset));
+                assertEquals(expectedHeaders, actualHeaders,
+                    "Partition " + partition.index() + " record at offset " + expectedOffset + " has unexpected headers");
+                expectedOffset++;
+                recordCount++;
+            }
+            assertEquals((int) (expected.lastOffset() - expected.firstOffset() + 1), recordCount,
+                "Partition " + partition.index() + " has unexpected number of records");
         }
     }
 
@@ -299,8 +363,15 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testDlqHappyPathExistingTopic() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
         client.prepareResponseFrom(
-            body -> body instanceof ProduceRequest,
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
             successfulProduceResponse(0),
             DEFAULT_LEADER
         );
@@ -308,6 +379,17 @@ class ShareGroupDLQStateManagerTest {
         stateManager = builder().withClient(client).build();
         stateManager.start();
         assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ))
+        ));
     }
 
     @Test
@@ -328,8 +410,15 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.getClusterNodes()).thenReturn(List.of(DEFAULT_LEADER));
 
         MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
         client.prepareResponseFrom(
-            body -> body instanceof ProduceRequest,
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
             successfulProduceResponse(0),
             DEFAULT_LEADER
         );
@@ -340,6 +429,17 @@ class ShareGroupDLQStateManagerTest {
             .build();
         stateManager.start();
         assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ))
+        ));
     }
 
     @Test
@@ -360,13 +460,20 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
 
         MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
         client.prepareResponseFrom(
             body -> body instanceof CreateTopicsRequest,
             successfulCreateTopicsResponse(),
             DEFAULT_LEADER
         );
         client.prepareResponseFrom(
-            body -> body instanceof ProduceRequest,
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
             successfulProduceResponse(0),
             DEFAULT_LEADER
         );
@@ -377,6 +484,17 @@ class ShareGroupDLQStateManagerTest {
             .build();
         stateManager.start();
         assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ))
+        ));
     }
 
     @Test
@@ -483,6 +601,7 @@ class ShareGroupDLQStateManagerTest {
             new SystemTimer("shareGroupDLQTestTimer"));
         try {
             MockClient client = new MockClient(MOCK_TIME);
+            List<ProduceRequest> capturedProduces = new ArrayList<>();
             // Two CreateTopics disconnects (retriable), then a successful create, then the produce succeeds.
             client.prepareResponseFrom(body -> body instanceof CreateTopicsRequest, null, DEFAULT_LEADER, true);
             client.prepareResponseFrom(body -> body instanceof CreateTopicsRequest, null, DEFAULT_LEADER, true);
@@ -492,7 +611,13 @@ class ShareGroupDLQStateManagerTest {
                 DEFAULT_LEADER
             );
             client.prepareResponseFrom(
-                body -> body instanceof ProduceRequest,
+                body -> {
+                    if (body instanceof ProduceRequest pr) {
+                        capturedProduces.add(pr);
+                        return true;
+                    }
+                    return false;
+                },
                 successfulProduceResponse(0),
                 DEFAULT_LEADER
             );
@@ -505,6 +630,17 @@ class ShareGroupDLQStateManagerTest {
             stateManager.start();
 
             assertNull(stateManager.dlq(param(), 1L, 5L, maxAttempts).get(5, TimeUnit.SECONDS));
+
+            assertEquals(1, capturedProduces.size());
+            assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+                0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                    HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                    HEADER_DLQ_ERRORS_PARTITION, "0",
+                    HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                    HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                    HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+                ))
+            ));
         } finally {
             Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
         }
@@ -517,14 +653,19 @@ class ShareGroupDLQStateManagerTest {
             new SystemTimer("shareGroupDLQTestTimer"));
         try {
             MockClient client = new MockClient(MOCK_TIME);
-            // Two Produce disconnects (retriable), then a successful produce.
-            client.prepareResponseFrom(body -> body instanceof ProduceRequest, null, DEFAULT_LEADER, true);
-            client.prepareResponseFrom(body -> body instanceof ProduceRequest, null, DEFAULT_LEADER, true);
-            client.prepareResponseFrom(
-                body -> body instanceof ProduceRequest,
-                successfulProduceResponse(0),
-                DEFAULT_LEADER
-            );
+            List<ProduceRequest> capturedProduces = new ArrayList<>();
+            // Two Produce disconnects (retriable), then a successful produce. Capture all attempts;
+            // the retried attempts must carry the same headers as the successful one.
+            MockClient.RequestMatcher captureProduce = body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            };
+            client.prepareResponseFrom(captureProduce, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(captureProduce, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(captureProduce, successfulProduceResponse(0), DEFAULT_LEADER);
 
             stateManager = builder()
                 .withClient(client)
@@ -533,6 +674,20 @@ class ShareGroupDLQStateManagerTest {
             stateManager.start();
 
             assertNull(stateManager.dlq(param(), 1L, 5L, maxAttempts).get(5, TimeUnit.SECONDS));
+
+            assertEquals(maxAttempts, capturedProduces.size());
+            Map<Integer, ExpectedDlqPartition> expectedByPartition = Map.of(
+                0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                    HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                    HEADER_DLQ_ERRORS_PARTITION, "0",
+                    HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                    HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                    HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+                ))
+            );
+            for (ProduceRequest pr : capturedProduces) {
+                assertDlqProduceRecordHeaders(pr, expectedByPartition);
+            }
         } finally {
             Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
         }
@@ -667,11 +822,19 @@ class ShareGroupDLQStateManagerTest {
         collection.add(topicResp);
 
         MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        MockClient.RequestMatcher captureProduce = body -> {
+            if (body instanceof ProduceRequest pr) {
+                capturedProduces.add(pr);
+                return true;
+            }
+            return false;
+        };
         // Two identical responses cover the non-coalesced path.
-        client.prepareResponseFrom(body -> body instanceof ProduceRequest,
+        client.prepareResponseFrom(captureProduce,
             new ProduceResponse(new ProduceResponseData().setResponses(collection.duplicate())),
             DEFAULT_LEADER);
-        client.prepareResponseFrom(body -> body instanceof ProduceRequest,
+        client.prepareResponseFrom(captureProduce,
             new ProduceResponse(new ProduceResponseData().setResponses(collection.duplicate())),
             DEFAULT_LEADER);
 
@@ -696,13 +859,48 @@ class ShareGroupDLQStateManagerTest {
 
         assertNull(r0.get(10, TimeUnit.SECONDS));
         assertNull(r1.get(10, TimeUnit.SECONDS));
+
+        // Two source partitions map to two distinct DLQ partition indices (0 and 1, given 2
+        // DLQ partitions). Whether they end up coalesced into a single request (one topic, two
+        // partitions) or sent as two requests (each with one partition) depends on scheduling.
+        ExpectedDlqPartition expectedDlqPartition0 = new ExpectedDlqPartition(0L, 0L, Map.of(
+            HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+            HEADER_DLQ_ERRORS_PARTITION, "0",
+            HEADER_DLQ_ERRORS_GROUP, GROUP_ID
+        ));
+        ExpectedDlqPartition expectedDlqPartition1 = new ExpectedDlqPartition(0L, 0L, Map.of(
+            HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+            HEADER_DLQ_ERRORS_PARTITION, "1",
+            HEADER_DLQ_ERRORS_GROUP, GROUP_ID
+        ));
+        if (capturedProduces.size() == 1) {
+            assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+                0, expectedDlqPartition0,
+                1, expectedDlqPartition1
+            ));
+        } else {
+            assertEquals(2, capturedProduces.size(),
+                "Expected coalesced (1 request) or non-coalesced (2 requests), got " + capturedProduces.size());
+            for (ProduceRequest pr : capturedProduces) {
+                int dlqPartitionIndex = pr.data().topicData().iterator().next().partitionData().get(0).index();
+                ExpectedDlqPartition expected = dlqPartitionIndex == 0 ? expectedDlqPartition0 : expectedDlqPartition1;
+                assertDlqProduceRecordHeaders(pr, Map.of(dlqPartitionIndex, expected));
+            }
+        }
     }
 
     @Test
     public void testDlqResolvesSourceTopicNameViaCacheHelperWhenMissing() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
         client.prepareResponseFrom(
-            body -> body instanceof ProduceRequest,
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
             successfulProduceResponse(0),
             DEFAULT_LEADER
         );
@@ -715,6 +913,18 @@ class ShareGroupDLQStateManagerTest {
             0L, 0L,
             Optional.empty(), Optional.empty(), false);
         assertNull(stateManager.dlq(p).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        // Source topic name was null in the parameter; the manager must have resolved it via
+        // ShareGroupDLQMetadataCacheHelper.topicName(SOURCE_TOPIC_ID), which the happy helper
+        // returns as "source-topic".
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 0L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID
+            ))
+        ));
     }
 
     // ---- Response builder helpers ----

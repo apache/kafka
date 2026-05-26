@@ -19,6 +19,7 @@ package kafka.server.share;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -30,6 +31,7 @@ import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
+import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,14 +93,14 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     @Override
     public boolean isDlqEnabledOnTopic(String topic) {
         Properties props = metadataCache.topicConfig(topic);
-        if (props == null || props.isEmpty()) {
+        if (props == null) {
             return false;
         }
-        Object isEnabled = props.get(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
-        if (isEnabled instanceof String) {
-            return Boolean.parseBoolean((String) isEnabled);
+        try {
+            return new LogConfig(props).getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+        } catch (ConfigException exe) {
+            return false;
         }
-        return false;
     }
 
     @Override
@@ -139,7 +141,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
                 }
             }
         } catch (Exception e) {
-            log.warn("Exception while getting share coordinator", e);
+            log.warn("Exception while getting share coordinator.", e);
         }
         return Node.noNode();
     }
@@ -149,7 +151,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
         try {
             return metadataCache.getAliveBrokerNodes(interBrokerListenerName);
         } catch (Exception e) {
-            log.warn("Exception while getting cluster nodes", e);
+            log.warn("Exception while getting cluster nodes.", e);
         }
         return List.of();
     }
@@ -159,7 +161,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
         try {
             return metadataCache.getTopicName(topicId);
         } catch (Exception e) {
-            log.warn("Exception while fetching topic name", e);
+            log.warn("Exception while fetching topic name.", e);
         }
         return Optional.empty();
     }
