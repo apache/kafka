@@ -1191,6 +1191,56 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testStaleConnectionClosedWhenHostnameChanges() {
+        AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver(
+                initialAddresses.toArray(new InetAddress[0]), initialAddresses.toArray(new InetAddress[0]));
+        MockSelector mockSelector = new MockSelector(this.time);
+
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(Long.MAX_VALUE);
+
+        int refreshBackoffMs = 50;
+        // Seed: node 0 reported at host-a
+        Node initialNode = new Node(0, "host-a", 1969);
+        MetadataResponse seedResponse = RequestTestUtils.metadataResponse(
+                Collections.singletonList(initialNode), "kafka-cluster", 0, Collections.emptyList());
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
+        metadata.updateWithCurrentRequestVersion(seedResponse, false, time.milliseconds());
+        Node targetNode = metadata.fetch().nodes().get(0);
+
+        NetworkClient client = new NetworkClient(null, metadata, mockSelector, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+                defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender,
+                Long.MAX_VALUE, MetadataRecoveryStrategy.NONE);
+
+        // Establish connection — ClusterConnectionStates caches host="host-a" for node 0
+        awaitReady(client, targetNode);
+        assertTrue(client.isReady(targetNode, time.milliseconds()));
+
+        // Simulate metadata reporting the same broker id under a different hostname
+        Node renamedNode = new Node(0, "host-b", 1969);
+        MetadataResponse updatedResponse = RequestTestUtils.metadataResponse(
+                Collections.singletonList(renamedNode), "kafka-cluster", 0, Collections.emptyList());
+
+        // Trigger a metadata refresh — request goes out on the next poll
+        metadata.requestUpdate(true);
+        time.sleep(refreshBackoffMs);
+        client.poll(0, time.milliseconds());
+
+        // Reflect the request header back into the updated response and deliver it
+        ByteBuffer requestBuffer = mockSelector.completedSendBuffers().get(0).buffer();
+        RequestHeader header = parseHeader(requestBuffer);
+        ByteBuffer responseBuffer = RequestTestUtils.serializeResponseWithHeader(
+                updatedResponse, header.apiVersion(), header.correlationId());
+        mockSelector.delayedReceive(new DelayedReceive(targetNode.idString(), new NetworkReceive(targetNode.idString(), responseBuffer)));
+
+        // Response processing closes the stale channel via maybeCloseStaleConnections
+        client.poll(0, time.milliseconds());
+        assertFalse(client.isReady(targetNode, time.milliseconds()));
+    }
+
+    @Test
     public void testFailedConnectionToFirstAddress() {
         AddressChangeHostResolver mockHostResolver = new AddressChangeHostResolver(
                 initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));

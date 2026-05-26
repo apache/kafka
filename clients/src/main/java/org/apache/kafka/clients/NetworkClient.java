@@ -54,6 +54,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -1076,6 +1077,29 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Close any TCP channel whose bound IP no longer matches the latest host from metadata.
+     * Detects IP changes that TCP keepalive misses — e.g. a broker pod rescheduled with a new
+     * IP, or an IP reassigned across brokers (KAFKA-20394).
+     */
+    private void maybeCloseStaleConnections() {
+        for (Node node : metadataUpdater.fetchNodes()) {
+            String nodeId = node.idString();
+            if (!connectionStates.isConnected(nodeId)) {
+                continue;
+            }
+            try {
+                if (connectionStates.isConnectionStale(nodeId, node.host())) {
+                    log.info("Closing stale connection to node {} (host {})", nodeId, node.host());
+                    disconnect(nodeId);
+                }
+            } catch (UnknownHostException e) {
+                log.debug("Could not re-resolve host {} for node {}; leaving existing connection in place",
+                        node.host(), nodeId, e);
+            }
+        }
+    }
+
+    /**
      * Record any newly completed connections
      */
     private void handleConnections() {
@@ -1304,6 +1328,7 @@ public class NetworkClient implements KafkaClient {
                 this.metadata.failedUpdate(now);
             } else {
                 this.metadata.update(inProgress.requestVersion, response, inProgress.isPartialUpdate, now);
+                maybeCloseStaleConnections();
                 metadataAttemptStartMs = Optional.empty();
             }
 
