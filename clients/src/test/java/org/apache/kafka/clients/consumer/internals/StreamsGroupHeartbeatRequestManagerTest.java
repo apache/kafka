@@ -69,6 +69,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+import static org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -367,11 +368,18 @@ class StreamsGroupHeartbeatRequestManagerTest {
             when(membershipManager.state()).thenReturn(MemberState.LEAVING);
             when(membershipManager.leaveGroupOperation()).thenReturn(operation);
             when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+            when(membershipManager.memberEpoch()).thenReturn(LEAVE_GROUP_STATIC_MEMBER_EPOCH);
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
 
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
             assertEquals(1, result.unsentRequests.size());
             verify(membershipManager, never()).onHeartbeatRequestSkipped();
+            final StreamsGroupHeartbeatRequest req =
+                (StreamsGroupHeartbeatRequest) result.unsentRequests.get(0).requestBuilder().build();
+            assertEquals(LEAVE_GROUP_STATIC_MEMBER_EPOCH, req.data().memberEpoch());
+            assertEquals(INSTANCE_ID, req.data().instanceId());
         }
     }
 
