@@ -321,6 +321,8 @@ public class NetworkClientTest {
 
         // Send the ApiVersionsRequest to the second node
         client.ready(node1, time.milliseconds());
+        assertFalse(client.connectionFailed(node0));
+        assertFalse(client.connectionFailed(node1));
         client.poll(0, time.milliseconds());
         delayedApiVersionsResponse(node1, 1, ApiKeys.API_VERSIONS.latestVersion(),
             TestUtils.errorApiVersionsResponse(0, Errors.REBOOTSTRAP_REQUIRED, ApiMessageType.ListenerType.BROKER));
@@ -328,6 +330,8 @@ public class NetworkClientTest {
         client.poll(0, time.milliseconds());
         // the ApiVersionsRequest is gone
         assertFalse(client.hasInFlightRequests(node1.idString()));
+        assertTrue(client.connectionFailed(node0));
+        assertTrue(client.connectionFailed(node1));
         selector.clear();
         assertEquals(1, metadataUpdater.getRebootstrapCount());
     }
