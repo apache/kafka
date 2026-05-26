@@ -57,15 +57,15 @@ public final class DisableRemoteLogOnTopicTest {
 
     @ClusterTemplate("clusterConfig")
     public void testDisableRemoteLogOnTopicWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
-        executeDisableRemoteLogOnTopic(clusterInstance, GroupProtocol.CLASSIC);
+        executeDisableRemoteLogOnTopicTest(clusterInstance, GroupProtocol.CLASSIC);
     }
 
     @ClusterTemplate("clusterConfig")
     public void testDisableRemoteLogOnTopicWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
-        executeDisableRemoteLogOnTopic(clusterInstance, GroupProtocol.CONSUMER);
+        executeDisableRemoteLogOnTopicTest(clusterInstance, GroupProtocol.CONSUMER);
     }
 
-    private static void executeDisableRemoteLogOnTopic(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
+    private static void executeDisableRemoteLogOnTopicTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
         final int broker0 = 0;
         final int broker1 = 1;
         final String topicA = "topicA";
