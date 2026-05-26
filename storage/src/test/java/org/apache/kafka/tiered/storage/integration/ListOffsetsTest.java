@@ -44,7 +44,7 @@ import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.creat
 
 public final class ListOffsetsTest {
 
-    private static final int BROKER_COUNT = 2;
+    private static final int BROKER_COUNT = 3;
     private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 5;
 
     private static List<ClusterConfig> clusterConfig() {
