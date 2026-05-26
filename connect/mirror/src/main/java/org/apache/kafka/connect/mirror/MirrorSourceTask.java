@@ -29,13 +29,14 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.common.errors.OffsetOutOfRangeException; // Add this
+// import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,6 +50,7 @@ import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES
 public class MirrorSourceTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceTask.class);
+    private final java.util.Map<TopicPartition, Long> lastExpectedOffsets = new java.util.HashMap<>();
 
     private KafkaConsumer<byte[], byte[]> consumer;
     private String sourceClusterAlias;
@@ -131,47 +133,63 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() {
-        if (!consumerAccess.tryAcquire()) {
-            return null;
-        }
+        if (!consumerAccess.tryAcquire()) return null;
+
         if (stopping) {
             consumerAccess.release();
             return null;
         }
+
         try {
-            // REMOVED: validateSourceTopicState() from here to save network overhead
-            
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+            // Validate partitions AFTER poll
+            for (TopicPartition tp : consumer.assignment()) {
+                long nextOffset = consumer.position(tp);
+                Map<TopicPartition, Long> beginningOffsets =
+                        consumer.beginningOffsets(Collections.singleton(tp));
+
+                Map<TopicPartition, Long> endOffsets =
+                        consumer.endOffsets(Collections.singleton(tp));
+
+                long beginningOffset = beginningOffsets.get(tp);
+                long endOffset = endOffsets.get(tp);
+
+                verifyPartitionState(
+                        tp,
+                        nextOffset,
+                        beginningOffset,
+                        endOffset
+                );
+            }
 
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
-                SourceRecord converted = convertRecord(record);
-                sourceRecords.add(converted);
-                TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
-                metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
-                metrics.recordBytes(topicPartition, byteSize(record.value()));
+                sourceRecords.add(convertRecord(record));
             }
-            if (sourceRecords.isEmpty()) {
-                return null;
-            } else {
-                return sourceRecords;
-            }
-        } catch (org.apache.kafka.common.errors.WakeupException e) {
-            return null;
-        } catch (OffsetOutOfRangeException e) {
-            // =================================================================
-            // RECOVERY & FAIL-FAST ROUTER ON EXCEPTION
-            // =================================================================
-            log.warn("Consumer offset out of bounds. Evaluating cluster state to differentiate truncation vs reset...");
-            handleOffsetBreach(consumer.assignment());
-            return null; 
-        } catch (KafkaException e) {
-            throw e; 
+            return sourceRecords.isEmpty() ? null : sourceRecords;
+
+        } catch (org.apache.kafka.common.errors.OffsetOutOfRangeException e) {
+            log.error("Source log truncation detected", e);
+            throw new org.apache.kafka.connect.errors.ConnectException(
+                    "Fail-Fast: Source log truncation detected.",
+                    e
+            );
+
         } finally {
             consumerAccess.release();
         }
     }
 
+    // // Helper to keep poll() clean
+    // private List<SourceRecord> processRecords(ConsumerRecords<byte[], byte[]> records) {
+    //     List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
+    //     for (ConsumerRecord<byte[], byte[]> record : records) {
+    //         sourceRecords.add(convertRecord(record));
+    //     }
+    //     return sourceRecords.isEmpty() ? null : sourceRecords;
+    // }
+    
+    /*
     private void handleOffsetBreach(Set<TopicPartition> breachedPartitions) {
         if (breachedPartitions == null || breachedPartitions.isEmpty()) return;
 
@@ -219,6 +237,7 @@ public class MirrorSourceTask extends SourceTask {
             }
         }
     }
+    */
 
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
@@ -264,22 +283,16 @@ public class MirrorSourceTask extends SourceTask {
         return MirrorUtils.unwrapOffset(wrappedOffset);
     }
 
-    // visible for testing
     void initializeConsumer(Set<TopicPartition> taskTopicPartitions) {
         Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
+        
+        // Use standard assign, no listener here
         consumer.assign(topicPartitionOffsets.keySet());
-        log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.values().stream()
-                .filter(this::isUncommitted).count());
-
+        
         topicPartitionOffsets.forEach((topicPartition, offset) -> {
-            // Do not call seek on partitions that don't have an existing offset committed.
-            if (isUncommitted(offset)) {
-                log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
-                return;
+            if (!isUncommitted(offset)) {
+                consumer.seek(topicPartition, offset + 1L);
             }
-            long nextOffsetToCommittedOffset = offset + 1L;
-            log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
-            consumer.seek(topicPartition, nextOffsetToCommittedOffset);
         });
     }
 
@@ -319,4 +332,20 @@ public class MirrorSourceTask extends SourceTask {
     private boolean isUncommitted(Long offset) {
         return offset == null || offset < 0;
     }
+
+    private void verifyPartitionState(TopicPartition tp, long nextOffset, long beginningOffset, long endOffset) {
+        // 1. True Log Truncation (Scenario 2: Data was chopped out from underneath MM2)
+        if (nextOffset < beginningOffset) {
+            log.error("CRITICAL: Source log truncation detected for {}! MM2 position is {}, but log starts at {}.", 
+                    tp, nextOffset, beginningOffset);
+            throw new org.apache.kafka.connect.errors.ConnectException("Fail-Fast: Hard log truncation detected.");
+        }
+
+        // 2. True Topic Reset/Purge (Scenario 3: Topic was wiped clean, log reset back to 0)
+        if (beginningOffset == 0 && nextOffset > endOffset) {
+            log.warn("Detected intentional source topic purge/reset for {}. Re-aligning consumer position to 0L.", tp);
+            consumer.seekToBeginning(Collections.singleton(tp));
+        }
+    }
 }
+
