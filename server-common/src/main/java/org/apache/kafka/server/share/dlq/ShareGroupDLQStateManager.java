@@ -149,6 +149,14 @@ public class ShareGroupDLQStateManager {
         return future;
     }
 
+    // Visibility for tests
+    CompletableFuture<Void> dlq(ShareGroupDLQRecordParameter param, long requestBackoffMs, long requestBackoffMaxMs, int maxRequestAttempts) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future, requestBackoffMs, requestBackoffMaxMs, maxRequestAttempts);
+        enqueue(requestHandler);
+        return future;
+    }
+
     private void enqueue(ProduceRequestHandler requestHandler) {
         sender.enqueue(requestHandler);
     }

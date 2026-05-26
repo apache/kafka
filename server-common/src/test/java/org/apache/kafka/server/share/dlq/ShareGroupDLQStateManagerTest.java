@@ -31,9 +31,12 @@ import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper.TopicPartitionData;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.MockTimer;
+import org.apache.kafka.server.util.timer.SystemTimer;
+import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -419,6 +422,123 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
+    public void testDlqCreateTopicRetriesExhaustedFailsWithNetworkException() throws Exception {
+        int maxAttempts = 3;
+        // Force the create-topic path: configured DLQ topic does not yet exist in metadata.
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+        when(cacheHelper.getClusterNodes()).thenReturn(List.of(DEFAULT_LEADER));
+
+        // Real timer with tiny backoffs lets the exhaustion path actually fire in a few ms.
+        Timer realTimer = new SystemTimerReaper("shareGroupDLQTestTimer",
+            new SystemTimer("shareGroupDLQTestTimer"));
+        try {
+            MockClient client = new MockClient(MOCK_TIME);
+            for (int i = 0; i < maxAttempts; i++) {
+                client.prepareResponseFrom(
+                    body -> body instanceof CreateTopicsRequest,
+                    null,
+                    DEFAULT_LEADER,
+                    true
+                );
+            }
+
+            stateManager = builder()
+                .withClient(client)
+                .withCacheHelper(cacheHelper)
+                .withTimer(realTimer)
+                .build();
+            stateManager.start();
+
+            Throwable cause = getCause(stateManager.dlq(param(), 1L, 5L, maxAttempts));
+            assertNotNull(cause);
+            assertEquals(Errors.NETWORK_EXCEPTION.exception().getClass(), cause.getClass());
+        } finally {
+            Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
+        }
+    }
+
+    @Test
+    public void testDlqCreateTopicPartialFailuresThenSucceeds() throws Exception {
+        int maxAttempts = 3;
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
+        when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(true);
+        when(cacheHelper.containsTopic(DLQ_TOPIC)).thenReturn(false);
+        when(cacheHelper.getClusterNodes()).thenReturn(List.of(DEFAULT_LEADER));
+        when(cacheHelper.topicName(SOURCE_TOPIC_ID)).thenReturn(Optional.of("source-topic"));
+        when(cacheHelper.topicPartitionData(DLQ_TOPIC)).thenReturn(new TopicPartitionData(
+            DLQ_TOPIC,
+            Optional.of(1),
+            Optional.of(DLQ_TOPIC_ID),
+            List.of(DEFAULT_LEADER)
+        ));
+
+        Timer realTimer = new SystemTimerReaper("shareGroupDLQTestTimer",
+            new SystemTimer("shareGroupDLQTestTimer"));
+        try {
+            MockClient client = new MockClient(MOCK_TIME);
+            // Two CreateTopics disconnects (retriable), then a successful create, then the produce succeeds.
+            client.prepareResponseFrom(body -> body instanceof CreateTopicsRequest, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(body -> body instanceof CreateTopicsRequest, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(
+                body -> body instanceof CreateTopicsRequest,
+                successfulCreateTopicsResponse(),
+                DEFAULT_LEADER
+            );
+            client.prepareResponseFrom(
+                body -> body instanceof ProduceRequest,
+                successfulProduceResponse(0),
+                DEFAULT_LEADER
+            );
+
+            stateManager = builder()
+                .withClient(client)
+                .withCacheHelper(cacheHelper)
+                .withTimer(realTimer)
+                .build();
+            stateManager.start();
+
+            assertNull(stateManager.dlq(param(), 1L, 5L, maxAttempts).get(5, TimeUnit.SECONDS));
+        } finally {
+            Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
+        }
+    }
+
+    @Test
+    public void testDlqProducePartialFailuresThenSucceeds() throws Exception {
+        int maxAttempts = 3;
+        Timer realTimer = new SystemTimerReaper("shareGroupDLQTestTimer",
+            new SystemTimer("shareGroupDLQTestTimer"));
+        try {
+            MockClient client = new MockClient(MOCK_TIME);
+            // Two Produce disconnects (retriable), then a successful produce.
+            client.prepareResponseFrom(body -> body instanceof ProduceRequest, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(body -> body instanceof ProduceRequest, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(
+                body -> body instanceof ProduceRequest,
+                successfulProduceResponse(0),
+                DEFAULT_LEADER
+            );
+
+            stateManager = builder()
+                .withClient(client)
+                .withTimer(realTimer)
+                .build();
+            stateManager.start();
+
+            assertNull(stateManager.dlq(param(), 1L, 5L, maxAttempts).get(5, TimeUnit.SECONDS));
+        } finally {
+            Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
+        }
+    }
+
+    @Test
     public void testDlqProduceFatalErrorFailsFuture() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
         client.prepareResponseFrom(
@@ -475,6 +595,39 @@ class ShareGroupDLQStateManagerTest {
             fail("Expected the future to remain incomplete while retry is pending");
         } catch (TimeoutException expected) {
             assertFalse(result.isDone());
+        }
+    }
+
+    @Test
+    public void testDlqProduceRetriesExhaustedFailsWithNetworkException() throws Exception {
+        int maxAttempts = 3;
+        // Real timer with tiny backoffs lets the exhaustion path actually fire in a few ms,
+        // rather than the ~30s a MockTimer-less production-like setup would take.
+        Timer realTimer = new SystemTimerReaper("shareGroupDLQTestTimer",
+            new SystemTimer("shareGroupDLQTestTimer"));
+        try {
+            MockClient client = new MockClient(MOCK_TIME);
+            // Each retry consumes one prepared response; stage one disconnect per attempt.
+            for (int i = 0; i < maxAttempts; i++) {
+                client.prepareResponseFrom(
+                    body -> body instanceof ProduceRequest,
+                    null,
+                    DEFAULT_LEADER,
+                    true
+                );
+            }
+
+            stateManager = builder()
+                .withClient(client)
+                .withTimer(realTimer)
+                .build();
+            stateManager.start();
+
+            Throwable cause = getCause(stateManager.dlq(param(), 1L, 5L, maxAttempts));
+            assertNotNull(cause);
+            assertEquals(Errors.NETWORK_EXCEPTION.exception().getClass(), cause.getClass());
+        } finally {
+            Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
         }
     }
 
