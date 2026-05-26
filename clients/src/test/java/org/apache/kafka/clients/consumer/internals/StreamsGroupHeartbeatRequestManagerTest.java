@@ -270,7 +270,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
             assertEquals(0, result.unsentRequests.size());
-            verify(membershipManager).onHeartbeatRequestSkipped(false);
+            verify(membershipManager).onHeartbeatRequestSkipped();
             verify(pollTimer, never()).update();
         }
     }
@@ -286,7 +286,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
             assertEquals(0, result.unsentRequests.size());
-            verify(membershipManager).onHeartbeatRequestSkipped(false);
+            verify(membershipManager).onHeartbeatRequestSkipped();
             verify(pollTimer, never()).update();
         }
     }
@@ -301,7 +301,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
         assertEquals(0, result.unsentRequests.size());
-        verify(membershipManager).onHeartbeatRequestSkipped(false);
+        verify(membershipManager).onHeartbeatRequestSkipped();
         verify(backgroundEventHandler).add(argThat(
             errorEvent -> errorEvent instanceof ErrorEvent && ((ErrorEvent) errorEvent).error() == fatalError));
     }
@@ -339,27 +339,40 @@ class StreamsGroupHeartbeatRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
         when(membershipManager.state()).thenReturn(MemberState.LEAVING);
         when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
 
         final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
         assertEquals(0, result.unsentRequests.size());
-        verify(membershipManager).onHeartbeatRequestSkipped(true);
+        verify(membershipManager).onHeartbeatRequestSkipped();
     }
 
-    @Test
-    public void testSkipLeaveHeartbeatForStaticMemberWithDefaultOperation() {
-        // Static member with DEFAULT operation should skip leave heartbeat,
-        // paralleling REMAIN_IN_GROUP semantics for dynamic members under the classic protocol.
-        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
-        when(membershipManager.state()).thenReturn(MemberState.LEAVING);
-        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.DEFAULT);
-        when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+    @ParameterizedTest
+    @EnumSource(value = CloseOptions.GroupMembershipOperation.class, names = {"DEFAULT", "REMAIN_IN_GROUP"})
+    public void testSendLeaveHeartbeatForStaticMember(final CloseOptions.GroupMembershipOperation operation) {
+        // Static members always send a leave heartbeat (with epoch -2) so the broker can hold the
+        // assignment until session timeout, regardless of the close operation.
+        final long heartbeatIntervalMs = 1234;
+        try (
+            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> {
+                    when(mock.canSendRequest(time.milliseconds())).thenReturn(false);
+                    when(mock.heartbeatIntervalMs()).thenReturn(heartbeatIntervalMs);
+                    when(mock.requestInFlight()).thenReturn(false);
+                })
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+            when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
 
-        final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
-        assertEquals(0, result.unsentRequests.size());
-        verify(membershipManager).onHeartbeatRequestSkipped(true);
+            assertEquals(1, result.unsentRequests.size());
+            verify(membershipManager, never()).onHeartbeatRequestSkipped();
+        }
     }
 
     @ParameterizedTest

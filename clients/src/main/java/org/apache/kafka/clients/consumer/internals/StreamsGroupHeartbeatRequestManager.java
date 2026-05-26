@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -51,7 +50,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.clients.consumer.internals.RequestState.RETRY_BACKOFF_JITTER;
@@ -367,7 +365,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
-            membershipManager.onHeartbeatRequestSkipped(false);
+            membershipManager.onHeartbeatRequestSkipped();
             maybePropagateCoordinatorFatalErrorEvent();
             return NetworkClientDelegate.PollResult.EMPTY;
         }
@@ -388,7 +386,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
         }
         if (membershipManager.state() == MemberState.LEAVING && shouldSkipLeaveHeartbeat()) {
-            membershipManager.onHeartbeatRequestSkipped(true);
+            logger.info("Dynamic member {} skipping leave heartbeat (operation=REMAIN_IN_GROUP). " +
+                "The broker will remove the member from the group via session timeout.",
+                membershipManager.memberId());
+            membershipManager.onHeartbeatRequestSkipped();
             return EMPTY;
         }
         if (shouldHeartbeatBeforeIntervalExpires() || heartbeatRequestState.canSendRequest(currentTimeMs)) {
@@ -479,12 +480,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * Returns whether a leave group heartbeat should be sent. The leave heartbeat is skipped when:
-     * <ul>
-     *   <li>The operation is {@link org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation#REMAIN_IN_GROUP}, or</li>
-     *   <li>The operation is {@link org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation#DEFAULT} and the member is static
-     *       (has a group instance ID), since the broker will remove the static member via session timeout.</li>
-     * </ul>
+     * Returns whether a leave group heartbeat should be sent. The leave heartbeat is skipped only
+     * when the member is dynamic (no group instance ID) and the operation is
+     * {@link org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation#REMAIN_IN_GROUP}.
+     * Static members always send the leave heartbeat (with epoch -2) so the broker holds the
+     * assignment until the session timeout.
      *
      * @return true if a leave heartbeat should be sent, false otherwise
      */
@@ -500,13 +500,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * Returns true if the leave heartbeat should be skipped: either the operation is REMAIN_IN_GROUP,
-     * or the operation is DEFAULT and the member is static (has a group instance ID).
+     * Returns true if the leave heartbeat should be skipped: only when the member is dynamic
+     * (no group instance ID) and the operation is REMAIN_IN_GROUP. Static members always send
+     * a leave heartbeat (with epoch -2) so the broker can hold the assignment.
      */
     private boolean shouldSkipLeaveHeartbeat() {
-        CloseOptions.GroupMembershipOperation operation = membershipManager.leaveGroupOperation();
-        return REMAIN_IN_GROUP == operation
-            || (DEFAULT == operation && membershipManager.groupInstanceId().isPresent());
+        return REMAIN_IN_GROUP == membershipManager.leaveGroupOperation()
+            && membershipManager.groupInstanceId().isEmpty();
     }
 
     private void maybePropagateCoordinatorFatalErrorEvent() {

@@ -365,12 +365,25 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     /**
-     * @return True if the member is preparing to leave the group or leaving (regardless of whether
-     *         a leave heartbeat will be sent). Use {@code shouldSkipLeaveHeartbeat()} in
-     *         {@link StreamsGroupHeartbeatRequestManager} to decide whether to actually send the heartbeat.
+     * @return True if the member is preparing to leave the group or leaving and a leave heartbeat
+     *         should be sent. Returns false for dynamic members with REMAIN_IN_GROUP, which skip
+     *         the leave heartbeat entirely.
      */
     public boolean isLeavingGroup() {
-        return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
+        if (CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP == leaveGroupOperation && groupInstanceId.isEmpty()) {
+            return false;
+        }
+        MemberState currentState = state();
+        boolean isLeavingState = currentState == MemberState.PREPARE_LEAVING || currentState == MemberState.LEAVING;
+        boolean hasLeaveOperation =
+            // Default operation: both static and dynamic members will send a leave heartbeat
+            CloseOptions.GroupMembershipOperation.DEFAULT == leaveGroupOperation
+            // Leave group operation: both static and dynamic members will send a leave heartbeat
+            || CloseOptions.GroupMembershipOperation.LEAVE_GROUP == leaveGroupOperation
+            // Remain in group: static members will send a leave heartbeat with -2 epoch to signal
+            // that a member using this instance ID is temporarily gone and will rejoin within session timeout.
+            || groupInstanceId.isPresent();
+        return isLeavingState && hasLeaveOperation;
     }
 
     private boolean isNotInGroup() {
@@ -483,8 +496,24 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     private void finalizeLeaving() {
-        updateMemberEpoch(StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH);
+        updateMemberEpoch(leaveGroupEpoch());
         clearCurrentTaskAssignment();
+    }
+
+    /**
+     * Returns the epoch to use in the leave group heartbeat. Static members use (LEAVE_GROUP_STATIC_MEMBER_EPOCH) 
+     * so the broker holds the assignment until session timeout, unless the operation is LEAVE_GROUP which forces 
+     * permanent removal.
+     */
+    public int leaveGroupEpoch() {
+        boolean isStaticMember = groupInstanceId.isPresent();
+        
+        if (CloseOptions.GroupMembershipOperation.LEAVE_GROUP == leaveGroupOperation) {
+            return StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        }
+        return isStaticMember
+            ? StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH
+            : StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
     }
 
     /**
@@ -551,27 +580,15 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     /**
-     * Notify when the heartbeat request is skipped.
      * Transition out of the {@link MemberState#LEAVING} state even if the heartbeat was not sent.
-     * This will ensure that the member is not blocked on {@link MemberState#LEAVING} (best
+     * This will ensure that the member is not blocked on {@link MemberState#LEAVING}. (best
      * effort to send the request, without any response handling or retry logic)
-     *
-     * @param intentional true if the skip was deliberate (e.g. REMAIN_IN_GROUP or DEFAULT + static
-     *                    member); false if the heartbeat could not be sent due to coordinator
-     *                    unavailability
      */
-    public void onHeartbeatRequestSkipped(final boolean intentional) {
+    public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
-            if (intentional) {
-                log.info("Skipping leave group heartbeat for member {} with epoch {} "
-                    + "(operation={}, static={}). The broker will remove the member from the group "
-                    + "via session timeout.",
-                    memberId, memberEpoch, leaveGroupOperation, groupInstanceId.isPresent());
-            } else {
-                log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
-                        "not known/available). Member {} with epoch {} will transition to {}.",
-                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
-            }
+            log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
+                    "not known/available). Member {} with epoch {} will transition to {}.",
+                memberId, memberEpoch, MemberState.UNSUBSCRIBED);
             transitionTo(MemberState.UNSUBSCRIBED);
             maybeCompleteLeaveInProgress();
         }
