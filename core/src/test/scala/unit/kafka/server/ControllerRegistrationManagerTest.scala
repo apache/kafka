@@ -100,7 +100,8 @@ class ControllerRegistrationManagerTest {
   }
 
   // This method simulates a metadata update by applying the given registration
-  // and unregistration modifiers to the previous image, and then calling
+  // and unregistration modifiers to the previous image (e.g. an unregistration
+  // modifier of `_ => None` means do not unregister any nodes), and then calling
   // manager.onMetadataUpdate() with the resulting delta and new image.
   private def doMetadataUpdate(
     prevImage: MetadataImage,

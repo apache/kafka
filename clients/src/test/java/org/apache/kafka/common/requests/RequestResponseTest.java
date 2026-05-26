@@ -866,16 +866,16 @@ public class RequestResponseTest {
         UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
             new UnregisterBrokerRequestData()
         ).build((short) 0);
-        String customerErrorMessage = "custom error message";
+        String customErrorMessage = "custom error message";
 
         UnregisterBrokerResponse response = request.getErrorResponse(
             0,
-            new RuntimeException(customerErrorMessage)
+            new RuntimeException(customErrorMessage)
         );
 
         assertEquals(0, response.throttleTimeMs());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
-        assertEquals(customerErrorMessage, response.data().errorMessage());
+        assertEquals(customErrorMessage, response.data().errorMessage());
     }
 
     @Test
@@ -883,16 +883,16 @@ public class RequestResponseTest {
         UnregisterControllerRequest request = new UnregisterControllerRequest.Builder(
             new UnregisterControllerRequestData()
         ).build((short) 0);
-        String customerErrorMessage = "custom error message";
+        String customErrorMessage = "custom error message";
 
         UnregisterControllerResponse response = request.getErrorResponse(
             0,
-            new RuntimeException(customerErrorMessage)
+            new RuntimeException(customErrorMessage)
         );
 
         assertEquals(0, response.throttleTimeMs());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
-        assertEquals(customerErrorMessage, response.data().errorMessage());
+        assertEquals(customErrorMessage, response.data().errorMessage());
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
