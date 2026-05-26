@@ -17,6 +17,10 @@
 
 package org.apache.kafka.server.share.dlq;
 
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.util.timer.Timer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,14 +39,14 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultShareGroupDLQManager.class);
 
-    public DefaultShareGroupDLQManager instance(ShareGroupDLQStateManager stateManager) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(stateManager);
+    public static ShareGroupDLQManager instance(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer);
         instance.start();
         return instance;
     }
 
-    private DefaultShareGroupDLQManager(ShareGroupDLQStateManager stateManager) {
-        this.stateManager = stateManager;
+    private DefaultShareGroupDLQManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
+        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer);
     }
 
     private void start() {
@@ -63,9 +67,7 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
     @Override
     public void stop() {
         try {
-            if (stateManager != null) {
-                stateManager.stop();
-            }
+            stateManager.stop();
         } catch (Exception e) {
             log.error("Unable to stop DLQ state manager", e);
         }

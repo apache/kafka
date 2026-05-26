@@ -20,8 +20,6 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
-import org.apache.kafka.common.metadata.ClientQuotaRecord;
-import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
@@ -33,13 +31,11 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.CLIENT_QUOTA_RECORD;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_DEFAULT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_EXACT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_SPECIFIED;
@@ -52,57 +48,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class ClientQuotasImageTest {
-    public static final ClientQuotasImage IMAGE1;
+    public static final ClientQuotasImage IMAGE1 = ClientQuotasImageFixtures.IMAGE1;
 
-    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS = ClientQuotasImageFixtures.DELTA1_RECORDS;
 
-    static final ClientQuotasDelta DELTA1;
+    static final ClientQuotasDelta DELTA1 = ClientQuotasImageFixtures.DELTA1;
 
-    static final ClientQuotasImage IMAGE2;
-
-    static {
-        Map<ClientQuotaEntity, ClientQuotaImage> entities1 = new HashMap<>();
-        Map<String, String> fooUser = Map.of(ClientQuotaEntity.USER, "foo");
-        Map<String, Double> fooUserQuotas = Map.of(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 123.0);
-        entities1.put(new ClientQuotaEntity(fooUser), new ClientQuotaImage(fooUserQuotas));
-        Map<String, String> barUserAndIp = new HashMap<>();
-        barUserAndIp.put(ClientQuotaEntity.USER, "bar");
-        barUserAndIp.put(ClientQuotaEntity.IP, "127.0.0.1");
-        Map<String, Double> barUserAndIpQuotas = Map.of(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 456.0);
-        entities1.put(new ClientQuotaEntity(barUserAndIp), new ClientQuotaImage(barUserAndIpQuotas));
-        IMAGE1 = new ClientQuotasImage(entities1);
-
-        DELTA1_RECORDS = new ArrayList<>();
-        // remove quota
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-                setEntity(List.of(
-                    new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("bar"),
-                    new EntityData().setEntityType(ClientQuotaEntity.IP).setEntityName("127.0.0.1"))).
-                setKey(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).
-                setRemove(true), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
-        // alter quota
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-            setEntity(List.of(
-                new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
-            setKey(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).
-            setValue(234.0), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
-        // add quota to entity with existing quota
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-            setEntity(List.of(
-                new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
-            setKey(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).
-            setValue(999.0), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
-
-        DELTA1 = new ClientQuotasDelta(IMAGE1);
-        RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
-
-        Map<ClientQuotaEntity, ClientQuotaImage> entities2 = new HashMap<>();
-        Map<String, Double> fooUserQuotas2 = new HashMap<>();
-        fooUserQuotas2.put(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 234.0);
-        fooUserQuotas2.put(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 999.0);
-        entities2.put(new ClientQuotaEntity(fooUser), new ClientQuotaImage(fooUserQuotas2));
-        IMAGE2 = new ClientQuotasImage(entities2);
-    }
+    static final ClientQuotasImage IMAGE2 = ClientQuotasImageFixtures.IMAGE2;
 
     @Test
     public void testEmptyImageRoundTrip() {

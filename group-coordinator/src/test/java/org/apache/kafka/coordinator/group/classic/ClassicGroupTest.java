@@ -1265,6 +1265,37 @@ public class ClassicGroupTest {
     }
 
     @Test
+    public void testComputeSubscribedTopicsHandlesMalformedMemberMetadata() {
+        ClassicGroup group = new ClassicGroup(logContext, "groupId", EMPTY, Time.SYSTEM);
+
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection();
+        protocols.add(new JoinGroupRequestProtocol()
+            .setName("range")
+            .setMetadata(new byte[]{
+                0, 1,                                              // version (int16) = 1
+                (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF // topics array length (int32) = -1
+            }));
+
+        ClassicGroupMember poisonMember = new ClassicGroupMember(
+            "poisonMember",
+            Optional.empty(),
+            clientId,
+            clientHost,
+            rebalanceTimeoutMs,
+            sessionTimeoutMs,
+            "consumer",
+            protocols
+        );
+
+        group.add(poisonMember);
+        group.transitionTo(PREPARING_REBALANCE);
+        group.initNextGeneration();
+
+        // RuntimeException should not propagate; falls through to Optional.empty().
+        assertEquals(Optional.empty(), group.computeSubscribedTopics());
+    }
+
+    @Test
     public void testIsInStates() {
         ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
         assertTrue(group.isInStates(Set.of("empty"), 0));

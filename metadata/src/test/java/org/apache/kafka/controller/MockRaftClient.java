@@ -479,7 +479,7 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
                                 listenerData.handleLoadSnapshot(
                                     RecordsSnapshotReader.of(
                                         snapshot.get(),
-                                        new MetadataRecordSerde(),
+                                        MetadataRecordSerde.INSTANCE,
                                         BufferSupplier.create(),
                                         Integer.MAX_VALUE,
                                         true,
@@ -554,7 +554,7 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
     }
 
     private static int messageSize(ApiMessageAndVersion messageAndVersion, ObjectSerializationCache objectCache) {
-        return new MetadataRecordSerde().recordSize(messageAndVersion, objectCache);
+        return MetadataRecordSerde.INSTANCE.recordSize(messageAndVersion, objectCache);
     }
 
     public void beginShutdown() {
@@ -729,7 +729,7 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
                 .setLastContainedLogTimestamp(lastContainedLogTimestamp)
                 .setTime(new MockTime())
                 .setRawSnapshotWriter(createNewSnapshot(snapshotId))
-                .build(new MetadataRecordSerde())
+                .build(MetadataRecordSerde.INSTANCE)
         );
     }
 
