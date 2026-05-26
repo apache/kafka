@@ -26,15 +26,15 @@ import org.apache.kafka.common.errors.ApiException;
  * epoch do not re-solicit the push. The caller receives
  * {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED} with this exception's message.
  */
-public class PluginPermanentFailureException extends ApiException {
+public class StreamsTopologyDescriptionPermanentFailureException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public PluginPermanentFailureException(String message) {
+    public StreamsTopologyDescriptionPermanentFailureException(String message) {
         super(message);
     }
 
-    public PluginPermanentFailureException(String message, Throwable cause) {
+    public StreamsTopologyDescriptionPermanentFailureException(String message, Throwable cause) {
         super(message, cause);
     }
 }

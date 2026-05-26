@@ -94,7 +94,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
 
     /**
      * Sets whether {@link #setTopology} should fail specifically with
-     * {@link org.apache.kafka.coordinator.group.api.streams.PluginPermanentFailureException}.
+     * {@link org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException}.
      * The broker treats this as a permanent failure and persists
      * {@code LastFailedTopologyEpoch}; integration tests use it to verify the
      * hot-loop ratchet.
@@ -154,7 +154,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
         setTopologyAttemptCount.incrementAndGet();
         if (failOnSetPermanent) {
             return CompletableFuture.failedFuture(
-                new org.apache.kafka.coordinator.group.api.streams.PluginPermanentFailureException("Simulated permanent failure"));
+                new org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException("Simulated permanent failure"));
         }
         if (failOnSet) {
             return CompletableFuture.failedFuture(new RuntimeException("Simulated plugin error"));

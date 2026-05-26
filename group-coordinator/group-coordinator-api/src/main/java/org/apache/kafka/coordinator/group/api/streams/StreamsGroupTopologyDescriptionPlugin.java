@@ -40,11 +40,11 @@ public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, Aut
      * must not throw synchronously. The completion exception drives broker-side behaviour:
      *
      * <ul>
-     *   <li>{@link PluginPermanentFailureException} — the description will never be accepted
+     *   <li>{@link StreamsTopologyDescriptionPermanentFailureException} — the description will never be accepted
      *       at this topology epoch (e.g. too large, semantically rejected). The broker
      *       ratchets {@code LastFailedTopologyEpoch} and stops re-soliciting until the
      *       epoch advances.</li>
-     *   <li>{@link PluginTransientFailureException} or any other exception — treated as
+     *   <li>{@link StreamsTopologyDescriptionTransientFailureException} or any other exception — treated as
      *       transient. The broker arms or extends the per-group back-off (30 s → 1 h,
      *       exponential) and re-solicits on a later heartbeat.</li>
      * </ul>

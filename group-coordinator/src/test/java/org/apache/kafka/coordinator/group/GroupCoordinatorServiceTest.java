@@ -6538,12 +6538,12 @@ public class GroupCoordinatorServiceTest {
 
     private static Stream<Arguments> setTopologyPluginFailures() {
         // All plugin failures now map to STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED on the wire.
-        // PluginPermanentFailureException additionally ratchets LastFailedTopologyEpoch (covered
+        // StreamsTopologyDescriptionPermanentFailureException additionally ratchets LastFailedTopologyEpoch (covered
         // by a separate test); transient failures arm the per-group back-off instead.
         return Stream.of(
             Arguments.of(new RuntimeException("Storage failure"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED),
-            Arguments.of(new org.apache.kafka.coordinator.group.api.streams.PluginTransientFailureException("backend down"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED),
-            Arguments.of(new org.apache.kafka.coordinator.group.api.streams.PluginPermanentFailureException("too big"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED)
+            Arguments.of(new org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionTransientFailureException("backend down"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED),
+            Arguments.of(new org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException("too big"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED)
         );
     }
 
@@ -6670,7 +6670,7 @@ public class GroupCoordinatorServiceTest {
             .thenReturn(CompletableFuture.completedFuture(null));
         when(plugin.setTopology(eq("foo"), eq(4), any(StreamsGroupTopologyDescription.class)))
             .thenReturn(CompletableFuture.failedFuture(
-                new org.apache.kafka.coordinator.group.api.streams.PluginPermanentFailureException("too big")));
+                new org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException("too big")));
 
         StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
             requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),

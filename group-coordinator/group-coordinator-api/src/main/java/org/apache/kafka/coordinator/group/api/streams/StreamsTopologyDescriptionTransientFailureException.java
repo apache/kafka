@@ -26,15 +26,15 @@ import org.apache.kafka.common.errors.ApiException;
  * with this exception's message. Plugins that throw any other (non-permanent)
  * exception are treated identically; this class is provided as the canonical signal.
  */
-public class PluginTransientFailureException extends ApiException {
+public class StreamsTopologyDescriptionTransientFailureException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public PluginTransientFailureException(String message) {
+    public StreamsTopologyDescriptionTransientFailureException(String message) {
         super(message);
     }
 
-    public PluginTransientFailureException(String message, Throwable cause) {
+    public StreamsTopologyDescriptionTransientFailureException(String message, Throwable cause) {
         super(message, cause);
     }
 }

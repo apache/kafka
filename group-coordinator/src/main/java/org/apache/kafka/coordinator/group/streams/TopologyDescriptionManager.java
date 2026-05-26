@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard;
-import org.apache.kafka.coordinator.group.api.streams.PluginPermanentFailureException;
+import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
@@ -66,7 +66,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
 
     /**
      * Per-group back-off after an unsuccessful solicitation — either a transient
-     * {@code setTopology} failure (anything other than {@code PluginPermanentFailureException}) or
+     * {@code setTopology} failure (anything other than {@code StreamsTopologyDescriptionPermanentFailureException}) or
      * a heartbeat-side solicitation that never produced a successful push within the previous
      * back-off window (e.g. a client with {@code topology.description.push.enabled=false}, or one
      * that is unreachable). Doubles per consecutive solicitation from 30 s up to 1 h.
@@ -211,7 +211,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
     /**
      * Invokes {@code plugin.setTopology} and persists the result via the appropriate broker-side
      * tagged field. On success: {@code StoredTopologyEpoch = pushedEpoch}, back-off cleared.
-     * On {@code PluginPermanentFailureException}: {@code LastFailedTopologyEpoch = pushedEpoch},
+     * On {@code StreamsTopologyDescriptionPermanentFailureException}: {@code LastFailedTopologyEpoch = pushedEpoch},
      * back-off cleared (the ratchet takes over).
      * On any other exception: arm/extend the per-group back-off; no metadata write.
      * The wire response always carries {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED} with the
@@ -233,7 +233,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
                         ? throwable.getCause() : throwable;
                     log.warn("Plugin operation failed for group {}", groupId, cause);
                     metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME);
-                    boolean permanentFailure = cause instanceof PluginPermanentFailureException;
+                    boolean permanentFailure = cause instanceof StreamsTopologyDescriptionPermanentFailureException;
                     responseData.setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code());
                     responseData.setErrorMessage(cause.getMessage());
                     if (permanentFailure) {
