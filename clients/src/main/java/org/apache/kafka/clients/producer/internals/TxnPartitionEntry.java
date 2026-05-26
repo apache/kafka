@@ -20,8 +20,8 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 
 import java.util.Comparator;
 import java.util.OptionalInt;

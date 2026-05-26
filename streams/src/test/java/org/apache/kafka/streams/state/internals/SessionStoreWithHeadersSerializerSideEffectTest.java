@@ -135,7 +135,7 @@ public class SessionStoreWithHeadersSerializerSideEffectTest {
 
         // Create a session store with headers using our custom serializer
         builder.addStateStore(
-            Stores.sessionStoreBuilderWithHeaders(
+            Stores.sessionStoreWithHeadersBuilder(
                 Stores.inMemorySessionStore(
                     STORE_NAME,
                     Duration.ofMillis(10000L)

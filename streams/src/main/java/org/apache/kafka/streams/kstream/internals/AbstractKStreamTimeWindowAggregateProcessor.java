@@ -21,11 +21,13 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -35,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.streams.state.internals.WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter;
 
 import org.slf4j.Logger;
 
@@ -78,7 +81,26 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
         emittedRecordsSensor = emittedRecordsSensor(threadId, context.taskId().toString(), processorName, metrics);
         emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(), processorName, metrics);
-        windowStore = context.getStateStore(storeName);
+
+        boolean isHeadersStore = false;
+        // Try timestamped store
+        try {
+            windowStore = new WindowedTimestampedHeadersStoreToWindowedTimestampedStoreAdapter<>(context.getStateStore(storeName));
+        } catch (final ClassCastException swallow) {
+            // not timestamped store
+
+            // Try headers-aware timestamped store
+            try {
+                windowStore = context.getStateStore(storeName);
+                isHeadersStore = true;
+            } catch (final ClassCastException fatal) {
+                final StateStore store = context.getStateStore(storeName);
+                final String storeType = store == null ? "null" : store.getClass().getName();
+                throw new InvalidStateStoreException("Windowed-KTable state store must implement either "
+                    + "TimestampedWindowStore, or TimestampedWindowStoreWithHeaders. Got: " + storeType);
+            }
+        }
+
 
         if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
             // Restore last emit close time for ON_WINDOW_CLOSE strategy
@@ -98,7 +120,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
                 context,
-                new TimestampedCacheFlushListenerWithHeaders<>(context),
+                isHeadersStore ? new TimestampedCacheFlushListenerWithHeaders<>(context) : new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
         }
     }

@@ -28,8 +28,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.query.Position;
@@ -140,6 +142,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected StateStoreContext context;
     protected Position position;
+    private TaskId taskId;
 
     public RocksDBStore(final String name,
                         final String metricsScope) {
@@ -165,6 +168,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
+        this.taskId = stateStoreContext.taskId();
         // open the DB dir
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
         openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
@@ -256,11 +260,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                     // For segmented stores, the overall position is composed of multiple underlying stores, so merge this store's position into it.
                     position.merge(existingPositionOrEmpty);
                 }
-            } catch (final StreamsException fatal) {
-                final String fatalMessage = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
+            } catch (final ProcessorStateException e) {
+                final String message = "State store " + name + " didn't find a valid state, since under EOS it has the risk of getting uncommitted data in stores";
+                throw new TaskCorruptedException(Set.of(taskId), new ProcessorStateException(message, e));
+            }  catch (final StreamsException fatal) {
+                final String fatalMessage = "Fatal error while opening store " + name;
                 throw new ProcessorStateException(fatalMessage, fatal);
-            } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error opening store " + name, e);
+            } catch (final RocksDBException fatal) {
+                final String fatalMessage = "Error opening store " + name;
+                throw new ProcessorStateException(fatalMessage, fatal);
             }
         } catch (final RuntimeException e) {
             closeNativeResources();
@@ -283,6 +291,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
+    void setTaskId(final TaskId taskId) {
+        this.taskId = taskId;
+    }
+
     private void addValueProvidersToMetricsRecorder() {
         final TableFormatConfig tableFormatConfig = userSpecifiedOptions.tableFormatConfig();
         if (tableFormatConfig instanceof BlockBasedTableConfigWithAccessibleCache) {
@@ -298,12 +310,28 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
+    /**
+     * Creates lightweight {@link ColumnFamilyOptions} for the offsets column family. The offsets CF
+     * stores only a small number of key-value pairs (one per changelog partition), so it does not
+     * need the heavyweight options used for the data CF (large write buffers, bloom filters,
+     * aggressive compaction). Sharing the data CF's options causes unnecessary write amplification
+     * and compaction pressure that can contribute to RocksDB write stalls under heavy restore I/O.
+     */
+    protected static ColumnFamilyOptions createOffsetsCFOptions() {
+        final ColumnFamilyOptions offsetsCFOptions = new ColumnFamilyOptions();
+        offsetsCFOptions.setCompressionType(CompressionType.NO_COMPRESSION);
+        offsetsCFOptions.setCompactionStyle(CompactionStyle.LEVEL);
+        offsetsCFOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
+        offsetsCFOptions.setMaxWriteBufferNumber(2);
+        return offsetsCFOptions;
+    }
+
     void openRocksDB(final DBOptions dbOptions,
                      final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
                 dbOptions,
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, createOffsetsCFOptions())
         );
 
         cfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1), columnFamilies.get(0));
@@ -884,6 +912,35 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         void flush(final ColumnFamilyHandle... columnFamilies) throws RocksDBException;
         void reset();
         void close();
+
+        default ManagedKeyValueIterator<Bytes, byte[]> all(final ColumnFamilyHandle cf, final String storeName, final boolean forward) {
+            final RocksIterator iter = newIterator(cf);
+            if (forward) {
+                iter.seekToFirst();
+            } else {
+                iter.seekToLast();
+            }
+            return new RocksDbIterator(storeName, iter, forward);
+        }
+
+        default ManagedKeyValueIterator<Bytes, byte[]> range(final ColumnFamilyHandle cf, final String storeName,
+                                                             final Bytes from, final Bytes to,
+                                                             final boolean forward, final boolean toInclusive) {
+            return new RocksDBRangeIterator(storeName, newIterator(cf), from, to, forward, toInclusive);
+        }
+
+        default ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final ColumnFamilyHandle cf, final String storeName,
+                                                                  final Bytes prefix, final Bytes to) {
+            return new RocksDBRangeIterator(storeName, newIterator(cf), prefix, to, true, false);
+        }
+
+        default void commitStagedWrites() throws RocksDBException {
+            // no-op for non-transactional accessors
+        }
+
+        default void rollbackStagedWrites() {
+            // no-op for non-transactional accessors
+        }
     }
 
     static class DirectDBAccessor implements DBAccessor {
@@ -1001,7 +1058,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         /**
          * Initializes the ColumnFamily.
          * @return the position of the store based on the data in the ColumnFamily. If no offset position is found, an empty position is returned.
-         * @throws StreamsException if an invalid state is found and ignoreInvalidState is false
+         * @throws ProcessorStateException if an invalid state is found and ignoreInvalidState is false
          */
         Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
@@ -1066,14 +1123,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                                             final Bytes from,
                                                             final Bytes to,
                                                             final boolean forward) {
-            return new RocksDBRangeIterator(
-                    name,
-                    accessor.newIterator(columnFamily),
-                    from,
-                    to,
-                    forward,
-                    true
-            );
+            return accessor.range(columnFamily, name, from, to, forward, true);
         }
 
         @Override
@@ -1088,26 +1138,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public ManagedKeyValueIterator<Bytes, byte[]> all(final DBAccessor accessor, final boolean forward) {
-            final RocksIterator innerIterWithTimestamp = accessor.newIterator(columnFamily);
-            if (forward) {
-                innerIterWithTimestamp.seekToFirst();
-            } else {
-                innerIterWithTimestamp.seekToLast();
-            }
-            return new RocksDbIterator(name, innerIterWithTimestamp, forward);
+            return accessor.all(columnFamily, name, forward);
         }
 
         @Override
         public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final DBAccessor accessor, final Bytes prefix) {
             final Bytes to = incrementWithoutOverflow(prefix);
-            return new RocksDBRangeIterator(
-                    name,
-                    accessor.newIterator(columnFamily),
-                    prefix,
-                    to,
-                    true,
-                    false
-            );
+            return accessor.prefixScan(columnFamily, name, prefix, to);
         }
 
         @Override

@@ -29,7 +29,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 
 import java.io.Closeable;
 import java.util.Collections;

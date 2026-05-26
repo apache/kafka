@@ -25,8 +25,8 @@ import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.SimpleRecord;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoaderImpl;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -290,7 +290,7 @@ public class GroupCoordinatorShardLoadingBenchmark {
 
     @Setup(Level.Invocation)
     public void setupInvocation() {
-        GroupConfigManager configManager = new GroupConfigManager(new HashMap<>(), config, shareGroupConfig);
+        GroupConfigManager configManager = new GroupConfigManager(config, shareGroupConfig);
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
 

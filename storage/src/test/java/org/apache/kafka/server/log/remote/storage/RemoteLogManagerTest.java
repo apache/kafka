@@ -46,7 +46,6 @@ import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
@@ -67,7 +66,6 @@ import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
-import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 
 import org.junit.jupiter.api.AfterEach;
@@ -137,6 +135,8 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_STORAGE_THREAD_POOL_METRICS;
+import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
+import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -261,6 +261,7 @@ public class RemoteLogManagerTest {
             }
         };
         doReturn(true).when(remoteLogMetadataManager).isReady(any(TopicIdPartition.class));
+        when(mockLog.config()).thenReturn(new LogConfig(new Properties()));
     }
 
     private RemoteLogManagerConfig configs(Properties props) {
@@ -273,7 +274,7 @@ public class RemoteLogManagerTest {
             remoteLogManager.close();
             remoteLogManager = null;
         }
-        kafka.utils.TestUtils.clearYammerMetrics();
+        clearYammerMetrics();
     }
 
     @Test
@@ -1240,18 +1241,9 @@ public class RemoteLogManagerTest {
                         safeLongYammerMetricValue("RemoteCopyLagSegments")));
     }
 
-    private Object yammerMetricValue(String name) {
-        Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(e -> e.getKey().getMBeanName().endsWith(name))
-                .findFirst()
-                .get()
-                .getValue();
-        return gauge.value();
-    }
-
     private long safeLongYammerMetricValue(String name) {
         try {
-            return (long) yammerMetricValue(name);
+            return yammerMetricValue(name).longValue();
         } catch (NoSuchElementException ex) {
             return 0L;
         }
@@ -2115,6 +2107,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testCandidateLogSegmentsSkipsActiveSegment() {
         UnifiedLog log = mock(UnifiedLog.class);
+        when(log.config()).thenReturn(new LogConfig(new Properties()));
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
         LogSegment activeSegment = mock(LogSegment.class);
@@ -2138,6 +2131,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset() {
         UnifiedLog log = mock(UnifiedLog.class);
+        when(log.config()).thenReturn(new LogConfig(new Properties()));
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
         LogSegment segment3 = mock(LogSegment.class);
@@ -2274,8 +2268,8 @@ public class RemoteLogManagerTest {
         // Register metrics to expose them via JMX
         expirationTask.registerMetrics();
 
-        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
-        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String retentionMetricName = "name=RetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
 
         // Test case 1: Testing RetentionSizeInPercent metric (standard retention scenario)
         // retentionSize = 12288, onlyLocalLogSegmentsSize = 100, localLogSegmentsSize = 100
@@ -2339,8 +2333,8 @@ public class RemoteLogManagerTest {
         // Register metrics to expose them via JMX
         expirationTask.registerMetrics();
 
-        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
-        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String retentionMetricName = "name=RetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
 
         // RetentionSizeInPercent = ((100 + 10240) * 100) / 12288 = 84%
         // LocalRetentionSizeInPercent = (100 * 100) / 6144 = 1%
@@ -2356,6 +2350,10 @@ public class RemoteLogManagerTest {
         // Verify metrics are reset to 0 on cancellation (check via accessor since JMX metrics are deregistered)
         assertEquals(0, expirationTask.retentionSizeInPercent());
         assertEquals(0, expirationTask.localRetentionSizeInPercent());
+
+        // Verify JMX metrics are actually deregistered from the Yammer registry after cancellation
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(retentionMetricName));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue(localRetentionMetricName));
     }
 
     @Test
@@ -2379,8 +2377,8 @@ public class RemoteLogManagerTest {
         // Register metrics to expose them via JMX
         expirationTask.registerMetrics();
 
-        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
-        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String retentionMetricName = "name=RetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,topic=" + leaderTopicIdPartition.topic() + ",partition=" + leaderTopicIdPartition.partition();
 
         expirationTask.buildRetentionSizeData(0, 100, 100, 1000, epochEntries, 0, Long.MAX_VALUE);
 

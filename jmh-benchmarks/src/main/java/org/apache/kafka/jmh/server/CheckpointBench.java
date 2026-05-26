@@ -17,7 +17,6 @@
 package org.apache.kafka.jmh.server;
 
 import kafka.cluster.Partition;
-import kafka.server.AlterPartitionManager;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -33,6 +32,7 @@ import org.apache.kafka.jmh.util.BenchmarkConfigUtils;
 import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
+import org.apache.kafka.server.partition.AlterPartitionManager;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.Scheduler;

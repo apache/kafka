@@ -452,6 +452,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
     if (group != null) quotaOrDefault(group, quotaType) else null
   }
 
+  @SuppressWarnings(Array("removal"))
   override def updateClusterMetadata(cluster: Cluster): Boolean = {
     val topicsByGroup = cluster.topics.asScala.groupBy(group)
 

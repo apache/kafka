@@ -313,6 +313,14 @@ class TransactionStateManager(brokerId: Int,
     getAndMaybeAddTransactionState(transactionalId, None)
   }
 
+  // Visible for testing — returns Java Optional instead of Scala Either/Option
+  def getTransactionMetadata(transactionalId: String): java.util.Optional[TransactionMetadata] = {
+    getTransactionState(transactionalId) match {
+      case Right(Some(epochAndMeta)) => java.util.Optional.of(epochAndMeta.transactionMetadata)
+      case _ => java.util.Optional.empty()
+    }
+  }
+
   def putTransactionStateIfNotExists(txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
     getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata)).map(_.getOrElse(
       throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))

@@ -43,7 +43,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
-class CachingSessionStore
+public class CachingSessionStore
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
     implements SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
 

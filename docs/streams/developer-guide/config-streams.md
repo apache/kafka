@@ -1501,6 +1501,61 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >         }
 >     }
 
+>**Note: The example above demonstrates manual production to a DLQ topic. The following example shows the recommended approach using the built-in DLQ support.**
+> A custom processing exception handler can decide whether to continue or fail processing when user logic throws an exception. If DLQ behavior is required, return DLQ records from the handler response.
+>
+> **Custom Exception Handler Implementation**
+>
+> The following example forwards failed records to a configured DLQ topic:
+>
+> ```java
+> public class DlqProcessingExceptionHandler implements ProcessingExceptionHandler {
+>
+>     private String deadLetterQueueTopic;
+>
+>     @Override
+>     public Response handleError(final ErrorHandlerContext context,
+>                                 final Record<?, ?> record,
+>                                 final Exception exception) {
+>
+>       // Example: forward the raw record to a DLQ topic
+>       ProducerRecord<byte[], byte[]> dlqRecord =
+>           new ProducerRecord<>(deadLetterQueueTopic,
+>                                null,
+>                                context.timestamp(),
+>                                context.sourceRawKey(),
+>                                context.sourceRawValue());
+>
+>       // Applications may choose how to construct DLQ records. For example,
+>       // they may forward the raw key/value bytes, transform the payload,
+>       // or add headers with error metadata.
+>       return Response.resume(List.of(dlqRecord));
+>      }
+>
+>     @Override
+>     public void configure(final Map<String, ?> configs) {
+>         // Retrieve the DLQ topic name from the configs map, or any other source
+>         deadLetterQueueTopic = (String) configs.get("my.dlq.topic.config.key");
+>     }
+> }
+> ```
+> To enable the custom exception handler and configure the DLQ topic:
+>
+> ```java
+> Properties props = new Properties();
+>
+> props.put(
+>     StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+>     DlqProcessingExceptionHandler.class
+> );
+>
+>//   Optional: if your custom handler reads the DLQ topic from StreamsConfig,
+>//   set it here. Otherwise, configure the topic name via your own properties.
+> //  props.put(
+> //    StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+> //    "dlq-topic"
+> //  );
+> ```
 ### processing.exception.handler.global.enabled (deprecated)
 
 > Controls whether the configured `ProcessingExceptionHandler` is invoked for exceptions occurring during global store/KTable processing. When set to `true` (recommended), the handler specified via `processing.exception.handler` will be invoked for exceptions occurring during global store/KTable processing. When set to `false` (default), exceptions from global store/KTable will not invoke the processing exception handler and will instead bubble up to the configured uncaught exception handler.
@@ -1533,6 +1588,8 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 > 
 > Recommendation:
 >     While it is technically possible to use EOS with any replication factor, using a replication factor lower than 3 effectively voids EOS. Thus it is strongly recommended to use a replication factor of 3 (together with `min.in.sync.replicas=2`). This recommendation applies to all topics (i.e. `__transaction_state`, `__consumer_offsets`, Kafka Streams internal topics, and user topics).
+
+> When exactly-once processing is enabled, Kafka Streams sets `transaction.timeout.ms` to 10000 (10 seconds) by default. This bounds how long a transaction may remain open before the broker aborts it and fences the producer. If your application requires longer processing times per poll-process-commit cycle, you can increase this value via `StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG)`, but note that when EOS is enabled Kafka Streams also requires `transaction.timeout.ms` to be greater than or equal to `commit.interval.ms`, otherwise the application will fail to start. In addition, the value must not exceed the broker's `transaction.max.timeout.ms`. Keep in mind that a higher transaction timeout delays fencing of zombie producers and may extend how long `read_committed` consumers block on uncommitted data, so it should only be increased when necessary.
 
 ### processor.wrapper.class
 
@@ -1997,5 +2054,3 @@ Admin
    * [Documentation](/documentation)
    * [Kafka Streams](/documentation/streams)
    * [Developer Guide](/documentation/streams/developer-guide/)
- 
-

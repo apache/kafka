@@ -74,12 +74,10 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
 
     private final FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
-    private final MetadataRecordSerde serde;
 
     private BatchFileReader(FileRecords fileRecords) {
         this.fileRecords = fileRecords;
         this.batchIterator = fileRecords.batchIterator();
-        this.serde = new MetadataRecordSerde();
     }
 
     @Override
@@ -142,7 +140,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
         for (Record record : input) {
             try {
                 ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
-                ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
+                ApiMessageAndVersion messageAndVersion = MetadataRecordSerde.INSTANCE.read(accessor, record.valueSize());
                 messages.add(messageAndVersion);
             } catch (Throwable e) {
                 throw new RuntimeException("unable to deserialize record at offset " + record.offset(), e);

@@ -220,17 +220,6 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
     }
 
-    // TODO: Remove this method when MeteredWindowStore will use headers version
-    @Deprecated
-    public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
-                                               final long windowSize,
-                                               final Deserializer<K> deserializer,
-                                               final String topic) {
-        final K key = deserializer.deserialize(topic, extractStoreKeyBytes(binaryKey));
-        final Window window = extractStoreWindow(binaryKey, windowSize);
-        return new Windowed<>(key, window);
-    }
-
     public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
                                                final long windowSize,
                                                final Deserializer<K> deserializer,

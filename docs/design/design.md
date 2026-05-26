@@ -436,13 +436,13 @@ Log compaction is handled by the log cleaner, a pool of background threads that 
 
 ### Configuring The Log Cleaner
 
-The log cleaner is enabled by default. This will start the pool of cleaner threads. To enable log cleaning on a particular topic, add the log-specific property 
+The log cleaner is enabled by default, which starts the pool of cleaner threads. Compaction runs only for topics whose cleanup policy includes `compact`. To make compaction the broker default for topics that do not set their own cleanup policy, add the following broker configuration to `server.properties`:
 
 ```properties
 log.cleanup.policy=compact
 ```
 
-The `log.cleanup.policy` property is a broker configuration setting defined in the broker's `server.properties` file; it affects all of the topics in the cluster that do not have a configuration override in place as documented [here](/documentation.html#brokerconfigs). The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag. 
+To enable compaction for an individual topic, set the topic configuration `cleanup.policy=compact` when creating or altering the topic. Topic-level configuration overrides the broker default, as documented [here](/documentation.html#topicconfigs). The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
 
 ```properties
 log.cleaner.min.compaction.lag.ms

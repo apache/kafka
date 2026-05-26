@@ -27,9 +27,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
@@ -388,6 +388,29 @@ public class StandbyTaskTest {
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
         assertEquals(Task.State.CLOSED, task.state());
+    }
+
+    @Test
+    public void shouldNotWipeStateDirOnDirtyCloseWithEosAndTransactionalStateStores() {
+        doNothing().when(stateManager).close();
+        when(stateManager.hasCorruptedStores()).thenReturn(false);
+
+        config = new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
+            mkEntry(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true")
+        )));
+
+        task = createStandbyTask();
+
+        task.suspend();
+        task.closeDirty();
+
+        assertEquals(Task.State.CLOSED, task.state());
+        // With transactional state stores, the state dir should NOT be wiped on dirty close
+        // unless stores are specifically marked as corrupted.
+        verify(stateManager, never()).baseDir();
     }
 
     @Test

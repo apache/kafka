@@ -32,21 +32,34 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class GroupConfigManager implements AutoCloseable {
 
-    private final GroupConfig defaultConfig;
-
+    /**
+     * The group configs for each group.
+     *
+     * Groups are only present in this map when they have config overrides.
+     */
     private final Map<String, GroupConfig> configMap;
 
+    /**
+     * The group coordinator config.
+     */
     private final GroupCoordinatorConfig groupCoordinatorConfig;
 
+    /**
+     * The share group config.
+     */
     private final ShareGroupConfig shareGroupConfig;
 
+    /**
+     * Constructor.
+     *
+     * @param groupCoordinatorConfig The group coordinator config.
+     * @param shareGroupConfig       The share group config.
+     */
     public GroupConfigManager(
-        Map<?, ?> defaultConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
         this.configMap = new ConcurrentHashMap<>();
-        this.defaultConfig = new GroupConfig(defaultConfig);
         this.groupCoordinatorConfig = Objects.requireNonNull(groupCoordinatorConfig);
         this.shareGroupConfig = Objects.requireNonNull(shareGroupConfig);
     }
@@ -57,7 +70,7 @@ public class GroupConfigManager implements AutoCloseable {
      * This method evaluates all configuration values within broker-level bounds.
      *
      * @param groupId        The group id.
-     * @param newGroupConfig The new group config.
+     * @param newGroupConfig The new group config overrides.
      */
     public void updateGroupConfig(String groupId, Properties newGroupConfig) {
         if (null == groupId || groupId.isEmpty()) {
@@ -75,15 +88,12 @@ public class GroupConfigManager implements AutoCloseable {
         Properties evaluatedProps = GroupConfig.evaluate(
             newGroupConfig, groupId, groupCoordinatorConfig, shareGroupConfig);
 
-        final GroupConfig newConfig = GroupConfig.fromProps(
-            defaultConfig.originals(),
-            evaluatedProps
-        );
+        final GroupConfig newConfig = new GroupConfig(evaluatedProps);
         configMap.put(groupId, newConfig);
     }
 
     /**
-     * Get the group config if it exists, otherwise return None.
+     * Get the group config if it has any overrides, otherwise return {@link Optional#empty()}.
      * The returned config has already been evaluated within broker-level bounds.
      *
      * @param groupId  The group id.
@@ -95,6 +105,14 @@ public class GroupConfigManager implements AutoCloseable {
 
     public List<String> groupIds() {
         return List.copyOf(configMap.keySet());
+    }
+
+    public Optional<String> shareGroupDlqTopicPrefix() {
+        return Optional.ofNullable(groupCoordinatorConfig.errorsDLQTopicNamePrefix());
+    }
+
+    public boolean isDlqAutoTopicCreateEnabled() {
+        return groupCoordinatorConfig.errorsDLQAutoCreateTopicsEnable();
     }
 
     /**

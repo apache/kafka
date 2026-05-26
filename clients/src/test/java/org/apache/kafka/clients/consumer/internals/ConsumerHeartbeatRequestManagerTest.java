@@ -42,11 +42,11 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.Builder;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -311,6 +311,33 @@ public class ConsumerHeartbeatRequestManagerTest {
             assertEquals(0, result.unsentRequests.size());
             assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
 
+        }
+    }
+
+    /**
+     * When the consumer uses manual partition assignment (assign()) instead of subscribe(), the
+     * member stays in UNSUBSCRIBED state indefinitely. Because heartbeats are skipped in that
+     * state and heartbeatIntervalMs initialises to 0, maximumTimeToWait used to return 0, causing
+     * a busy-loop in pollForFetches. Verify that maximumTimeToWait returns Long.MAX_VALUE whenever
+     * the member is in UNSUBSCRIBED state so the application thread can block for the full poll
+     * timeout.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMaximumTimeToWaitWhenHeartbeatShouldBeSkipped(final boolean isUnsubscribed) {
+        // Start with zero heartbeat interval (simulates the initial state before any HB response)
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        when(membershipManager.state()).thenReturn(isUnsubscribed ? MemberState.UNSUBSCRIBED : MemberState.JOINING);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        if (isUnsubscribed) {
+            assertEquals(Long.MAX_VALUE, result,
+                "maximumTimeToWait should return Long.MAX_VALUE when in UNSUBSCRIBED state " +
+                    "(e.g., manual assignment) to prevent a busy loop");
+        } else {
+            assertEquals(0, result,
+                "maximumTimeToWait should return 0 when heartbeat interval timer has already expired");
         }
     }
 

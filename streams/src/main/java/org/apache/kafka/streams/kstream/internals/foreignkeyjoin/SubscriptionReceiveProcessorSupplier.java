@@ -109,7 +109,7 @@ public class SubscriptionReceiveProcessorSupplier<KLeft, KRight>
             }
 
             private Change<ValueTimestampHeaders<SubscriptionWrapper<KLeft>>> inferBasedOnState(final Record<KRight, SubscriptionWrapper<KLeft>> record) {
-                final Bytes subscriptionKey = keySchema.toBytes(record.key(), record.value().primaryKey());
+                final Bytes subscriptionKey = keySchema.toBytes(record.key(), record.value().primaryKey(), record.headers());
 
                 final ValueTimestampHeaders<SubscriptionWrapper<KLeft>> newValue = ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers());
                 final ValueTimestampHeaders<SubscriptionWrapper<KLeft>> oldValue = store.get(subscriptionKey);

@@ -42,7 +42,8 @@ import org.apache.kafka.common.replica._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{Exit, Time, Utils}
+import org.apache.kafka.common.utils.internals.Exit
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.logger.StateChangeLogger
@@ -56,7 +57,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.partition.PartitionListener
+import org.apache.kafka.server.partition.{AlterPartitionManager, PartitionListener}
 import org.apache.kafka.server.purgatory.DelayedProduce.PartitionStatusValidator.Result
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}

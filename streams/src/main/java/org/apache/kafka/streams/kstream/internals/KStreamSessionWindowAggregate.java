@@ -22,12 +22,14 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -129,8 +131,25 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
             emittedRecordsSensor = emittedRecordsSensor(threadId, context.taskId().toString(), processorName, metrics);
             emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(), processorName, metrics);
-            store = context.getStateStore(storeName);
 
+            boolean isHeadersStore = false;
+            // Try plain session store
+            try {
+                store = new SessionHeadersStoreToSessionStoreAdapter<>(context.getStateStore(storeName));
+            } catch (final ClassCastException swallow) {
+                // not plain session store
+
+                // Try headers-aware session store
+                try {
+                    store = context.getStateStore(storeName);
+                    isHeadersStore = true;
+                } catch (final ClassCastException fatal) {
+                    final StateStore store = context.getStateStore(storeName);
+                    final String storeType = store == null ? "null" : store.getClass().getName();
+                    throw new InvalidStateStoreException("Session-KTable state store must implement either "
+                        + "SessionStore, or SessionStoreWithHeaders. Got: " + storeType);
+                }
+            }
             if (emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
                 // Restore last emit close time for ON_WINDOW_CLOSE strategy
                 final Long lastEmitWindowCloseTime = internalProcessorContext.processorMetadataForKey(storeName);
@@ -149,7 +168,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
-                    new SessionCacheFlushListenerWithHeader<>(context),
+                    isHeadersStore ? new SessionCacheFlushListenerWithHeader<>(context) : new SessionCacheFlushListener<>(context),
                     sendOldValues);
             }
         }
@@ -367,7 +386,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
     @Override
     public KTableValueGetterSupplier<Windowed<KIn>, VAgg> view() {
-        return new KTableValueGetterSupplier<Windowed<KIn>, VAgg>() {
+        return new KTableValueGetterSupplier<>() {
             @Override
             public KTableValueGetter<Windowed<KIn>, VAgg> get() {
                 return new KTableSessionWindowValueGetter();
@@ -386,7 +405,21 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         
         @Override
         public void init(final ProcessorContext<?, ?> context) {
-            store = context.getStateStore(storeName);
+            try {
+                store = new SessionHeadersStoreToSessionStoreAdapter<>(context.getStateStore(storeName));
+            } catch (final ClassCastException swallow) {
+                // not plain session store
+
+                // Try headers-aware session store
+                try {
+                    store = context.getStateStore(storeName);
+                } catch (final ClassCastException fatal) {
+                    final StateStore store = context.getStateStore(storeName);
+                    final String storeType = store == null ? "null" : store.getClass().getName();
+                    throw new InvalidStateStoreException("Session-KTable state store must implement either "
+                        + "SessionStore, or SessionStoreWithHeaders. Got: " + storeType);
+                }
+            }
         }
 
         @Override

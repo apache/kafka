@@ -130,6 +130,9 @@ public enum MetadataVersion {
     // they have set the configuration unstable.feature.versions.enable=true.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
+
+    // IBP_4_4_IV0 enables dead-letter queue support for share groups (KIP-1191). When this version
+    // is finalized, so will the DLQ support.
     IBP_4_4_IV0(31, "4.4", "IV0", false);
 
 

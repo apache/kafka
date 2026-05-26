@@ -30,7 +30,7 @@ public class RaftVoterEndpoint {
     private final String host;
     private final int port;
 
-    static String requireNonNullAllCapsNonEmpty(String input) {
+    private static String requireNonNullAllCapsNonEmpty(String input) {
         if (input == null) {
             throw new IllegalArgumentException("Null argument not allowed.");
         }

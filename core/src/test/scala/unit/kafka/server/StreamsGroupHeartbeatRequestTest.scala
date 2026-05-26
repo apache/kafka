@@ -826,8 +826,25 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertEquals(totalActiveTasks, totalStandbyTasks, "Each active task should have one standby task")
 
       // Verify both members picked up change of `task.offset.interval.ms`
-      assertEquals(45_000, streamsGroupHeartbeatResponse1.taskOffsetIntervalMs(), "Member 1 should pickup task.offset.interval.ms initially")
-      assertEquals(45_000, streamsGroupHeartbeatResponse2.taskOffsetIntervalMs(), "Member 2 should pickup task.offset.interval.ms initially")
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse1 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId1,
+          memberEpoch = streamsGroupHeartbeatResponse1.memberEpoch()
+        )
+        streamsGroupHeartbeatResponse1.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse1.taskOffsetIntervalMs() == 45_000
+      }, "Member 1 did not pick up updated task.offset.interval.ms within the timeout period.")
+
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse2 = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId2,
+          memberEpoch = streamsGroupHeartbeatResponse2.memberEpoch()
+        )
+        streamsGroupHeartbeatResponse2.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse2.taskOffsetIntervalMs() == 45_000
+      }, "Member 2 did not pick up updated task.offset.interval.ms within the timeout period.")
 
     } finally {
       admin.close()

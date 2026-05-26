@@ -55,10 +55,10 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
@@ -378,8 +378,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         int maxPollRecords = config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG);
         boolean checkCrcs = config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG);
 
-        ConsumerMetrics metricsRegistry = new ConsumerMetrics();
-        this.fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
+        FetchMetricsRegistry fetchMetricsRegistry = new FetchMetricsRegistry(CONSUMER_METRIC_GROUP_PREFIX);
+        this.fetchMetricsManager = new FetchMetricsManager(metrics, fetchMetricsRegistry);
         ApiVersions apiVersions = new ApiVersions();
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,

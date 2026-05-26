@@ -294,7 +294,7 @@ public class ClassicGroupMemberTest {
             new JoinGroupRequestProtocol()
                 .setName("range")
                 .setMetadata(new byte[]{0})
-        ).iterator());
+        ));
 
         ClassicGroupMember member = new ClassicGroupMember(
             "member",

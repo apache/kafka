@@ -31,11 +31,14 @@ import java.util.Optional;
  */
 public class CloseOptions {
     /**
-     * Enum to specify the group membership operation upon leaving group.
+     * Enum to specify the group membership operation upon leaving a group.
      *
      * <ul>
-     *   <li><b>{@code LEAVE_GROUP}</b>:  means the consumer will leave the group.</li>
-     *   <li><b>{@code REMAIN_IN_GROUP}</b>: means the consumer will remain in the group.</li>
+     *   <li><b>{@code LEAVE_GROUP}</b>: The consumer will leave the group. This is the default for dynamic members,
+     *       and can be used by static members when they want to permanently leave the group and trigger a rebalance.</li>
+     *   <li><b>{@code REMAIN_IN_GROUP}</b>: The consumer will remain in the group. This is the default for static members,
+     *       allowing them to rejoin quickly without triggering a rebalance. When used by dynamic members, no leave
+     *       heartbeat will be sent and the member will be removed by the coordinator after the session timeout expires.</li>
      *   <li><b>{@code DEFAULT}</b>: Applies the default behavior:
      *     <ul>
      *       <li>For <b>static members</b>: The consumer will remain in the group.</li>

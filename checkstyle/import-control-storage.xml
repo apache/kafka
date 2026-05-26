@@ -84,6 +84,7 @@
         <subpackage name="purgatory">
             <allow pkg="kafka.utils" />
             <allow pkg="org.apache.kafka.server.storage.log" />
+            <allow pkg="org.apache.kafka.server.util" />
         </subpackage>
     </subpackage>
 
@@ -117,6 +118,7 @@
         <allow pkg="org.apache.kafka.tiered.storage" />
 
         <allow pkg="kafka.api" />
+        <allow pkg="kafka.integration" />
         <allow pkg="kafka.log" />
         <allow pkg="kafka.server" />
         <allow pkg="kafka.utils" />

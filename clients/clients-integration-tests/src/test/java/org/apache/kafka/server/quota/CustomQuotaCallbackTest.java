@@ -149,6 +149,7 @@ public class CustomQuotaCallbackTest {
             return true;
         }
 
+        @SuppressWarnings("removal")
         @Override
         public boolean updateClusterMetadata(Cluster cluster) {
             COUNTERS.computeIfAbsent(nodeId, k -> new AtomicInteger()).incrementAndGet();

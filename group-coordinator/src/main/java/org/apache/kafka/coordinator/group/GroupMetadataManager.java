@@ -77,8 +77,8 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
@@ -217,6 +217,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord;
@@ -224,6 +225,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsToString;
@@ -247,6 +249,7 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord;
+import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroupMember.hasAssignedTasksChanged;
@@ -2377,6 +2380,11 @@ public class GroupMetadataManager {
             updatedMember,
             records
         );
+        boolean preferredServerAssignorChanged = hasPreferredServerAssignorChanged(
+            group,
+            member,
+            updatedMember
+        );
 
         // The subscription has changed when either the subscribed topic names or subscribed topic
         // regex has changed.
@@ -2389,9 +2397,12 @@ public class GroupMetadataManager {
             // the group epoch when the member has changed its subscribed topic names or the member
             // has changed its subscribed topic regex to a regex that is already resolved. We avoid
             // bumping the group epoch when the new subscribed topic regex has not been resolved
-            // yet, since we will have to update the target assignment again later.
+            // yet, since we will have to update the target assignment again later. We also bump the
+            // group epoch when the effective preferred server assignor changes, since the target
+            // assignment must be recomputed with the new assignor.
             subscribedTopicNamesChanged ||
-            updateRegularExpressionStatus == UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED;
+            updateRegularExpressionStatus == UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED ||
+            preferredServerAssignorChanged;
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
@@ -3230,6 +3241,27 @@ public class GroupMetadataManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Returns true if the effective preferred server assignor of the group changes as a
+     * result of updating the given member. The effective preferred assignor falls back to
+     * the default assignor when no member has an explicit preference.
+     *
+     * @param group         The consumer group.
+     * @param member        The old member.
+     * @param updatedMember The updated member.
+     * @return Whether the effective preferred server assignor has changed.
+     */
+    private boolean hasPreferredServerAssignorChanged(
+        ConsumerGroup group,
+        ConsumerGroupMember member,
+        ConsumerGroupMember updatedMember
+    ) {
+        String defaultAssignorName = defaultConsumerGroupAssignor.name();
+        String currentPreferredAssignor = group.preferredServerAssignor().orElse(defaultAssignorName);
+        String newPreferredAssignor = group.computePreferredServerAssignor(member, updatedMember).orElse(defaultAssignorName);
+        return !currentPreferredAssignor.equals(newPreferredAssignor);
     }
 
     private static boolean isNotEmpty(String value) {
@@ -4350,6 +4382,16 @@ public class GroupMetadataManager {
             records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
             log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", group.groupId(), groupEpoch, groupMetadataHash);
 
+            // If all members are being fenced, the group becomes empty so
+            // we must also update the assignment epoch to match the group
+            // epoch. We use a timestamp of zero to mimic the behavior of
+            // a new group so that the assignment interval does not delay
+            // the next assignment computation.
+            if (group.members().size() == members.size()) {
+                records.add(newConsumerGroupTargetAssignmentMetadataRecord(
+                    group.groupId(), groupEpoch, 0L));
+            }
+
             for (ConsumerGroupMember member : members) {
                 cancelTimers(group.groupId(), member.memberId());
             }
@@ -4391,6 +4433,16 @@ public class GroupMetadataManager {
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
         records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, groupMetadataHash));
+
+        // If this is the last member, the group becomes empty so we must
+        // also update the assignment epoch to match the group epoch. We
+        // use a timestamp of zero to mimic the behavior of a new group
+        // so that the assignment interval does not delay the next
+        // assignment computation.
+        if (group.members().size() == 1) {
+            records.add(newShareGroupTargetAssignmentMetadataRecord(
+                group.groupId(), groupEpoch, 0L));
+        }
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
 
@@ -4453,6 +4505,16 @@ public class GroupMetadataManager {
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
         records.add(newStreamsGroupMetadataRecord(group.groupId(), groupEpoch, group.metadataHash(), group.validatedTopologyEpoch(), group.lastAssignmentConfigs()));
+
+        // If this is the last member, the group becomes empty so we must
+        // also update the assignment epoch to match the group epoch. We
+        // use a timestamp of zero to mimic the behavior of a new group
+        // so that the assignment interval does not delay the next
+        // assignment computation.
+        if (group.members().size() == 1) {
+            records.add(newStreamsGroupTargetAssignmentMetadataRecord(
+                group.groupId(), groupEpoch, 0L));
+        }
 
         cancelTimers(group.groupId(), member.memberId());
 
@@ -8758,7 +8820,7 @@ public class GroupMetadataManager {
      */
     private int consumerGroupSessionTimeoutMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::consumerSessionTimeoutMs)
+        return groupConfig.flatMap(GroupConfig::consumerSessionTimeoutMs)
             .orElse(config.consumerGroupSessionTimeoutMs());
     }
 
@@ -8767,7 +8829,7 @@ public class GroupMetadataManager {
      */
     private int consumerGroupHeartbeatIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::consumerHeartbeatIntervalMs)
+        return groupConfig.flatMap(GroupConfig::consumerHeartbeatIntervalMs)
             .orElse(config.consumerGroupHeartbeatIntervalMs());
     }
 
@@ -8796,7 +8858,7 @@ public class GroupMetadataManager {
      */
     private int shareGroupSessionTimeoutMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::shareSessionTimeoutMs)
+        return groupConfig.flatMap(GroupConfig::shareSessionTimeoutMs)
             .orElse(config.shareGroupSessionTimeoutMs());
     }
 
@@ -8805,7 +8867,7 @@ public class GroupMetadataManager {
      */
     private int shareGroupHeartbeatIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::shareHeartbeatIntervalMs)
+        return groupConfig.flatMap(GroupConfig::shareHeartbeatIntervalMs)
             .orElse(config.shareGroupHeartbeatIntervalMs());
     }
 
@@ -8834,7 +8896,7 @@ public class GroupMetadataManager {
      */
     private int streamsGroupSessionTimeoutMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsSessionTimeoutMs)
+        return groupConfig.flatMap(GroupConfig::streamsSessionTimeoutMs)
             .orElse(config.streamsGroupSessionTimeoutMs());
     }
 
@@ -8843,7 +8905,7 @@ public class GroupMetadataManager {
      */
     private int streamsGroupHeartbeatIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsHeartbeatIntervalMs)
+        return groupConfig.flatMap(GroupConfig::streamsHeartbeatIntervalMs)
             .orElse(config.streamsGroupHeartbeatIntervalMs());
     }
 
@@ -8872,7 +8934,7 @@ public class GroupMetadataManager {
      */
     private int streamsGroupTaskOffsetIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsTaskOffsetIntervalMs)
+        return groupConfig.flatMap(GroupConfig::streamsTaskOffsetIntervalMs)
             .orElse(config.streamsGroupTaskOffsetIntervalMs());
     }
 
@@ -8881,7 +8943,7 @@ public class GroupMetadataManager {
      */
     private int streamsGroupInitialRebalanceDelayMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        return groupConfig.map(GroupConfig::streamsInitialRebalanceDelayMs)
+        return groupConfig.flatMap(GroupConfig::streamsInitialRebalanceDelayMs)
             .orElse(config.streamsGroupInitialRebalanceDelayMs());
     }
 
@@ -8897,7 +8959,7 @@ public class GroupMetadataManager {
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
-        final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
+        final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
         return new TreeMap<>(Map.of(
             "num.standby.replicas", numStandbyReplicas.toString()

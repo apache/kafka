@@ -182,7 +182,11 @@ public class MeteredKeyValueStore<K, V>
         );
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                    (config, now) -> wrapped().approximateNumEntries());
+                    (config, now) -> {
+                        final InMemoryKeyValueStore inMemoryStore = findInner(InMemoryKeyValueStore.class);
+                        return inMemoryStore != null ? inMemoryStore.approximateNumEntries() : -1L;
+                    }
+            );
         }
     }
 
@@ -226,7 +230,8 @@ public class MeteredKeyValueStore<K, V>
                             ))
                     );
                 },
-                sendOldValues);
+                sendOldValues
+            );
         }
         return false;
     }
@@ -437,20 +442,20 @@ public class MeteredKeyValueStore<K, V>
         }
     }
 
-    protected byte[] serializeValue(final V value) {
-        return value != null ? serdes.rawValue(value, internalContext.headers()) : null;
-    }
-
-    protected V deserializeValue(final byte[] rawValue) {
-        return rawValue != null ? serdes.valueFrom(rawValue, internalContext.headers()) : null;
-    }
-
     protected Bytes serializeKey(final K key) {
         return Bytes.wrap(serdes.rawKey(key, internalContext.headers()));
     }
 
     protected K deserializeKey(final byte[] rawKey) {
         return serdes.keyFrom(rawKey, internalContext.headers());
+    }
+
+    protected byte[] serializeValue(final V value) {
+        return value != null ? serdes.rawValue(value, internalContext.headers()) : null;
+    }
+
+    protected V deserializeValue(final byte[] rawValue) {
+        return rawValue != null ? serdes.valueFrom(rawValue, internalContext.headers()) : null;
     }
 
     private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, V>> from) {

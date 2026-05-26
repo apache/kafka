@@ -161,7 +161,7 @@ public class StandardAuthorizerPropertyTest {
 
     private StandardAuthorizer buildAuthorizer() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.start(new StandardAuthorizerTest.AuthorizerTestServerInfo(List.of(PLAINTEXT)));
+        authorizer.start(new AuthorizerTestServerInfo(List.of(PLAINTEXT)));
         authorizer.completeInitialLoad();
         return authorizer;
     }

@@ -70,12 +70,12 @@ public class Uuid implements Comparable<Uuid> {
 
     /**
      * Static factory to retrieve a type 4 (pseudo randomly generated) UUID.
-     *
-     * This will not generate a UUID equal to 0, 1, or one whose string representation starts with a dash ("-")
+     * <p>
+     * This will not generate a UUID equal to 0, 1, or one whose string representation contains a dash ("-").
      */
     public static Uuid randomUuid() {
         Uuid uuid = unsafeRandomUuid();
-        while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
+        while (RESERVED.contains(uuid) || uuid.toString().contains("-")) {
             uuid = unsafeRandomUuid();
         }
         return uuid;

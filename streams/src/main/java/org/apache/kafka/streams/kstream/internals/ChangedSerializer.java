@@ -134,7 +134,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
 
     @Override
     public byte[] serialize(final String topic, final Change<T> data) {
-        return serialize(topic, null, data);
+        throw new UnsupportedOperationException("ChangedSerializer requires the headers-aware version of serialize");
     }
 
     @Override

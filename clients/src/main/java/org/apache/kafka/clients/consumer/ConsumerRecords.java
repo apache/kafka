@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
 
 import java.util.ArrayList;
 import java.util.Collections;

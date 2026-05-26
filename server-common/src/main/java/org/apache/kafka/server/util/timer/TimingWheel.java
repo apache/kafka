@@ -128,15 +128,19 @@ public class TimingWheel {
         }
     }
 
-    private synchronized void addOverflowWheel() {
+    private void addOverflowWheel() {
         if (overflowWheel == null) {
-            overflowWheel = new TimingWheel(
-                interval,
-                wheelSize,
-                currentTimeMs,
-                taskCounter,
-                queue
-            );
+            synchronized (this) {
+                if (overflowWheel == null) {
+                    overflowWheel = new TimingWheel(
+                        interval,
+                        wheelSize,
+                        currentTimeMs,
+                        taskCounter,
+                        queue
+                    );
+                }
+            }
         }
     }
 
