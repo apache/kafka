@@ -893,7 +893,8 @@ org.apache.kafka.tiered.storage.integration.DeleteSegmentsTest:
 - testDeleteSegmentsByRetentionTimeWithClassicGroupProtocol
 - testDeleteSegmentsByRetentionTimeWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.DeleteTopicTest:
-- executeTieredStorageTest
+- testDeleteTopicWithClassicGroupProtocol
+- testDeleteTopicWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.DisableRemoteLogOnTopicTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.EnableRemoteLogOnTopicTest:
@@ -901,7 +902,8 @@ org.apache.kafka.tiered.storage.integration.EnableRemoteLogOnTopicTest:
 org.apache.kafka.tiered.storage.integration.FetchFromLeaderWithCorruptedCheckpointTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.ListOffsetsTest:
-- executeTieredStorageTest
+- testListOffsetsWithClassicGroupProtocol
+- testListOffsetsWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.OffloadAndConsumeFromLeaderTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.OffloadAndTxnConsumeFromLeaderTest:
