@@ -318,6 +318,13 @@ public final class TieredStorageTestBuilder {
         return actions;
     }
 
+    /**
+     * Builds an executable test plan from the actions described so far.
+     */
+    public TieredStorageTestPlan build() {
+        return new TieredStorageTestPlan(complete());
+    }
+
     private void createProduceAction() {
         if (!producables.isEmpty()) {
             producables.forEach((topicPartition, producableSpec) -> {
