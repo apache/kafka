@@ -250,6 +250,17 @@ public class Formatter {
         if (clusterId == null) {
             throw new FormatterException("You must specify the cluster id.");
         }
+        try {
+            if (clusterId.contains("=")) {
+                throw new FormatterException("The specified cluster id, " + clusterId + " contains padding and is invalid");
+            }
+            Uuid uuid = Uuid.fromString(clusterId);
+            if (Uuid.RESERVED.contains(uuid)) {
+                throw new FormatterException("The specified cluster id, " + clusterId + " is reserved");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new FormatterException("The specified cluster id, " + clusterId + " is invalid", e);
+        }
         if (directories.isEmpty()) {
             throw new FormatterException("You must specify at least one directory to format");
         }
