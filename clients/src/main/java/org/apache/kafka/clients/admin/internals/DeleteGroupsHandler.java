@@ -123,11 +123,11 @@ public abstract class DeleteGroupsHandler extends AdminApiHandler.Batched<Coordi
                 failed.put(groupId, error.exception());
                 break;
 
-            case DELETE_FAILED:
+            case GROUP_DELETION_FAILED:
                 // A terminal per-group failure surfaced by the broker — no retry. Use the
                 // per-group ErrorMessage (which carries the underlying cause, e.g. a streams-group
                 // topology description plugin failure) instead of the generic enum message.
-                log.debug("`{}` request for group id {} returned DELETE_FAILED: {}",
+                log.debug("`{}` request for group id {} returned GROUP_DELETION_FAILED: {}",
                     displayName(), groupId.idValue, errorMessage);
                 failed.put(groupId, error.exception(errorMessage));
                 break;

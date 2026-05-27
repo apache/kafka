@@ -22,7 +22,7 @@
   // Version 2 is the first flexible version.
   //
   // Version 3 adds the per-group ErrorMessage field so the broker can surface a cause
-  // string when DELETE_FAILED (or any other non-NONE error) is returned for a group.
+  // string when GROUP_DELETION_FAILED (or any other non-NONE error) is returned for a group.
   "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [

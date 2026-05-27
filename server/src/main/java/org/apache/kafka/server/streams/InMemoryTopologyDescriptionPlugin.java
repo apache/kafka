@@ -18,6 +18,7 @@ package org.apache.kafka.server.streams;
 
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +33,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A simple in-memory implementation of {@link StreamsGroupTopologyDescriptionPlugin}
- * that stores topology descriptions keyed by their (groupCreationTimeMs, topologyEpoch) pair.
+ * that stores topology descriptions keyed by groupId, retaining only the most recent
+ * topology epoch per group.
  *
  * <p>This implementation maintains a static registry of all instances, accessible via
  * {@link #instances()}, to support integration tests that need to verify plugin state.
@@ -94,7 +96,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
 
     /**
      * Sets whether {@link #setTopology} should fail specifically with
-     * {@link org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException}.
+     * {@link StreamsTopologyDescriptionPermanentFailureException}.
      * The broker treats this as a permanent failure and persists
      * {@code LastFailedTopologyEpoch}; integration tests use it to verify the
      * hot-loop ratchet.
@@ -154,7 +156,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
         setTopologyAttemptCount.incrementAndGet();
         if (failOnSetPermanent) {
             return CompletableFuture.failedFuture(
-                new org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException("Simulated permanent failure"));
+                new StreamsTopologyDescriptionPermanentFailureException("Simulated permanent failure"));
         }
         if (failOnSet) {
             return CompletableFuture.failedFuture(new RuntimeException("Simulated plugin error"));

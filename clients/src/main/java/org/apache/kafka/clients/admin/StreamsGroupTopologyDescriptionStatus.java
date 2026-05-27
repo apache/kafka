@@ -19,6 +19,9 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Status of a streams group topology description on a {@link StreamsGroupDescription}.
  *
@@ -53,19 +56,25 @@ public enum StreamsGroupTopologyDescriptionStatus {
      */
     ERROR;
 
+    private static final Logger LOG = LoggerFactory.getLogger(StreamsGroupTopologyDescriptionStatus.class);
+
     /**
      * Maps the wire-level {@code TopologyDescriptionStatus} int8 onto this enum.
      * The wire encoding is: 0=NOT_REQUESTED, 1=NOT_STORED, 2=ERROR, 3=AVAILABLE.
      * The broker is required to set 3 (AVAILABLE) whenever it attaches a topology
      * description, so for a non-null description this method should always observe 3.
+     * Unknown wire codes (from a newer broker) are mapped to {@link #ERROR} after
+     * logging a warning so the mis-mapping leaves a breadcrumb.
      */
-    public static StreamsGroupTopologyDescriptionStatus fromWire(boolean topologyPresent, byte wireStatus) {
+    public static StreamsGroupTopologyDescriptionStatus fromWire(byte wireStatus) {
         switch (wireStatus) {
             case 0: return NOT_REQUESTED;
             case 1: return NOT_STORED;
             case 2: return ERROR;
             case 3: return AVAILABLE;
-            default: return ERROR;
+            default:
+                LOG.warn("Unrecognised TopologyDescriptionStatus wire code {} from broker; mapping to ERROR.", wireStatus);
+                return ERROR;
         }
     }
 }

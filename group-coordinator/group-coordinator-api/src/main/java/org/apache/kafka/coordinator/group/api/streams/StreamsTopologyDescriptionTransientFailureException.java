@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.api.streams;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
 /**
@@ -26,6 +27,7 @@ import org.apache.kafka.common.errors.ApiException;
  * with this exception's message. Plugins that throw any other (non-permanent)
  * exception are treated identically; this class is provided as the canonical signal.
  */
+@InterfaceStability.Evolving
 public class StreamsTopologyDescriptionTransientFailureException extends ApiException {
 
     private static final long serialVersionUID = 1L;

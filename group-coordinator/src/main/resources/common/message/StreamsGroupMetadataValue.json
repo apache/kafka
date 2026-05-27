@@ -33,7 +33,7 @@
     { "name": "StoredTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 3, "default": -1, "type": "int32",
       "about": "The topology epoch whose description is currently stored in the topology description plugin, or -1 if none is stored." },
     { "name": "LastFailedTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 4, "default": -1, "type": "int32",
-      "about": "The topology epoch whose description push the plugin permanently rejected (TooLarge / InvalidRequest), or -1 if none. Heartbeat-path solicitation is suppressed while this equals the current topology epoch to avoid hot-looping." }
+      "about": "The topology epoch whose description push the plugin permanently rejected (signalled by StreamsTopologyDescriptionPermanentFailureException), or -1 if none. Heartbeat-path solicitation is suppressed while this equals the current topology epoch to avoid hot-looping." }
   ],
   "commonStructs": [
     { "name": "LastAssignmentConfig", "versions": "0+", "fields": [

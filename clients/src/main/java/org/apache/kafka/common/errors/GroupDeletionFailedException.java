@@ -17,15 +17,15 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Indicates that a delete operation could not complete for the affected group or
- * resource. The accompanying error message describes the underlying cause; the
- * caller may retry once the underlying condition is resolved.
+ * Indicates that {@code DeleteGroups} could not complete for the affected group. The
+ * accompanying error message describes the underlying cause; the caller may retry once
+ * the underlying condition is resolved.
  */
-public class DeleteFailedException extends ApiException {
+public class GroupDeletionFailedException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public DeleteFailedException(String message) {
+    public GroupDeletionFailedException(String message) {
         super(message);
     }
 }

@@ -100,6 +100,8 @@ import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -109,8 +111,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
-import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
-import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
@@ -373,8 +373,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * Owns all broker-side topology-description plugin logic: heartbeat solicitation gating,
-     * setTopology / getTopology / deleteTopology dispatch, the in-flight tracker, the
-     * transient-failure back-off, and the periodic cleanup timer.
+     * setTopology / getTopology / deleteTopology dispatch, the per-group back-off, the
+     * cleanup-cycle reentry guard, and the periodic cleanup timer.
      */
     private final TopologyDescriptionManager topologyDescriptionManager;
 
@@ -1618,7 +1618,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         // Step 1: read which IDs in this partition are streams groups with a stored topology.
         // Step 2: for each such ID, call plugin.deleteTopology. Groups whose plugin call fails are
-        //         excluded from the tombstone write and reported as DELETE_FAILED with the cause in ErrorMessage.
+        //         excluded from the tombstone write and reported as GROUP_DELETION_FAILED with the cause in ErrorMessage.
         // Step 3: issue the delete-groups write for the remaining group IDs and merge the results.
         // If the Step-1 read itself fails, propagate that failure: deleting tombstones without
         // knowing which groups had stored plugin state would leak plugin-side orphans, so the
@@ -1643,7 +1643,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     if (cause != null) {
                         results.add(new DeleteGroupsResponseData.DeletableGroupResult()
                             .setGroupId(groupId)
-                            .setErrorCode(Errors.DELETE_FAILED.code())
+                            .setErrorCode(Errors.GROUP_DELETION_FAILED.code())
                             .setErrorMessage("Topology description plugin failed to delete: " + cause.getMessage()));
                     } else {
                         remaining.add(groupId);
@@ -1653,7 +1653,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             if (remaining.isEmpty()) {
                 return CompletableFuture.completedFuture(results);
             }
-            // Map the write outcome explicitly so that on failure we still keep the DELETE_FAILED
+            // Map the write outcome explicitly so that on failure we still keep the GROUP_DELETION_FAILED
             // entries already in `results` and only synthesize error rows for `remaining`.
             return runtime.<DeleteGroupsResponseData.DeletableGroupResultCollection>scheduleWriteOperation(
                 "delete-groups",

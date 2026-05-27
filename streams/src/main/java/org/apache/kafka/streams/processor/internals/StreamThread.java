@@ -58,8 +58,8 @@ import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TaskMetadata;
-import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.ThreadMetadata;
+import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -89,10 +89,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -760,6 +760,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         } else if (node instanceof TopologyDescription.Sink) {
             result.setNodeType(NODE_TYPE_SINK);
             result.setSinkTopic(((TopologyDescription.Sink) node).topic());
+        } else {
+            throw new IllegalStateException("Unsupported TopologyDescription.Node subtype: "
+                + node.getClass().getName());
         }
 
         // Only successors are sent over the wire — predecessors are reconstructed on the read side.

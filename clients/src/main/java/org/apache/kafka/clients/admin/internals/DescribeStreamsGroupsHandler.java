@@ -137,8 +137,7 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
                 Optional.ofNullable(describedGroup.topologyDescription())
                     .map(DescribeStreamsGroupsHandler::convertTopologyDescription);
             final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus =
-                StreamsGroupTopologyDescriptionStatus.fromWire(
-                    topologyDescription.isPresent(), describedGroup.topologyDescriptionStatus());
+                StreamsGroupTopologyDescriptionStatus.fromWire(describedGroup.topologyDescriptionStatus());
 
             final StreamsGroupDescription streamsGroupDescription = new StreamsGroupDescription(
                     describedGroup.groupId(),

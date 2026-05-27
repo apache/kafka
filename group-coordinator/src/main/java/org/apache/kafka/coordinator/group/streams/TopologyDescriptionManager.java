@@ -21,16 +21,16 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.internals.ExponentialBackoff;
-import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard;
-import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -74,10 +74,11 @@ public class TopologyDescriptionManager implements AutoCloseable {
         new ExponentialBackoff(30_000L, 2, 3_600_000L, 0.0);
 
     /**
-     * Per-group back-off state for transient {@code setTopology} failures. The entry is keyed by
-     * the topology epoch the failure was observed at; an epoch advance implicitly invalidates the
-     * back-off. In-memory only — coordinator failover loses the state, in which case the new
-     * leader re-solicits once and the back-off re-arms on the next failure.
+     * Per-group back-off state used for both transient {@code setTopology} failures and
+     * heartbeat-side solicitations that have not yet produced a successful push. The entry is
+     * keyed by the topology epoch the failure was observed at; an epoch advance implicitly
+     * invalidates the back-off. In-memory only — coordinator failover loses the state, in which
+     * case the new leader re-solicits once and the back-off re-arms on the next failure.
      */
     private static final class Backoff {
         final int topologyEpoch;
@@ -217,6 +218,10 @@ public class TopologyDescriptionManager implements AutoCloseable {
      * On any other exception: arm/extend the per-group back-off; no metadata write.
      * The wire response always carries {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED} with the
      * exception's message; the permanent-vs-transient split is reflected only in broker-side state.
+     *
+     * <p>The metadata write is fire-and-forget — the wire response future completes before the
+     * persisted record is committed. If the metadata commit fails, it is logged and the next
+     * heartbeat re-solicits (or, for permanent failures, the next cleanup cycle retries).
      */
     public CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> handleSetTopology(
         String groupId,
@@ -382,8 +387,17 @@ public class TopologyDescriptionManager implements AutoCloseable {
         }
         metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
         if (topology != null) {
-            describedGroup.setTopologyDescription(pojoToDescribeResponse(topology));
-            describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
+            try {
+                describedGroup.setTopologyDescription(pojoToDescribeResponse(topology));
+                describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
+            } catch (Throwable conversionEx) {
+                // A malformed plugin response shouldn't poison the rest of the describe batch.
+                // Mark this single group ERROR and leave the others untouched.
+                log.warn("Failed to convert plugin topology response for group {}; reporting ERROR.",
+                    groupId, conversionEx);
+                describedGroup.setTopologyDescription(null);
+                describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
+            }
             return;
         }
         log.warn("Plugin getTopology returned null for group {} while StoredTopologyEpoch={} matched the current topology epoch.",
@@ -454,7 +468,7 @@ public class TopologyDescriptionManager implements AutoCloseable {
      * plugin call has settled, resolving to a map from {@code groupId} to the failure cause for
      * groups whose plugin call failed. Groups not present in the map succeeded (or had no stored
      * topology). The service uses the map to skip the tombstone for failed groups and report
-     * {@code DELETE_FAILED} on the per-group result, with the cause string in {@code ErrorMessage}.
+     * {@code GROUP_DELETION_FAILED} on the per-group result, with the cause string in {@code ErrorMessage}.
      */
     public CompletableFuture<Map<String, Throwable>> deleteBeforeGroupDelete(
         Map<String, Integer> storedEpochs
@@ -586,6 +600,11 @@ public class TopologyDescriptionManager implements AutoCloseable {
         }
         CompletableFuture.allOf(partitionDoneFutures.toArray(new CompletableFuture<?>[0]))
             .thenCompose(__ -> CompletableFuture.allOf(perGroupFutures.toArray(new CompletableFuture<?>[0])))
-            .whenComplete((__, ___) -> cleanupCycleInFlight.set(false));
+            .whenComplete((__, throwable) -> {
+                if (throwable != null) {
+                    log.warn("Topology-description cleanup cycle failed to complete cleanly.", throwable);
+                }
+                cleanupCycleInFlight.set(false);
+            });
     }
 }

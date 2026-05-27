@@ -129,7 +129,7 @@ public class StreamsGroupTopologyDescription {
      * does reconstruct predecessors, since it is user-facing and traversal in both directions
      * is convenient for tooling.
      */
-    public interface Node {
+    public sealed interface Node permits Source, Processor, Sink {
         String name();
 
         /**

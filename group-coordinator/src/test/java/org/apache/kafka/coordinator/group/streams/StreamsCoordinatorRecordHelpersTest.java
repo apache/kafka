@@ -818,4 +818,47 @@ class StreamsCoordinatorRecordHelpersTest {
             StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(null));
         assertEquals("topology should not be null here", exception.getMessage());
     }
+
+    @Test
+    public void testStreamsGroupMetadataValueRoundTripWithPositiveTopologyEpochs() {
+        StreamsGroupMetadataValue original = new StreamsGroupMetadataValue()
+            .setEpoch(7)
+            .setMetadataHash(42L)
+            .setValidatedTopologyEpoch(3)
+            .setLastAssignmentConfigs(List.of())
+            .setGroupCreationTimeMs(1_000L)
+            .setStoredTopologyEpoch(5)
+            .setLastFailedTopologyEpoch(3);
+
+        StreamsGroupMetadataValue roundTripped = roundTripStreamsGroupMetadataValue(original);
+        assertEquals(5, roundTripped.storedTopologyEpoch());
+        assertEquals(3, roundTripped.lastFailedTopologyEpoch());
+        assertEquals(original, roundTripped);
+    }
+
+    @Test
+    public void testStreamsGroupMetadataValueRoundTripWithMixedTopologyEpochs() {
+        StreamsGroupMetadataValue original = new StreamsGroupMetadataValue()
+            .setEpoch(7)
+            .setMetadataHash(42L)
+            .setValidatedTopologyEpoch(3)
+            .setLastAssignmentConfigs(List.of())
+            .setGroupCreationTimeMs(1_000L)
+            .setStoredTopologyEpoch(0)
+            .setLastFailedTopologyEpoch(-1);
+
+        StreamsGroupMetadataValue roundTripped = roundTripStreamsGroupMetadataValue(original);
+        assertEquals(0, roundTripped.storedTopologyEpoch());
+        assertEquals(-1, roundTripped.lastFailedTopologyEpoch());
+        assertEquals(original, roundTripped);
+    }
+
+    private static StreamsGroupMetadataValue roundTripStreamsGroupMetadataValue(StreamsGroupMetadataValue value) {
+        short version = StreamsGroupMetadataValue.HIGHEST_SUPPORTED_VERSION;
+        java.nio.ByteBuffer buffer =
+            org.apache.kafka.common.protocol.MessageUtil.toByteBufferAccessor(value, version).buffer();
+        StreamsGroupMetadataValue out = new StreamsGroupMetadataValue();
+        out.read(new org.apache.kafka.common.protocol.ByteBufferAccessor(buffer.duplicate()), version);
+        return out;
+    }
 }

@@ -37,8 +37,10 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  *
  * <p>This manager is polled by the consumer background thread. On each poll it checks
  * {@link StreamsRebalanceData#topologyDescriptionRequired()} and, if a request is not already
- * in-flight, sends one to the coordinator. Retries are driven by the heartbeat cycle: on failure
- * the flag is cleared and the broker will re-request on the next heartbeat.
+ * in-flight, sends one to the coordinator. Retries are driven by the heartbeat cycle: on most
+ * non-transport failures the flag is cleared and the broker re-requests on a later heartbeat;
+ * for coordinator-discovery / load failures the flag stays set so the manager retries directly
+ * once the coordinator is reachable.
  */
 public class StreamsGroupTopologyDescriptionRequestManager implements RequestManager {
 

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription.GlobalStore;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription.Node;
@@ -23,8 +25,7 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescri
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription.Sink;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription.Source;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription.Subtopology;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -35,7 +36,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -45,7 +45,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

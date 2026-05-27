@@ -2900,8 +2900,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleStreamsGroupTopologyDescriptionUpdate(request: Request): CompletableFuture[Unit] = {
     val updateRequest = request.body(classOf[StreamsGroupTopologyDescriptionUpdateRequest])
-    val groupId = updateRequest.data.groupId
 
+    if (!isStreamsGroupProtocolEnabled) {
+      requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      return CompletableFuture.completedFuture[Unit](())
+    }
+
+    val groupId = updateRequest.data.groupId
     if (!authHelper.authorize(request.context, READ, GROUP, groupId)) {
       val responseData = new StreamsGroupTopologyDescriptionUpdateResponseData()
         .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)

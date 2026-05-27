@@ -2290,6 +2290,10 @@ public class RequestResponseTest {
         result.add(new DeletableGroupResult()
                        .setGroupId("test-group")
                        .setErrorCode(Errors.NONE.code()));
+        result.add(new DeletableGroupResult()
+                       .setGroupId("failed-group")
+                       .setErrorCode(Errors.GROUP_DELETION_FAILED.code())
+                       .setErrorMessage("plugin offline"));
         return new DeleteGroupsResponse(
             new DeleteGroupsResponseData()
                 .setResults(result)
@@ -4037,4 +4041,5 @@ public class RequestResponseTest {
                 assertThrows(UnsupportedVersionException.class, () -> new ListConfigResourcesRequest.Builder(data).build((short) 0));
             });
     }
+
 }

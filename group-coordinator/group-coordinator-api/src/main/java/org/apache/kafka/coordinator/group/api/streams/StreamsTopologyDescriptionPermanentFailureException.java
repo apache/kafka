@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.api.streams;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
 /**
@@ -26,6 +27,7 @@ import org.apache.kafka.common.errors.ApiException;
  * epoch do not re-solicit the push. The caller receives
  * {@code STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED} with this exception's message.
  */
+@InterfaceStability.Evolving
 public class StreamsTopologyDescriptionPermanentFailureException extends ApiException {
 
     private static final long serialVersionUID = 1L;

@@ -20,8 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
@@ -1105,6 +1105,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 }
             } catch (GroupIdNotFoundException ignored) {
                 // Skip — the group will be reported as not-found by the deletion path.
+            } catch (Throwable t) {
+                // One bad group must not abort the whole batch — log and continue. The
+                // group will be handled by the deletion path's own per-group error mapping.
+                log.warn("Unexpected error reading StoredTopologyEpoch for group {}; skipping.", groupId, t);
             }
         }
         return result;
@@ -1120,20 +1124,25 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long now = time.milliseconds();
         Map<String, Integer> result = new HashMap<>();
         for (String groupId : groupMetadataManager.groupIds()) {
-            Group group;
             try {
-                group = groupMetadataManager.group(groupId, committedOffset);
-            } catch (GroupIdNotFoundException ignored) {
-                continue;
+                Group group;
+                try {
+                    group = groupMetadataManager.group(groupId, committedOffset);
+                } catch (GroupIdNotFoundException ignored) {
+                    continue;
+                }
+                if (group.type() != Group.GroupType.STREAMS) continue;
+                StreamsGroup sg =
+                    (StreamsGroup) group;
+                if (!sg.isEmpty()) continue;
+                int storedEpoch = sg.storedTopologyEpoch();
+                if (storedEpoch == -1) continue;
+                if (!offsetMetadataManager.allOffsetsExpired(groupId, now)) continue;
+                result.put(groupId, storedEpoch);
+            } catch (Throwable t) {
+                // One bad group must not abort the whole scan; the next cycle retries.
+                log.warn("Unexpected error scanning streams group {} for topology cleanup; skipping.", groupId, t);
             }
-            if (group.type() != Group.GroupType.STREAMS) continue;
-            StreamsGroup sg =
-                (StreamsGroup) group;
-            if (!sg.isEmpty()) continue;
-            int storedEpoch = sg.storedTopologyEpoch();
-            if (storedEpoch == -1) continue;
-            if (!offsetMetadataManager.allOffsetsExpired(groupId, now)) continue;
-            result.put(groupId, storedEpoch);
         }
         return result;
     }

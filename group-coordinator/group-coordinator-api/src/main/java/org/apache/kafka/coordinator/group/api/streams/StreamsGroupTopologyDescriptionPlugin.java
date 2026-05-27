@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.api.streams;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -30,6 +31,7 @@ import java.util.concurrent.CompletableFuture;
  * {@link #deleteTopology} must also be idempotent — it may be called more than once
  * for the same {@code groupId}, including when nothing is stored.
  */
+@InterfaceStability.Evolving
 public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, AutoCloseable {
 
     /**
@@ -59,7 +61,7 @@ public interface StreamsGroupTopologyDescriptionPlugin extends Configurable, Aut
     /**
      * Remove any topology description stored for this group. Called when the group is
      * deleted or expires. A failure (future completed exceptionally) is reported to the
-     * caller of {@code DeleteGroups} as {@code DELETE_FAILED} with the exception message
+     * caller of {@code DeleteGroups} as {@code GROUP_DELETION_FAILED} with the exception message
      * in the per-group {@code ErrorMessage}, and the broker does not tombstone the group;
      * a retry of {@code DeleteGroups} re-invokes this method idempotently. The
      * periodic-cleanup path treats a failure identically — the group's tombstone is
