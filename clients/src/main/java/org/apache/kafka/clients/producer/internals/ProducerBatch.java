@@ -89,11 +89,11 @@ public final class ProducerBatch {
     // Tracks the attempt in which leader was changed to currentLeaderEpoch for the 1st time.
     private int attemptsWhenLeaderLastChanged;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
+    public ProducerBatch(TopicPartition tp, AbstractRecordsBuilder recordsBuilder, long createdMs) {
         this(tp, recordsBuilder, createdMs, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+    public ProducerBatch(TopicPartition tp, AbstractRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
         this.createdMs = createdMs;
         this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
