@@ -129,9 +129,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private Cache cache;
     private BloomFilter filter;
     private Statistics statistics;
-    // Options for the offsets column family, kept on a field so close() can release the
-    // native resources (notably the BlockBasedTableFactory's default LRUCache) that the
-    // RocksDB C++ side auto-allocates when a ColumnFamilyOptions is constructed.
     private ColumnFamilyOptions offsetsCfOptions;
 
     private RocksDBConfigSetter configSetter;
@@ -315,27 +312,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     /**
-     * Creates lightweight {@link ColumnFamilyOptions} for the offsets column family. The offsets CF
-     * stores only a small number of key-value pairs (one per changelog partition), so it does not
-     * need the heavyweight options used for the data CF (large write buffers, bloom filters,
-     * aggressive compaction). Sharing the data CF's options causes unnecessary write amplification
-     * and compaction pressure that can contribute to RocksDB write stalls under heavy restore I/O.
-     *
-     * <p>The returned {@code ColumnFamilyOptions} is stored on {@link #offsetsCfOptions} so that
-     * {@link #close()} can release it. Constructing a {@code ColumnFamilyOptions} on the JNI side
-     * auto-allocates a default {@code BlockBasedTableFactory} and its {@code LRUCache}; if the
-     * options object is never closed, that native cache leaks. We also explicitly disable the block
-     * cache for this CF because the offsets metadata is tiny and benefits nothing from caching.
+     * The offsets CF stores only a small number of key-value pairs
+     * (one per changelog partition), so it does not need the heavyweight
+     * options used for the data CF.
+     * Uses the default options for compaction and max write buffer number.
      */
     protected ColumnFamilyOptions createOffsetsCFOptions() {
         offsetsCfOptions = new ColumnFamilyOptions();
         offsetsCfOptions.setCompressionType(CompressionType.NO_COMPRESSION);
-        offsetsCfOptions.setCompactionStyle(CompactionStyle.LEVEL);
         offsetsCfOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
-        offsetsCfOptions.setMaxWriteBufferNumber(2);
-        final BlockBasedTableConfig offsetsTableConfig = new BlockBasedTableConfig();
-        offsetsTableConfig.setNoBlockCache(true);
-        offsetsCfOptions.setTableFormatConfig(offsetsTableConfig);
         return offsetsCfOptions;
     }
 
