@@ -83,7 +83,7 @@ public class ProducerPerformance {
                 payload = new byte[config.recordSize];
             }
             // not thread-safe, do not share with other threads
-            SplittableRandom random = new SplittableRandom(0);
+            SplittableRandom random = new SplittableRandom(config.randomSeed);
             ProducerRecord<byte[], byte[]> record;
 
             if (config.warmupRecords > 0) {
@@ -436,6 +436,17 @@ public class ProducerPerformance {
                 .help("The key distribution to use: 'none' for null keys, 'range' for round-robin keys in " +
                         "[0, KEY-RANGE), or 'random' for random keys in [0, KEY-RANGE). " +
                         "Requires --message-key-range when set to 'range' or 'random'.");
+
+        parser.addArgument("--random-seed")
+                .action(store())
+                .required(false)
+                .type(Long.class)
+                .metavar("RANDOM-SEED")
+                .dest("randomSeed")
+                .setDefault(0L)
+                .help("Seed for the pseudo-random number generator used by --key-distribution random and " +
+                        "random payload generation. The default value of 0 ensures deterministic, reproducible " +
+                        "benchmark runs. Set to a different value when non-repeating sequences are required.");
         return parser;
     }
 
@@ -622,6 +633,7 @@ public class ProducerPerformance {
         final long reportingInterval;
         final Integer messageKeyRange;
         final KeyDistribution keyDistribution;
+        final long randomSeed;
 
         public ConfigPostProcessor(ArgumentParser parser, String[] args) throws IOException, ArgumentParserException {
             Namespace namespace = parser.parseArgs(args);
@@ -679,6 +691,7 @@ public class ProducerPerformance {
                 throw new ArgumentParserException(
                         "--key-distribution must be 'range' or 'random' when --message-key-range is specified.", parser);
             }
+            this.randomSeed = namespace.getLong("randomSeed");
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = namespace.getString("payloadDelimiter").equals("\\n")

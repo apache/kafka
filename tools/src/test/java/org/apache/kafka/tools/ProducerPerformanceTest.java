@@ -934,4 +934,18 @@ public class ProducerPerformanceTest {
             assertThrows(ArgumentParserException.class,
                 () -> new ProducerPerformance.ConfigPostProcessor(parser, args)).getMessage());
     }
+
+    @Test
+    public void testRandomSeedCustomValue() throws IOException, ArgumentParserException {
+        ArgumentParser parser = ProducerPerformance.argParser();
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
+            "--bootstrap-server", "localhost:9000",
+            "--random-seed", "42"};
+        ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
+        assertEquals(42L, configs.randomSeed);
+    }
 }
