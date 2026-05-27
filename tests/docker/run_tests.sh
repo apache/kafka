@@ -41,10 +41,7 @@ else
 fi
 
 if [ "$REBUILD" == "t" ]; then
-    ./gradlew clean systemTestLibs
-    if [ "$KAFKA_MODE" == "native" ]; then
-        ./gradlew clean releaseTarGz
-    fi
+    export CLEAN_BUILD=true
 fi
 
 if ${SCRIPT_DIR}/ducker-ak ssh | grep -q '(none)'; then
