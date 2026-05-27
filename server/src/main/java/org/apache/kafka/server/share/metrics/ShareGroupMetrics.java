@@ -39,10 +39,11 @@ public class ShareGroupMetrics implements AutoCloseable {
     private static final String PARTITION_LOAD_TIME_MS = "PartitionLoadTimeMs";
     private static final String TOPIC_PARTITIONS_FETCH_RATIO = "RequestTopicPartitionsFetchRatio";
     private static final String TOPIC_PARTITIONS_ACQUIRE_TIME_MS = "TopicPartitionsAcquireTimeMs";
-    private static final String ACK_TYPE_TAG = "ackType";
     private static final String DEAD_LETTER_QUEUE_RECORD_COUNT = "DeadLetterQueueRecordCount";
     private static final String DEAD_LETTER_QUEUE_TOTAL_PRODUCE_REQ_PER_SEC = "DeadLetterQueueTotalProduceRequestsPerSec";
     private static final String DEAD_LETTER_QUEUE_FAILED_PRODUCE_REQ_PER_SEC = "DeadLetterQueueFailedProduceRequestsPerSec";
+
+    private static final String ACK_TYPE_TAG = "ackType";
     private static final String GROUP_ID_TAG = "group";
 
     /**
@@ -117,13 +118,13 @@ public class ShareGroupMetrics implements AutoCloseable {
 
     public void recordTopicPartitionsFetchRatio(String groupId, long value) {
         topicPartitionsFetchRatio.computeIfAbsent(groupId,
-            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_FETCH_RATIO, true, Map.of("group", groupId)));
+            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_FETCH_RATIO, true, Map.of(GROUP_ID_TAG, groupId)));
         topicPartitionsFetchRatio.get(groupId).update(value);
     }
 
     public void recordTopicPartitionsAcquireTimeMs(String groupId, long timeMs) {
         topicPartitionsAcquireTimeMs.computeIfAbsent(groupId,
-            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_ACQUIRE_TIME_MS, true, Map.of("group", groupId)));
+            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_ACQUIRE_TIME_MS, true, Map.of(GROUP_ID_TAG, groupId)));
         topicPartitionsAcquireTimeMs.get(groupId).update(timeMs);
     }
 
@@ -150,7 +151,7 @@ public class ShareGroupMetrics implements AutoCloseable {
     public void recordDLQRecordWrite(String shareGroupId, int count) {
         dlqRecordCountPerGroup.computeIfAbsent(shareGroupId, k -> metricsGroup.newMeter(
             DEAD_LETTER_QUEUE_RECORD_COUNT,
-            "dlq-records",
+            "requests",
             TimeUnit.SECONDS,
             Map.of(GROUP_ID_TAG, k)
         )).mark(count);
@@ -159,7 +160,7 @@ public class ShareGroupMetrics implements AutoCloseable {
     public void recordDLQProduce(String shareGroupId) {
         dlqProduceTotalPerGroup.computeIfAbsent(shareGroupId, k -> metricsGroup.newMeter(
             DEAD_LETTER_QUEUE_TOTAL_PRODUCE_REQ_PER_SEC,
-            "dlq-produce",
+            "errors",
             TimeUnit.SECONDS,
             Map.of(GROUP_ID_TAG, k)
         )).mark();
@@ -168,7 +169,7 @@ public class ShareGroupMetrics implements AutoCloseable {
     public void recordDLQProduceFailed(String shareGroupId) {
         dlqProduceFailedPerGroup.computeIfAbsent(shareGroupId, k -> metricsGroup.newMeter(
             DEAD_LETTER_QUEUE_FAILED_PRODUCE_REQ_PER_SEC,
-            "dlq-produce",
+            "errors",
             TimeUnit.SECONDS,
             Map.of(GROUP_ID_TAG, k)
         )).mark();
