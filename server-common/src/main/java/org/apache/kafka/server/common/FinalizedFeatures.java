@@ -19,35 +19,38 @@ package org.apache.kafka.server.common;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Represents the finalized feature levels for a Kafka cluster.
  * <p>
  * This class can be in one of three states:
  * <ul>
- *   <li>Unknown - metadata version is not yet known (use {@link #unknown()})</li>
- *   <li>KRaft version only - only metadata version is known (use {@link #fromKRaftVersion(MetadataVersion)})</li>
- *   <li>Full features - metadata version, features map, and epoch are all known (use {@link #of(MetadataVersion, Map, long)})</li>
+ *   <li>Unknown - the metadata version has not been committed yet, e.g. before a quorum is
+ *       formed. Used as the initial state in {@code FeaturesPublisher}. (use {@link #unknown()})</li>
+ *   <li>Metadata version only - the metadata version is known but no additional features or
+ *       epoch have been set. (use {@link #fromKRaftVersion(MetadataVersion)})</li>
+ *   <li>Full features - metadata version, features map, and epoch are all known. Used after
+ *       the controller has committed feature records. (use {@link #of(MetadataVersion, Map, long)})</li>
  * </ul>
  */
 public final class FinalizedFeatures {
-    private static final FinalizedFeatures UNKNOWN = new FinalizedFeatures(null, Map.of(), -1);
+    private static final FinalizedFeatures UNKNOWN = new FinalizedFeatures(Optional.empty(), Map.of(), -1);
 
-    private final MetadataVersion metadataVersion;
+    private final Optional<MetadataVersion> metadataVersion;
     private final Map<String, Short> finalizedFeatures;
     private final long finalizedFeaturesEpoch;
 
     private FinalizedFeatures(
-        MetadataVersion metadataVersion,
+        Optional<MetadataVersion> metadataVersion,
         Map<String, Short> finalizedFeatures,
         long finalizedFeaturesEpoch
     ) {
         this.metadataVersion = metadataVersion;
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
-        if (metadataVersion != null) {
-            this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
-        }
+        metadataVersion.ifPresent(mv ->
+            this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, mv.featureLevel()));
     }
 
     /**
@@ -68,7 +71,7 @@ public final class FinalizedFeatures {
      */
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
         Objects.requireNonNull(version, "version cannot be null");
-        return new FinalizedFeatures(version, Map.of(), -1);
+        return new FinalizedFeatures(Optional.of(version), Map.of(), -1);
     }
 
     /**
@@ -83,7 +86,7 @@ public final class FinalizedFeatures {
     public static FinalizedFeatures of(MetadataVersion metadataVersion, Map<String, Short> finalizedFeatures, long epoch) {
         Objects.requireNonNull(metadataVersion, "metadataVersion cannot be null");
         Objects.requireNonNull(finalizedFeatures, "finalizedFeatures cannot be null");
-        return new FinalizedFeatures(metadataVersion, finalizedFeatures, epoch);
+        return new FinalizedFeatures(Optional.of(metadataVersion), finalizedFeatures, epoch);
     }
 
     /**
@@ -92,7 +95,7 @@ public final class FinalizedFeatures {
      * @return true if the metadata version is known, false otherwise
      */
     public boolean isMetadataKnown() {
-        return metadataVersion != null;
+        return metadataVersion.isPresent();
     }
 
     /**
@@ -102,10 +105,8 @@ public final class FinalizedFeatures {
      * @throws IllegalStateException if the metadata version is unknown
      */
     public MetadataVersion metadataVersionOrThrow() {
-        if (metadataVersion == null) {
-            throw new IllegalStateException("Metadata version is unknown");
-        }
-        return metadataVersion;
+        return metadataVersion.orElseThrow(() ->
+            new IllegalStateException("Metadata version is unknown"));
     }
 
     /**
@@ -136,7 +137,7 @@ public final class FinalizedFeatures {
      * @throws IllegalStateException if this is the unknown instance
      */
     public FinalizedFeatures setFinalizedLevel(String key, short level) {
-        if (metadataVersion == null) {
+        if (metadataVersion.isEmpty()) {
             throw new IllegalStateException("Cannot set finalized level on unknown FinalizedFeatures");
         }
         if (level == (short) 0) {
