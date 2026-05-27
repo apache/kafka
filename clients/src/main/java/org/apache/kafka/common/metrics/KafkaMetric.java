@@ -135,6 +135,11 @@ public final class KafkaMetric implements Metric {
      */
     @Override
     public String toString() {
+        Class<?> cls = metricValueProvider.getClass();
+        if (cls.isSynthetic() || cls.isAnonymousClass()) {
+            return "KafkaMetric [metricName=" + metricName + "]";
+        }
+
         return "KafkaMetric [" +
                 "metricName=" + metricName +
                 ", metricValueProvider=" + metricValueProvider.getClass().getSimpleName() +

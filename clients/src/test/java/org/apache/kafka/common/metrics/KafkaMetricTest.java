@@ -84,24 +84,43 @@ public class KafkaMetricTest {
     /**
      * Verifies that toString produces a human-readable representation suitable for logging,
      * e.g. in {@link org.apache.kafka.common.metrics.MetricsReporter#metricChange(KafkaMetric)}.
-     * Note that metricValueProvider may render as a lambda reference rather than a meaningful
-     * value, but this is still a significant improvement over the default Object.toString()
-     * output (e.g. "KafkaMetric@62a7d6c6").
+     * Note that we skip the metric provider in this case, but this is still a
+     * significant improvement over the default Object.toString() output (e.g. "KafkaMetric@62a7d6c6").
      */
     @Test
     public void testToStringWithLambdaProvider() {
         Measurable metricValueProvider = (config, now) -> 0;
+        testToStringOnLambdaOrAnonymousClass(metricValueProvider);
+    }
+
+    /**
+     * Verifies that toString produces a human-readable representation suitable for logging,
+     * e.g. in {@link org.apache.kafka.common.metrics.MetricsReporter#metricChange(KafkaMetric)}.
+     * Note that we skip the metric provider in this case, but this is still a
+     * significant improvement over the default Object.toString() output (e.g. "KafkaMetric@62a7d6c6").
+     */
+    @Test
+    public void testToStringWithAnonymousClassProvider() {
+        //noinspection Convert2Lambda
+        Measurable metricValueProvider = new Measurable() {
+            @Override
+            public double measure(MetricConfig config, long now) {
+                return 0;
+            }
+        };
+        testToStringOnLambdaOrAnonymousClass(metricValueProvider);
+    }
+
+    private void testToStringOnLambdaOrAnonymousClass(Measurable metricValueProvider) {
         KafkaMetric metric = new KafkaMetric(
                 new Object(), METRIC_NAME_2, metricValueProvider, new MetricConfig(), new MockTime());
 
         String result = metric.toString();
-        assertTrue(result.startsWith(
-                "KafkaMetric [metricName=MetricName [name=request-latency-avg, "
+        assertEquals("KafkaMetric [metricName=MetricName [name=request-latency-avg, "
                 + "group=consumer-fetch-manager-metrics, "
                 + "description=The average request latency in ms, "
-                + "tags={client-id=consumer-1}], "
-                + "metricValueProvider="));
-        assertTrue(result.endsWith("]"));
+                + "tags={client-id=consumer-1}]]",
+                result);
     }
 
     @Test
