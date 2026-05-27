@@ -54,7 +54,7 @@ public class BufferPool {
     /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize.  */
     private long nonPooledAvailableMemory;
     private final Metrics metrics;
-    private final Time time;
+    protected final Time time;
     private final Sensor waitTime;
     private boolean closed;
 

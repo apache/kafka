@@ -396,7 +396,7 @@ public class RecordAccumulator {
         }
 
         MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
-        ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
+        ProducerBatch batch = newProducerBatch(new TopicPartition(topic, partition), nowMs, recordsBuilder);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
 
@@ -404,6 +404,10 @@ public class RecordAccumulator {
         incomplete.add(batch);
 
         return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
+    }
+
+    protected ProducerBatch newProducerBatch(TopicPartition topicPartition, long nowMs, MemoryRecordsBuilder recordsBuilder) {
+        return new ProducerBatch(topicPartition, recordsBuilder, nowMs);
     }
 
     private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer) {
