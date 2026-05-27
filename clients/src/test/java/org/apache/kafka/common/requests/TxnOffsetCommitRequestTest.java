@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.kafka.common.requests.TxnOffsetCommitRequest.getErrorResponse;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -133,22 +132,52 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     @Test
     @Override
     public void testGetErrorResponse() {
-        TxnOffsetCommitResponseData expectedResponse = new TxnOffsetCommitResponseData()
+        var topicOneId = Uuid.randomUuid();
+        var topicTwoId = Uuid.randomUuid();
+
+        var data = new TxnOffsetCommitRequestData()
+            .setTransactionalId("transactionalId")
+            .setGroupId(groupId)
+            .setProducerId(10L)
+            .setProducerEpoch((short) 1)
+            .setTopics(List.of(
+                new TxnOffsetCommitRequestTopic()
+                    .setTopicId(topicOneId)
+                    .setName(topicOne)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitRequestPartition()
+                            .setPartitionIndex(partitionOne)
+                            .setCommittedOffset(offset))),
+                new TxnOffsetCommitRequestTopic()
+                    .setTopicId(topicTwoId)
+                    .setName(topicTwo)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitRequestPartition()
+                            .setPartitionIndex(partitionTwo)
+                            .setCommittedOffset(offset)))));
+
+        var expectedResponseData = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
                 new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicOneId)
                     .setName(topicOne)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
-                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                            .setPartitionIndex(partitionOne))),
+                            .setPartitionIndex(partitionOne)
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))),
                 new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicTwoId)
                     .setName(topicTwo)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
-                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                            .setPartitionIndex(partitionTwo)))));
+                            .setPartitionIndex(partitionTwo)
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())))));
 
-        assertEquals(expectedResponse, getErrorResponse(builderWithGroupMetadata.data, Errors.UNKNOWN_MEMBER_ID));
+        assertEquals(expectedResponseData, TxnOffsetCommitRequest.getErrorResponse(data, Errors.UNKNOWN_MEMBER_ID));
+
+        var request = TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build();
+        var response = request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_MEMBER_ID.exception());
+        assertEquals(expectedResponseData.setThrottleTimeMs(throttleTimeMs), response.data());
     }
 
     @ParameterizedTest

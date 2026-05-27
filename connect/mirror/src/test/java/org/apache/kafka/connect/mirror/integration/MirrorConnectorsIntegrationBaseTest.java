@@ -287,6 +287,8 @@ public class MirrorConnectorsIntegrationBaseTest {
             } finally {
                 Exit.resetExitProcedure();
                 Exit.resetHaltProcedure();
+                // Shared by all CollectAllMetricsReporter instances; avoid cross-test accumulation.
+                CollectAllMetricsReporter.METRICS.clear();
             }
         }
     }
@@ -1627,6 +1629,11 @@ public class MirrorConnectorsIntegrationBaseTest {
         @Override
         public void metricChange(KafkaMetric metric) {
             METRICS.put(metric.metricName(), metric);
+        }
+
+        @Override
+        public void metricRemoval(KafkaMetric metric) {
+            METRICS.remove(metric.metricName());
         }
     }
 }

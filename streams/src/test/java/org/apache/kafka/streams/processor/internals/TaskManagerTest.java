@@ -2471,6 +2471,7 @@ public class TaskManagerTest {
         when(corruptedActive.prepareCommit(false)).thenReturn(emptyMap());
         when(corruptedActive.changelogPartitions()).thenReturn(taskId00ChangelogPartitions);
         doNothing().when(corruptedActive).suspend();
+        doNothing().when(corruptedActive).markChangelogAsCorrupted(taskId00ChangelogPartitions);
         doNothing().when(corruptedActive).postCommit(true);
         doNothing().when(corruptedActive).closeDirty();
         doNothing().when(corruptedActive).revive();
@@ -2481,21 +2482,24 @@ public class TaskManagerTest {
 
         taskManager.handleCorruption(singleton(taskId00));
 
-        // 1. verify corrupted task was closed dirty and revived
+        // 1. verify corrupted task was closed dirty and revived; markChangelogAsCorrupted precedes postCommit
         final InOrder corruptedOrder = inOrder(corruptedActive, tasks);
         corruptedOrder.verify(corruptedActive).prepareCommit(false);
         corruptedOrder.verify(corruptedActive).suspend();
+        corruptedOrder.verify(corruptedActive).markChangelogAsCorrupted(taskId00ChangelogPartitions);
         corruptedOrder.verify(corruptedActive).postCommit(true);
         corruptedOrder.verify(corruptedActive).closeDirty();
         corruptedOrder.verify(tasks).removeTask(corruptedActive);
         corruptedOrder.verify(corruptedActive).revive();
         corruptedOrder.verify(tasks).addPendingTasksToInit(Set.of(corruptedActive));
 
-        // 2. verify uncorrupted task attempted commit, failed with timeout, then was closed dirty and revived
+        // 2. verify uncorrupted task attempted commit, failed with timeout; EOS converts TimeoutException to
+        //    TaskCorruptedException so it also ends up in the corrupted path (markAsCorrupted=true)
         final InOrder uncorruptedOrder = inOrder(uncorruptedActive, producer, tasks);
         uncorruptedOrder.verify(uncorruptedActive).prepareCommit(true);
-        uncorruptedOrder.verify(producer).commitTransaction(offsets, groupMetadata); // tries to commit, throws TimeoutException
+        uncorruptedOrder.verify(producer).commitTransaction(offsets, groupMetadata); // throws TimeoutException → TaskCorruptedException
         uncorruptedOrder.verify(uncorruptedActive).suspend();
+        uncorruptedOrder.verify(uncorruptedActive).markChangelogAsCorrupted(taskId01ChangelogPartitions);
         uncorruptedOrder.verify(uncorruptedActive).postCommit(true);
         uncorruptedOrder.verify(uncorruptedActive).closeDirty();
         uncorruptedOrder.verify(tasks).removeTask(uncorruptedActive);

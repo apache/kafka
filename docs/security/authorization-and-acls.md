@@ -46,7 +46,11 @@ If you prefer that resources without any ACLs be accessible by all users (instea
 allow.everyone.if.no.acl.found=true
 ```
 
-With this setting enabled, if a resource does not have any ACLs defined, Kafka will allow access to everyone. If a resource has one or more ACLs defined, those ACL rules will be enforced as usual, regardless of the setting. One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive. 
+With this setting enabled, if a resource does not have any ACLs defined, Kafka will allow access to everyone. If a resource has one or more ACLs defined, those ACL rules will be enforced as usual, regardless of the setting.
+
+**Note:** This flag only changes behavior when **no** ACL matches the resource. It does not weaken or skip ACL checks when any ACL exists for that resource. Because any resource that still has no ACLs is effectively open to all principals, `allow.everyone.if.no.acl.found=true` is mainly useful for development, tests, or a phased rollout while you add ACLs. For production clusters, keep the default (`false`) unless you routinely ensure every sensitive resource already has explicit ACLs, including new topics and other resources created after you enable this setting.
+
+One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive.
 
 ```java-properties
 super.users=User:Bob;User:Alice

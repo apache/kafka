@@ -280,6 +280,7 @@ public class TaskManager {
 
                     // we need to enforce a checkpoint that removes the corrupted partitions
                     if (markAsCorrupted) {
+                        task.markChangelogAsCorrupted(task.changelogPartitions());
                         task.postCommit(true);
                     }
                 } catch (final RuntimeException swallow) {

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
@@ -23,6 +25,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.MessageUtil;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 
@@ -30,6 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
+
+    private final Uuid topicOneId = Uuid.randomUuid();
+    private final Uuid topicTwoId = Uuid.randomUuid();
 
     @Test
     @Override
@@ -65,16 +72,21 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
         }
     }
 
-    @Test
-    public void testBuilderAddPartition() {
-        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
-        builder.addPartition(topicOne, partitionOne, errorOne);
-        builder.addPartition(topicOne, partitionTwo, errorTwo);
-        builder.addPartition(topicTwo, partitionOne, errorOne);
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testBuilderAddPartition(boolean useTopicIds) {
+        var topicOneIdOrZero = useTopicIds ? topicOneId : Uuid.ZERO_UUID;
+        var topicTwoIdOrZero = useTopicIds ? topicTwoId : Uuid.ZERO_UUID;
 
-        TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
+        var builder = TxnOffsetCommitResponse.newBuilder(useTopicIds);
+        builder.addPartition(topicOneIdOrZero, topicOne, partitionOne, errorOne);
+        builder.addPartition(topicOneIdOrZero, topicOne, partitionTwo, errorTwo);
+        builder.addPartition(topicTwoIdOrZero, topicTwo, partitionOne, errorOne);
+
+        var expected = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicOneIdOrZero)
                     .setName(topicOne)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
@@ -84,6 +96,7 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
                             .setPartitionIndex(partitionTwo)
                             .setErrorCode(errorTwo.code()))),
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicTwoIdOrZero)
                     .setName(topicTwo)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
@@ -93,15 +106,27 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
         assertEquals(expected, builder.build().data());
     }
 
-    @Test
-    public void testBuilderAddPartitions() {
-        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
-        builder.addPartition(topicOne, partitionOne, errorOne);
-        builder.addPartition(topicOne, partitionTwo, errorOne);
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testBuilderAddPartitions(boolean useTopicIds) {
+        var topicOneIdOrZero = useTopicIds ? topicOneId : Uuid.ZERO_UUID;
 
-        TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
+        var builder = TxnOffsetCommitResponse.newBuilder(useTopicIds);
+        builder.addPartitions(
+            topicOneIdOrZero,
+            topicOne,
+            List.of(
+                new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition().setPartitionIndex(partitionOne),
+                new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition().setPartitionIndex(partitionTwo)
+            ),
+            TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition::partitionIndex,
+            errorOne
+        );
+
+        var expected = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicOneIdOrZero)
                     .setName(topicOne)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
@@ -114,47 +139,58 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
         assertEquals(expected, builder.build().data());
     }
 
-    @Test
-    public void testBuilderMergeIntoEmpty() {
-        TxnOffsetCommitResponseData newData = new TxnOffsetCommitResponseData()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testBuilderMergeIntoEmpty(boolean useTopicIds) {
+        var topicOneIdOrZero = useTopicIds ? topicOneId : Uuid.ZERO_UUID;
+
+        var newData = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicOneIdOrZero)
                     .setName(topicOne)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
                             .setPartitionIndex(partitionOne)
                             .setErrorCode(errorOne.code())))));
 
-        TxnOffsetCommitResponse response = TxnOffsetCommitResponse.newBuilder()
+        var response = TxnOffsetCommitResponse.newBuilder(useTopicIds)
             .merge(newData)
             .build();
 
         assertEquals(newData, response.data());
     }
 
-    @Test
-    public void testBuilderMergeAddsNewTopic() {
-        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
-        builder.addPartition(topicOne, partitionOne, errorOne);
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testBuilderMergeAddsNewTopic(boolean useTopicIds) {
+        var topicOneIdOrZero = useTopicIds ? topicOneId : Uuid.ZERO_UUID;
+        var topicTwoIdOrZero = useTopicIds ? topicTwoId : Uuid.ZERO_UUID;
 
-        TxnOffsetCommitResponseData newData = new TxnOffsetCommitResponseData()
+        var builder = TxnOffsetCommitResponse.newBuilder(useTopicIds);
+        builder.addPartition(topicOneIdOrZero, topicOne, partitionOne, errorOne);
+
+        var newData = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicTwoIdOrZero)
                     .setName(topicTwo)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
                             .setPartitionIndex(partitionTwo)
                             .setErrorCode(errorTwo.code())))));
 
-        TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
+        var expected = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicOneIdOrZero)
                     .setName(topicOne)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
                             .setPartitionIndex(partitionOne)
                             .setErrorCode(errorOne.code()))),
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicTwoIdOrZero)
                     .setName(topicTwo)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
@@ -164,23 +200,28 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
         assertEquals(expected, builder.merge(newData).build().data());
     }
 
-    @Test
-    public void testBuilderMergeAppendsToExistingTopic() {
-        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
-        builder.addPartition(topicOne, partitionOne, errorOne);
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testBuilderMergeAppendsToExistingTopic(boolean useTopicIds) {
+        var topicOneIdOrZero = useTopicIds ? topicOneId : Uuid.ZERO_UUID;
 
-        TxnOffsetCommitResponseData newData = new TxnOffsetCommitResponseData()
+        var builder = TxnOffsetCommitResponse.newBuilder(useTopicIds);
+        builder.addPartition(topicOneIdOrZero, topicOne, partitionOne, errorOne);
+
+        var newData = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicOneIdOrZero)
                     .setName(topicOne)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
                             .setPartitionIndex(partitionTwo)
                             .setErrorCode(errorTwo.code())))));
 
-        TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
+        var expected = new TxnOffsetCommitResponseData()
             .setTopics(List.of(
                 new TxnOffsetCommitResponseTopic()
+                    .setTopicId(topicOneIdOrZero)
                     .setName(topicOne)
                     .setPartitions(List.of(
                         new TxnOffsetCommitResponsePartition()
@@ -193,11 +234,11 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
         assertEquals(expected, builder.merge(newData).build().data());
     }
 
-    @Test
-    public void testTopicNameBuilderRejectsNullTopicName() {
-        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testBuilderRejectsNullKey(boolean useTopicIds) {
+        var builder = TxnOffsetCommitResponse.newBuilder(useTopicIds);
         assertThrows(IllegalArgumentException.class,
-            () -> builder.addPartition(null, partitionOne, errorOne));
+            () -> builder.addPartition(useTopicIds ? null : Uuid.ZERO_UUID, useTopicIds ? topicOne : null, partitionOne, errorOne));
     }
-
 }

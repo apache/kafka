@@ -69,6 +69,7 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
                 }
             }
         }
+        accessor.commitStagedWrites();
     }
 
     @Override

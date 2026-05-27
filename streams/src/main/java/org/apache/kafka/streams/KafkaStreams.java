@@ -1036,7 +1036,9 @@ public class KafkaStreams implements AutoCloseable {
             globalStreamThread.setStateListener(streamStateListener);
         }
 
-        queryableStoreProvider = new QueryableStoreProvider(globalStateStoreProvider);
+        queryableStoreProvider = new QueryableStoreProvider(
+            globalStateStoreProvider,
+            applicationConfigs::defaultInteractiveQueryIsolationLevel);
         for (int i = 1; i <= numStreamThreads; i++) {
             createAndAddStreamThread(cacheSizePerThread, i);
         }
@@ -2123,7 +2125,10 @@ public class KafkaStreams implements AutoCloseable {
                                     request.isRequireActive()
                                         ? PositionBound.unbounded()
                                         : request.getPositionBound(),
-                                    new QueryConfig(request.executionInfoEnabled())
+                                    new QueryConfig(
+                                        request.executionInfoEnabled(),
+                                        request.isolationLevel()
+                                            .orElseGet(applicationConfigs::defaultInteractiveQueryIsolationLevel))
                                 );
                                 result.addResult(partition, r);
                             }
