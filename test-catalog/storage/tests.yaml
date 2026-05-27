@@ -896,9 +896,11 @@ org.apache.kafka.tiered.storage.integration.DeleteTopicTest:
 - testDeleteTopicWithClassicGroupProtocol
 - testDeleteTopicWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.DisableRemoteLogOnTopicTest:
-- executeTieredStorageTest
+- testDisableRemoteLogOnTopicWithClassicGroupProtocol
+- testDisableRemoteLogOnTopicWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.EnableRemoteLogOnTopicTest:
-- executeTieredStorageTest
+- testEnableRemoteLogOnTopicWithClassicGroupProtocol
+- testEnableRemoteLogOnTopicWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.FetchFromLeaderWithCorruptedCheckpointTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.ListOffsetsTest:
@@ -916,9 +918,11 @@ org.apache.kafka.tiered.storage.integration.ReassignReplicaMoveAndExpandTest:
 - testReassignReplicaMoveWithClassicGroupProtocol
 - testReassignReplicaMoveWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.ReassignReplicaShrinkTest:
-- executeTieredStorageTest
+- testReassignReplicaShrinkWithClassicGroupProtocol
+- testReassignReplicaShrinkWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.RollAndOffloadActiveSegmentTest:
-- executeTieredStorageTest
+- testRollAndOffloadActiveSegmentWithClassicGroupProtocol
+- testRollAndOffloadActiveSegmentWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.TransactionsExpirationTest:
 - testFatalErrorAfterInvalidProducerIdMappingWithTV1
 - testFatalErrorAfterInvalidProducerIdMappingWithTV2

@@ -1338,6 +1338,9 @@ org.apache.kafka.connect.storage.MemoryStatusBackingStoreTest:
 - deleteTaskStatus
 - putAndGetConnectorStatus
 - putAndGetTaskStatus
+org.apache.kafka.connect.storage.OffsetStorageReaderTest:
+- testClosingOffsetReaderWhenOffsetStoreHangs
+- testClosingOffsetReaderWhenOffsetStoreHangsAndHasIncompleteFutures
 org.apache.kafka.connect.storage.OffsetStorageWriterTest:
 - testAlreadyFlushing
 - testCancelAfterAwaitFlush
