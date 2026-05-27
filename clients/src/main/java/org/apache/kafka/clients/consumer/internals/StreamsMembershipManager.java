@@ -586,9 +586,11 @@ public class StreamsMembershipManager implements RequestManager {
      */
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
-            log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
-                    "not known/available). Member {} with epoch {} will transition to {}.",
-                memberId, memberEpoch, MemberState.UNSUBSCRIBED);
+            if (isLeavingGroup()) {
+                log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
+                        "not known/available). Member {} with epoch {} will transition to {}.",
+                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
+            }
             transitionTo(MemberState.UNSUBSCRIBED);
             maybeCompleteLeaveInProgress();
         }
