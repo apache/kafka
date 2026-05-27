@@ -854,20 +854,22 @@ org.apache.kafka.metadata.authorizer.StandardAuthorizerTest:
 - testSimpleAuthorizations
 - testStartWithEarlyStartListeners
 - testTopicAclWithOperationAll
-org.apache.kafka.metadata.bootstrap.BootstrapDirectoryTest:
-- testMissingDirectory
-- testReadFromConfigurationFile
-- testReadFromEmptyConfiguration
 org.apache.kafka.metadata.bootstrap.BootstrapMetadataTest:
 - testCopyWithModifiedFeatureRecord
 - testCopyWithNewFeatureRecord
 - testFeatureLevelForFeature
 - testFeatureLevelForFeatureThatIsNotSet
 - testFeatureLevelForMetadataVersion
+- testFromCheckpointFileNotFound
+- testFromDirectoryWithLegacyBootstrapCheckpoint
 - testFromRecordsList
 - testFromRecordsListWithOldMetadataVersion
 - testFromRecordsListWithoutMetadataVersion
 - testFromVersion
+- testFromVersions
+- testFromVersionsExcludesZeroLevelFeatures
+- testMissingDirectory
+- testReadFromEmptyDirectory
 org.apache.kafka.metadata.placement.PartitionAssignmentTest:
 - testConsistentEqualsAndHashCode
 - testPartitionAssignmentReplicas
@@ -913,6 +915,7 @@ org.apache.kafka.metadata.storage.FormatterTest:
 - testInvalidFeatureFlag
 - testOneDirectoryFormattedAndOthersNotFormatted
 - testOneDirectoryFormattedAndOthersNotFormattedWithIgnoreFormatted
+- testSkipsBootstrapSnapshotWhenDisabled
 - testStandaloneWithIgnoreFormatted
 org.apache.kafka.metadata.storage.ScramParserTest:
 - testConfiguredIterations

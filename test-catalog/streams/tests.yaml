@@ -2875,6 +2875,9 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldReturnNullIfProducerTelemetryDisabled
 - shouldReturnNullIfRestoreConsumerTelemetryDisabled
 - shouldReturnStandbyTaskMetadataWhileRunningState
+- shouldRouteDefaultToConsumerDefaultForStreamsProtocol
+- shouldRouteDefaultToRemainInGroupForClassicProtocol
+- shouldRouteRemainInGroupToRemainInGroupForStreamsProtocol
 - shouldShutdownTaskManagerOnClose
 - shouldShutdownTaskManagerOnCloseWithoutStart
 - shouldThrowTaskMigratedExceptionHandlingRevocation

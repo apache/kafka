@@ -186,6 +186,11 @@ org.apache.kafka.streams.integration.KTableSourceTopicRestartIntegrationTest:
 - shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosV2Enabled
 org.apache.kafka.streams.integration.KafkaStreamsCloseOptionsIntegrationTest:
 - testCloseOptions
+- testCloseOptionsDefaultClassicProtocol
+- testCloseOptionsDefaultStreamsProtocol
+- testCloseOptionsLeaveGroupStreamsProtocol
+- testCloseOptionsRemainInGroupClassicProtocol
+- testCloseOptionsRemainInGroupStreamsProtocol
 org.apache.kafka.streams.integration.KafkaStreamsTelemetryIntegrationTest:
 - passedMetricsShouldNotLeakIntoClientMetrics
 - shouldPassCorrectMetricsDynamicInstances

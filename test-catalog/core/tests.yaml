@@ -2482,8 +2482,7 @@ kafka.server.share.ShareCoordinatorMetadataCacheHelperImplTest:
 - testGetClusterNodesSuccess
 - testIsDlqAutoTopicCreateEnabledReturnsFalse
 - testIsDlqAutoTopicCreateEnabledReturnsTrue
-- testIsDlqEnabledOnTopicReturnsFalseValue
-- testIsDlqEnabledOnTopicReturnsFalseWhenConfigValueNotBoolean
+- testIsDlqEnabledOnTopicReturnsFalse
 - testIsDlqEnabledOnTopicReturnsFalseWhenTopicConfigEmpty
 - testIsDlqEnabledOnTopicReturnsFalseWhenTopicConfigNull
 - testIsDlqEnabledOnTopicReturnsTrue
@@ -2499,6 +2498,13 @@ kafka.server.share.ShareCoordinatorMetadataCacheHelperImplTest:
 - testShareGroupDlqTopicPrefixReturnsPrefix
 - testShareGroupDlqTopicReturnsEmptyWhenGroupConfigIsEmpty
 - testShareGroupDlqTopicReturnsTopicName
+- testTopicNameReturnsEmptyOnException
+- testTopicNameReturnsEmptyWhenNotPresent
+- testTopicNameReturnsNameWhenPresent
+- testTopicPartitionDataReturnsEmptyTopicIdWhenZeroUuid
+- testTopicPartitionDataReturnsFullData
+- testTopicPartitionDataWithMissingPartitionLeader
+- testTopicPartitionDataWithoutNumPartitions
 kafka.server.share.ShareFetchUtilsTest:
 - FileRecords
 - MemoryRecords
