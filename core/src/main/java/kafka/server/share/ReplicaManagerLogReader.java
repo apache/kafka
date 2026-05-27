@@ -18,6 +18,7 @@ package kafka.server.share;
 
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
+
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.LogReader;

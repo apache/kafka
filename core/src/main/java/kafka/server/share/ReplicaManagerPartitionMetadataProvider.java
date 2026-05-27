@@ -17,8 +17,8 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-
 import kafka.server.ReplicaManager;
+
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
