@@ -108,10 +108,12 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String ATTACH_LISTENER_THREAD_PREFIX = "Attach Listener";
     private static final String PROCESS_REAPER_THREAD_PREFIX = "process reaper";
     private static final String RMI_THREAD_PREFIX = "RMI";
+    private static final String JDK_INTERNAL_CLEANERIMPL_THREAD_PREFIX = "Cleaner-";
+
     private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
     private static final Set<String> SKIPPED_THREAD_PREFIX = Set.of(METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX,
             FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX, ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX,
-            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX);
+            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX, JDK_INTERNAL_CLEANERIMPL_THREAD_PREFIX);
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
@@ -182,7 +184,9 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             }
             List<Thread> threads = detectThreadLeak.newThreads();
             assertTrue(threads.isEmpty(), "Thread leak detected: " +
-                threads.stream().map(Thread::getName).collect(Collectors.joining(", ")));
+                threads.stream().map(t -> {
+                    return t.getThreadGroup().getName() + "/" + t.getName();
+                }).collect(Collectors.joining(", ")));
         }
     }
 
