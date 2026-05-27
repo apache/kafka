@@ -958,6 +958,29 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Clears {@code StoredTopologyEpoch} (sets it to {@code -1}) only if the group's current
+     * value still equals {@code expectedStoredEpoch}. Used by the service-driven topology
+     * cleanup to avoid racing with a concurrent {@code setTopology} write: if a member
+     * re-joined the group and successfully pushed a new topology between the cleanup's
+     * eligibility scan and this write, the stored epoch has advanced and the clear must
+     * be a no-op. Missing groups and mismatched epochs both yield an empty record list.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> clearStoredTopologyEpochIfMatches(
+        String groupId,
+        int expectedStoredEpoch
+    ) {
+        try {
+            StreamsGroup group = (StreamsGroup) groupMetadataManager.group(groupId);
+            if (group.storedTopologyEpoch() != expectedStoredEpoch) {
+                return new CoordinatorResult<>(List.of());
+            }
+            return groupMetadataManager.updateStreamsGroupTopologyFields(groupId, -1, null);
+        } catch (GroupIdNotFoundException ignored) {
+            return new CoordinatorResult<>(List.of());
+        }
+    }
+
+    /**
      * Handles a ShareGroupDescribe request.
      *
      * @param groupIds      The IDs of the groups to describe.
@@ -1093,9 +1116,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * uses this list to drive {@code plugin.deleteTopology} and clear {@code StoredTopologyEpoch}
      * before the {@link #cleanupGroupMetadata} sweep can tombstone the group.
      */
-    public Set<String> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
+    public Map<String, Integer> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
         long now = time.milliseconds();
-        Set<String> result = new HashSet<>();
+        Map<String, Integer> result = new HashMap<>();
         for (String groupId : groupMetadataManager.groupIds()) {
             Group group;
             try {
@@ -1107,9 +1130,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             StreamsGroup sg =
                 (StreamsGroup) group;
             if (!sg.isEmpty()) continue;
-            if (sg.storedTopologyEpoch() == -1) continue;
+            int storedEpoch = sg.storedTopologyEpoch();
+            if (storedEpoch == -1) continue;
             if (!offsetMetadataManager.allOffsetsExpired(groupId, now)) continue;
-            result.add(groupId);
+            result.put(groupId, storedEpoch);
         }
         return result;
     }

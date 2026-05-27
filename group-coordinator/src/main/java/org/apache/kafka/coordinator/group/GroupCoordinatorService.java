@@ -1620,16 +1620,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // Step 2: for each such ID, call plugin.deleteTopology. Groups whose plugin call fails are
         //         excluded from the tombstone write and reported as DELETE_FAILED with the cause in ErrorMessage.
         // Step 3: issue the delete-groups write for the remaining group IDs and merge the results.
+        // If the Step-1 read itself fails, propagate that failure: deleting tombstones without
+        // knowing which groups had stored plugin state would leak plugin-side orphans, so the
+        // entire DeleteGroups call must fail and the operator can retry.
         return runtime.<Map<String, Integer>>scheduleReadOperation(
             "list-streams-stored-topology-epochs",
             topicPartition,
             (coordinator, lastCommittedOffset) ->
                 coordinator.getStreamsGroupStoredTopologyEpochs(groupIds, lastCommittedOffset)
-        ).exceptionally(throwable -> {
-            log.warn("Failed to read stored topology epochs ahead of DeleteGroups; proceeding without plugin pre-delete.",
-                throwable);
-            return Map.of();
-        }).thenCompose(storedEpochs ->
+        ).thenCompose(storedEpochs ->
             topologyDescriptionManager.deleteBeforeGroupDelete(storedEpochs)
         ).thenCompose(pluginFailures -> {
             DeleteGroupsResponseData.DeletableGroupResultCollection results =
@@ -1654,12 +1653,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
             if (remaining.isEmpty()) {
                 return CompletableFuture.completedFuture(results);
             }
+            // Map the write outcome explicitly so that on failure we still keep the DELETE_FAILED
+            // entries already in `results` and only synthesize error rows for `remaining`.
             return runtime.<DeleteGroupsResponseData.DeletableGroupResultCollection>scheduleWriteOperation(
                 "delete-groups",
                 topicPartition,
                 coordinator -> coordinator.deleteGroups(context, remaining)
-            ).thenApply(writeResults -> {
-                writeResults.forEach(result -> results.add(result.duplicate()));
+            ).handle((writeResults, writeException) -> {
+                if (writeException != null) {
+                    DeleteGroupsResponseData.DeletableGroupResultCollection writeErrors = handleOperationException(
+                        "delete-groups",
+                        remaining,
+                        writeException,
+                        (error, __) -> DeleteGroupsRequest.getErrorResultCollection(remaining, error),
+                        log
+                    );
+                    writeErrors.forEach(result -> results.add(result.duplicate()));
+                } else {
+                    writeResults.forEach(result -> results.add(result.duplicate()));
+                }
                 return results;
             });
         }).exceptionally(exception -> handleOperationException(
@@ -2619,6 +2631,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
         final List<StreamsGroupTopologyDescription.GlobalStore> globalStores = new ArrayList<>(wire.globalStores().size());
         for (StreamsGroupTopologyDescriptionUpdateRequestData.GlobalStore gs : wire.globalStores()) {
+            if (gs.source().nodeType() != NODE_TYPE_SOURCE) {
+                throw new InvalidRequestException("GlobalStore source node " + gs.source().name()
+                    + " has nodeType=" + gs.source().nodeType() + ", expected " + NODE_TYPE_SOURCE + " (SOURCE).");
+            }
+            if (gs.processor().nodeType() != NODE_TYPE_PROCESSOR) {
+                throw new InvalidRequestException("GlobalStore processor node " + gs.processor().name()
+                    + " has nodeType=" + gs.processor().nodeType() + ", expected " + NODE_TYPE_PROCESSOR + " (PROCESSOR).");
+            }
             globalStores.add(new StreamsGroupTopologyDescription.GlobalStore(
                 (StreamsGroupTopologyDescription.Source) updateRequestNode(gs.source()),
                 (StreamsGroupTopologyDescription.Processor) updateRequestNode(gs.processor())

@@ -6724,12 +6724,12 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = builder.build(true);
 
         // First partition surfaces a group that needs cleanup; second partition is idle.
-        when(runtime.<Set<String>>scheduleReadAllOperation(
+        when(runtime.<Map<String, Integer>>scheduleReadAllOperation(
             ArgumentMatchers.eq("list-streams-groups-needing-topology-cleanup"),
             ArgumentMatchers.any()
         )).thenReturn(List.of(
-            CompletableFuture.completedFuture(Set.of("expired-streams-group")),
-            CompletableFuture.completedFuture(Set.of())
+            CompletableFuture.completedFuture(Map.of("expired-streams-group", 7)),
+            CompletableFuture.completedFuture(Map.of())
         ));
         when(plugin.deleteTopology(eq("expired-streams-group")))
             .thenReturn(CompletableFuture.completedFuture(null));
@@ -6759,8 +6759,8 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = builder.build(true);
 
         // A never-completing plugin deleteTopology keeps the first cycle in flight.
-        CompletableFuture<Set<String>> partitionRead = CompletableFuture.completedFuture(Set.of("slow-group"));
-        when(runtime.<Set<String>>scheduleReadAllOperation(
+        CompletableFuture<Map<String, Integer>> partitionRead = CompletableFuture.completedFuture(Map.of("slow-group", 3));
+        when(runtime.<Map<String, Integer>>scheduleReadAllOperation(
             ArgumentMatchers.eq("list-streams-groups-needing-topology-cleanup"),
             ArgumentMatchers.any()
         )).thenReturn(List.of(partitionRead));
@@ -6795,10 +6795,10 @@ public class GroupCoordinatorServiceTest {
         MockTimer timer = builder.timer();
         GroupCoordinatorService service = builder.build(true);
 
-        when(runtime.<Set<String>>scheduleReadAllOperation(
+        when(runtime.<Map<String, Integer>>scheduleReadAllOperation(
             ArgumentMatchers.eq("list-streams-groups-needing-topology-cleanup"),
             ArgumentMatchers.any()
-        )).thenReturn(List.of(CompletableFuture.completedFuture(Set.of("stuck-group"))));
+        )).thenReturn(List.of(CompletableFuture.completedFuture(Map.of("stuck-group", 5))));
         when(plugin.deleteTopology(eq("stuck-group")))
             .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
 

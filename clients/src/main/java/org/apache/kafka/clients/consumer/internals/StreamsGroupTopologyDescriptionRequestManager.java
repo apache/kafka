@@ -49,11 +49,14 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
     private final StreamsRebalanceData streamsRebalanceData;
     private final String groupId;
 
-    // Prevents sending a second request while one is already in-flight.
-    private boolean requestInFlight = false;
+    // Prevents sending a second request while one is already in-flight. The response callback
+    // runs on the network I/O thread and the read in poll() runs on the consumer background thread,
+    // so the field must be volatile for cross-thread visibility.
+    private volatile boolean requestInFlight = false;
 
     // Earliest time at which the next request may be sent; advanced by ThrottleTimeMs from the broker.
-    private long nextSendTimeMs = 0L;
+    // Written in the response callback (network thread), read in poll() (background thread).
+    private volatile long nextSendTimeMs = 0L;
 
     public StreamsGroupTopologyDescriptionRequestManager(
             final LogContext logContext,
