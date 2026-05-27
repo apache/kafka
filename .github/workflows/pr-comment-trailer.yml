@@ -1,0 +1,58 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Auto-appends a `Reviewers:` trailer to the PR body when someone comments on
+# the PR. This runs on the `issue_comment` event, which (unlike
+# `pull_request_review`) is NOT subject to the first-time-contributor approval
+# gate for fork PRs. As a result the trailer is updated immediately, with no
+# `action_required` step blocking the chain.
+#
+# The workflow always runs against the workflow file in the base repository's
+# default branch, so fork code is never executed here.
+
+name: PR Comment Trailer
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  append-trailer:
+    # Only PR comments. Skip bots and the PR author so the trailer is not
+    # polluted by automation noise or self-attribution.
+    if: |
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.type != 'Bot' &&
+      github.event.comment.user.login != github.event.issue.user.login
+    runs-on: ubuntu-latest
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Append reviewer trailer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REVIEWER_LOGIN: ${{ github.event.comment.user.login }}
+        run: python .github/scripts/pr-format.py
