@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.share.dlq;
+package org.apache.kafka.server.replica;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -25,7 +25,7 @@ import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import java.util.List;
 
-public interface ShareGroupDLQRecordFetcher {
+public interface ReplicaLogReader {
     /**
      * Util java record to encapsulate the input parameters
      *
@@ -53,8 +53,7 @@ public interface ShareGroupDLQRecordFetcher {
      * @param readPartitionInfo List of topic partitions and their offset into to read data from.
      * @param quota             ReplicaQuota representing any quote to be honored
      * @param readFromPurgatory Boolean representing whether data to be read from purgatory.
-     * @return A list of ReadResult util record which represents the read results. This is a list
-     * and not a map because the input could contain multiple entries for same topic partition.
+     * @return A list of ReadResult util record which represents the read results.
      */
     List<ReadResult> readFromLog(
         FetchParams params,

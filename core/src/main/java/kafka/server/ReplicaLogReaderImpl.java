@@ -15,38 +15,34 @@
  * limitations under the License.
  */
 
-package kafka.server.share.dlq;
-
-import kafka.server.ReplicaManager;
+package kafka.server;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.quota.ReplicaQuota;
-import org.apache.kafka.server.share.dlq.ShareGroupDLQRecordFetcher;
+import org.apache.kafka.server.replica.ReplicaLogReader;
 import org.apache.kafka.server.storage.log.FetchParams;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import scala.Tuple2;
 import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 
 /**
- * This class implements {@link ShareGroupDLQRecordFetcher} to proxy calls to
+ * This class implements {@link ReplicaLogReader} to proxy calls to
  * {@link ReplicaManager#readFromLog(FetchParams, Seq, ReplicaQuota, boolean)}.
  * The primary purpose is to be utilized by modules without dependency on core.
  */
-public class ShareGroupDLQRecordFetcherImpl implements ShareGroupDLQRecordFetcher {
+public final class ReplicaLogReaderImpl implements ReplicaLogReader {
     private final ReplicaManager replicaManager;
 
-    public ShareGroupDLQRecordFetcherImpl(ReplicaManager replicaManager) {
-        if (replicaManager == null) {
-            throw new IllegalArgumentException("replicaManager cannot be null");
-        }
+    public ReplicaLogReaderImpl(ReplicaManager replicaManager) {
+        Objects.requireNonNull(replicaManager, "replicaManager");
         this.replicaManager = replicaManager;
     }
-
 
     @Override
     public List<ReadResult> readFromLog(
@@ -55,6 +51,10 @@ public class ShareGroupDLQRecordFetcherImpl implements ShareGroupDLQRecordFetche
         ReplicaQuota quota,
         boolean readFromPurgatory
     ) {
+        if (readPartitionInfo.isEmpty()) {
+            return List.of();
+        }
+
         List<Tuple2<TopicIdPartition, FetchRequest.PartitionData>> readInfoTup = new ArrayList<>(readPartitionInfo.size());
         readPartitionInfo.forEach(partitionInfo -> readInfoTup.add(new Tuple2<>(
             partitionInfo.topicIdPartition(), partitionInfo.partitionData())));
@@ -67,9 +67,7 @@ public class ShareGroupDLQRecordFetcherImpl implements ShareGroupDLQRecordFetche
         );
 
         List<ReadResult> readResults = new ArrayList<>(results.size());
-        CollectionConverters.asJava(results).forEach(tup -> {
-            readResults.add(new ReadResult(tup._1, tup._2));
-        });
+        results.foreach(tup -> readResults.add(new ReadResult(tup._1, tup._2)));
         return readResults;
     }
 }
