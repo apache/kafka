@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
@@ -62,8 +63,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         @Override
         public OffsetCommitRequest build(short version) {
             if (data.groupInstanceId() != null && version < 7) {
-                throw new UnsupportedVersionException("The broker offset commit api version " +
-                    version + " does not support usage of config group.instance.id.");
+                throw new UnsupportedProtocolFieldException("GroupInstanceId", apiKey().name(), version, 7);
             }
             if (version >= 10) {
                 data.topics().forEach(topic -> {

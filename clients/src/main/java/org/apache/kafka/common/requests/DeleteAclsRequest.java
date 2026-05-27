@@ -20,7 +20,7 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.message.DeleteAclsRequestData.DeleteAclsFilter;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
@@ -31,6 +31,7 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -76,9 +77,13 @@ public class DeleteAclsRequest extends AbstractRequest {
                 // to LITERAL. Note that the wildcard `*` is considered `LITERAL` for compatibility reasons.
                 if (patternType == PatternType.ANY)
                     filter.setPatternTypeFilter(PatternType.LITERAL.code());
-                else if (patternType != PatternType.LITERAL)
-                    throw new UnsupportedVersionException("Version 0 does not support pattern type " +
-                            patternType + " (only LITERAL and ANY are supported)");
+                else if (patternType != PatternType.LITERAL) {
+                    String unsupportedTypes = Arrays.stream(PatternType.values())
+                        .filter(type -> type != PatternType.ANY && type != PatternType.LITERAL)
+                        .map(PatternType::name)
+                        .collect(Collectors.joining(","));
+                    throw new UnsupportedProtocolFieldException(unsupportedTypes, apiKey().name(), version(), 1);
+                }
             }
         }
 

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -100,12 +101,14 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         String errorMessage = exception.getMessage();
         if (exception instanceof UnsupportedVersionException) {
             String message = CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
-            if (errorMessage.equals(REGEX_RESOLUTION_NOT_SUPPORTED_MSG)) {
+            if (exception instanceof UnsupportedProtocolFieldException) {
                 message = REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
                 logger.error("{} regex resolution not supported: {}", heartbeatRequestName(), message);
             } else {
                 logger.error("{} failed due to unsupported version while sending request: {}", heartbeatRequestName(), errorMessage);
             }
+            // Surface the parent type here: handleFatalFailure propagates this via BackgroundEvent
+            // to the user-facing API. Propagating the subclass would be a user-visible behavior change.
             handleFatalFailure(new UnsupportedVersionException(message, exception));
             errorHandled = true;
         }
