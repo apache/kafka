@@ -1577,6 +1577,7 @@ public class StoreChangelogReaderTest {
         setupStandbyStateManager();
         setupStoreMetadata();
         setupStore();
+        // standby fixture has a null taskId, so the predicate looks up tasks.get(null)
         @SuppressWarnings("unchecked")
         final Map<TaskId, Task> mockTasks = mock(Map.class);
         when(mockTasks.get(null)).thenReturn(mock(Task.class));
@@ -1623,6 +1624,7 @@ public class StoreChangelogReaderTest {
         setupStandbyStateManager();
         setupStoreMetadata();
         setupStore();
+        // standby fixture has a null taskId, so the predicate looks up tasks.get(null)
         @SuppressWarnings("unchecked")
         final Map<TaskId, Task> mockTasks = mock(Map.class);
         when(mockTasks.get(null)).thenReturn(mock(Task.class));
