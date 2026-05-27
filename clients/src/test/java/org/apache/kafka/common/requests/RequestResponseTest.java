@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedProtocolFieldException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
@@ -683,8 +684,8 @@ public class RequestResponseTest {
 
     @Test
     public void testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas() {
-        final UnsupportedVersionException exception = assertThrows(
-            UnsupportedVersionException.class, () -> {
+        final UnsupportedProtocolFieldException exception = assertThrows(
+            UnsupportedProtocolFieldException.class, () -> {
                 CreateTopicsRequestData data = new CreateTopicsRequestData()
                     .setTimeoutMs(123)
                     .setValidateOnly(false);
@@ -699,8 +700,7 @@ public class RequestResponseTest {
 
                 new Builder(data).build((short) 3);
             });
-        assertTrue(exception.getMessage().contains("supported in CreateTopicRequest version 4+"));
-        assertTrue(exception.getMessage().contains("[foo, bar]"));
+        assertTrue(exception.getMessage().contains("does not support [foo,bar] in CREATE_TOPICS API version 3"));
     }
 
     @Test
