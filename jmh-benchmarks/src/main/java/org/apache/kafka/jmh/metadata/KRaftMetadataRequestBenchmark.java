@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.metadata;
 
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
-import kafka.server.AutoTopicCreationManager;
 import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
@@ -57,6 +56,7 @@ import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.AutoTopicCreationManager;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.FetchManager;
 import org.apache.kafka.server.SimpleApiVersionManager;

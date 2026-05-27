@@ -1365,7 +1365,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 ### group.protocol
 
-> The group protocol used by the Kafka Streams client used for coordination. It determines how the client will communicate with the Kafka brokers and other clients in the same group. The default value is `"classic"`, which is the classic consumer group protocol. Can be set to `"streams"` (requires broker-side enablement) to enable the new Kafka Streams group protocol. Note that the "streams" rebalance protocol is an Early Access feature and should not be used in production. 
+> The group protocol used by the Kafka Streams client used for coordination. It determines how the client will communicate with the Kafka brokers and other clients in the same group. The default value is `"classic"`, which is the classic consumer group protocol. Can be set to `"streams"` (requires broker-side enablement) to enable the new Kafka Streams group protocol.
 
 ### rack.aware.assignment.non_overlap_cost
 
