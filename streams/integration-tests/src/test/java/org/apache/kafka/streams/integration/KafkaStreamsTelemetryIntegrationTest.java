@@ -284,6 +284,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsApplicationProperties = props(groupProtocol);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
 
+        shouldPassMetrics(topology, FIRST_INSTANCE_CLIENT);
+        shouldPassMetrics(topology, SECOND_INSTANCE_CLIENT);
+    }
+
+    private void shouldPassMetrics(final Topology topology, final int clientInstance) throws Exception {
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
@@ -295,8 +300,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
 
 
-            final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).passedMetrics().stream().map(KafkaMetric::metricName).toList();
-            final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName).toList();
+            final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(clientInstance).passedMetrics().stream().map(KafkaMetric::metricName).toList();
+            final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(clientInstance).passedMetrics.stream().map(KafkaMetric::metricName).toList();
 
 
             assertEquals(streamsThreadMetrics.size(), consumerPassedStreamThreadMetricNames.size());

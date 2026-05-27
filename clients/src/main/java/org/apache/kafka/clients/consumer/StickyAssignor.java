@@ -23,11 +23,11 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -230,7 +230,11 @@ public class StickyAssignor extends AbstractStickyAssignor {
     static ByteBuffer serializeTopicPartitionAssignment(MemberData memberData) {
         Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA_V1);
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(memberData.partitions).entrySet()) {
+        var partitionsByTopic = new HashMap<String, List<Integer>>();
+        for (TopicPartition tp : memberData.partitions) {
+            partitionsByTopic.computeIfAbsent(tp.topic(), t -> new ArrayList<>()).add(tp.partition());
+        }
+        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
             Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT);
             topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
             topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
@@ -272,4 +276,5 @@ public class StickyAssignor extends AbstractStickyAssignor {
         Optional<Integer> generation = struct.hasField(GENERATION_KEY_NAME) ? Optional.of(struct.getInt(GENERATION_KEY_NAME)) : Optional.empty();
         return new MemberData(partitions, generation);
     }
+
 }

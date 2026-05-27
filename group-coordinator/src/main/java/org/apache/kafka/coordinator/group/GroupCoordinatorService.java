@@ -79,10 +79,11 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorBackgroundThreadPoolExecutor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
@@ -119,6 +120,7 @@ import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParamet
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.PartitionMetadataClient;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
@@ -138,7 +140,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -259,6 +261,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 coordinatorRuntimeMetrics
             );
 
+            ExecutorService executorService = new CoordinatorBackgroundThreadPoolExecutor(
+                "group-coordinator-background-",
+                config.numBackgroundThreads(),
+                time,
+                coordinatorRuntimeMetrics
+            );
+
             CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime =
                 new CoordinatorRuntime.Builder<GroupCoordinatorShard, CoordinatorRecord>()
                     .withTime(time)
@@ -275,7 +284,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withSerializer(new GroupCoordinatorRecordSerde())
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
-                    .withExecutorService(Executors.newSingleThreadExecutor())
+                    .withExecutorService(executorService)
                     .withCachedBufferMaxBytesSupplier(config::cachedBufferMaxBytes)
                     .build();
 
@@ -757,7 +766,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         Map<Integer, PartitionErrorData> partitionErrors =
                             Optional.ofNullable(topicPartitionErrorsMap)
                                 .map(map -> map.get(topic.topicId()))
-                                .orElse(Collections.emptyMap());
+                                .orElse(Map.of());
                         PartitionErrorData error = partitionErrors.get(partition.partitionIndex());
                         if (error == null) {
                             partitionData = partition.duplicate();
@@ -2178,11 +2187,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         short transactionVersion
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
         if (!tp.topic().equals(Topic.GROUP_METADATA_TOPIC_NAME)) {
-            return FutureUtils.failedFuture(new IllegalStateException(
+            return CompletableFuture.failedFuture(new IllegalStateException(
                 "Completing a transaction for " + tp + " is not expected"
             ));
         }

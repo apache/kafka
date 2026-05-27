@@ -51,8 +51,8 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
@@ -457,7 +457,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static class Builder {
-        private MockTime time = new MockTime(0, 0, 0);
+        private MockTime time = new MockTime(0, 1000, 1000);
         private final MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();
@@ -560,7 +560,9 @@ public class GroupMetadataManagerTestContext {
                 StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(builder.groupId());
                 if (group.topology().isPresent()) {
                     group.setConfiguredTopology(InternalTopicManager.configureTopics(
-                        new LogContext(),
+                        logContext.logger(InternalTopicManager.class),
+                        builder.groupId(),
+                        "",
                         0,
                         group.topology().get(),
                         metadataImage,

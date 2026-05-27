@@ -36,7 +36,7 @@ public class ShareAcknowledgementEvent {
     public ShareAcknowledgementEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
                                      boolean checkForRenewAcknowledgements,
                                      Optional<Integer> acquisitionLockTimeoutMs) {
-        this.acknowledgementsMap = acknowledgementsMap;
+        this.acknowledgementsMap = Map.copyOf(acknowledgementsMap);
         this.checkForRenewAcknowledgements = checkForRenewAcknowledgements;
         this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
     }

@@ -20,7 +20,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.record.internal.CompressionType
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}

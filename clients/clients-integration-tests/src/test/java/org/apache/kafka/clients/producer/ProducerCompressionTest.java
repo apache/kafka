@@ -24,7 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 
 @ClusterTestDefaults(types = {Type.KRAFT})
-class ProducerCompressionTest {
+public class ProducerCompressionTest {
 
     private final String topicName = "topic";
     private final int numRecords = 2000;
@@ -61,7 +61,7 @@ class ProducerCompressionTest {
      * Compressed messages should be able to sent and consumed correctly
      */
     @ClusterTest
-    void testCompression(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+    public void testCompression(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         for (CompressionType compression : CompressionType.values()) {
             processCompressionTest(cluster, compression);
         }

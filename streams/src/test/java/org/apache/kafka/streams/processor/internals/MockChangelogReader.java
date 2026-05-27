@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
@@ -89,6 +90,12 @@ public class MockChangelogReader implements ChangelogReader {
         for (final TopicPartition partition : partitions) {
             restoredOffsets.remove(partition);
         }
+    }
+
+    @Override
+    public void unregister(final Collection<TopicPartition> partitions,
+                           final SuspendReason reason) {
+        unregister(partitions);
     }
 
     @Override

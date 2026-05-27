@@ -244,6 +244,11 @@ public class ConnectMetricsTest {
         }
 
         @Override
+        public String version() {
+            return "test";
+        }
+
+        @Override
         public ConfigDef config() {
             return Converter.super.config();
         }
@@ -330,6 +335,11 @@ public class ConnectMetricsTest {
         }
 
         @Override
+        public String version() {
+            return "test";
+        }
+
+        @Override
         public ConfigDef config() {
             return null;
         }
@@ -372,6 +382,11 @@ public class ConnectMetricsTest {
 
         @Override
         public void configure(Map<String, ?> configs) { }
+
+        @Override
+        public String version() {
+            return "test";
+        }
 
         @Override
         public ConfigDef config() {

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -142,6 +143,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
+                          final Headers headers,
                           final Position position) {
     }
 

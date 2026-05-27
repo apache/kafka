@@ -34,9 +34,9 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -44,6 +44,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -126,7 +127,7 @@ public class OffsetFetcher {
 
         try {
             Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
-                    timer, true).fetchedOffsets;
+                    timer, true, false).fetchedOffsets;
 
             return buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
         } finally {
@@ -136,7 +137,8 @@ public class OffsetFetcher {
 
     private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                  Timer timer,
-                                                 boolean requireTimestamps) {
+                                                 boolean requireTimestamps,
+                                                 boolean updatePartitionEndOffsetsFlag) {
         ListOffsetResult result = new ListOffsetResult();
         if (timestampsToSearch.isEmpty())
             return result;
@@ -153,11 +155,17 @@ public class OffsetFetcher {
                         remainingToSearch.keySet().retainAll(value.partitionsToRetry);
 
                         offsetFetcherUtils.updateSubscriptionState(value.fetchedOffsets, isolationLevel);
+
+                        if (updatePartitionEndOffsetsFlag)
+                            offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
                     }
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
+                    if (updatePartitionEndOffsetsFlag)
+                        offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
+
                     if (!(e instanceof RetriableException)) {
                         throw future.exception();
                     }
@@ -185,23 +193,49 @@ public class OffsetFetcher {
     }
 
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Timer timer) {
-        return beginningOrEndOffset(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timer);
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timer, false);
     }
 
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer) {
-        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer);
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer, false);
+    }
+
+    public OptionalLong currentLag(TopicPartition topicPartition) {
+        final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
+
+        // if the log end offset is not known and hence cannot return lag and there is
+        // no in-flight list offset requested yet,
+        // issue a list offset request for that partition so that next time
+        // we may get the answer; we do not need to wait for the return value
+        // since we would not try to poll the network client synchronously
+        if (lag == null) {
+            if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
+                    offsetFetcherUtils.maybeSetPartitionEndOffsetRequest(topicPartition)) {
+                beginningOrEndOffset(
+                    Set.of(topicPartition),
+                    ListOffsetsRequest.LATEST_TIMESTAMP,
+                    time.timer(0L),
+                    true
+                );
+            }
+
+            return OptionalLong.empty();
+        }
+
+        return OptionalLong.of(lag);
     }
 
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
                                                            long timestamp,
-                                                           Timer timer) {
+                                                           Timer timer,
+                                                           boolean updatePartitionEndOffsetsFlag) {
         metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
             Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
                     .distinct()
                     .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
 
-            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false);
+            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false, updatePartitionEndOffsetsFlag);
 
             return result.fetchedOffsets.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
@@ -213,8 +247,12 @@ public class OffsetFetcher {
     private void resetPositionsAsync(Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
         Map<TopicPartition, Long> partitionResetTimestamps = partitionAutoOffsetResetStrategyMap.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
+        Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
-                groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
+                groupListOffsetRequests(partitionResetTimestamps, partitionsToRetry);
+        if (!partitionsToRetry.isEmpty()) {
+            metadata.requestUpdate(false);
+        }
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
             final Map<TopicPartition, ListOffsetsPartition> resetTimestamps = entry.getValue();
@@ -379,7 +417,7 @@ public class OffsetFetcher {
                 }
             }
         }
-        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap);
+        return offsetFetcherUtils.regroupPartitionMapByNode(partitionDataMap, partitionsToRetry);
     }
 
     /**

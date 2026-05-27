@@ -33,11 +33,12 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
@@ -47,7 +48,6 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -84,7 +84,6 @@ public class OffsetMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private GroupMetadataManager groupMetadataManager = null;
-        private MetadataImage metadataImage = null;
         private GroupCoordinatorConfig config = null;
         private GroupCoordinatorMetricsShard metrics = null;
 
@@ -113,11 +112,6 @@ public class OffsetMetadataManager {
             return this;
         }
 
-        public Builder withMetadataImage(MetadataImage metadataImage) {
-            this.metadataImage = metadataImage;
-            return this;
-        }
-
         public Builder withGroupCoordinatorMetricsShard(GroupCoordinatorMetricsShard metrics) {
             this.metrics = metrics;
             return this;
@@ -126,7 +120,6 @@ public class OffsetMetadataManager {
         public OffsetMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
 
             if (groupMetadataManager == null) {
@@ -141,7 +134,6 @@ public class OffsetMetadataManager {
                 snapshotRegistry,
                 logContext,
                 time,
-                metadataImage,
                 groupMetadataManager,
                 config,
                 metrics
@@ -425,7 +417,6 @@ public class OffsetMetadataManager {
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
-        MetadataImage metadataImage,
         GroupMetadataManager groupMetadataManager,
         GroupCoordinatorConfig config,
         GroupCoordinatorMetricsShard metrics
@@ -515,13 +506,17 @@ public class OffsetMetadataManager {
         try {
             group = groupMetadataManager.group(request.groupId());
         } catch (GroupIdNotFoundException ex) {
-            if (request.generationId() < 0) {
+            if (request.generationIdOrMemberEpoch() < 0) {
                 // If the group does not exist and generation id is -1, the request comes from
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
                 group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
+            } else if (TxnOffsetCommitRequest.supportsGroupIdNotFoundError((short) context.requestVersion())) {
+                // From v6 onwards, GROUP_ID_NOT_FOUND is propagated directly (KIP-1319).
+                throw ex;
             } else {
+                // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
         }
@@ -530,11 +525,16 @@ public class OffsetMetadataManager {
             return group.validateOffsetCommit(
                 request.memberId(),
                 request.groupInstanceId(),
-                request.generationId(),
+                request.generationIdOrMemberEpoch(),
                 true,
                 context.requestVersion()
             );
         } catch (StaleMemberEpochException ex) {
+            if (TxnOffsetCommitRequest.supportsStaleMemberEpochError((short) context.requestVersion())) {
+                // From v6 onwards, STALE_MEMBER_EPOCH is propagated directly (KIP-1319).
+                throw ex;
+            }
+            // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
             throw Errors.ILLEGAL_GENERATION.exception();
         }
     }
@@ -689,7 +689,9 @@ public class OffsetMetadataManager {
         final long currentTimeMs = time.milliseconds();
 
         request.topics().forEach(topic -> {
-            final TxnOffsetCommitResponseTopic topicResponse = new TxnOffsetCommitResponseTopic().setName(topic.name());
+            final TxnOffsetCommitResponseTopic topicResponse = new TxnOffsetCommitResponseTopic()
+                .setName(topic.name())
+                .setTopicId(topic.topicId());
             response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
@@ -702,15 +704,20 @@ public class OffsetMetadataManager {
                     try {
                         validator.validate(
                             topic.name(),
-                            org.apache.kafka.common.Uuid.ZERO_UUID,
+                            topic.topicId(),
                             partition.partitionIndex()
                         );
                     } catch (StaleMemberEpochException ex) {
+                        if (TxnOffsetCommitRequest.supportsStaleMemberEpochError((short) context.requestVersion())) {
+                            // From v6 onwards, STALE_MEMBER_EPOCH is propagated directly (KIP-1319).
+                            throw ex;
+                        }
+                        // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
                         throw Errors.ILLEGAL_GENERATION.exception();
                     }
 
-                    log.debug("[GroupId {}] Committing transactional offsets {} for partition {}-{} from member {} with leader epoch {}.",
-                        request.groupId(), partition.committedOffset(), topic.name(), partition.partitionIndex(),
+                    log.debug("[GroupId {}] Committing transactional offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
+                        request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());
 
                     topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
@@ -718,6 +725,7 @@ public class OffsetMetadataManager {
                         .setErrorCode(Errors.NONE.code()));
 
                     final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRequest(
+                        topic.topicId(),
                         partition,
                         currentTimeMs
                     );

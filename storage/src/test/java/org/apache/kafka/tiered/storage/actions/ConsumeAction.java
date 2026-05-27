@@ -18,7 +18,7 @@ package org.apache.kafka.tiered.storage.actions;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;

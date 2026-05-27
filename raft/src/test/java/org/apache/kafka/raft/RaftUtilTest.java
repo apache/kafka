@@ -51,10 +51,10 @@ import org.apache.kafka.common.message.VoteResponseDataJsonConverter;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 

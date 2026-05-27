@@ -329,6 +329,8 @@ public class StreamsRebalanceData {
 
     private final Optional<HostInfo> endpoint;
 
+    private final Optional<String> rackId;
+
     private final Map<String, String> clientTags;
 
     private final Map<String, Subtopology> subtopologies;
@@ -343,12 +345,16 @@ public class StreamsRebalanceData {
 
     private final AtomicInteger heartbeatIntervalMs = new AtomicInteger(-1);
 
+    private final AtomicInteger taskOffsetIntervalMs = new AtomicInteger(-1);
+
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
+                                final Optional<String> rackId,
                                 final Map<String, Subtopology> subtopologies,
                                 final Map<String, String> clientTags) {
         this.processId = Objects.requireNonNull(processId, "Process ID cannot be null");
         this.endpoint = Objects.requireNonNull(endpoint, "Endpoint cannot be null");
+        this.rackId = Objects.requireNonNull(rackId, "Rack ID cannot be null");
         this.subtopologies = Map.copyOf(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null"));
         this.clientTags = Map.copyOf(Objects.requireNonNull(clientTags, "Client tags cannot be null"));
     }
@@ -359,6 +365,10 @@ public class StreamsRebalanceData {
 
     public Optional<HostInfo> endpoint() {
         return endpoint;
+    }
+
+    public Optional<String> rackId() {
+        return rackId;
     }
 
     public Map<String, String> clientTags() {
@@ -417,6 +427,16 @@ public class StreamsRebalanceData {
     /** Returns the heartbeat interval in milliseconds, or -1 if not yet set. */
     public int heartbeatIntervalMs() {
         return heartbeatIntervalMs.get();
+    }
+
+    /** Updated whenever a heartbeat response is received from the broker. */
+    public void setTaskOffsetIntervalMs(final int taskOffsetIntervalMs) {
+        this.taskOffsetIntervalMs.set(taskOffsetIntervalMs);
+    }
+
+    /** Returns the task offset interval in milliseconds, or -1 if not yet set. */
+    public int taskOffsetIntervalMs() {
+        return taskOffsetIntervalMs.get();
     }
 
 }

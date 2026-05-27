@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class HeartbeatMetricsManager {
+public class HeartbeatMetricsManager extends AbstractConsumerMetricsManager {
     // MetricName visible for testing
     final MetricName heartbeatResponseTimeMax;
     final MetricName heartbeatRate;
@@ -43,6 +43,11 @@ public class HeartbeatMetricsManager {
     }
 
     public HeartbeatMetricsManager(Metrics metrics, String metricGroupPrefix) {
+        this(new MetricsLedger(metrics), metricGroupPrefix);
+    }
+
+    private HeartbeatMetricsManager(MetricsLedger metrics, String metricGroupPrefix) {
+        super(metrics);
         final String metricGroupName = metricGroupPrefix + COORDINATOR_METRICS_SUFFIX;
         heartbeatSensor = metrics.sensor("heartbeat-latency");
         heartbeatResponseTimeMax = metrics.metricName("heartbeat-response-time-max",

@@ -22,8 +22,8 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;

@@ -39,10 +39,11 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -53,7 +54,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.ChangelogRegister;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
@@ -74,21 +74,32 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
-import org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacade;
+import org.apache.kafka.streams.state.internals.GenericReadOnlyKeyValueStoreFacade;
+import org.apache.kafka.streams.state.internals.GenericReadOnlyWindowStoreFacade;
+import org.apache.kafka.streams.state.internals.SessionStoreIteratorFacade;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ValueConverters;
 import org.apache.kafka.streams.test.TestRecord;
 
 import org.slf4j.Logger;
@@ -98,7 +109,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -438,12 +448,18 @@ public class TopologyTestDriver implements Closeable {
                 new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache, mockWallClockTime);
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
+            @SuppressWarnings("deprecation")
+            final boolean globalEnabled = streamsConfig.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
+            final ProcessingExceptionHandler processingExceptionHandler = 
+                globalEnabled ? streamsConfig.processingExceptionHandler() : null;
+
             globalStateTask = new GlobalStateUpdateTask(
                 logContext,
                 globalTopology,
                 globalProcessorContext,
                 globalStateManager,
                 new LogAndContinueExceptionHandler(),
+                processingExceptionHandler,
                 mockWallClockTime,
                 streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
             );
@@ -470,6 +486,7 @@ public class TopologyTestDriver implements Closeable {
                 TASK_ID,
                 Task.TaskType.ACTIVE,
                 StreamsConfig.EXACTLY_ONCE_V2.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
+                streamsConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                 logContext,
                 stateDirectory,
                 processorTopology.storeToChangelogTopic(),
@@ -872,10 +889,13 @@ public class TopologyTestDriver implements Closeable {
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
@@ -903,10 +923,13 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     public StateStore getStateStore(final String name) throws IllegalArgumentException {
         return getStateStore(name, true);
@@ -967,30 +990,40 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link KeyValueStore} or {@link TimestampedKeyValueStore} with the given name.
+     * Get the {@link KeyValueStore}, {@link TimestampedKeyValueStore}, or {@link TimestampedKeyValueStoreWithHeaders}
+     * with the given name.
      * The store can be a "regular" or global store.
      * <p>
-     * If the registered store is a {@link TimestampedKeyValueStore} this method will return a value-only query
-     * interface. <strong>It is highly recommended to update the code for this case to avoid bugs and to use
-     * {@link #getTimestampedKeyValueStore(String)} for full store access instead.</strong>
+     * If the registered store is a {@link TimestampedKeyValueStore} or {@link TimestampedKeyValueStoreWithHeaders}
+     * this method will return a value-only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedKeyValueStore(String)} or {@link #getTimestampedKeyValueStoreWithHeaders(String)}
+     * for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link KeyValueStore} or {@link TimestampedKeyValueStore}
-     * has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link KeyValueStore}, {@link TimestampedKeyValueStore}, or
+     * {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+            log.warn("Method #getTimestampedKeyValueStore() should be used to access a TimestampedKeyValueStoreWithHeaders.");
+            return new KeyValueStoreFacadeForHeaders<>((TimestampedKeyValueStoreWithHeaders<K, V>) store);
+        }
         if (store instanceof TimestampedKeyValueStore) {
             log.warn("Method #getTimestampedKeyValueStore() should be used to access a TimestampedKeyValueStore.");
             return new KeyValueStoreFacade<>((TimestampedKeyValueStore<K, V>) store);
@@ -999,26 +1032,63 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link TimestampedKeyValueStore} with the given name.
+     * Get the {@link TimestampedKeyValueStore} or {@link TimestampedKeyValueStoreWithHeaders} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link TimestampedKeyValueStoreWithHeaders} this method will return a value-ts-only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedKeyValueStoreWithHeaders(String)} for full store access instead.</strong>
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the key value store, or {@code null} if no {@link TimestampedKeyValueStore} or
+     * {@link TimestampedKeyValueStoreWithHeaders }has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
+     * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
+        final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+            return new TimestampedKeyValueStoreFacadeForHeaders<>((TimestampedKeyValueStoreWithHeaders<K, V>) store);
+        }
+        return store instanceof TimestampedKeyValueStore ? (TimestampedKeyValueStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link TimestampedKeyValueStoreWithHeaders} with the given name.
      * The store can be a "regular" or global store.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link TimestampedKeyValueStore} has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link TimestampedKeyValueStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
-    public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
+    public <K, V> KeyValueStore<K, ValueTimestampHeaders<V>> getTimestampedKeyValueStoreWithHeaders(final String name) {
         final StateStore store = getStateStore(name, false);
-        return store instanceof TimestampedKeyValueStore ? (TimestampedKeyValueStore<K, V>) store : null;
+        return store instanceof TimestampedKeyValueStoreWithHeaders ? (TimestampedKeyValueStoreWithHeaders<K, V>) store : null;
     }
 
     /**
@@ -1029,14 +1099,17 @@ public class TopologyTestDriver implements Closeable {
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link VersionedKeyValueStore} has been registered with the given name
+     * @return the versioned store, or {@code null} if no {@link VersionedKeyValueStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> VersionedKeyValueStore<K, V> getVersionedKeyValueStore(final String name) {
@@ -1045,30 +1118,40 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link WindowStore} or {@link TimestampedWindowStore} with the given name.
+     * Get the {@link WindowStore}, {@link TimestampedWindowStore}, or {@link TimestampedWindowStoreWithHeaders}
+     * with the given name.
      * The store can be a "regular" or global store.
      * <p>
-     * If the registered store is a {@link TimestampedWindowStore} this method will return a value-only query
-     * interface. <strong>It is highly recommended to update the code for this case to avoid bugs and to use
-     * {@link #getTimestampedWindowStore(String)} for full store access instead.</strong>
+     * If the registered store is a {@link TimestampedWindowStore} or {@link TimestampedWindowStoreWithHeaders}
+     * this method will return a value-only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedWindowStore(String)} or {@link #getTimestampedWindowStoreWithHeaders(String)}
+     * for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link WindowStore} or {@link TimestampedWindowStore}
-     * has been registered with the given name
+     * @return the window store, or {@code null} if no {@link WindowStore}, {@link TimestampedWindowStore}, or
+     * {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
         final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedWindowStoreWithHeaders) {
+            log.warn("Method #getTimestampedWindowStoreWithHeaders() should be used to access a TimestampedWindowStoreWithHeaders.");
+            return new WindowStoreFacadeForHeaders<>((TimestampedWindowStoreWithHeaders<K, V>) store);
+        }
         if (store instanceof TimestampedWindowStore) {
             log.warn("Method #getTimestampedWindowStore() should be used to access a TimestampedWindowStore.");
             return new WindowStoreFacade<>((TimestampedWindowStore<K, V>) store);
@@ -1077,49 +1160,125 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link TimestampedWindowStore} with the given name.
+     * Get the {@link TimestampedWindowStore} or {@link TimestampedWindowStoreWithHeaders} with the given name.
      * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link TimestampedWindowStoreWithHeaders}
+     * this method will return a value-ts--only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getTimestampedWindowStoreWithHeaders(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link TimestampedWindowStore} has been registered with the given name
+     * @return the window store, or {@code null} if no {@link TimestampedWindowStore} or
+     * {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, ValueAndTimestamp<V>> getTimestampedWindowStore(final String name) {
         final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedWindowStoreWithHeaders) {
+            return new TimestampedWindowStoreFacadeForHeaders<>((TimestampedWindowStoreWithHeaders<K, V>) store);
+        }
         return store instanceof TimestampedWindowStore ? (TimestampedWindowStore<K, V>) store : null;
     }
 
     /**
-     * Get the {@link SessionStore} with the given name.
+     * Get the {@link TimestampedWindowStoreWithHeaders} with the given name.
      * The store can be a "regular" or global store.
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link SessionStore} has been registered with the given name
+     * @return the window store, or {@code null} if no {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getSessionStore(String)
+     * @see #getSessionStoreWithHeaders(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> WindowStore<K, ValueTimestampHeaders<V>> getTimestampedWindowStoreWithHeaders(final String name) {
+        final StateStore store = getStateStore(name, false);
+        return store instanceof TimestampedWindowStoreWithHeaders ? (TimestampedWindowStoreWithHeaders<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link SessionStore} or {@link SessionStoreWithHeaders} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * If the registered store is a {@link SessionStoreWithHeaders}
+     * this method will return a value--only query interface.
+     * <strong>It is highly recommended to update the code for this case to avoid bugs and to use
+     * {@link #getSessionStoreWithHeaders(String)} for full store access instead.</strong>
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the session store, or {@code null} if no {@link SessionStore} or {@link SessionStoreWithHeaders}
+     * has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
+     * @see #getSessionStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
         final StateStore store = getStateStore(name, false);
+        if (store instanceof SessionStoreWithHeaders) {
+            return new SessionStoreFacade<>((SessionStoreWithHeaders<K, V>) store);
+        }
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link SessionStoreWithHeaders} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the session store, or {@code null} if no {@link SessionStoreWithHeaders} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getVersionedKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
+     * @see #getSessionStore(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> SessionStoreWithHeaders<K, V> getSessionStoreWithHeaders(final String name) {
+        final StateStore store = getStateStore(name, false);
+        return store instanceof SessionStoreWithHeaders ? (SessionStoreWithHeaders<K, V>) store : null;
     }
 
     /**
@@ -1148,17 +1307,6 @@ public class TopologyTestDriver implements Closeable {
         producer.close();
         consumer.close();
         stateDirectory.clean();
-    }
-
-    static class MockChangelogRegister implements ChangelogRegister {
-        @Override
-        public void register(final TopicPartition partition, final ProcessorStateManager stateManager) { }
-
-        @Override
-        public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) { }
-
-        @Override
-        public void unregister(final Collection<TopicPartition> partitions) { }
     }
 
     static class MockTime implements Time {
@@ -1200,15 +1348,23 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    static class KeyValueStoreFacade<K, V> extends ReadOnlyKeyValueStoreFacade<K, V> implements KeyValueStore<K, V> {
+    static class KeyValueStoreFacade<K, V> extends GenericReadOnlyKeyValueStoreFacade<K, ValueAndTimestamp<V>, V> implements KeyValueStore<K, V> {
+        private final TimestampedKeyValueStore<K, V> inner;
 
-        public KeyValueStoreFacade(final TimestampedKeyValueStore<K, V> inner) {
-            super(inner);
+        public KeyValueStoreFacade(final TimestampedKeyValueStore<K, V> store) {
+            super(store, ValueConverters.extractValue());
+            this.inner = store;
         }
 
         @Override
         public void init(final StateStoreContext stateStoreContext, final StateStore root) {
             inner.init(stateStoreContext, root);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void flush() {
+            inner.flush();
         }
 
         @Override
@@ -1234,8 +1390,19 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public void flush() {
-            inner.flush();
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public Long committedOffset(final TopicPartition topicPartition) {
+            return inner.committedOffset(topicPartition);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public boolean managesOffsets() {
+            return inner.managesOffsets();
         }
 
         @Override
@@ -1246,6 +1413,455 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public String name() {
             return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public <R> QueryResult<R> query(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
+            return inner.query(query, positionBound, config);
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+    }
+
+    static class WindowStoreFacade<K, V> extends GenericReadOnlyWindowStoreFacade<K, ValueAndTimestamp<V>, V> implements WindowStore<K, V> {
+        private final TimestampedWindowStore<K, V> inner;
+
+        public WindowStoreFacade(final TimestampedWindowStore<K, V> store) {
+            super(store, ValueConverters.extractValue());
+            this.inner = store;
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            inner.init(stateStoreContext, root);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void flush() {
+            inner.flush();
+        }
+
+        @Override
+        public WindowStoreIterator<V> fetch(final K key,
+                                            final long timeFrom,
+                                            final long timeTo) {
+            return fetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
+                                                         final long timeTo) {
+            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                      final K keyTo,
+                                                      final long timeFrom,
+                                                      final long timeTo) {
+            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<V> backwardFetch(final K key,
+                                                     final long timeFrom,
+                                                     final long timeTo) {
+            return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
+                                                                 final long timeTo) {
+            return backwardFetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                              final K keyTo,
+                                                              final long timeFrom,
+                                                              final long timeTo) {
+            return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public void put(final K key,
+                        final V value,
+                        final long windowStartTimestamp) {
+            inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP), windowStartTimestamp);
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public Long committedOffset(final TopicPartition topicPartition) {
+            return inner.committedOffset(topicPartition);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public boolean managesOffsets() {
+            return inner.managesOffsets();
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public <R> QueryResult<R> query(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
+            return inner.query(query, positionBound, config);
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+    }
+
+    static class WindowStoreFacadeForHeaders<K, V> extends GenericReadOnlyWindowStoreFacade<K, ValueTimestampHeaders<V>, V> implements WindowStore<K, V> {
+        private final TimestampedWindowStoreWithHeaders<K, V> inner;
+
+        public WindowStoreFacadeForHeaders(final TimestampedWindowStoreWithHeaders<K, V> store) {
+            super(store, ValueConverters.extractValueFromHeaders());
+            this.inner = store;
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            inner.init(stateStoreContext, root);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void flush() {
+            inner.flush();
+        }
+
+        @Override
+        public WindowStoreIterator<V> fetch(final K key,
+                                            final long timeFrom,
+                                            final long timeTo) {
+            return fetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
+                                                         final long timeTo) {
+            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                      final K keyTo,
+                                                      final long timeFrom,
+                                                      final long timeTo) {
+            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<V> backwardFetch(final K key,
+                                                    final long timeFrom,
+                                                    final long timeTo) {
+            return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
+                                                                 final long timeTo) {
+            return backwardFetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                              final K keyTo,
+                                                              final long timeFrom,
+                                                              final long timeTo) {
+            return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public void put(final K key,
+                        final V value,
+                        final long windowStartTimestamp) {
+            inner.put(key, ValueTimestampHeaders.make(value, ConsumerRecord.NO_TIMESTAMP, new RecordHeaders()), windowStartTimestamp);
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public Long committedOffset(final TopicPartition topicPartition) {
+            return inner.committedOffset(topicPartition);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public boolean managesOffsets() {
+            return inner.managesOffsets();
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public <R> QueryResult<R> query(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
+            return inner.query(query, positionBound, config);
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+    }
+
+    static class TimestampedWindowStoreFacadeForHeaders<K, V> extends GenericReadOnlyWindowStoreFacade<K, ValueTimestampHeaders<V>, ValueAndTimestamp<V>> implements WindowStore<K, ValueAndTimestamp<V>> {
+        private final TimestampedWindowStoreWithHeaders<K, V> inner;
+
+        public TimestampedWindowStoreFacadeForHeaders(final TimestampedWindowStoreWithHeaders<K, V> store) {
+            super(store, ValueConverters.extractValueAndTimestampFromHeaders());
+            this.inner = store;
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            inner.init(stateStoreContext, root);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void flush() {
+            inner.flush();
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public Long committedOffset(final TopicPartition topicPartition) {
+            return inner.committedOffset(topicPartition);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public boolean managesOffsets() {
+            return inner.managesOffsets();
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public <R> QueryResult<R> query(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
+            return inner.query(query, positionBound, config);
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+
+        @Override
+        public void put(final K key, final ValueAndTimestamp<V> value, final long windowStartTimestamp) {
+            inner.put(key, ValueTimestampHeaders.make(value.value(), value.timestamp(), null), windowStartTimestamp);
+        }
+
+        @Override
+        public WindowStoreIterator<ValueAndTimestamp<V>> fetch(final K key, final long timeFrom, final long timeTo) {
+            return fetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetch(final K keyFrom, final K keyTo, final long timeFrom, final long timeTo) {
+            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetchAll(final long timeFrom, final long timeTo) {
+            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+    }
+
+
+    static class SessionStoreFacade<K, V> implements SessionStore<K, V> {
+        private final SessionStoreWithHeaders<K, V> inner;
+
+        SessionStoreFacade(final SessionStoreWithHeaders<K, V> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> findSessions(final K key,
+                                                             final long earliestSessionEndTime,
+                                                             final long latestSessionStartTime) {
+            return new SessionStoreIteratorFacade<>(inner.findSessions(key, earliestSessionEndTime, latestSessionStartTime));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K key,
+                                                                     final long earliestSessionEndTime,
+                                                                     final long latestSessionStartTime) {
+            return new SessionStoreIteratorFacade<>(inner.backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> findSessions(final K keyFrom,
+                                                             final K keyTo,
+                                                             final long earliestSessionEndTime,
+                                                             final long latestSessionStartTime) {
+            return new SessionStoreIteratorFacade<>(inner.findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K keyFrom,
+                                                                     final K keyTo,
+                                                                     final long earliestSessionEndTime,
+                                                                     final long latestSessionStartTime) {
+            return new SessionStoreIteratorFacade<>(inner.backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime));
+        }
+
+        @Override
+        public V fetchSession(final K key,
+                              final long sessionStartTime,
+                              final long sessionEndTime) {
+            return AggregationWithHeaders.getAggregationOrNull(inner.fetchSession(key, sessionStartTime, sessionEndTime));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> findSessions(final long earliestSessionEndTime,
+                                                             final long latestSessionEndTime) {
+            return new SessionStoreIteratorFacade<>(inner.findSessions(earliestSessionEndTime, latestSessionEndTime));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
+            return new SessionStoreIteratorFacade<>(inner.fetch(key));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K key) {
+            return new SessionStoreIteratorFacade<>(inner.backwardFetch(key));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom, final K keyTo) {
+            return new SessionStoreIteratorFacade<>(inner.fetch(keyFrom, keyTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom, final K keyTo) {
+            return new SessionStoreIteratorFacade<>(inner.backwardFetch(keyFrom, keyTo));
+        }
+
+        @Override
+        public void remove(final Windowed<K> sessionKey) {
+            inner.remove(sessionKey);
+        }
+
+        @Override
+        public void put(final Windowed<K> sessionKey, final V aggregate) {
+            inner.put(sessionKey, AggregationWithHeaders.make(aggregate, new RecordHeaders()));
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            inner.init(stateStoreContext, root);
+        }
+
+        @Override
+        public void close() {
+            inner.close();
         }
 
         @Override
@@ -1264,10 +1880,17 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
-    static class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> implements WindowStore<K, V> {
+    static class KeyValueStoreFacadeForHeaders<K, V> extends GenericReadOnlyKeyValueStoreFacade<K, ValueTimestampHeaders<V>, V> implements KeyValueStore<K, V> {
+        private final TimestampedKeyValueStoreWithHeaders<K, V> inner;
 
-        public WindowStoreFacade(final TimestampedWindowStore<K, V> store) {
-            super(store);
+        public KeyValueStoreFacadeForHeaders(final TimestampedKeyValueStoreWithHeaders<K, V> store) {
+            super(store, ValueConverters.extractValueFromHeaders());
+            this.inner = store;
+        }
+
+        @Override
+        public V get(final K key) {
+            return ValueTimestampHeaders.getValueOrNull(inner.get(key));
         }
 
         @Override
@@ -1275,59 +1898,53 @@ public class TopologyTestDriver implements Closeable {
             inner.init(stateStoreContext, root);
         }
 
-        @Override
-        public void put(final K key,
-                        final V value,
-                        final long windowStartTimestamp) {
-            inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP), windowStartTimestamp);
-        }
-
-        @Override
-        public WindowStoreIterator<V> fetch(final K key,
-                                            final long timeFrom,
-                                            final long timeTo) {
-            return fetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
-        }
-
-        @Override
-        public WindowStoreIterator<V> backwardFetch(final K key,
-                                                    final long timeFrom,
-                                                    final long timeTo) {
-            return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
-                                                      final K keyTo,
-                                                      final long timeFrom,
-                                                      final long timeTo) {
-            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom),
-                Instant.ofEpochMilli(timeTo));
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                              final K keyTo,
-                                                              final long timeFrom,
-                                                              final long timeTo) {
-            return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                         final long timeTo) {
-            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
-                                                                 final long timeTo) {
-            return backwardFetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
-        }
-
+        @SuppressWarnings("deprecation")
         @Override
         public void flush() {
             inner.flush();
+        }
+
+        @Override
+        public void put(final K key, final V value) {
+            inner.put(key, ValueTimestampHeaders.make(value, ConsumerRecord.NO_TIMESTAMP, null));
+        }
+
+        @Override
+        public V putIfAbsent(final K key, final V value) {
+            return ValueTimestampHeaders.getValueOrNull(inner.putIfAbsent(key, ValueTimestampHeaders.make(value, ConsumerRecord.NO_TIMESTAMP, null)));
+        }
+
+        @Override
+        public void putAll(final List<KeyValue<K, V>> entries) {
+            for (final KeyValue<K, V> entry : entries) {
+                inner.put(entry.key, ValueTimestampHeaders.make(entry.value, ConsumerRecord.NO_TIMESTAMP, null));
+            }
+        }
+
+        @Override
+        public V delete(final K key) {
+            return ValueTimestampHeaders.getValueOrNull(inner.delete(key));
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return inner.approximateNumEntries();
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public Long committedOffset(final TopicPartition topicPartition) {
+            return inner.committedOffset(topicPartition);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public boolean managesOffsets() {
+            return inner.managesOffsets();
         }
 
         @Override
@@ -1348,6 +1965,115 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public boolean isOpen() {
             return inner.isOpen();
+        }
+
+        @Override
+        public <R> QueryResult<R> query(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
+            return inner.query(query, positionBound, config);
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+    }
+
+    static class TimestampedKeyValueStoreFacadeForHeaders<K, V> extends GenericReadOnlyKeyValueStoreFacade<K, ValueTimestampHeaders<V>, ValueAndTimestamp<V>> implements KeyValueStore<K, ValueAndTimestamp<V>> {
+        private final TimestampedKeyValueStoreWithHeaders<K, V> inner;
+
+        public TimestampedKeyValueStoreFacadeForHeaders(final TimestampedKeyValueStoreWithHeaders<K, V> store) {
+            super(store, ValueConverters.extractValueAndTimestampFromHeaders());
+            this.inner = store;
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            inner.init(stateStoreContext, root);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public void flush() {
+            inner.flush();
+        }
+
+        @Override
+        public void put(final K key, final ValueAndTimestamp<V> value) {
+            inner.put(key, ValueTimestampHeaders.make(value.value(), value.timestamp(), null));
+        }
+
+        @Override
+        public ValueAndTimestamp<V> get(final K key) {
+            final ValueTimestampHeaders<V> vth = inner.get(key);
+            return vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp());
+        }
+
+        @Override
+        public ValueAndTimestamp<V> putIfAbsent(final K key, final ValueAndTimestamp<V> value) {
+            final ValueTimestampHeaders<V> result = inner.putIfAbsent(key, ValueTimestampHeaders.make(value.value(), value.timestamp(), null));
+            return result == null ? null : ValueAndTimestamp.make(result.value(), result.timestamp());
+        }
+
+        @Override
+        public void putAll(final List<KeyValue<K, ValueAndTimestamp<V>>> entries) {
+            for (final KeyValue<K, ValueAndTimestamp<V>> entry : entries) {
+                inner.put(entry.key, ValueTimestampHeaders.make(entry.value.value(), entry.value.timestamp(), null));
+            }
+        }
+
+        @Override
+        public ValueAndTimestamp<V> delete(final K key) {
+            final ValueTimestampHeaders<V> result = inner.delete(key);
+            return result == null ? null : ValueAndTimestamp.make(result.value(), result.timestamp());
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public Long committedOffset(final TopicPartition topicPartition) {
+            return inner.committedOffset(topicPartition);
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public boolean managesOffsets() {
+            return inner.managesOffsets();
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public <R> QueryResult<R> query(
+            final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config
+        ) {
+            return inner.query(query, positionBound, config);
         }
 
         @Override

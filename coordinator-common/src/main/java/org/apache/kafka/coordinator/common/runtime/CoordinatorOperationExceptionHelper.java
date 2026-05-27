@@ -35,6 +35,7 @@ public class CoordinatorOperationExceptionHelper {
      * @param handler           A function which takes an Errors and a String and builds the expected
      *                          output. The String can be null. Note that the function could further
      *                          transform the error depending on the context.
+     * @param log               The logger.
      * @return The output built by the handler.
      * @param <IN> The type of the operation input. It must be a toString'able object.
      * @param <OUT> The type of the value returned by handler.

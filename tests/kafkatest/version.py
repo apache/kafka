@@ -128,11 +128,11 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("4.3.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("4.4.0-SNAPSHOT")
 
 LATEST_STABLE_TRANSACTION_VERSION = 2
 # This should match the LATEST_PRODUCTION version defined in MetadataVersion.java
-LATEST_STABLE_METADATA_VERSION = "4.2-IV1"
+LATEST_STABLE_METADATA_VERSION = "4.3-IV0"
 
 # 2.1.x versions
 V_2_1_0 = KafkaVersion("2.1.0")
@@ -235,7 +235,8 @@ LATEST_3_8 = V_3_8_1
 # 3.9.x version
 V_3_9_0 = KafkaVersion("3.9.0")
 V_3_9_1 = KafkaVersion("3.9.1")
-LATEST_3_9 = V_3_9_1
+V_3_9_2 = KafkaVersion("3.9.2")
+LATEST_3_9 = V_3_9_2
 
 # 4.0.x version
 V_4_0_0 = KafkaVersion("4.0.0")
@@ -245,8 +246,13 @@ LATEST_4_0 = V_4_0_1
 # 4.1.x version
 V_4_1_0 = KafkaVersion("4.1.0")
 V_4_1_1 = KafkaVersion("4.1.1")
-LATEST_4_1 = V_4_1_1
+V_4_1_2 = KafkaVersion("4.1.2")
+LATEST_4_1 = V_4_1_2
 
 # 4.2.x version
 V_4_2_0 = KafkaVersion("4.2.0")
 LATEST_4_2 = V_4_2_0
+
+# 4.3.x version
+V_4_3_0 = KafkaVersion("4.3.0")
+LATEST_4_3 = V_4_3_0

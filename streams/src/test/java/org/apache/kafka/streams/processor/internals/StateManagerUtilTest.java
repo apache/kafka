@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -110,7 +110,7 @@ public class StateManagerUtilTest {
             topology, stateManager, stateDirectory, processorContext);
 
         inOrder.verify(stateManager).registerStateStores(stateStores, processorContext);
-        inOrder.verify(stateManager).initializeStoreOffsetsFromCheckpoint(true);
+        inOrder.verify(stateManager).initializeStoreOffsets(true);
         verifyNoMoreInteractions(stateManager);
     }
 
@@ -121,7 +121,7 @@ public class StateManagerUtilTest {
         when(stateDirectory.lock(taskId)).thenReturn(true);
 
         StateManagerUtil.closeStateManager(logger,
-            "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
+            "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).close();
         inOrder.verify(stateDirectory).unlock(taskId);
@@ -136,7 +136,7 @@ public class StateManagerUtilTest {
 
         final ProcessorStateException thrown = assertThrows(
             ProcessorStateException.class, () -> StateManagerUtil.closeStateManager(logger,
-                "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE));
+                "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE));
 
         // Thrown stateMgr exception will not be wrapped.
         assertEquals("state manager failed to close", thrown.getMessage());
@@ -154,7 +154,7 @@ public class StateManagerUtilTest {
         assertThrows(
             ProcessorStateException.class,
             () -> StateManagerUtil.closeStateManager(
-                logger, "logPrefix:", false, false, stateManager, stateDirectory, TaskType.ACTIVE));
+                logger, "logPrefix:", false, false, false, stateManager, stateDirectory, TaskType.ACTIVE));
 
         verify(stateDirectory).unlock(taskId);
     }
@@ -168,9 +168,10 @@ public class StateManagerUtilTest {
         when(stateManager.baseDir()).thenReturn(TestUtils.tempDirectory("state_store"));
 
         StateManagerUtil.closeStateManager(logger,
-            "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
+            "logPrefix:", false, true, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
         inOrder.verify(stateDirectory).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }
@@ -186,7 +187,7 @@ public class StateManagerUtilTest {
 
         try (MockedStatic<Utils> ignored = mockStatic(Utils.class)) {
             assertThrows(ProcessorStateException.class, () ->
-                    StateManagerUtil.closeStateManager(logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
+                    StateManagerUtil.closeStateManager(logger, "logPrefix:", false, true, false, stateManager, stateDirectory, TaskType.ACTIVE));
         }
 
         verify(stateDirectory).unlock(taskId);
@@ -205,12 +206,13 @@ public class StateManagerUtilTest {
 
             final ProcessorStateException thrown = assertThrows(
                     ProcessorStateException.class, () -> StateManagerUtil.closeStateManager(logger,
-                            "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
+                            "logPrefix:", false, true, false, stateManager, stateDirectory, TaskType.ACTIVE));
 
             assertEquals(IOException.class, thrown.getCause().getClass());
         }
 
         inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
         inOrder.verify(stateDirectory).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }
@@ -222,7 +224,7 @@ public class StateManagerUtilTest {
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         StateManagerUtil.closeStateManager(
-                logger, "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
+                logger, "logPrefix:", true, false, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).taskId();
         inOrder.verify(stateDirectory).lock(taskId);
@@ -239,7 +241,7 @@ public class StateManagerUtilTest {
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         StateManagerUtil.closeStateManager(
-                logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
+                logger, "logPrefix:", false, true, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).taskId();
         inOrder.verify(stateDirectory).lock(taskId);
@@ -247,5 +249,36 @@ public class StateManagerUtilTest {
         verify(stateManager, never()).baseDir();
         verify(stateDirectory, never()).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
+    }
+
+    @Test
+    public void testCloseStateManagerTransactionalDoesNotWipeWhenNoCorruptedStores() {
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+        when(stateManager.hasCorruptedStores()).thenReturn(false);
+
+        StateManagerUtil.closeStateManager(logger,
+            "logPrefix:", false, true, true, stateManager, stateDirectory, TaskType.ACTIVE);
+
+        inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).unlock(taskId);
+        verify(stateDirectory, never()).removeTaskOffsets(taskId);
+    }
+
+    @Test
+    public void testCloseStateManagerTransactionalWipesWhenStoresAreCorrupted() {
+        final InOrder inOrder = inOrder(stateManager, stateDirectory);
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateDirectory.lock(taskId)).thenReturn(true);
+        when(stateManager.hasCorruptedStores()).thenReturn(true);
+        when(stateManager.baseDir()).thenReturn(TestUtils.tempDirectory("state_store"));
+
+        StateManagerUtil.closeStateManager(logger,
+            "logPrefix:", false, true, true, stateManager, stateDirectory, TaskType.ACTIVE);
+
+        inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
+        inOrder.verify(stateDirectory).unlock(taskId);
     }
 }

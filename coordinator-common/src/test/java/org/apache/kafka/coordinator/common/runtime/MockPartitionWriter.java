@@ -20,7 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.VerificationGuard;

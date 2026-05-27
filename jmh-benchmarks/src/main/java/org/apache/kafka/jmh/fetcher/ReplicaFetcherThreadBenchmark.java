@@ -18,8 +18,6 @@
 package org.apache.kafka.jmh.fetcher;
 
 import kafka.cluster.Partition;
-import kafka.log.LogManager;
-import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerBlockingSender;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
@@ -29,7 +27,6 @@ import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
 
@@ -44,13 +41,13 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.RecordsSend;
+import org.apache.kafka.common.record.internal.BaseRecords;
+import org.apache.kafka.common.record.internal.RecordsSend;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.jmh.util.BenchmarkConfigUtils;
 import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.LeaderRecoveryState;
@@ -59,6 +56,8 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.network.BrokerEndPoint;
+import org.apache.kafka.server.partition.AlterPartitionManager;
+import org.apache.kafka.server.quota.ReplicaQuota;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
@@ -66,6 +65,7 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -96,7 +96,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 
@@ -230,7 +229,7 @@ public class ReplicaFetcherThreadBenchmark {
         replicaManager.shutdown(false);
         logManager.shutdown(-1L);
         scheduler.shutdown();
-        for (File dir : CollectionConverters.asJava(logManager.liveLogDirs())) {
+        for (File dir : logManager.liveLogDirs()) {
             Utils.delete(dir);
         }
     }

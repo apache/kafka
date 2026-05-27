@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.record.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
 
 public record BatchMetadata(int lastSeq, long lastOffset, int offsetDelta, long timestamp) {
 

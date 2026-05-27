@@ -57,58 +57,63 @@ The rest of this section will walk through some code to demonstrate the key step
 ### Connector Example
 
 We'll cover the `SourceConnector` as a simple example. `SinkConnector` implementations are very similar. Pick a package and class name, these examples will use the `FileStreamSourceConnector` but substitute your own class name where appropriate. In order to make the plugin discoverable at runtime, add a ServiceLoader manifest to your resources in `META-INF/services/org.apache.kafka.connect.source.SourceConnector` with your fully-qualified class name on a single line:
-    
-    
-    com.example.FileStreamSourceConnector
+
+```text
+com.example.FileStreamSourceConnector
+```
 
 Create a class that inherits from `SourceConnector` and add a field that will store the configuration information to be propagated to the task(s) (the topic to send data to, and optionally - the filename to read from and the maximum batch size):
-    
-    
-    package com.example;
-    
-    public class FileStreamSourceConnector extends SourceConnector {
-        private Map<String, String> props;
+
+```java
+package com.example;
+
+public class FileStreamSourceConnector extends SourceConnector {
+    private Map<String, String> props;
+```
 
 The easiest method to fill in is `taskClass()`, which defines the class that should be instantiated in worker processes to actually read the data:
-    
-    
-    @Override
-    public Class<? extends Task> taskClass() {
-        return FileStreamSourceTask.class;
-    }
+
+```java
+@Override
+public Class<? extends Task> taskClass() {
+    return FileStreamSourceTask.class;
+}
+```
 
 We will define the `FileStreamSourceTask` class below. Next, we add some standard lifecycle methods, `start()` and `stop()`:
-    
-    
-    @Override
-    public void start(Map<String, String> props) {
-        // Initialization logic and setting up of resources can take place in this method.
-        // This connector doesn't need to do any of that, but we do log a helpful message to the user.
-    
-        this.props = props;
-        AbstractConfig config = new AbstractConfig(CONFIG_DEF, props);
-        String filename = config.getString(FILE_CONFIG);
-        filename = (filename == null || filename.isEmpty()) ? "standard input" : config.getString(FILE_CONFIG);
-        log.info("Starting file source connector reading from {}", filename);
-    }
-    
-    @Override
-    public void stop() {
-        // Nothing to do since no background monitoring is required.
-    }
+
+```java
+@Override
+public void start(Map<String, String> props) {
+    // Initialization logic and setting up of resources can take place in this method.
+    // This connector doesn't need to do any of that, but we do log a helpful message to the user.
+
+    this.props = props;
+    AbstractConfig config = new AbstractConfig(CONFIG_DEF, props);
+    String filename = config.getString(FILE_CONFIG);
+    filename = (filename == null || filename.isEmpty()) ? "standard input" : config.getString(FILE_CONFIG);
+    log.info("Starting file source connector reading from {}", filename);
+}
+
+@Override
+public void stop() {
+    // Nothing to do since no background monitoring is required.
+}
+```
 
 Finally, the real core of the implementation is in `taskConfigs()`. In this case we are only handling a single file, so even though we may be permitted to generate more tasks as per the `maxTasks` argument, we return a list with only one entry:
-    
-    
-    @Override
-    public List<Map<String, String>> taskConfigs(int maxTasks) {
-        // Note that the task configs could contain configs additional to or different from the connector configs if needed. For instance,
-        // if different tasks have different responsibilities, or if different tasks are meant to process different subsets of the source data stream).
-        ArrayList<Map<String, String>> configs = new ArrayList<>();
-        // Only one input stream makes sense.
-        configs.add(props);
-        return configs;
-    }
+
+```java
+@Override
+public List<Map<String, String>> taskConfigs(int maxTasks) {
+    // Note that the task configs could contain configs additional to or different from the connector configs if needed. For instance,
+    // if different tasks have different responsibilities, or if different tasks are meant to process different subsets of the source data stream).
+    ArrayList<Map<String, String>> configs = new ArrayList<>();
+    // Only one input stream makes sense.
+    configs.add(props);
+    return configs;
+}
+```
 
 Even with multiple tasks, this method implementation is usually pretty simple. It just has to determine the number of input tasks, which may require contacting the remote service it is pulling data from, and then divvy them up. Because some patterns for splitting work among tasks are so common, some utilities are provided in `ConnectorUtils` to simplify these cases.
 
@@ -119,57 +124,59 @@ Note that this simple example does not include dynamic input. See the discussion
 Next we'll describe the implementation of the corresponding `SourceTask`. The implementation is short, but too long to cover completely in this guide. We'll use pseudo-code to describe most of the implementation, but you can refer to the source code for the full example.
 
 Just as with the connector, we need to create a class inheriting from the appropriate base `Task` class. It also has some standard lifecycle methods:
-    
-    
-    public class FileStreamSourceTask extends SourceTask {
-        private String filename;
-        private InputStream stream;
-        private String topic;
-        private int batchSize;
-    
-        @Override
-        public void start(Map<String, String> props) {
-            filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
-            stream = openOrThrowError(filename);
-            topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
-            batchSize = props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG);
-        }
-    
-        @Override
-        public synchronized void stop() {
-            stream.close();
-        }
+
+```java
+public class FileStreamSourceTask extends SourceTask {
+    private String filename;
+    private InputStream stream;
+    private String topic;
+    private int batchSize;
+
+    @Override
+    public void start(Map<String, String> props) {
+        filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
+        stream = openOrThrowError(filename);
+        topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
+        batchSize = props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG);
     }
+
+    @Override
+    public synchronized void stop() {
+        stream.close();
+    }
+}
+```
 
 These are slightly simplified versions, but show that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the `start()` method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the `stop()` method is synchronized. This will be necessary because `SourceTasks` are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.
 
 Next, we implement the main functionality of the task, the `poll()` method which gets events from the input system and returns a `List<SourceRecord>`:
-    
-    
-    @Override
-    public List<SourceRecord> poll() throws InterruptedException {
-        try {
-            ArrayList<SourceRecord> records = new ArrayList<>();
-            while (streamValid(stream) && records.isEmpty()) {
-                LineAndOffset line = readToNextLine(stream);
-                if (line != null) {
-                    Map<String, Object> sourcePartition = Collections.singletonMap("filename", filename);
-                    Map<String, Object> sourceOffset = Collections.singletonMap("position", streamOffset);
-                    records.add(new SourceRecord(sourcePartition, sourceOffset, topic, Schema.STRING_SCHEMA, line));
-                    if (records.size() >= batchSize) {
-                        return records;
-                    }
-                } else {
-                    Thread.sleep(1);
+
+```java
+@Override
+public List<SourceRecord> poll() throws InterruptedException {
+    try {
+        ArrayList<SourceRecord> records = new ArrayList<>();
+        while (streamValid(stream) && records.isEmpty()) {
+            LineAndOffset line = readToNextLine(stream);
+            if (line != null) {
+                Map<String, Object> sourcePartition = Collections.singletonMap("filename", filename);
+                Map<String, Object> sourceOffset = Collections.singletonMap("position", streamOffset);
+                records.add(new SourceRecord(sourcePartition, sourceOffset, topic, Schema.STRING_SCHEMA, line));
+                if (records.size() >= batchSize) {
+                    return records;
                 }
+            } else {
+                Thread.sleep(1);
             }
-            return records;
-        } catch (IOException e) {
-            // Underlying stream was killed, probably as a result of calling stop. Allow to return
-            // null, and driving thread will handle any shutdown if necessary.
         }
-        return null;
+        return records;
+    } catch (IOException e) {
+        // Underlying stream was killed, probably as a result of calling stop. Allow to return
+        // null, and driving thread will handle any shutdown if necessary.
     }
+    return null;
+}
+```
 
 Again, we've omitted some details, but we can see the important steps: the `poll()` method is going to be called repeatedly, and for each call it will loop trying to read records from the file. For each line it reads, it also tracks the file offset. It uses this information to create an output `SourceRecord` with four pieces of information: the source partition (there is only one, the single file being read), source offset (byte offset in the file), output topic name, and output value (the line, and we include a schema indicating this value will always be a string). Other variants of the `SourceRecord` constructor can also include a specific output partition, a key, and headers.
 
@@ -180,18 +187,19 @@ Although not used in the example, `SourceTask` also provides two APIs to commit 
 ### Sink Tasks
 
 The previous section described how to implement a simple `SourceTask`. Unlike `SourceConnector` and `SinkConnector`, `SourceTask` and `SinkTask` have very different interfaces because `SourceTask` uses a pull interface and `SinkTask` uses a push interface. Both share the common lifecycle methods, but the `SinkTask` interface is quite different:
-    
-    
-    public abstract class SinkTask implements Task {
-        public void initialize(SinkTaskContext context) {
-            this.context = context;
-        }
-    
-        public abstract void put(Collection<SinkRecord> records);
-    
-        public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
-        }
+
+```java
+public abstract class SinkTask implements Task {
+    public void initialize(SinkTaskContext context) {
+        this.context = context;
     }
+
+    public abstract void put(Collection<SinkRecord> records);
+
+    public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    }
+}
+```
 
 The `SinkTask` documentation contains full details, but this interface is nearly as simple as the `SourceTask`. The `put()` method should contain most of the implementation, accepting sets of `SinkRecords`, performing any required translation, and storing them in the destination system. This method does not need to ensure the data has been fully written to the destination system before returning. In fact, in many cases internal buffering will be useful so an entire batch of records can be sent at once, reducing the overhead of inserting events into the downstream data store. The `SinkRecords` contain essentially the same information as `SourceRecords`: Kafka topic, partition, offset, the event key and value, and optional headers.
 
@@ -200,53 +208,55 @@ The `flush()` method is used during the offset commit process, which allows task
 ### Errant Record Reporter
 
 When error reporting is enabled for a connector, the connector can use an `ErrantRecordReporter` to report problems with individual records sent to a sink connector. The following example shows how a connector's `SinkTask` subclass might obtain and use the `ErrantRecordReporter`, safely handling a null reporter when the DLQ is not enabled or when the connector is installed in an older Connect runtime that doesn't have this reporter feature:
-    
-    
-    private ErrantRecordReporter reporter;
-    
-    @Override
-    public void start(Map<String, String> props) {
-        ...
-        try {
-            reporter = context.errantRecordReporter(); // may be null if DLQ not enabled
-        } catch (NoSuchMethodException | NoClassDefFoundError e) {
-            // Will occur in Connect runtimes earlier than 2.6
-            reporter = null;
-        }
+
+```java
+private ErrantRecordReporter reporter;
+
+@Override
+public void start(Map<String, String> props) {
+    ...
+    try {
+        reporter = context.errantRecordReporter(); // may be null if DLQ not enabled
+    } catch (NoSuchMethodException | NoClassDefFoundError e) {
+        // Will occur in Connect runtimes earlier than 2.6
+        reporter = null;
     }
-    
-    @Override
-    public void put(Collection<SinkRecord> records) {
-        for (SinkRecord record: records) {
-            try {
-                // attempt to process and send record to data sink
-                process(record);
-            } catch(Exception e) {
-                if (reporter != null) {
-                    // Send errant record to error reporter
-                    reporter.report(record, e);
-                } else {
-                    // There's no error reporter, so fail
-                    throw new ConnectException("Failed on record", e);
-                }
+}
+
+@Override
+public void put(Collection<SinkRecord> records) {
+    for (SinkRecord record: records) {
+        try {
+            // attempt to process and send record to data sink
+            process(record);
+        } catch(Exception e) {
+            if (reporter != null) {
+                // Send errant record to error reporter
+                reporter.report(record, e);
+            } else {
+                // There's no error reporter, so fail
+                throw new ConnectException("Failed on record", e);
             }
         }
     }
+}
+```
 
 ### Resuming from Previous Offsets
 
 The `SourceTask` implementation included a stream ID (the input filename) and offset (position in the file) with each record. The framework uses this to commit offsets periodically so that in the case of a failure, the task can recover and minimize the number of events that are reprocessed and possibly duplicated (or to resume from the most recent offset if Kafka Connect was stopped gracefully, e.g. in standalone mode or due to a job reconfiguration). This commit process is completely automated by the framework, but only the connector knows how to seek back to the right position in the input stream to resume from that location.
 
 To correctly resume upon startup, the task can use the `SourceContext` passed into its `initialize()` method to access the offset data. In `initialize()`, we would add a bit more code to read the offset (if it exists) and seek to that position:
-    
-    
-    stream = new FileInputStream(filename);
-    Map<String, Object> offset = context.offsetStorageReader().offset(Collections.singletonMap(FILENAME_FIELD, filename));
-    if (offset != null) {
-        Long lastRecordedOffset = (Long) offset.get("position");
-        if (lastRecordedOffset != null)
-            seekToOffset(stream, lastRecordedOffset);
-    }
+
+```java
+stream = new FileInputStream(filename);
+Map<String, Object> offset = context.offsetStorageReader().offset(Collections.singletonMap(FILENAME_FIELD, filename));
+if (offset != null) {
+    Long lastRecordedOffset = (Long) offset.get("position");
+    if (lastRecordedOffset != null)
+        seekToOffset(stream, lastRecordedOffset);
+}
+```
 
 Of course, you might need to read many keys for each of the input streams. The `OffsetStorageReader` interface also allows you to issue bulk reads to efficiently load all offsets, then apply them by seeking each input stream to the appropriate position.
 
@@ -263,51 +273,53 @@ By default, the Kafka Connect framework will create and commit a new Kafka trans
 If enabled, the connector's tasks will have access to a `TransactionContext` from their `SourceTaskContext`, which they can use to control when transactions are aborted and committed.
 
 For example, to commit a transaction at least every ten records:
-    
-    
-    private int recordsSent;
-    
-    @Override
-    public void start(Map<String, String> props) {
+
+```java
+private int recordsSent;
+
+@Override
+public void start(Map<String, String> props) {
+    this.recordsSent = 0;
+}
+
+@Override
+public List<SourceRecord> poll() {
+    List<SourceRecord> records = fetchRecords();
+    boolean shouldCommit = false;
+    for (SourceRecord record : records) {
+        if (++this.recordsSent >= 10) {
+            shouldCommit = true;
+        }
+    }
+    if (shouldCommit) {
         this.recordsSent = 0;
+        this.context.transactionContext().commitTransaction();
     }
-    
-    @Override
-    public List<SourceRecord> poll() {
-        List<SourceRecord> records = fetchRecords();
-        boolean shouldCommit = false;
-        for (SourceRecord record : records) {
-            if (++this.recordsSent >= 10) {
-                shouldCommit = true;
-            }
-        }
-        if (shouldCommit) {
-            this.recordsSent = 0;
-            this.context.transactionContext().commitTransaction();
-        }
-        return records;
-    }
+    return records;
+}
+```
 
 Or to commit a transaction for exactly every tenth record:
-    
-    
-    private int recordsSent;
-    
-    @Override
-    public void start(Map<String, String> props) {
-        this.recordsSent = 0;
-    }
-    
-    @Override
-    public List<SourceRecord> poll() {
-        List<SourceRecord> records = fetchRecords();
-        for (SourceRecord record : records) {
-            if (++this.recordsSent % 10 == 0) {
-                this.context.transactionContext().commitTransaction(record);
-            }
+
+```java
+private int recordsSent;
+
+@Override
+public void start(Map<String, String> props) {
+    this.recordsSent = 0;
+}
+
+@Override
+public List<SourceRecord> poll() {
+    List<SourceRecord> records = fetchRecords();
+    for (SourceRecord record : records) {
+        if (++this.recordsSent % 10 == 0) {
+            this.context.transactionContext().commitTransaction(record);
         }
-        return records;
     }
+    return records;
+}
+```
 
 Most connectors do not need to define their own transaction boundaries. However, it may be useful if files or objects in the source system are broken up into multiple source records, but should be delivered atomically. Additionally, it may be useful if it is impossible to give each source record a unique source offset, if every record with a given offset is delivered within a single transaction.
 
@@ -320,32 +332,36 @@ A few additional preflight validation APIs can be implemented by source connecto
 Some users may require exactly-once semantics from a connector. In this case, they may set the `exactly.once.support` property to `required` in the configuration for the connector. When this happens, the Kafka Connect framework will ask the connector whether it can provide exactly-once semantics with the specified configuration. This is done by invoking the `exactlyOnceSupport` method on the connector.
 
 If a connector doesn't support exactly-once semantics, it should still implement this method to let users know for certain that it cannot provide exactly-once semantics:
-    
-    
-    @Override
-    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
-        // This connector cannot provide exactly-once semantics under any conditions
-        return ExactlyOnceSupport.UNSUPPORTED;
-    }
-    
+
+```java
+@Override
+public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
+    // This connector cannot provide exactly-once semantics under any conditions
+    return ExactlyOnceSupport.UNSUPPORTED;
+}
+```
+
+
 
 Otherwise, a connector should examine the configuration, and return `ExactlyOnceSupport.SUPPORTED` if it can provide exactly-once semantics:
-    
-    
-    @Override
-    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
-        // This connector can always provide exactly-once semantics
-        return ExactlyOnceSupport.SUPPORTED;
-    }
+
+```java
+@Override
+public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
+    // This connector can always provide exactly-once semantics
+    return ExactlyOnceSupport.SUPPORTED;
+}
+```
 
 Additionally, if the user has configured the connector to define its own transaction boundaries, the Kafka Connect framework will ask the connector whether it can define its own transaction boundaries with the specified configuration, using the `canDefineTransactionBoundaries` method:
-    
-    
-    @Override
-    public ConnectorTransactionBoundaries canDefineTransactionBoundaries(Map<String, String> props) {
-        // This connector can always define its own transaction boundaries
-        return ConnectorTransactionBoundaries.SUPPORTED;
-    }
+
+```java
+@Override
+public ConnectorTransactionBoundaries canDefineTransactionBoundaries(Map<String, String> props) {
+    // This connector can always define its own transaction boundaries
+    return ConnectorTransactionBoundaries.SUPPORTED;
+}
+```
 
 This method should only be implemented for connectors that can define their own transaction boundaries in some cases. If a connector is never able to define its own transaction boundaries, it does not need to implement this method.
 
@@ -354,10 +370,11 @@ This method should only be implemented for connectors that can define their own 
 Kafka Connect is intended to define bulk data copying jobs, such as copying an entire database rather than creating many jobs to copy each table individually. One consequence of this design is that the set of input or output streams for a connector can vary over time.
 
 Source connectors need to monitor the source system for changes, e.g. table additions/deletions in a database. When they pick up changes, they should notify the framework via the `ConnectorContext` object that reconfiguration is necessary. For example, in a `SourceConnector`:
-    
-    
-    if (inputsChanged())
-        this.context.requestTaskReconfiguration();
+
+```java
+if (inputsChanged())
+    this.context.requestTaskReconfiguration();
+```
 
 The framework will promptly request new configuration information and update the tasks, allowing them to gracefully commit their progress before reconfiguring them. Note that in the `SourceConnector` this monitoring is currently left up to the connector implementation. If an extra thread is required to perform this monitoring, the connector must allocate it itself.
 
@@ -370,17 +387,18 @@ Ideally this code for monitoring changes would be isolated to the `Connector` an
 Kafka Connect allows you to validate connector configurations before submitting a connector to be executed and can provide feedback about errors and recommended values. To take advantage of this, connector developers need to provide an implementation of `config()` to expose the configuration definition to the framework.
 
 The following code in `FileStreamSourceConnector` defines the configuration and exposes it to the framework.
-    
-    
-    static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
-        .define(TOPIC_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.NonEmptyString(), Importance.HIGH, "The topic to publish data to")
-        .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
-            "The maximum number of records the source task can read from the file each time it is polled");
-    
-    public ConfigDef config() {
-        return CONFIG_DEF;
-    }
+
+```java
+static final ConfigDef CONFIG_DEF = new ConfigDef()
+    .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
+    .define(TOPIC_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.NonEmptyString(), Importance.HIGH, "The topic to publish data to")
+    .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
+        "The maximum number of records the source task can read from the file each time it is polled");
+
+public ConfigDef config() {
+    return CONFIG_DEF;
+}
+```
 
 `ConfigDef` class is used for specifying the set of expected configurations. For each configuration, you can specify the name, the type, the default value, the documentation, the group information, the order in the group, the width of the configuration value and the name suitable for display in the UI. Plus, you can provide special validation logic used for single configuration validation by overriding the `Validator` class. Moreover, as there may be dependencies between configurations, for example, the valid values and visibility of a configuration may change according to the values of other configurations. To handle this, `ConfigDef` allows you to specify the dependents of a configuration and to provide an implementation of `Recommender` to get valid values and set visibility of a configuration given the current configuration values.
 
@@ -393,17 +411,18 @@ The FileStream connectors are good examples because they are simple, but they al
 To create more complex data, you'll need to work with the Kafka Connect `data` API. Most structured records will need to interact with two classes in addition to primitive types: `Schema` and `Struct`.
 
 The API documentation provides a complete reference, but here is a simple example creating a `Schema` and `Struct`:
-    
-    
-    Schema schema = SchemaBuilder.struct().name(NAME)
-        .field("name", Schema.STRING_SCHEMA)
-        .field("age", Schema.INT_SCHEMA)
-        .field("admin", SchemaBuilder.bool().defaultValue(false).build())
-        .build();
-    
-    Struct struct = new Struct(schema)
-        .put("name", "Barbara Liskov")
-        .put("age", 75);
+
+```java
+Schema schema = SchemaBuilder.struct().name(NAME)
+    .field("name", Schema.STRING_SCHEMA)
+    .field("age", Schema.INT_SCHEMA)
+    .field("admin", SchemaBuilder.bool().defaultValue(false).build())
+    .build();
+
+Struct struct = new Struct(schema)
+    .put("name", "Barbara Liskov")
+    .put("age", 75);
+```
 
 If you are implementing a source connector, you'll need to decide when and how to create schemas. Where possible, you should avoid recomputing them as much as possible. For example, if your connector is guaranteed to have a fixed schema, create it statically and reuse a single instance.
 

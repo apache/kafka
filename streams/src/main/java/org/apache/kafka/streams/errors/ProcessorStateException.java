@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 /**
- * Indicates a processor state operation (e.g. put, get) has failed.
+ * Indicates a processor state operation (e.g. init, put, get) has failed.
  *
  * @see org.apache.kafka.streams.processor.StateStore
  */

@@ -35,6 +35,7 @@ public enum AcknowledgeType {
     /** The record is still being processed. Renew the acquisition lock so processing can continue. */
     RENEW((byte) 4);
 
+    /** The unique identifier for this acknowledge type. */
     public final byte id;
 
     AcknowledgeType(byte id) {
@@ -46,7 +47,13 @@ public enum AcknowledgeType {
         return super.toString().toLowerCase(Locale.ROOT);
     }
 
-
+    /**
+     * Returns the AcknowledgeType for the given identifier.
+     *
+     * @param id The identifier for the acknowledge type
+     * @return The corresponding AcknowledgeType
+     * @throws IllegalArgumentException If the ID is not recognized
+     */
     public static AcknowledgeType forId(byte id) {
         switch (id) {
             case 1:

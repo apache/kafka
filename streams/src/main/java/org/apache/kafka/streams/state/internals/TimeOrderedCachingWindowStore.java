@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -47,6 +48,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -56,7 +58,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
-class TimeOrderedCachingWindowStore
+public class TimeOrderedCachingWindowStore
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
     implements WindowStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
 
@@ -89,7 +91,7 @@ class TimeOrderedCachingWindowStore
     }
 
     private void enforceWrappedStore(final WindowStore<Bytes, byte[]> underlying) {
-        final RocksDBTimeOrderedWindowStore timeOrderedWindowStore = getWrappedStore(underlying);
+        final RocksDBTimeOrderedWindowStore<?> timeOrderedWindowStore = getWrappedStore(underlying);
         if (timeOrderedWindowStore == null) {
             throw new IllegalArgumentException("TimeOrderedCachingWindowStore only supports RocksDBTimeOrderedWindowStore backed store");
         }
@@ -98,9 +100,12 @@ class TimeOrderedCachingWindowStore
     }
 
     @SuppressWarnings("unchecked")
-    private RocksDBTimeOrderedWindowStore getWrappedStore(final StateStore wrapped) {
+    private RocksDBTimeOrderedWindowStore<?> getWrappedStore(final StateStore wrapped) {
         if (wrapped instanceof RocksDBTimeOrderedWindowStore) {
-            return (RocksDBTimeOrderedWindowStore) wrapped;
+            return (RocksDBTimeOrderedWindowStore<?>) wrapped;
+        }
+        if (wrapped instanceof TimestampedToHeadersWindowStoreAdapter) {
+            return getWrappedStore(((TimestampedToHeadersWindowStoreAdapter) wrapped).store);
         }
         if (wrapped instanceof WrappedStateStore) {
             return getWrappedStore(((WrappedStateStore<?, Bytes, byte[]>) wrapped).wrapped());
@@ -108,6 +113,7 @@ class TimeOrderedCachingWindowStore
         return null;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         final String prefix = StreamsConfig.InternalConfig.getString(
@@ -504,9 +510,9 @@ class TimeOrderedCachingWindowStore
     }
 
     @Override
-    public synchronized void flush() {
+    public synchronized void commit(final Map<TopicPartition, Long> changelogOffsets) {
         internalContext.cache().flush(cacheName);
-        wrapped().flush();
+        wrapped().commit(changelogOffsets);
     }
 
     @Override

@@ -990,6 +990,19 @@ The size of a partition on disk, measured in bytes.
 <tr>  
 <td>
 
+Partition size as a percentage of retention bytes limit
+</td>  
+<td>
+
+kafka.log:type=Log,name=RetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
+</td>  
+<td>
+
+The partition size expressed as a percentage of the configured retention.bytes limit. Returns 0 for topics with tiered storage enabled (where the metric is reported by RemoteLogManager) or when retention bytes is unlimited. May exceed 100% if retention cleanup is delayed.
+</td> </tr>  
+<tr>  
+<td>
+
 Number of log segments in a partition
 </td>  
 <td>
@@ -1832,6 +1845,32 @@ The time to read data from remote storage by a broker
 <td>
 
 kafka.log.remote:type=RemoteLogManager,name=RemoteLogReaderFetchRateAndTimeMs
+</td> </tr>  
+<tr>  
+<td>
+
+Retention Size In Percent
+</td>  
+<td>
+
+Total partition size (local + remote) as a percentage of the configured retention.bytes limit. Available for tiered storage topics. May exceed 100% if retention cleanup is delayed. Returns 0 when retention bytes is unlimited.
+</td>  
+<td>
+
+kafka.log.remote:type=RemoteLogManager,name=RetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
+</td> </tr>  
+<tr>  
+<td>
+
+Local Retention Size In Percent
+</td>  
+<td>
+
+Local log size as a percentage of the configured local.retention.bytes limit. Available for tiered storage topics. Helps operators monitor pressure on local disks independently of remote storage. May exceed 100% if retention cleanup is delayed. Returns 0 when local retention bytes is unlimited.
+</td>  
+<td>
+
+kafka.log.remote:type=RemoteLogManager,name=LocalRetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+)
 </td> </tr>  
 <tr>  
 <td>
@@ -3845,9 +3884,10 @@ A Kafka Streams instance contains all the producer and consumer metrics as well 
 Note that the metrics have a 4-layer hierarchy. At the top level there are client-level metrics for each started Kafka Streams client. Each client has stream threads, with their own metrics. Each stream thread has tasks, with their own metrics. Each task has a number of processor nodes, with their own metrics. Each task also has a number of state stores and record caches, all with their own metrics. 
 
 Use the following configuration option to specify which metrics you want collected: 
-    
-    
-    metrics.recording.level="info"
+
+```properties
+metrics.recording.level="info"
+```
 
 ### Client Metrics
 
@@ -5041,7 +5081,7 @@ kafka.streams:type=stream-topic-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),pr
 
 ### State Store Metrics
 
-All the following metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level `trace` and `num-open-iterators` which has recording level `info`. Note that the `store-scope` value is specified in `StoreSupplier#metricsScope()` for user's customized state stores; for built-in state stores, currently we have: 
+All the following metrics have a recording level of `debug`, except for the `record-e2e-latency-*` metrics which have a recording level `trace` and `num-open-iterators` and `num-keys` which have recording level `info`. Note that the `store-scope` value is specified in `StoreSupplier#metricsScope()` for user's customized state stores; for built-in state stores, currently we have: 
 
   * `in-memory-state`
   * `in-memory-lru-state`
@@ -5277,25 +5317,51 @@ kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[s
 <tr>  
 <td>
 
-flush-latency-avg
-</td>  
+flush-latency-avg (deprecated)
+</td>
 <td>
 
-The average flush execution time in ns.
-</td>  
+The average flush execution time in ns. Deprecated: use commit-latency-avg instead.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
-</td> </tr>  
-<tr>  
+</td> </tr>
+<tr>
 <td>
 
-flush-latency-max
-</td>  
+flush-latency-max (deprecated)
+</td>
 <td>
 
-The maximum flush execution time in ns.
-</td>  
+The maximum flush execution time in ns. Deprecated: use commit-latency-max instead.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+commit-latency-avg
+</td>
+<td>
+
+The average commit execution time in ns.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
+<td>
+
+commit-latency-max
+</td>
+<td>
+
+The maximum commit execution time in ns.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
@@ -5433,17 +5499,30 @@ kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[s
 <tr>  
 <td>
 
-flush-rate
-</td>  
+flush-rate (deprecated)
+</td>
 <td>
 
-The average flush rate for this store.
-</td>  
+The average flush rate for this store. Deprecated: use commit-rate instead.
+</td>
 <td>
 
 kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
-</td> </tr>  
-<tr>  
+</td> </tr>
+<tr>
+<td>
+
+commit-rate
+</td>
+<td>
+
+The average commit rate for this store.
+</td>
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>
+<tr>
 <td>
 
 restore-rate
@@ -5555,6 +5634,19 @@ num-open-iterators
 <td>
 
 The current number of iterators on the store that have been created, but not yet closed.
+</td>  
+<td>
+
+kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)
+</td> </tr>  
+<tr>  
+<td>
+
+num-keys
+</td>  
+<td>
+
+The current number of keys in the in-memory state store. Only reported for in-memory state stores; not available for RocksDB-backed stores.
 </td>  
 <td>
 

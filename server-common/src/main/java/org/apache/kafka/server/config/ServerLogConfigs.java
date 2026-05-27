@@ -18,8 +18,10 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.record.BrokerCompressionType;
+
+import java.util.List;
 
 import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFIX;
 
@@ -32,13 +34,27 @@ import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFI
 public class ServerLogConfigs {
     public static final String NUM_PARTITIONS_CONFIG = "num.partitions";
     public static final int NUM_PARTITIONS_DEFAULT = 1;
-    public static final String NUM_PARTITIONS_DOC = "The default number of log partitions per topic";
+    public static final String NUM_PARTITIONS_DOC =
+        "The default number of log partitions per topic. This configuration affects the following paths:"
+        + "<ul>"
+        + "  <li>1. Auto topic creation</li>"
+        + "  <li>2. Internal streams topic creation</li>"
+        + "  <li>3. Topic creation via <code>AdminClient#createTopics</code> when the number of partition is set to -1</li>"
+        + "</ul>"
+        + "<p>For (1), the value from the broker configuration is used only when it is explicitly set. "
+        + "If it is not explicitly configured on the broker, the value from the controller configuration is used.<br/>"
+        + "For (2) and (3), the value from the controller configuration is always used.</p>";
 
     public static final String LOG_DIRS_CONFIG = LOG_PREFIX + "dirs";
     public static final String LOG_DIR_CONFIG = LOG_PREFIX + "dir";
     public static final String LOG_DIR_DEFAULT = "/tmp/kafka-logs";
     public static final String LOG_DIR_DOC = "A comma-separated list of the directories where the log data is stored. (supplemental to " + LOG_DIRS_CONFIG + " property)";
     public static final String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIR_CONFIG + " is used.";
+
+    public static final String CORDONED_LOG_DIRS_CONFIG = "cordoned.log.dirs";
+    public static final List<String> CORDONED_LOG_DIRS_DEFAULT = List.of();
+    public static final String CORDONED_LOG_DIRS_DOC = "A comma-separated list of the directories that are cordoned. Entries in this list must be entries in log.dirs or log.dir configuration. This can also be set to * to cordon all log directories.";
+    public static final String CORDONED_LOG_DIRS_ALL = "*";
 
     public static final String LOG_SEGMENT_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
     public static final String LOG_SEGMENT_BYTES_DOC = "The maximum size of a single log file";

@@ -18,7 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 
 import java.util.Optional;

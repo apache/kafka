@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -24,14 +25,14 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 
 class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, V1, V2, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableKTableOuterJoin.class);
@@ -115,15 +116,15 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
             final long resultTimestamp;
             VOut oldValue = null;
 
-            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter.get(record.key());
-            final V2 value2 = getValueOrNull(valueAndTimestamp2);
+            final ValueTimestampHeaders<V2> valueTimestampHeaders2 = valueGetter.get(record.key());
+            final V2 value2 = getValueOrNull(valueTimestampHeaders2);
             if (value2 == null) {
                 if (record.value().newValue == null && record.value().oldValue == null) {
                     return;
                 }
                 resultTimestamp = record.timestamp();
             } else {
-                resultTimestamp = Math.max(record.timestamp(), valueAndTimestamp2.timestamp());
+                resultTimestamp = Math.max(record.timestamp(), valueTimestampHeaders2.timestamp());
             }
 
             if (value2 != null || record.value().newValue != null) {
@@ -161,21 +162,21 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
         }
 
         @Override
-        public ValueAndTimestamp<VOut> get(final K key) {
+        public ValueTimestampHeaders<VOut> get(final K key) {
             VOut newValue = null;
 
-            final ValueAndTimestamp<V1> valueAndTimestamp1 = valueGetter1.get(key);
+            final ValueTimestampHeaders<V1> valueTimestampHeaders1 = valueGetter1.get(key);
             final V1 value1;
             final long timestamp1;
-            if (valueAndTimestamp1 == null) {
+            if (valueTimestampHeaders1 == null) {
                 value1 = null;
                 timestamp1 = UNKNOWN;
             } else {
-                value1 = valueAndTimestamp1.value();
-                timestamp1 = valueAndTimestamp1.timestamp();
+                value1 = valueTimestampHeaders1.value();
+                timestamp1 = valueTimestampHeaders1.timestamp();
             }
 
-            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(key);
+            final ValueTimestampHeaders<V2> valueAndTimestamp2 = valueGetter2.get(key);
             final V2 value2;
             final long timestamp2;
             if (valueAndTimestamp2 == null) {
@@ -190,7 +191,7 @@ class KTableKTableOuterJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
                 newValue = joiner.apply(value1, value2);
             }
 
-            return ValueAndTimestamp.make(newValue, Math.max(timestamp1, timestamp2));
+            return ValueTimestampHeaders.make(newValue, Math.max(timestamp1, timestamp2), new RecordHeaders());
         }
 
         @Override

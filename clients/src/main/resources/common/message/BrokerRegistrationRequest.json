@@ -14,13 +14,9 @@
 // limitations under the License.
 
 // Version 1 adds Zk broker epoch to the request if the broker is migrating from Zk mode to KRaft mode.
-
 // Version 2 adds LogDirs for KIP-858
-
 // Version 3 adds the PreviousBrokerEpoch for the KIP-966
-
 // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion in the response from being 0.
-
 {
   "apiKey":62,
   "type": "request",

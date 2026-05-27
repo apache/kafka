@@ -26,8 +26,8 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 
-class TimestampedSegment extends RocksDBTimestampedStore implements Comparable<TimestampedSegment>, Segment {
-    public final long id;
+class TimestampedSegment extends RocksDBTimestampedStore implements Segment {
+    private final long id;
 
     TimestampedSegment(final String segmentName,
                        final String windowName,
@@ -37,6 +37,11 @@ class TimestampedSegment extends RocksDBTimestampedStore implements Comparable<T
         super(segmentName, windowName, metricsRecorder);
         this.id = id;
         this.position = position;
+    }
+
+    @Override
+    public long id() {
+        return id;
     }
 
     @Override
@@ -50,14 +55,8 @@ class TimestampedSegment extends RocksDBTimestampedStore implements Comparable<T
     }
 
     @Override
-    public int compareTo(final TimestampedSegment segment) {
-        return Long.compare(id, segment.id);
-    }
-
-    @Override
     public void openDB(final Map<String, Object> configs, final File stateDir) {
         super.openDB(configs, stateDir);
-        // skip the registering step
     }
 
     @Override

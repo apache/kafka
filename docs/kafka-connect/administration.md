@@ -39,22 +39,23 @@ If a Connect worker leaves the group, intentionally or due to a failure, Connect
 The new Connect protocol is enabled when all the workers that form the Connect cluster are configured with `connect.protocol=compatible`, which is also the default value when this property is missing. Therefore, upgrading to the new Connect protocol happens automatically when all the workers upgrade to 2.3.0. A rolling upgrade of the Connect cluster will activate incremental cooperative rebalancing when the last worker joins on version 2.3.0. 
 
 You can use the REST API to view the current status of a connector and its tasks, including the ID of the worker to which each was assigned. For example, the `GET /connectors/file-source/status` request shows the status of a connector named `file-source`: 
-    
-    
-    {
-        "name": "file-source",
-        "connector": {
+
+```json
+{
+    "name": "file-source",
+    "connector": {
+        "state": "RUNNING",
+        "worker_id": "192.168.1.208:8083"
+    },
+    "tasks": [
+        {
+            "id": 0,
             "state": "RUNNING",
-            "worker_id": "192.168.1.208:8083"
-        },
-        "tasks": [
-            {
-                "id": 0,
-                "state": "RUNNING",
-                "worker_id": "192.168.1.209:8083"
-            }
-        ]
-    }
+            "worker_id": "192.168.1.209:8083"
+        }
+    ]
+}
+```
 
 Connectors and their tasks publish status updates to a shared topic (configured with `status.storage.topic`) which all workers in the cluster monitor. Because the workers consume this topic asynchronously, there is typically a (short) delay before a state change is visible through the status API. The following states are possible for a connector or one of its tasks: 
 

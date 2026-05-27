@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.time.Duration;
@@ -144,8 +145,9 @@ public interface StateUpdater {
      * restored tasks, or failed tasks.
      *
      * @param taskId ID of the task to remove
+     * @param suspendReason the reason for suspending standby update, passed through to the changelog reader
      */
-    CompletableFuture<RemovedTaskResult> remove(final TaskId taskId);
+    CompletableFuture<RemovedTaskResult> remove(final TaskId taskId, final StandbyUpdateListener.SuspendReason suspendReason);
 
     /**
      * Wakes up the state updater if it is currently dormant, to check if a paused task should be resumed.

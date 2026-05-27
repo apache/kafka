@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, 
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys.{BROKER_HEARTBEAT, BROKER_REGISTRATION, CONTROLLER_REGISTRATION}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.server.ControllerInformation
 

@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.compress;
 
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 
 import org.junit.jupiter.api.Test;
 

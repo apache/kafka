@@ -16,7 +16,12 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
@@ -27,8 +32,13 @@ import java.nio.ByteBuffer;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 public class StateSerdesTest {
@@ -48,6 +58,7 @@ public class StateSerdesTest {
         assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes("anyName", byte[].class, null));
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void shouldReturnSerdesForBuiltInKeyAndValueTypesForBuiltinTypes() {
         final Class[] supportedBuildInTypes = new Class[] {
@@ -96,10 +107,11 @@ public class StateSerdesTest {
 
     @Test
     public void shouldThrowIfIncompatibleSerdeForValue() throws ClassNotFoundException {
+        @SuppressWarnings("rawtypes")
         final Class myClass = Class.forName("java.lang.String");
         final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
         final Integer myInt = 123;
-        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(myInt));
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(myInt, new RecordHeaders()));
         assertThat(
             e.getMessage(),
             equalTo(
@@ -110,11 +122,13 @@ public class StateSerdesTest {
 
     @Test
     public void shouldSkipValueAndTimestampeInformationForErrorOnTimestampAndValueSerialization() throws ClassNotFoundException {
+        @SuppressWarnings("rawtypes")
         final Class myClass = Class.forName("java.lang.String");
+        @SuppressWarnings("rawtypes")
         final StateSerdes<Object, Object> stateSerdes =
             new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), new ValueAndTimestampSerde(Serdes.serdeFrom(myClass)));
         final Integer myInt = 123;
-        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(ValueAndTimestamp.make(myInt, 0L)));
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(ValueAndTimestamp.make(myInt, 0L), new RecordHeaders()));
         assertThat(
             e.getMessage(),
             equalTo(
@@ -125,10 +139,11 @@ public class StateSerdesTest {
 
     @Test
     public void shouldThrowIfIncompatibleSerdeForKey() throws ClassNotFoundException {
+        @SuppressWarnings("rawtypes")
         final Class myClass = Class.forName("java.lang.String");
         final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
         final Integer myInt = 123;
-        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawKey(myInt));
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawKey(myInt, new RecordHeaders()));
         assertThat(
             e.getMessage(),
             equalTo(
@@ -137,4 +152,48 @@ public class StateSerdesTest {
                     "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
     }
 
+    @Test
+    public void shouldSerializeAndDeserializeKeyWithHeaders() {
+        final Serde<String> spyKeySerde = spy(Serdes.String());
+        final Serializer<String> spySerializer = spy(spyKeySerde.serializer());
+        final Deserializer<String> spyDeserializer = spy(spyKeySerde.deserializer());
+        when(spyKeySerde.serializer()).thenReturn(spySerializer);
+        when(spyKeySerde.deserializer()).thenReturn(spyDeserializer);
+
+        final StateSerdes<String, String> stateSerdes =
+            new StateSerdes<>("test-topic", spyKeySerde, Serdes.String());
+
+        final Headers headers = new RecordHeaders();
+        final String key = "test-key";
+        final byte[] rawKey = stateSerdes.rawKey(key, headers);
+
+        verify(spySerializer).serialize(eq("test-topic"), eq(headers), eq("test-key"));
+
+        final String deserializedKey = stateSerdes.keyFrom(rawKey, headers);
+        verify(spyDeserializer).deserialize(eq("test-topic"), eq(headers), eq(rawKey));
+        assertEquals(key, deserializedKey);
+    }
+
+    @Test
+    public void shouldSerializeAndDeserializeValueWithHeaders() {
+        final Serde<String> spyValueSerde = spy(Serdes.String());
+        final Serializer<String> spySerializer = spy(spyValueSerde.serializer());
+        final Deserializer<String> spyDeserializer = spy(spyValueSerde.deserializer());
+        when(spyValueSerde.serializer()).thenReturn(spySerializer);
+        when(spyValueSerde.deserializer()).thenReturn(spyDeserializer);
+
+        final StateSerdes<String, String> stateSerdes =
+            new StateSerdes<>("test-topic", Serdes.String(), spyValueSerde);
+
+        final Headers headers = new RecordHeaders()
+            .add("header-key", "header-value".getBytes());
+        final String value = "test-value";
+        final byte[] serialized = stateSerdes.rawValue(value, headers);
+
+        verify(spySerializer).serialize(eq("test-topic"), eq(headers), eq("test-value"));
+
+        final String deserialized = stateSerdes.valueFrom(serialized, headers);
+        verify(spyDeserializer).deserialize(eq("test-topic"), eq(headers), eq(serialized));
+        assertEquals(value, deserialized);
+    }
 }

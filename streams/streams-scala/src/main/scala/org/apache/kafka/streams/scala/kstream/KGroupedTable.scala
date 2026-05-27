@@ -32,6 +32,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
  * @param inner The underlying Java abstraction for KGroupedTable
  * @see `org.apache.kafka.streams.kstream.KGroupedTable`
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.KGroupedTable` instead", "4.3.0")
 class KGroupedTable[K, V](inner: KGroupedTableJ[K, V]) {
 
   /**

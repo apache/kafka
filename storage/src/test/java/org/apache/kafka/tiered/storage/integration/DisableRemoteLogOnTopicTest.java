@@ -16,38 +16,56 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
-
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
-public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness {
+public final class DisableRemoteLogOnTopicTest {
 
-    @Override
-    public int brokerCount() {
-        return 2;
+    private static final int BROKER_COUNT = 3;
+    private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 5;
+
+    private static List<ClusterConfig> clusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        DisableRemoteLogOnTopicTest.class.getSimpleName().toLowerCase(Locale.ROOT),
+                        BROKER_COUNT,
+                        NUM_REMOTE_LOG_METADATA_PARTITIONS))
+                .build());
     }
 
-    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
-    @MethodSource("getTestGroupProtocolParametersAll")
-    @Override
-    public void executeTieredStorageTest(String groupProtocol) {
-        super.executeTieredStorageTest(groupProtocol);
+    @ClusterTemplate("clusterConfig")
+    public void testDisableRemoteLogOnTopicWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeDisableRemoteLogOnTopicTest(clusterInstance, GroupProtocol.CLASSIC);
     }
 
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
+    @ClusterTemplate("clusterConfig")
+    public void testDisableRemoteLogOnTopicWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeDisableRemoteLogOnTopicTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private static void executeDisableRemoteLogOnTopicTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
         final int broker0 = 0;
         final int broker1 = 1;
         final String topicA = "topicA";
@@ -74,6 +92,7 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
         deleteOnDisable.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
         deleteOnDisable.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, "true");
 
+        TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         builder
                 .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,
                         enableRemoteLogStorage)
@@ -123,5 +142,18 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                 .expectEmptyRemoteStorage(topicA, p0)
                 // verify the local log is still consumable
                 .consume(topicA, p0, 3L, 1, 0);
+
+        Map<String, Object> extraConsumerProps = Map.of(
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
+        );
+        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
+            try {
+                for (TieredStorageTestAction action : builder.complete()) {
+                    action.execute(context);
+                }
+            } finally {
+                context.printReport(System.out);
+            }
+        }
     }
 }

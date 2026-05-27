@@ -224,8 +224,8 @@ public class ConsoleConsumerTest {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", tp0.topic(),
-            "--partition", String.valueOf(tp0.partition()),
-            "--timeout-ms", "1000"
+            "--partition", String.valueOf(tp0.partition())
+            //"--timeout-ms", "1000"
         };
 
         ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(

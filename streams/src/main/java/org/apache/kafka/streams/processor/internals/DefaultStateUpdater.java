@@ -30,11 +30,12 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.TaskAndAction.Action;
@@ -222,7 +223,7 @@ public class DefaultStateUpdater implements StateUpdater {
                             addTask(taskAndAction.task());
                             break;
                         case REMOVE:
-                            removeTask(taskAndAction.taskId(), taskAndAction.futureForRemove());
+                            removeTask(taskAndAction.taskId(), taskAndAction.futureForRemove(), taskAndAction.suspendReason());
                             break;
                         default:
                             throw new IllegalStateException("Unknown action type " + action);
@@ -363,7 +364,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 task.markChangelogAsCorrupted(task.changelogPartitions());
 
                 // we need to enforce a checkpoint that removes the corrupted partitions
-                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                measureCheckpointLatency(() -> task.maybeCheckpoint());
             } catch (final StreamsException swallow) {
                 log.warn("Checkpoint failed for corrupted task {}", task.id(), swallow);
             }
@@ -519,10 +520,12 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void removeTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+        private void removeTask(final TaskId taskId,
+                                final CompletableFuture<RemovedTaskResult> future,
+                                final StandbyUpdateListener.SuspendReason suspendReason) {
             try {
-                if (!removeUpdatingTask(taskId, future)
-                    && !removePausedTask(taskId, future)
+                if (!removeUpdatingTask(taskId, future, suspendReason)
+                    && !removePausedTask(taskId, future, suspendReason)
                     && !removeRestoredTask(taskId, future)
                     && !removeFailedTask(taskId, future)) {
 
@@ -539,12 +542,14 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private boolean removeUpdatingTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+        private boolean removeUpdatingTask(final TaskId taskId,
+                                           final CompletableFuture<RemovedTaskResult> future,
+                                           final StandbyUpdateListener.SuspendReason suspendReason) {
             if (!updatingTasks.containsKey(taskId)) {
                 return false;
             }
             final Task task = updatingTasks.get(taskId);
-            prepareUpdatingTaskForRemoval(task);
+            prepareUpdatingTaskForRemoval(task, suspendReason);
             updatingTasks.remove(taskId);
             if (task.isActive()) {
                 transitToUpdateStandbysIfOnlyStandbysLeft();
@@ -555,18 +560,21 @@ public class DefaultStateUpdater implements StateUpdater {
             return true;
         }
 
-        private void prepareUpdatingTaskForRemoval(final Task task) {
-            measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+        private void prepareUpdatingTaskForRemoval(final Task task,
+                                                   final StandbyUpdateListener.SuspendReason suspendReason) {
+            measureCheckpointLatency(() -> task.maybeCheckpoint());
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
-            changelogReader.unregister(changelogPartitions);
+            changelogReader.unregister(changelogPartitions, suspendReason);
         }
 
-        private boolean removePausedTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
+        private boolean removePausedTask(final TaskId taskId,
+                                         final CompletableFuture<RemovedTaskResult> future,
+                                         final StandbyUpdateListener.SuspendReason suspendReason) {
             if (!pausedTasks.containsKey(taskId)) {
                 return false;
             }
             final Task task = pausedTasks.get(taskId);
-            preparePausedTaskForRemoval(task);
+            preparePausedTaskForRemoval(task, suspendReason);
             pausedTasks.remove(taskId);
             log.info((task.isActive() ? "Active" : "Standby")
                 + " task " + task.id() + " was removed from the paused tasks.");
@@ -574,9 +582,10 @@ public class DefaultStateUpdater implements StateUpdater {
             return true;
         }
 
-        private void preparePausedTaskForRemoval(final Task task) {
+        private void preparePausedTaskForRemoval(final Task task,
+                                                 final StandbyUpdateListener.SuspendReason suspendReason) {
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
-            changelogReader.unregister(changelogPartitions);
+            changelogReader.unregister(changelogPartitions, suspendReason);
         }
 
         private boolean removeRestoredTask(final TaskId taskId, final CompletableFuture<RemovedTaskResult> future) {
@@ -624,7 +633,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final TaskId taskId = task.id();
             // do not need to unregister changelog partitions for paused tasks
             try {
-                measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                measureCheckpointLatency(() -> task.maybeCheckpoint());
                 pausedTasks.put(taskId, task);
                 updatingTasks.remove(taskId);
                 if (task.isActive()) {
@@ -663,7 +672,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(changelogPartitions)) {
                 try {
-                    measureCheckpointLatency(() -> task.maybeCheckpoint(true));
+                    measureCheckpointLatency(() -> task.maybeCheckpoint());
                     changelogReader.unregister(changelogPartitions);
                     addToRestoredTasks(task);
                     log.info("Stateful active task " + task.id() + " completed restoration");
@@ -704,7 +713,7 @@ public class DefaultStateUpdater implements StateUpdater {
                     for (final Task task : updatingTasks.values()) {
                         try {
                             // do not enforce checkpointing during restoration if its position has not advanced much
-                            task.maybeCheckpoint(false);
+                            task.maybeCheckpoint();
                         } catch (final StreamsException streamsException) {
                             handleStreamsExceptionWithTask(streamsException, task.id());
                         }
@@ -896,11 +905,12 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     @Override
-    public CompletableFuture<RemovedTaskResult> remove(final TaskId taskId) {
+    public CompletableFuture<RemovedTaskResult> remove(final TaskId taskId,
+                                                       final StandbyUpdateListener.SuspendReason suspendReason) {
         final CompletableFuture<RemovedTaskResult> future = new CompletableFuture<>();
         tasksAndActionsLock.lock();
         try {
-            tasksAndActions.add(TaskAndAction.createRemoveTask(taskId, future));
+            tasksAndActions.add(TaskAndAction.createRemoveTask(taskId, future, suspendReason));
             tasksAndActionsCondition.signalAll();
         } finally {
             tasksAndActionsLock.unlock();

@@ -30,8 +30,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -50,7 +50,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.record.internal.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -220,13 +220,13 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called by the client
+     * Request an update for the partition metadata if and only if we have seen a newer leader epoch. This is called by the client
      * any time it handles a response from the broker that includes leader epoch, except for update via Metadata RPC which
      * follows a different code path ({@link #update}).
      *
-     * @param topicPartition
-     * @param leaderEpoch
-     * @return true if we updated the last seen epoch, false otherwise
+     * @param topicPartition The partition for which to update the last seen leader epoch.
+     * @param leaderEpoch    The leader epoch received from the broker.
+     * @return {@code true} if we updated the last seen epoch, {@code false} otherwise.
      */
     public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");

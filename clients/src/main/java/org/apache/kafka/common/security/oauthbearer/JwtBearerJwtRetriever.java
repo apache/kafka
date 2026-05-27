@@ -21,29 +21,21 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.Configurat
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionCreator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionJwtTemplate;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.DefaultAssertionCreator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.FileAssertionCreator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.StaticAssertionJwtTemplate;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionSupplierFactory;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.CloseableSupplier;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.File;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.function.Supplier;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.layeredAssertionJwtTemplate;
 
 /**
  * {@code JwtBearerJwtRetriever} is a {@link JwtRetriever} that performs the steps to request
@@ -116,10 +108,11 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.ass
  */
 public class JwtBearerJwtRetriever implements JwtRetriever {
 
+    private static final Logger LOG = LoggerFactory.getLogger(JwtBearerJwtRetriever.class);
+
     private final Time time;
     private HttpJwtRetriever delegate;
-    private AssertionJwtTemplate assertionJwtTemplate;
-    private AssertionCreator assertionCreator;
+    private CloseableSupplier<String> assertionSupplier;
 
     public JwtBearerJwtRetriever() {
         this(Time.SYSTEM);
@@ -135,32 +128,12 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
 
         String scope = cu.validateString(SASL_OAUTHBEARER_SCOPE, false);
 
-        if (cu.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false) != null) {
-            File assertionFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE);
-            assertionCreator = new FileAssertionCreator(assertionFile);
-            assertionJwtTemplate = new StaticAssertionJwtTemplate();
-        } else {
-            String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
-            File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
-            Optional<String> passphrase = cu.containsKey(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE) ?
-                Optional.of(cu.validatePassword(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE)) :
-                Optional.empty();
-
-            assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, passphrase);
-            assertionJwtTemplate = layeredAssertionJwtTemplate(cu, time);
-        }
-
-        Supplier<String> assertionSupplier = () -> {
-            try {
-                return assertionCreator.create(assertionJwtTemplate);
-            } catch (Exception e) {
-                throw new JwtRetrieverException(e);
-            }
-        };
+        assertionSupplier = AssertionSupplierFactory.create(cu, time);
 
         HttpRequestFormatter requestFormatter = new JwtBearerRequestFormatter(scope, assertionSupplier);
 
         delegate = new HttpJwtRetriever(requestFormatter);
+        LOG.debug("Created instance of {} as delegate", delegate.getClass().getName());
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
@@ -174,8 +147,7 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
 
     @Override
     public void close() throws IOException {
-        Utils.closeQuietly(assertionCreator, "JWT assertion creator");
-        Utils.closeQuietly(assertionJwtTemplate, "JWT assertion template");
+        Utils.closeQuietly(assertionSupplier, "JWT assertion supplier");
         Utils.closeQuietly(delegate, "JWT retriever delegate");
     }
 }

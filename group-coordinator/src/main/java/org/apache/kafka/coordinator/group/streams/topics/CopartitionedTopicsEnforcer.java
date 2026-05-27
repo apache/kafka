@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
-import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
@@ -44,14 +43,14 @@ public class CopartitionedTopicsEnforcer {
     /**
      * The constructor for the class.
      *
-     * @param logContext                  The context for emitting log messages.
+     * @param log                         The logger.
      * @param topicPartitionCountProvider Returns the number of partitions for a given topic, representing the current state of the broker
      *                                    as well as any partition number decisions that have already been made. In particular, we expect
      *                                    the number of partitions for all topics in all co-partitions groups to be defined.
      */
-    public CopartitionedTopicsEnforcer(final LogContext logContext,
+    public CopartitionedTopicsEnforcer(final Logger log,
                                        final Function<String, OptionalInt> topicPartitionCountProvider) {
-        this.log = logContext.logger(getClass());
+        this.log = log;
         this.topicPartitionCountProvider = topicPartitionCountProvider;
     }
 

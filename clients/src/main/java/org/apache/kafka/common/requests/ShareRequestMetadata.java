@@ -33,7 +33,9 @@ public class ShareRequestMetadata {
     public static final int FINAL_EPOCH = -1;
 
     /**
+     * Whether this session is a new session.
      *
+     * @return Whether the session epoch is the initial epoch.
      */
     public boolean isNewSession() {
         return epoch == INITIAL_EPOCH;

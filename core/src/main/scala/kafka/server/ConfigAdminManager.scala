@@ -36,6 +36,7 @@ import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.metadata.ConfigRepository
+import org.apache.kafka.server.config.AbstractKafkaConfig
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.{Map, Seq}
@@ -400,7 +401,7 @@ object ConfigAdminManager {
    */
   def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
     configProps.asScala.map {
-      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
+      case (key, value) => (key, AbstractKafkaConfig.loggableValue(resource.`type`, key, value))
     }
   }
 
@@ -417,10 +418,12 @@ object ConfigAdminManager {
     configKeys: Map[String, ConfigKey]
   ): Unit = {
     def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
-      val configKey = configKeys(configName)
-      if (configKey == null)
-        throw new InvalidConfigurationException(s"Unknown config name: $configName")
-      configKey.`type` == ConfigDef.Type.LIST
+      configKeys.get(configName) match {
+        case Some(configKey) =>
+          configKey.`type` == ConfigDef.Type.LIST
+        case None =>
+          throw new InvalidConfigurationException(s"Unknown config name: $configName")
+      }
     }
 
     alterConfigOps.foreach { alterConfigOp =>

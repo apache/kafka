@@ -25,13 +25,14 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -969,7 +970,8 @@ public class StoreChangelogReader implements ChangelogReader {
     private void prepareChangelogs(final Map<TaskId, Task> tasks,
                                    final Set<ChangelogMetadata> newPartitionsToRestore) {
         // separate those who do not have the current offset loaded from checkpoint
-        final Set<TopicPartition> newPartitionsWithoutStartOffset = new HashSet<>();
+        final Set<TopicPartition> newSeekToBeginningPartitions = new HashSet<>();
+        final Map<TopicPartition, Long> newWindowedPartitionsRetention = new HashMap<>();
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -986,18 +988,18 @@ public class StoreChangelogReader implements ChangelogReader {
                 log.debug("Start restoring changelog partition {} from current offset {} to end offset {}.",
                     partition, currentOffset, recordEndOffset(endOffset));
             } else {
-                log.debug("Start restoring changelog partition {} from the beginning offset to end offset {} " +
-                    "since we cannot find current offset.", partition, recordEndOffset(endOffset));
-
-                newPartitionsWithoutStartOffset.add(partition);
+                final long retentionPeriod = storeMetadata.retentionPeriod();
+                if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE) {
+                    newWindowedPartitionsRetention.put(partition, retentionPeriod);
+                } else {
+                    log.debug("Start restoring changelog partition {} from the beginning offset to end offset {} " +
+                        "since we cannot find current offset.", partition, recordEndOffset(endOffset));
+                    newSeekToBeginningPartitions.add(partition);
+                }
             }
         }
 
-        // optimization: batch all seek-to-beginning offsets in a single request
-        //               seek is not a blocking call so there's nothing to capture
-        if (!newPartitionsWithoutStartOffset.isEmpty()) {
-            restoreConsumer.seekToBeginning(newPartitionsWithoutStartOffset);
-        }
+        seekNewPartitions(newWindowedPartitionsRetention, newSeekToBeginningPartitions);
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -1039,8 +1041,107 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    private void seekNewPartitions(final Map<TopicPartition, Long> windowedPartitionsRetention,
+                                    final Set<TopicPartition> seekToBeginningPartitions) {
+        // Seek non-windowed partitions to beginning.
+        if (!seekToBeginningPartitions.isEmpty()) {
+            restoreConsumer.seekToBeginning(seekToBeginningPartitions);
+        }
+
+        // Try to optimize windowed partitions by seeking past expired data.
+        if (!windowedPartitionsRetention.isEmpty()) {
+            final Set<TopicPartition> allAssigned = restoreConsumer.assignment();
+            final Set<TopicPartition> previouslyPaused = new HashSet<>(restoreConsumer.paused());
+
+            try {
+                restoreConsumer.pause(allAssigned);
+                restoreConsumer.resume(windowedPartitionsRetention.keySet());
+
+                final Map<TopicPartition, Long> endOffsets =
+                    restoreConsumer.endOffsets(windowedPartitionsRetention.keySet());
+
+                for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
+                    final Long endOffset = endOffsets.get(partition);
+                    if (endOffset != null && endOffset > 0) {
+                        restoreConsumer.seek(partition, endOffset - 1);
+                    } else {
+                        restoreConsumer.seekToBeginning(Collections.singleton(partition));
+                        seekToBeginningPartitions.add(partition);
+                    }
+                }
+                windowedPartitionsRetention.keySet().removeAll(seekToBeginningPartitions);
+
+                final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
+
+                seekByRetentionFromPolledRecords(polledRecords, windowedPartitionsRetention, seekToBeginningPartitions);
+            } catch (final TimeoutException e) {
+                log.debug("Could not seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
+                    windowedPartitionsRetention.keySet(), e);
+                seekToBeginningPartitions.addAll(windowedPartitionsRetention.keySet());
+            } catch (final KafkaException e) {
+                log.warn("Failed to seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
+                    windowedPartitionsRetention.keySet(), e);
+                seekToBeginningPartitions.addAll(windowedPartitionsRetention.keySet());
+            } finally {
+                restoreConsumer.pause(allAssigned);
+                final Set<TopicPartition> toResume = new HashSet<>(allAssigned);
+                toResume.removeAll(previouslyPaused);
+                if (!toResume.isEmpty()) {
+                    restoreConsumer.resume(toResume);
+                }
+            }
+        }
+
+        // Seek any windowed partitions that failed during the optimization back to the beginning.
+        // Their position was moved by seek+poll above.
+        if (!seekToBeginningPartitions.isEmpty()) {
+            restoreConsumer.seekToBeginning(seekToBeginningPartitions);
+        }
+    }
+
+    private void seekByRetentionFromPolledRecords(final ConsumerRecords<byte[], byte[]> polledRecords,
+                                                   final Map<TopicPartition, Long> windowedPartitionsRetention,
+                                                   final Set<TopicPartition> seekToBeginningPartitions) {
+        final Map<TopicPartition, Long> seekTimestamps = new HashMap<>();
+        for (final Map.Entry<TopicPartition, Long> entry : windowedPartitionsRetention.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+            final long retentionPeriod = entry.getValue();
+            final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
+            if (!records.isEmpty()) {
+                final long latestTimestamp = records.get(0).timestamp();
+                final long seekTimestamp = latestTimestamp - retentionPeriod;
+                if (seekTimestamp > 0) {
+                    seekTimestamps.put(partition, seekTimestamp);
+                    log.debug("Start restoring windowed changelog partition {} from stream-time-based timestamp {} " +
+                        "(maxStreamTime={}, retention={}).", partition, seekTimestamp, latestTimestamp, retentionPeriod);
+                    continue;
+                }
+            }
+            log.debug("Start restoring changelog partition {} from the beginning.", partition);
+            seekToBeginningPartitions.add(partition);
+        }
+
+        if (!seekTimestamps.isEmpty()) {
+            final Map<TopicPartition, OffsetAndTimestamp> offsetsByTimestamp =
+                restoreConsumer.offsetsForTimes(seekTimestamps);
+            offsetsByTimestamp.forEach((partition, offsetAndTimestamp) -> {
+                if (offsetAndTimestamp != null) {
+                    restoreConsumer.seek(partition, offsetAndTimestamp.offset());
+                } else {
+                    seekToBeginningPartitions.add(partition);
+                }
+            });
+        }
+    }
+
     @Override
     public void unregister(final Collection<TopicPartition> revokedChangelogs) {
+        unregister(revokedChangelogs, StandbyUpdateListener.SuspendReason.MIGRATED);
+    }
+
+    @Override
+    public void unregister(final Collection<TopicPartition> revokedChangelogs,
+                           final StandbyUpdateListener.SuspendReason reason) {
         // Only changelogs that are initialized have been added to the restore consumer's assignment
         final List<TopicPartition> revokedInitializedChangelogs = new ArrayList<>();
 
@@ -1068,13 +1169,8 @@ public class StoreChangelogReader implements ChangelogReader {
                             // endOffset and storeOffset may be unknown at this point
                             final long storeOffset = storeMetadata.offset() != null ? storeMetadata.offset() : -1;
                             final long endOffset = storeMetadata.endOffset() != null ? storeMetadata.endOffset() : -1;
-                            // Unregistering running standby tasks means the task has been promoted to active.
-                            final StandbyUpdateListener.SuspendReason suspendReason = 
-                                changelogMetadata.stateManager.taskState() == Task.State.RUNNING 
-                                    ? StandbyUpdateListener.SuspendReason.PROMOTED
-                                    : StandbyUpdateListener.SuspendReason.MIGRATED;
                             try {
-                                standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, suspendReason);
+                                standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, reason);
                             } catch (final Exception e) {
                                 throw new StreamsException("Standby updater listener failed on update suspended", e);
                             }

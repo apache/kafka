@@ -18,14 +18,15 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.FileRecords.LogOffsetPosition;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.message.AbortedTxn;
+import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.FileRecords.LogOffsetPosition;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 
@@ -348,7 +349,11 @@ public class LogSegment implements Closeable {
     public void updateTxnIndex(CompletedTxn completedTxn, long lastStableOffset) throws IOException {
         if (completedTxn.isAborted()) {
             LOGGER.trace("Writing aborted transaction {} to transaction index, last stable offset is {}", completedTxn, lastStableOffset);
-            txnIndex.append(new AbortedTxn(completedTxn, lastStableOffset));
+            txnIndex.append(new AbortedTxn()
+                .setProducerId(completedTxn.producerId())
+                .setFirstOffset(completedTxn.firstOffset())
+                .setLastOffset(completedTxn.lastOffset())
+                .setLastStableOffset(lastStableOffset));
         }
     }
 

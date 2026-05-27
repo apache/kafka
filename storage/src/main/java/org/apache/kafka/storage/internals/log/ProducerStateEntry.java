@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
 import java.util.ArrayDeque;
 import java.util.Collection;

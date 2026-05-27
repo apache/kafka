@@ -257,13 +257,13 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.KafkaThread;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.KafkaThread;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -657,7 +657,7 @@ public class KafkaAdminClient extends AdminClient {
                     " must be no smaller than the value of " + AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG + ".");
             } else {
                 log.warn("Overriding the default value for {} ({}) with the explicitly configured request timeout {}",
-                    AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, this.defaultApiTimeoutMs,
+                    AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs,
                     requestTimeoutMs);
                 return requestTimeoutMs;
             }
@@ -900,6 +900,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param now       The current time in milliseconds.
          * @param throwable The failure exception.
          */
+        @SuppressWarnings("NPathComplexity")
         final void fail(long now, Throwable throwable) {
             if (curNode != null) {
                 runnable.nodeReadyDeadlines.remove(curNode);
@@ -921,6 +922,11 @@ public class KafkaAdminClient extends AdminClient {
             }
             nextAllowedTryMs = now + retryBackoff.backoff(tries++);
 
+            // Don't mask VirtualMachineError as TimeoutException - propagate it directly
+            if (throwable instanceof VirtualMachineError) {
+                handleFailure(throwable);
+                return;
+            }
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
                 handleTimeoutFailure(now, throwable);
@@ -3054,7 +3060,8 @@ public class KafkaAdminClient extends AdminClient {
                 Errors.forCode(logDirResult.errorCode()).exception(),
                 replicaInfoMap,
                 logDirResult.totalBytes(),
-                logDirResult.usableBytes()));
+                logDirResult.usableBytes(),
+                logDirResult.isCordoned()));
         }
         return result;
     }
@@ -3864,6 +3871,14 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    /**
+     * Get the metrics kept by the admin client.
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the admin client
+     */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
@@ -5036,10 +5051,10 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse response) {
                 handleNotControllerError(response);
-                RemoveRaftVoterResponse addResponse = (RemoveRaftVoterResponse) response;
-                Errors error = Errors.forCode(addResponse.data().errorCode());
+                RemoveRaftVoterResponse removeResponse = (RemoveRaftVoterResponse) response;
+                Errors error = Errors.forCode(removeResponse.data().errorCode());
                 if (error != Errors.NONE)
-                    future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
+                    future.completeExceptionally(error.exception(removeResponse.data().errorMessage()));
                 else
                     future.complete(null);
             }

@@ -577,16 +577,28 @@ public class StreamsBuilder {
     /**
      * Returns the {@link Topology} that represents the specified processing logic.
      * Note that using this method means no optimizations are performed.
+     * To enable topology optimizations, use {@link #build(Properties)} instead and pass
+     * a {@link Properties} object with {@code topology.optimization} set to
+     * {@link StreamsConfig#OPTIMIZE}.
      *
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
         return build(null);
     }
-    
+
     /**
      * Returns the {@link Topology} that represents the specified processing logic and accepts
      * a {@link Properties} instance used to indicate whether to optimize topology or not.
+     * <p>
+     * To enable topology optimizations, two steps are required:
+     * <ol>
+     *   <li>Set {@code topology.optimization} to {@link StreamsConfig#OPTIMIZE} in the
+     *       provided {@link Properties}.</li>
+     *   <li>Pass that same {@link Properties} object to this method.</li>
+     * </ol>
+     * If {@code topology.optimization} is not set to {@link StreamsConfig#OPTIMIZE} in
+     * {@code props}, no optimizations will be applied even if this method is called.
      *
      * @param props the {@link Properties} used for building possibly optimized topology
      * @return the {@link Topology} that represents the specified processing logic

@@ -21,7 +21,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordM
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
-import org.apache.kafka.common.record.Record
+import org.apache.kafka.common.record.internal.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.server.config.ServerConfigs

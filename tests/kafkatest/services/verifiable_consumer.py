@@ -352,6 +352,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                         handler.handle_partitions_revoked(event, node, self.logger)
                     elif name == "partitions_assigned":
                         handler.handle_partitions_assigned(event, node, self.logger)
+                    elif name == "shutdown_requested":
+                        self.logger.debug("Shutdown has been requested")
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 

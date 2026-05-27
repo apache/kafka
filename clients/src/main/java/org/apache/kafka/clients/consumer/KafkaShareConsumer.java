@@ -35,8 +35,8 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -490,7 +490,10 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * Get the current subscription. Will return the same topics used in the most recent call to
      * {@link #subscribe(Collection)}, or an empty set if no such call has been made.
      *
-     * @return The set of topics currently subscribed to
+     * <p>The returned set is a snapshot of the current subscription at the time of the call. It will not be updated
+     * if the subscription changes afterward.
+     *
+     * @return An immutable snapshot of the set of topics currently subscribed to
      */
     @Override
     public Set<String> subscription() {
@@ -732,6 +735,11 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
 
     /**
      * Get the metrics kept by the consumer
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the consumer
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {

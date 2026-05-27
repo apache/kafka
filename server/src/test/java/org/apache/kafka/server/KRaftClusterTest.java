@@ -34,7 +34,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -776,9 +775,9 @@ public class KRaftClusterTest {
                 TopicPartition topicPartition = new TopicPartition("foo", partitionId);
                 var partition = broker.replicaManager().getPartition(topicPartition);
                 if (isHosted) {
-                    assertNotEquals(kafka.server.HostedPartition.None$.MODULE$, partition, "topicPartition = " + topicPartition);
+                    assertNotEquals(new HostedPartition.None<kafka.cluster.Partition>(), partition, "topicPartition = " + topicPartition);
                 } else {
-                    assertEquals(kafka.server.HostedPartition.None$.MODULE$, partition, "topicPartition = " + topicPartition);
+                    assertEquals(new HostedPartition.None<kafka.cluster.Partition>(), partition, "topicPartition = " + topicPartition);
                 }
             }
         }
@@ -1213,6 +1212,7 @@ public class KRaftClusterTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testCreateClusterAndRestartControllerNode() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
@@ -1453,7 +1453,7 @@ public class KRaftClusterTest {
 
                 // Wait until foo-0 is created on broker0.
                 TestUtils.retryOnExceptionWithTimeout(60000, () -> {
-                    assertTrue(broker0.logManager().getLog(foo0, false).isDefined());
+                    assertTrue(broker0.logManager().getLog(foo0, false).isPresent());
                 });
 
                 // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
@@ -1503,7 +1503,7 @@ public class KRaftClusterTest {
 
                 // Wait until foo-0 is created on broker0.
                 TestUtils.retryOnExceptionWithTimeout(60000, () -> 
-                    assertTrue(broker0.logManager().getLog(foo0, false).isDefined()));
+                    assertTrue(broker0.logManager().getLog(foo0, false).isPresent()));
 
                 // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
                 broker0.shutdown();
@@ -1553,7 +1553,7 @@ public class KRaftClusterTest {
 
                 // Wait until foo-0 is created on broker0.
                 TestUtils.retryOnExceptionWithTimeout(60000, () ->
-                    assertTrue(broker0.logManager().getLog(foo0, false).isDefined()));
+                    assertTrue(broker0.logManager().getLog(foo0, false).isPresent()));
 
                 // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
                 broker0.shutdown();
@@ -1776,11 +1776,6 @@ public class KRaftClusterTest {
         @Override
         public boolean quotaResetRequired(ClientQuotaType quotaType) {
             return true;
-        }
-
-        @Override
-        public boolean updateClusterMetadata(Cluster cluster) {
-            return false;
         }
 
         @Override

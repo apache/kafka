@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.utils.ByteBufferUnmapper;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ByteBufferUnmapper;
 import org.apache.kafka.server.util.LockUtils;
 
 import org.slf4j.Logger;

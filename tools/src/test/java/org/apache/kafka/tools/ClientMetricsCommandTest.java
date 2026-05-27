@@ -27,7 +27,7 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

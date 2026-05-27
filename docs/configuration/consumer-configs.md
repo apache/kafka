@@ -1,6 +1,6 @@
 ---
-title: Consumer Configs
-description: Consumer Configs
+title: Consumer and Share Consumer Configs
+description: Consumer and Share Consumer Configs
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 

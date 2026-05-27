@@ -102,7 +102,7 @@ public class ProducerIdExpirationTest {
     private final ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "");
 
     @ClusterTest
-    void testProducerIdExpirationWithNoTransactions(ClusterInstance cluster) throws InterruptedException, ExecutionException {
+    public void testProducerIdExpirationWithNoTransactions(ClusterInstance cluster) throws InterruptedException, ExecutionException {
         cluster.createTopic(topic1, numPartitions, replicationFactor);
         Producer<byte[], byte[]> producer = cluster.producer(Map.of(ENABLE_IDEMPOTENCE_CONFIG, true));
         // Send records to populate producer state cache.
@@ -123,7 +123,7 @@ public class ProducerIdExpirationTest {
     }
 
     @ClusterTest
-    void testTransactionAfterTransactionIdExpiresButProducerIdRemains(ClusterInstance cluster) throws InterruptedException, ExecutionException {
+    public void testTransactionAfterTransactionIdExpiresButProducerIdRemains(ClusterInstance cluster) throws InterruptedException, ExecutionException {
         cluster.createTopic(topic1, numPartitions, replicationFactor);
         Producer<byte[], byte[]> producer = cluster.producer(transactionalProducerConfig());
         producer.initTransactions();
@@ -188,7 +188,7 @@ public class ProducerIdExpirationTest {
     }
 
     @ClusterTest
-    void testDynamicProducerIdExpirationMs(ClusterInstance cluster) throws InterruptedException, ExecutionException {
+    public void testDynamicProducerIdExpirationMs(ClusterInstance cluster) throws InterruptedException, ExecutionException {
         cluster.createTopic(topic1, numPartitions, replicationFactor);
         Producer<byte[], byte[]> producer = cluster.producer(Map.of(ENABLE_IDEMPOTENCE_CONFIG, true));
 

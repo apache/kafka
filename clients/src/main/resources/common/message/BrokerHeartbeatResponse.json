@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Version 1 is the same as version 0 (new field in request).
+// Version 2 is the same as version 0 (new field in request).
 {
   "apiKey": 63,
   "type": "response",
   "name": "BrokerHeartbeatResponse",
-  "validVersions": "0-1",
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import org.junit.jupiter.api.Test;

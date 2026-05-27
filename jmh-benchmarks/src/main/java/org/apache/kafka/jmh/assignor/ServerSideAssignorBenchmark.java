@@ -135,7 +135,7 @@ public class ServerSideAssignorBenchmark {
         setupTopics();
 
         Map<String, ConsumerGroupMember> members = createMembers();
-        this.groupSpec = AssignorBenchmarkUtils.createGroupSpec(members, subscriptionType, topicResolver);
+        this.groupSpec = AssignorBenchmarkUtils.createConsumerGroupSpec(members, subscriptionType, topicResolver);
 
         if (assignmentType == AssignmentType.INCREMENTAL) {
             simulateIncrementalRebalance();

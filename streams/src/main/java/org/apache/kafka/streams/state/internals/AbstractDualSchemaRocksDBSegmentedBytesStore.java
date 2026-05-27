@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -37,7 +38,6 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +46,7 @@ import java.util.Optional;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
-public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
+public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore, WithRetentionPeriod {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractDualSchemaRocksDBSegmentedBytesStore.class);
 
     private final String name;
@@ -60,7 +60,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     protected boolean consistencyEnabled = false;
     protected Position position;
-    protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
@@ -73,6 +72,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         this.indexKeySchema = indexKeySchema;
         this.segments = segments;
         this.retentionPeriod = retentionPeriod;
+    }
+
+    @Override
+    public long retentionPeriod() {
+        return retentionPeriod;
     }
 
     @Override
@@ -253,18 +257,15 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             metrics
         );
 
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-        segments.setPosition(this.position);
-
         segments.openExisting(internalProcessorContext, observedStreamTime);
+        this.position = segments.position;
+        StoreQueryUtils.maybeMigrateExistingPositionFile(stateStoreContext.stateDir(), name(), this.position);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+            segments::writePosition
         );
 
         open = true;
@@ -277,8 +278,19 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     @Override
-    public void flush() {
-        segments.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        segments.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return segments.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return segments.committedOffset(partition);
     }
 
     @Override

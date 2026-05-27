@@ -63,12 +63,12 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -84,10 +84,10 @@ import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -551,7 +551,7 @@ public class SenderTest {
         try (Metrics m = new Metrics()) {
             // Create a new record accumulator with non-0 partitionAvailabilityTimeoutMs
             // otherwise it wouldn't update the stats.
-            RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42);
+            RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42, false, "");
             long totalSize = 1024 * 1024;
             accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
                 DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, null,

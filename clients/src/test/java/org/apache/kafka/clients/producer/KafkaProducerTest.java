@@ -72,8 +72,8 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -92,10 +92,10 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockPartitioner;
 import org.apache.kafka.test.MockProducerInterceptor;
@@ -2227,7 +2227,7 @@ public class KafkaProducerTest {
             TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data();
             return data.groupId().equals(groupId) &&
                 data.memberId().equals(memberId) &&
-                data.generationId() == generationId &&
+                data.generationIdOrMemberEpoch() == generationId &&
                 data.groupInstanceId().equals(groupInstanceId);
         }, txnOffsetsCommitResponse(Collections.singletonMap(
             new TopicPartition("topic", 0), Errors.NONE)));

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 
@@ -25,6 +26,8 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToSessionHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -32,11 +35,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class RecordConvertersTest {
 
     private final RecordConverter timestampedValueConverter = rawValueToTimestampedValue();
+    private final RecordConverter headersValueConverter = rawValueToHeadersValue();
+    private final RecordConverter sessionValueConverter = rawValueToSessionHeadersValue();
+
 
     @Test
     public void shouldPreserveNullValueOnConversion() {
         final ConsumerRecord<byte[], byte[]> nullValueRecord = new ConsumerRecord<>("", 0, 0L, new byte[0], null);
         assertNull(timestampedValueConverter.convert(nullValueRecord).value());
+        assertNull(headersValueConverter.convert(nullValueRecord).value());
+        assertNull(sessionValueConverter.convert(nullValueRecord).value());
     }
 
     @Test
@@ -50,4 +58,36 @@ public class RecordConvertersTest {
         final byte[] actualValue = timestampedValueConverter.convert(inputRecord).value();
         assertArrayEquals(expectedValue, actualValue);
     }
+
+    @Test
+    public void shouldAddTimestampAndHeadersToValueOnConversionWhenValueIsNotNull() {
+        final long timestamp = 10L;
+        final byte[] value = new byte[1];
+        final Headers headers = new RecordHeaders().add("header-key", "header-value".getBytes());
+        final ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
+            "topic", 1, 0, timestamp, TimestampType.CREATE_TIME, 0, 0, new byte[0], value,
+            headers, Optional.empty());
+        // Expected format: [headersSize(varint)][headersBytes][timestamp(8)][value]
+        final byte[] expectedValue =
+            {50, 2, 20, 'h', 'e', 'a', 'd', 'e', 'r', '-', 'k', 'e', 'y', 24, 'h', 'e', 'a', 'd', 'e',
+                'r', '-', 'v', 'a', 'l', 'u', 'e', 0, 0, 0, 0, 0, 0, 0, 10, value[0]};
+        final byte[] actualValue = headersValueConverter.convert(inputRecord).value();
+        assertArrayEquals(expectedValue, actualValue);
+    }
+
+    @Test
+    public void shouldAddHeadersToValueOnConversionWhenValueIsNotNull() {
+        final byte[] value = new byte[1];
+        final Headers headers = new RecordHeaders().add("header-key", "header-value".getBytes());
+        final ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
+            "topic", 1, 0, 0, TimestampType.CREATE_TIME, 0, 0, new byte[0], value,
+            headers, Optional.empty());
+        // Expected format: [headersSize(varint)][headersBytes][value]
+        final byte[] expectedValue =
+            {50, 2, 20, 'h', 'e', 'a', 'd', 'e', 'r', '-', 'k', 'e', 'y', 24, 'h', 'e', 'a', 'd', 'e',
+                'r', '-', 'v', 'a', 'l', 'u', 'e', value[0]};
+        final byte[] actualValue = sessionValueConverter.convert(inputRecord).value();
+        assertArrayEquals(expectedValue, actualValue);
+    }
+
 }

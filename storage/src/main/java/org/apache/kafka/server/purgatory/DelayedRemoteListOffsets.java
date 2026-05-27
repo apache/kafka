@@ -19,8 +19,9 @@ package org.apache.kafka.server.purgatory;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
@@ -40,15 +41,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-
 public class DelayedRemoteListOffsets extends DelayedOperation {
 
     private static final Logger LOG = LoggerFactory.getLogger(DelayedRemoteListOffsets.class);
 
     // For compatibility, metrics are defined to be under `kafka.server.DelayedRemoteListOffsetsMetrics` class
-    private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedRemoteListOffsetsMetrics");
+    static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedRemoteListOffsetsMetrics");
     static final Meter AGGREGATE_EXPIRATION_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
     static final Map<TopicPartition, Meter> PARTITION_EXPIRATION_METERS = new ConcurrentHashMap<>();
 
@@ -189,6 +187,13 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
         PARTITION_EXPIRATION_METERS.computeIfAbsent(partition, tp -> METRICS_GROUP.newMeter("ExpiresPerSec",
                 "requests",
                 TimeUnit.SECONDS,
-                mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))).mark();
+                MetricsUtils.getTags("topic", tp.topic(), "partition", String.valueOf(tp.partition())))).mark();
+    }
+
+    public static void removePartitionMetrics(TopicPartition partition) {
+        if (PARTITION_EXPIRATION_METERS.remove(partition) != null) {
+            METRICS_GROUP.removeMetric("ExpiresPerSec",
+                    MetricsUtils.getTags("topic", partition.topic(), "partition", String.valueOf(partition.partition())));
+        }
     }
 }

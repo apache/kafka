@@ -423,11 +423,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     }
 
     @Override
-    public MetricsRegistry registry() {
-        return this.registry;
-    }
-
-    @Override
     public void onUpdateLastCommittedOffset(TopicPartition tp, long offset) {
         CoordinatorMetricsShard shard = shards.get(tp);
         if (shard != null) {

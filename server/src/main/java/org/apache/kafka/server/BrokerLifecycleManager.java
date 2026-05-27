@@ -27,8 +27,8 @@ import org.apache.kafka.common.requests.BrokerHeartbeatRequest;
 import org.apache.kafka.common.requests.BrokerHeartbeatResponse;
 import org.apache.kafka.common.requests.BrokerRegistrationRequest;
 import org.apache.kafka.common.requests.BrokerRegistrationResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.queue.EventQueue;
@@ -48,6 +48,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -55,16 +56,17 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 /**
  * The broker lifecycle manager owns the broker state.
  *
- * Its inputs are messages passed in from other parts of the broker and from the
+ * <p>Its inputs are messages passed in from other parts of the broker and from the
  * controller: requests to start up, or shut down, for example. Its output are the broker
  * state and various futures that can be used to wait for broker state transitions to
  * occur.
  *
- * The lifecycle manager handles registering the broker with the controller, as described
+ * <p>The lifecycle manager handles registering the broker with the controller, as described
  * in KIP-631. After registration is complete, it handles sending periodic broker
- * heartbeats and processing the responses.
+ * heartbeats and processing the responses. Once the broker has caught up with the cluster metadata, it starts
+ * sending the Uuid of its cordoned log directories in its heartbeats.
  *
- * This code uses an event queue paradigm. Modifications get translated into events, which
+ * <p>This code uses an event queue paradigm. Modifications get translated into events, which
  * are placed on the queue to be processed sequentially. As described in the JavaDoc for
  * each variable, most mutable state can be accessed only from that event queue thread.
  * In some cases we expose a volatile variable which can be read from any thread, but only
@@ -76,8 +78,9 @@ public class BrokerLifecycleManager {
     private final KafkaEventQueue eventQueue;
     private final AbstractKafkaConfig config;
     private final Time time;
-    private final Set<Uuid> logDirs;
+    private final Map<String, Uuid> logDirs;
     private final Runnable shutdownHook;
+    private final Supplier<Boolean> cordonedLogDirsSupported;
 
     /**
      * The broker id.
@@ -144,7 +147,13 @@ public class BrokerLifecycleManager {
      * to the Controller.
      * This variable can only be read or written from the event queue thread.
      */
-    private Map<Uuid, Boolean> offlineDirs = new HashMap<>();
+    private final Map<Uuid, Boolean> offlineDirs = new HashMap<>();
+
+    /**
+     * Set of cordoned log directories. The is null at startup until the broker has caught up with the metadata
+     * This variable can only be read or written from the event queue thread.
+     */
+    private Set<Uuid> cordonedLogDirs;
 
     /**
      * True if we sent an event queue to the active controller requesting controlled
@@ -210,20 +219,22 @@ public class BrokerLifecycleManager {
             AbstractKafkaConfig config,
             Time time,
             String threadNamePrefix,
-            Set<Uuid> logDirs) {
-        this(config, time, threadNamePrefix, logDirs, () -> { });
+            Map<String, Uuid> logDirs) {
+        this(config, time, threadNamePrefix, logDirs, () -> { }, () -> false);
     }
 
     public BrokerLifecycleManager(
             AbstractKafkaConfig config,
             Time time,
             String threadNamePrefix,
-            Set<Uuid> logDirs,
-            Runnable shutdownHook) {
+            Map<String, Uuid> logDirs,
+            Runnable shutdownHook,
+            Supplier<Boolean> cordonedLogDirsSupported) {
         this.config = config;
         this.time = time;
         this.logDirs = logDirs;
         this.shutdownHook = shutdownHook;
+        this.cordonedLogDirsSupported = cordonedLogDirsSupported;
         LogContext logContext = new LogContext("[BrokerLifecycleManager id=" + this.config.nodeId() + "] ");
         this.logger = logContext.logger(BrokerLifecycleManager.class);
         this.nodeId = config.nodeId();
@@ -273,6 +284,16 @@ public class BrokerLifecycleManager {
         eventQueue.scheduleDeferred("offlineDirFailure",
                 new EventQueue.DeadlineFunction(time.nanoseconds() + MILLISECONDS.toNanos(timeout)),
                 new OfflineDirBrokerFailureEvent(directory));
+    }
+
+    /**
+     * Propagate directory cordoned to the controller.
+     * @param directories The IDs for the directories that is cordoned.
+     */
+    public void propagateDirectoryCordoned(Set<Uuid> directories) {
+        if (cordonedLogDirsSupported.get()) {
+            eventQueue.append(new CordonedDirEvent(directories));
+        }
     }
 
     public void resendBrokerRegistration() {
@@ -397,6 +418,23 @@ public class BrokerLifecycleManager {
         }
     }
 
+    private class CordonedDirEvent implements EventQueue.Event {
+
+        private final Set<Uuid> dirs;
+
+        CordonedDirEvent(Set<Uuid> dirs) {
+            this.dirs = dirs;
+        }
+
+        @Override
+        public void run() {
+            cordonedLogDirs = dirs;
+            if (registered) {
+                scheduleNextCommunicationImmediately();
+            }
+        }
+    }
+
     private class StartupEvent implements EventQueue.Event {
 
         private final Supplier<Long> highestMetadataOffsetProvider;
@@ -442,7 +480,7 @@ public class BrokerLifecycleManager {
                         .setMinSupportedVersion(range.min())
                         .setMaxSupportedVersion(range.max()))
         );
-        List<Uuid> sortedLogDirs = new ArrayList<>(logDirs);
+        List<Uuid> sortedLogDirs = new ArrayList<>(logDirs.values());
         sortedLogDirs.sort(Uuid::compareTo);
         BrokerRegistrationRequestData data = new BrokerRegistrationRequestData()
             .setBrokerId(nodeId)
@@ -496,10 +534,10 @@ public class BrokerLifecycleManager {
                 return;
             }
             if (response.authenticationException() != null) {
-                logger.error("Unable to register broker $nodeId because of an authentication exception.", response.authenticationException());
+                logger.error("Unable to register broker {} because of an authentication exception.", nodeId, response.authenticationException());
                 scheduleNextCommunicationAfterFailure();
             } else if (response.versionMismatch() != null) {
-                logger.error("Unable to register broker $nodeId because of an API version problem.", response.versionMismatch());
+                logger.error("Unable to register broker {} because of an API version problem.", nodeId, response.versionMismatch());
                 scheduleNextCommunicationAfterFailure();
             } else if (response.responseBody() == null) {
                 logger.warn("Unable to register broker {}.", nodeId);
@@ -532,6 +570,9 @@ public class BrokerLifecycleManager {
             .setWantFence(!readyToUnfence)
             .setWantShutDown(state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
             .setOfflineLogDirs(new ArrayList<>(offlineDirs.keySet()));
+        if (initialCatchUpFuture.isDone() && !initialCatchUpFuture.isCompletedExceptionally() && cordonedLogDirsSupported.get()) {
+            data.setCordonedLogDirs(List.copyOf(cordonedLogDirs));
+        }
         if (logger.isTraceEnabled()) {
             logger.trace("Sending broker heartbeat {}", data);
         }
@@ -575,6 +616,7 @@ public class BrokerLifecycleManager {
             this.currentOfflineDirs = currentOfflineDirs;
         }
 
+        @SuppressWarnings({"CyclomaticComplexity"})
         @Override
         public void run() {
             communicationInFlight = false;
@@ -606,6 +648,12 @@ public class BrokerLifecycleManager {
                                 logger.info("The broker has caught up. Transitioning from STARTING to RECOVERY.");
                                 state = BrokerState.RECOVERY;
                                 initialCatchUpFuture.complete(null);
+                                // Now that the broker has caught up with the latest metadata, the configuration should
+                                // be up to date, so we can retrieve the cordoned log dirs to include them in the
+                                // next heartbeat request
+                                cordonedLogDirs = config.cordonedLogDirs().stream()
+                                    .flatMap(logDir -> Optional.ofNullable(logDirs.get(logDir)).stream())
+                                    .collect(Collectors.toSet());
                             } else {
                                 logger.debug("The broker is STARTING. Still waiting to catch up with cluster metadata.");
                             }

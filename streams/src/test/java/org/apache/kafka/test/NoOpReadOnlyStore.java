@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
@@ -24,13 +27,16 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import java.io.File;
+import java.util.Map;
 
 public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, StateStore {
     private final String name;
     private final boolean rocksdbStore;
+    private final StateRestoreCallback stateRestoreCallback;
     private boolean open = true;
     public boolean initialized;
-    public boolean flushed;
+    public boolean committed;
+    public IsolationLevel isolationLevel;
 
     public NoOpReadOnlyStore() {
         this("", false);
@@ -42,8 +48,15 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
 
     public NoOpReadOnlyStore(final String name,
                              final boolean rocksdbStore) {
+        this(name, rocksdbStore, null);
+    }
+
+    public NoOpReadOnlyStore(final String name,
+                             final boolean rocksdbStore,
+                             final StateRestoreCallback stateRestoreCallback) {
         this.name = name;
         this.rocksdbStore = rocksdbStore;
+        this.stateRestoreCallback = stateRestoreCallback;
     }
 
     @Override
@@ -85,12 +98,12 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
             new File(stateStoreContext.stateDir() + File.separator + name).mkdir();
         }
         this.initialized = true;
-        stateStoreContext.register(root, (k, v) -> { });
+        stateStoreContext.register(root, stateRestoreCallback != null ? stateRestoreCallback : (k, v) -> { });
     }
 
     @Override
-    public void flush() {
-        flushed = true;
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        committed = true;
     }
 
     @Override
@@ -111,6 +124,12 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     @Override
     public Position getPosition() {
         throw new UnsupportedOperationException("Position handling not implemented");
+    }
+
+    @Override
+    public ReadOnlyKeyValueStore<K, V> readOnly(final IsolationLevel level) {
+        this.isolationLevel = level;
+        return this;
     }
 
 }

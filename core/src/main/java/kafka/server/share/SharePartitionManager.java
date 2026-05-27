@@ -29,9 +29,9 @@ import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.partition.PartitionListener;
 import org.apache.kafka.server.share.CachedSharePartition;
@@ -53,7 +53,6 @@ import org.apache.kafka.server.share.session.ShareSession;
 import org.apache.kafka.server.share.session.ShareSessionCache;
 import org.apache.kafka.server.share.session.ShareSessionKey;
 import org.apache.kafka.server.storage.log.FetchParams;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -75,6 +74,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The SharePartitionManager is responsible for managing the SharePartitions and ShareSessions.
@@ -105,9 +105,9 @@ public class SharePartitionManager implements AutoCloseable {
     private final ShareSessionCache cache;
 
     /**
-     * The group config manager is used to retrieve the values for dynamic group configurations
+     * The provider used to retrieve share group dynamic configuration values.
      */
-    private final GroupConfigManager groupConfigManager;
+    private final ShareGroupConfigProvider configProvider;
 
     /**
      * The default record lock duration is the time in milliseconds that a record lock is held for.
@@ -149,6 +149,11 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final BrokerTopicStats brokerTopicStats;
 
+    /**
+     * Supplier indicating whether DLQ support is enabled.
+     */
+    private final Supplier<Boolean> shareGroupDlqEnableSupplier;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -158,8 +163,9 @@ public class SharePartitionManager implements AutoCloseable {
         int maxInFlightRecords,
         long remoteFetchMaxWaitMs,
         Persister persister,
-        GroupConfigManager groupConfigManager,
-        BrokerTopicStats brokerTopicStats
+        ShareGroupConfigProvider configProvider,
+        BrokerTopicStats brokerTopicStats,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this(replicaManager,
             time,
@@ -170,9 +176,10 @@ public class SharePartitionManager implements AutoCloseable {
             maxInFlightRecords,
             remoteFetchMaxWaitMs,
             persister,
-            groupConfigManager,
+            configProvider,
             new ShareGroupMetrics(time),
-            brokerTopicStats
+            brokerTopicStats,
+            shareGroupDlqEnableSupplier
         );
     }
 
@@ -186,9 +193,10 @@ public class SharePartitionManager implements AutoCloseable {
         int maxInFlightRecords,
         long remoteFetchMaxWaitMs,
         Persister persister,
-        GroupConfigManager groupConfigManager,
+        ShareGroupConfigProvider configProvider,
         ShareGroupMetrics shareGroupMetrics,
-        BrokerTopicStats brokerTopicStats
+        BrokerTopicStats brokerTopicStats,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this(replicaManager,
             time,
@@ -201,13 +209,15 @@ public class SharePartitionManager implements AutoCloseable {
             maxInFlightRecords,
             remoteFetchMaxWaitMs,
             persister,
-            groupConfigManager,
+            configProvider,
             shareGroupMetrics,
-            brokerTopicStats
+            brokerTopicStats,
+            shareGroupDlqEnableSupplier
         );
     }
 
     // Visible for testing.
+    @SuppressWarnings("ParameterNumber")
     SharePartitionManager(
             ReplicaManager replicaManager,
             Time time,
@@ -219,9 +229,10 @@ public class SharePartitionManager implements AutoCloseable {
             int maxInFlightRecords,
             long remoteFetchMaxWaitMs,
             Persister persister,
-            GroupConfigManager groupConfigManager,
+            ShareGroupConfigProvider configProvider,
             ShareGroupMetrics shareGroupMetrics,
-            BrokerTopicStats brokerTopicStats
+            BrokerTopicStats brokerTopicStats,
+            Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -233,10 +244,11 @@ public class SharePartitionManager implements AutoCloseable {
         this.maxInFlightRecords = maxInFlightRecords;
         this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
         this.persister = persister;
-        this.groupConfigManager = groupConfigManager;
+        this.configProvider = configProvider;
         this.shareGroupMetrics = shareGroupMetrics;
         this.brokerTopicStats = brokerTopicStats;
         this.cache.registerShareGroupListener(new ShareGroupListenerImpl());
+        this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
     }
 
     /**
@@ -362,7 +374,7 @@ public class SharePartitionManager implements AutoCloseable {
         ShareSessionKey key = shareSessionKey(groupId, memberId);
         if (cache.remove(key) == null) {
             log.error("Share session error for {}: no such share session found", key);
-            return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
+            return CompletableFuture.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
         } else {
             log.debug("Removed share session with key {}", key);
         }
@@ -564,12 +576,11 @@ public class SharePartitionManager implements AutoCloseable {
     /**
      * The handler for share version feature metadata changes.
      * @param shareVersion the new share version feature
-     * @param isEnabledFromConfig whether the share version feature is enabled from config
      */
-    public void onShareVersionToggle(ShareVersion shareVersion, boolean isEnabledFromConfig) {
+    public void onShareVersionToggle(ShareVersion shareVersion) {
         // Clear the cache and remove all share partitions from the cache if the share version does
         // not support share groups.
-        if (!shareVersion.supportsShareGroups() && !isEnabledFromConfig) {
+        if (!shareVersion.supportsShareGroups()) {
             cache.removeAllSessions();
             Set<SharePartitionKey> sharePartitionKeys = partitionCache.cachedSharePartitionKeys();
             // Remove all share partitions from partition cache.
@@ -720,8 +731,9 @@ public class SharePartitionManager implements AutoCloseable {
                             time,
                             persister,
                             replicaManager,
-                            groupConfigManager,
-                            listener
+                            configProvider,
+                            listener,
+                            shareGroupDlqEnableSupplier
                     );
                 });
     }

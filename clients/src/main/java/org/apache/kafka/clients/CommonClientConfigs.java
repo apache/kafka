@@ -247,6 +247,12 @@ public class CommonClientConfigs {
             "metadata for this interval, client repeats the bootstrap process using <code>bootstrap.servers</code> configuration.";
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = 300 * 1000;
 
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = "metadata.cluster.check.enable";
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = "Whether the client should send cluster and node information " +
+            "when connecting to a broker to enable it to check for a misrouted connection. This configuration is ignored if " +
+            "rebootstrapping is disabled by setting the configuration <code>metadata.recovery.strategy=none</code>. If the client " +
+            "is connecting to a broker older than Apache Kafka 4.4, no checking is performed and this configuration has no effect.";
+
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
      * is explicitly configured but the maximum reconnect backoff is not explicitly configured.

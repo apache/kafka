@@ -52,7 +52,7 @@ Kafka is a partitioned system so not all servers have the complete data set. Ins
 
 All systems of this nature have the question of how a particular piece of data is assigned to a particular partition. Kafka clients directly control this assignment, the brokers themselves enforce no particular semantics of which messages should be published to a particular partition. Rather, to publish messages the client directly addresses messages to a particular partition, and when fetching messages, fetches from a particular partition. If two clients want to use the same partitioning scheme they must use the same method to compute the mapping of key to partition.
 
-These requests to publish or fetch data must be sent to the broker that is currently acting as the leader for a given partition. This condition is enforced by the broker, so a request for a particular partition to the wrong broker will result in an the NotLeaderForPartition error code (described below).
+These requests to publish or fetch data must be sent to the broker that is currently acting as the leader for a given partition. This condition is enforced by the broker, so a request for a particular partition to the wrong broker will result in the NotLeaderForPartition error code (described below).
 
 How can the client find out which topics exist, what partitions they have, and which brokers currently host those partitions so that it can direct its requests to the right hosts? This information is dynamic, so you can't just configure each client with some static mapping file. Instead all Kafka brokers can answer a metadata request that describes the current state of the cluster: what topics there are, which partitions those topics have, which broker is the leader for those partitions, and the host and port information for these brokers.
 
@@ -79,7 +79,7 @@ Partitioning really serves two purposes in Kafka:
 
 For a given use case you may care about only one of these or both.
 
-To accomplish simple load balancing a simple approach would be for the client to just round robin requests over all brokers. Another alternative, in an environment where there are many more producers than brokers, would be to have each client chose a single partition at random and publish to that. This later strategy will result in far fewer TCP connections.
+To accomplish simple load balancing a simple approach would be for the client to just round robin requests over all brokers. Another alternative, in an environment where there are many more producers than brokers, would be to have each client choose a single partition at random and publish to that. This latter strategy will result in far fewer TCP connections.
 
 Semantic partitioning means using some key in the message to assign messages to partitions. For example if you were processing a click message stream you might want to partition the stream by the user id so that all data for a particular user would go to a single consumer. To accomplish this the client can take a key associated with the message and use some hash of this key to choose the partition to which to deliver the message.
 
@@ -113,7 +113,7 @@ The following sequence may be used by a client to obtain supported API versions 
   2. On receiving `ApiVersionsRequest`, a broker returns its full list of supported ApiKeys and versions regardless of current authentication state (e.g., before SASL authentication on an SASL listener, do note that no Kafka protocol requests may take place on an SSL listener before the SSL handshake is finished). If this is considered to leak information about the broker version a workaround is to use SSL with client authentication which is performed at an earlier stage of the connection where the `ApiVersionRequest` is not available. Also, note that broker versions older than 0.10.0.0 do not support this API and will either ignore the request or close connection in response to the request. Also note that if the client `ApiVersionsRequest` version is unsupported by the broker (client is ahead), and the broker version is 2.4.0 or greater, then the broker will respond with a version 0 ApiVersionsResponse with the error code set to `UNSUPPORTED_VERSION` and the `api_versions` field populated with the supported version of the `ApiVersionsRequest`. It is then up to the client to retry, making another `ApiVersionsRequest` using the highest version supported by the client and broker. See [KIP-511: Collect and Expose Client's Name and Version in the Brokers](https://cwiki.apache.org/confluence/x/qRJ4Bw)
   3. If multiple versions of an API are supported by broker and client, clients are recommended to use the latest version supported by the broker and itself.
   4. Deprecation of a protocol version is done by marking an API version as deprecated in the protocol documentation.
-  5. Supported API versions obtained from a broker are only valid for the connection on which that information is obtained. In the event of disconnection, the client should obtain the information from the broker again, as the broker might have been upgraded/downgraded in the mean time.
+  5. Supported API versions obtained from a broker are only valid for the connection on which that information is obtained. In the event of disconnection, the client should obtain the information from the broker again, as the broker might have been upgraded/downgraded in the meantime.
 
 
 
@@ -215,3 +215,19 @@ Others have asked if maybe we shouldn't support many different protocols. Prior 
 Another question is why we don't adopt XMPP, STOMP, AMQP or an existing protocol. The answer to this varies by protocol, but in general the problem is that the protocol does determine large parts of the implementation and we couldn't do what we are doing if we didn't have control over the protocol. Our belief is that it is possible to do better than existing messaging systems have in providing a truly distributed messaging system, and to do this we need to build something that works differently.
 
 A final question is why we don't use a system like Protocol Buffers or Thrift to define our request messages. These packages excel at helping you to managing lots and lots of serialized messages. However we have only a few messages. Support across languages is somewhat spotty (depending on the package). Finally the mapping between binary log format and wire protocol is something we manage somewhat carefully and this would not be possible with these systems. Finally we prefer the style of versioning APIs explicitly and checking this to inferring new values as nulls as it allows more nuanced control of compatibility.
+
+## Recommendations for 3rd‑party Clients: Member ID Format
+
+When a Kafka client participates in group protocols (e.g., `ConsumerGroupHeartbeat` RPC), it must generate a **member ID** to identify itself to the broker. While the protocol does not strictly enforce the format of this ID, we strongly recommend the following:
+
+1. **Use a base64‑encoded UUID** as the member ID.
+2. **Encode the UUID using URL‑safe base64** (without `+` or `/` characters).
+3. **Omit hyphens** — the resulting string should be a continuous sequence of alphanumeric characters (e.g., `abc123def456`).
+
+**Example**  
+A standard UUID (`00000000-0000-0000-0000-000000000000`) should be transformed into a URL‑safe base64 string like: `YzYxNjQ4OTItZDE1Mi00Y2E4LWIyNzUtYmIwMzAwMDAwMDAw`
+
+*(Note: This is illustrative; actual encoding depends on the UUID bytes.)*
+
+**Important**  
+While this is a strong recommendation, the protocol does **not** reject member IDs that deviate from this format.

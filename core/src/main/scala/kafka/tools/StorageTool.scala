@@ -26,12 +26,14 @@ import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace, Subparser, Subparsers}
 import net.sourceforge.argparse4j.internal.HelpScreenException
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.utils.{Exit, Utils}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.Exit
 import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
 import org.apache.kafka.raft.{DynamicVoters, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.util.TerseFailure
 
 import java.util
 import scala.collection.mutable
@@ -123,6 +125,7 @@ object StorageTool extends Logging {
     val formatter = new Formatter().
       setPrintStream(printStream).
       setNodeId(config.nodeId).
+      setWriteBootstrapSnapshot(config.processRoles.contains(ProcessRole.ControllerRole)).
       setClusterId(namespace.getString("cluster_id")).
       setUnstableFeatureVersionsEnabled(config.unstableFeatureVersionsEnabled).
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).

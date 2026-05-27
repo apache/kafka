@@ -35,12 +35,14 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
 
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "List of topic configuration properties and/or regexes "
                                                                 + "that should not be replicated.";
-    public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = "follower\\.replication\\.throttled\\.replicas, "
-                                                                   + "leader\\.replication\\.throttled\\.replicas, "
-                                                                   + "message\\.timestamp\\.difference\\.max\\.ms, "
-                                                                   + "message\\.timestamp\\.type, "
-                                                                   + "unclean\\.leader\\.election\\.enable, "
-                                                                   + "min\\.insync\\.replicas";
+    public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = "follower.replication.throttled.replicas, "
+                                                                   + "leader.replication.throttled.replicas, "
+                                                                   + "message.timestamp.difference.max.ms, "
+                                                                   + "log.message.timestamp.before.max.ms, "
+                                                                   + "log.message.timestamp.after.max.ms, "
+                                                                   + "message.timestamp.type, "
+                                                                   + "unclean.leader.election.enable, "
+                                                                   + "min.insync.replicas";
     private Pattern excludePattern = MirrorUtils.compilePatternList(CONFIG_PROPERTIES_EXCLUDE_DEFAULT);
     private String useDefaultsFrom = USE_DEFAULTS_FROM_DEFAULT;
 

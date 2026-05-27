@@ -78,6 +78,7 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.mockito.stubbing.Answer;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -126,6 +127,7 @@ import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -309,7 +311,7 @@ public class KafkaStreamsTest {
     }
 
     private void prepareConsumer(final StreamThread thread, final AtomicReference<StreamThread.State> state) {
-        doAnswer(invocation -> {
+        final Answer<Object> shutdownAnswer = invocation -> {
             supplier.consumer.close(
                 org.apache.kafka.clients.consumer.CloseOptions.groupMembershipOperation(org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
             );
@@ -324,7 +326,9 @@ public class KafkaStreamsTest {
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
             return null;
-        }).when(thread).shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        };
+        doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.DEFAULT);
+        doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     }
 
     private void prepareThreadLock(final StreamThread thread) {
@@ -416,32 +420,13 @@ public class KafkaStreamsTest {
             try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
                 assertEquals(1, constructed.constructed().size());
                 final StateDirectory stateDirectory = constructed.constructed().get(0);
-                verify(stateDirectory, times(0)).initializeStartupTasks(any(), any(), any());
+                verify(stateDirectory, times(0)).initializeStartupStores(any(), any(), any());
                 streams.start();
-                verify(stateDirectory, times(1)).initializeStartupTasks(any(), any(), any());
+                verify(stateDirectory, times(1)).initializeStartupStores(any(), any(), any());
             }
         }
     }
 
-    @Test
-    public void shouldCloseStartupTasksAfterFirstRebalance() throws Exception {
-        prepareStreams();
-        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
-        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
-        prepareThreadState(streamThreadOne, state1);
-        prepareThreadState(streamThreadTwo, state2);
-        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
-            (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
-            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-                assertEquals(1, constructed.constructed().size());
-                final StateDirectory stateDirectory = constructed.constructed().get(0);
-                streams.setStateListener(streamsStateListener);
-                streams.start();
-                waitForCondition(() -> streams.state() == State.RUNNING, "Streams never started.");
-                verify(stateDirectory, times(1)).closeStartupTasks();
-            }
-        }
-    }
 
     @Test
     public void stateShouldTransitToRunningIfNonDeadThreadsBackToRunning() throws Exception {
@@ -1892,6 +1877,112 @@ public class KafkaStreamsTest {
                 assertTrue(appender.getMessages().stream()
                     .anyMatch(msg -> msg.contains("A non-default kafka client supplier was supplied. " +
                         "Note that supplying a custom main consumer is not supported with the STREAMS protocol.")));
+            }
+        }
+    }
+
+    @Test
+    public void shouldCallCleanOnStartupOnlyWhenEnabled() {
+        props.put(StreamsConfig.STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG, 100);
+
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
+                (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                assertEquals(1, constructed.constructed().size());
+                final StateDirectory stateDirectory = constructed.constructed().get(0);
+                streams.start();
+                verify(stateDirectory).cleanOutdatedDirsOnStartup(100);
+            }
+        }
+    }
+
+    @Test
+    public void shouldNotCallCleanOnStartupByDefault() {
+        prepareStreams();
+        prepareStreamThread(streamThreadOne, 1);
+        prepareStreamThread(streamThreadTwo, 2);
+
+        try (final MockedConstruction<StateDirectory> constructed = mockConstruction(StateDirectory.class,
+                (mock, context) -> when(mock.initializeProcessId()).thenReturn(UUID.randomUUID()))) {
+            try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+                assertEquals(1, constructed.constructed().size());
+                final StateDirectory stateDirectory = constructed.constructed().get(0);
+                streams.start();
+                verify(stateDirectory, never()).cleanOutdatedDirsOnStartup(anyLong());
+            }
+        }
+    }
+
+    @Test
+    public void shouldHandleCloseAfterErrorState() throws Exception {
+        // Regression test for the race condition bug fixed by KAFKA-17379 that also fixed KAFKA-16600.
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING,
+                "Streams never started"
+            );
+
+            final int numberOfConcurrentCloseThreads = 10;
+            final AtomicReference<Throwable> closeException = new AtomicReference<>();
+            final CountDownLatch startLatch = new CountDownLatch(1);
+            final CountDownLatch completionLatch = new CountDownLatch(numberOfConcurrentCloseThreads + 1);
+
+            // Launch multiple close() threads
+            for (int i = 0; i < numberOfConcurrentCloseThreads; i++) {
+                new Thread(
+                    () -> {
+                        try {
+                            startLatch.await();
+                            streams.close(Duration.ofSeconds(10));
+                        } catch (final Throwable t) {
+                            closeException.compareAndSet(null, t);
+                        } finally {
+                            completionLatch.countDown();
+                        }
+                    },
+                    "CloseThread-" + i
+                ).start();
+            }
+
+            // Launch error thread
+            new Thread(
+                () -> {
+                    try {
+                        startLatch.await();
+                        streams.closeToError();
+                    } catch (final Throwable t) {
+                        // Ignore - this is expected to race
+                    } finally {
+                        completionLatch.countDown();
+                    }
+                },
+                "ErrorThread"
+            ).start();
+
+            // Start the race
+            startLatch.countDown();
+
+            // Wait for completion
+            assertTrue(
+                completionLatch.await(15, TimeUnit.SECONDS),
+                "All threads should complete within timeout"
+            );
+
+            if (closeException.get() != null) {
+                // Before fix: StreamsException("Failed to shut down while in state ERROR")
+                // After fix:  No exception
+                fail("Race condition detected; close() threw exception", closeException.get());
             }
         }
     }

@@ -29,7 +29,8 @@ import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, SimpleRecord, TimestampType}
+import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.record.internal.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -46,6 +47,7 @@ import org.apache.kafka.storage.internals.log.AppendOrigin
 import com.google.re2j.{Pattern, PatternSyntaxException}
 import org.apache.kafka.common.errors.InvalidRegularExpression
 
+import java.util
 import java.util.Optional
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -257,8 +259,8 @@ class TransactionStateManager(brokerId: Int,
     expiredForPartition: Iterable[TransactionalIdCoordinatorEpochAndMetadata],
     tombstoneRecords: MemoryRecords
   ): Unit = {
-    def removeFromCacheCallback(responses: collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
-      responses.foreachEntry { (topicPartition, response) =>
+    def removeFromCacheCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+      responses.forEach { (topicPartition, response) =>
         inReadLock[Exception](stateLock, () => {
           transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
             expiredForPartition.foreach { idCoordinatorEpochAndMetadata =>
@@ -309,6 +311,14 @@ class TransactionStateManager(brokerId: Int,
 
   def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     getAndMaybeAddTransactionState(transactionalId, None)
+  }
+
+  // Visible for testing — returns Java Optional instead of Scala Either/Option
+  def getTransactionMetadata(transactionalId: String): java.util.Optional[TransactionMetadata] = {
+    getTransactionState(transactionalId) match {
+      case Right(Some(epochAndMeta)) => java.util.Optional.of(epochAndMeta.transactionMetadata)
+      case _ => java.util.Optional.empty()
+    }
   }
 
   def putTransactionStateIfNotExists(txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
@@ -491,24 +501,23 @@ class TransactionStateManager(brokerId: Int,
                 fileRecords.readInto(buffer, 0)
                 MemoryRecords.readableRecords(buffer)
             }
+
+            def unknownVersionWarning(versionType: String, version: Short): String =
+              s"Unknown message $versionType with version $version" +
+                s" while loading transaction state from $topicPartition. Ignoring it. " +
+                s"It could be a left over from an aborted upgrade."
             memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
-                val transactionalId = try Some(TransactionLog.readTxnRecordKey(record.key))
-                catch {
-                  case e: IllegalStateException =>
-                    warn(s"Unknown message key version while loading transaction state from $topicPartition. " +
-                      s"Ignoring it. It could be a left over from an aborted upgrade", e)
-                    None
-                }
-                transactionalId.foreach { txnId =>
-                  // load transaction metadata along with transaction state
-                  val txnMetadata = TransactionLog.readTxnRecordValue(txnId, record.value)
-                  if (txnMetadata == null) {
-                    loadedTransactions.remove(txnId)
-                  } else {
-                    loadedTransactions.put(txnId, txnMetadata)
-                  }
+                TransactionLog.read(record.key(), record.value()) match {
+                  case v: TransactionLog.UnknownKeyVersion =>
+                    warn(unknownVersionWarning("key", v.version()))
+                  case v: TransactionLog.UnknownValueVersion =>
+                    warn(unknownVersionWarning("value", v.version()))
+                  case r: TransactionLog.TxnTombstone =>
+                    loadedTransactions.remove(r.transactionId())
+                  case r: TransactionLog.TxnRecord =>
+                    loadedTransactions.put(r.transactionId(), r.metadata())
                 }
               }
               currOffset = batch.nextOffset
@@ -670,13 +679,13 @@ class TransactionStateManager(brokerId: Int,
     val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
 
     // set the callback function to update transaction status in cache after log append completed
-    def updateCacheCallback(responseStatus: collection.Map[TopicIdPartition, PartitionResponse]): Unit = {
+    def updateCacheCallback(responseStatus: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
       // the append response should only contain the topics partition
-      if (responseStatus.size != 1 || !responseStatus.contains(transactionStateTopicIdPartition))
+      if (responseStatus.size != 1 || !responseStatus.containsKey(transactionStateTopicIdPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
           .format(responseStatus, transactionStateTopicPartition))
 
-      val status = responseStatus(transactionStateTopicIdPartition)
+      val status = responseStatus.get(transactionStateTopicIdPartition)
 
       var responseError = if (status.error == Errors.NONE) {
         Errors.NONE

@@ -18,12 +18,12 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.RaftClientTestContext;

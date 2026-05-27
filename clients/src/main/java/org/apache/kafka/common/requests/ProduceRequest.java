@@ -24,15 +24,15 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.BaseRecords;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -174,7 +174,7 @@ public class ProduceRequest extends AbstractRequest {
             }
             tpr.partitionResponses().add(new ProduceResponseData.PartitionProduceResponse()
                     .setIndex(tpId.partition())
-                    .setRecordErrors(Collections.emptyList())
+                    .setRecordErrors(List.of())
                     .setBaseOffset(INVALID_OFFSET)
                     .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
                     .setLogStartOffset(INVALID_OFFSET)
@@ -187,7 +187,7 @@ public class ProduceRequest extends AbstractRequest {
     @Override
     public Map<Errors, Integer> errorCounts(Throwable e) {
         Errors error = Errors.forException(e);
-        return Collections.singletonMap(error, partitionSizes().size());
+        return Map.of(error, partitionSizes().size());
     }
 
     public short acks() {

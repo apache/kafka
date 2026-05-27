@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -72,7 +71,6 @@ public class ListStreamsGroupTest {
     public static void setup() throws Exception {
         // start the cluster and create the input topic
         final Properties props = new Properties();
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
         cluster = new EmbeddedKafkaCluster(1, props);
         cluster.start();
         cluster.createTopic(INPUT_TOPIC, 2, 1);

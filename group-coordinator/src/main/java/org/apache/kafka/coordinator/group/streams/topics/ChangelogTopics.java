@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
@@ -44,7 +43,7 @@ public class ChangelogTopics {
     /**
      * Constructor for ChangelogTopics.
      *
-     * @param logContext                    The context for emitting log messages.
+     * @param log                           The logger.
      * @param subtopologies                 The subtopologies for the requested topology.
      * @param topicPartitionCountProvider   Returns the number of partitions for a given topic, representing the current state of the broker
      *                                      as well as any partition number decisions that have already been made. In particular, we expect
@@ -52,11 +51,11 @@ public class ChangelogTopics {
      *                                      broker yet.
      */
     public ChangelogTopics(
-        final LogContext logContext,
+        final Logger log,
         final Collection<Subtopology> subtopologies,
         final Function<String, OptionalInt> topicPartitionCountProvider
     ) {
-        this.log = logContext.logger(getClass());
+        this.log = log;
         this.subtopologies = subtopologies;
         this.topicPartitionCountProvider = topicPartitionCountProvider;
     }

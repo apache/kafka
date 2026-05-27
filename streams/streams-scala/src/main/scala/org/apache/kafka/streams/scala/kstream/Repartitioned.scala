@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.kstream.{Repartitioned => RepartitionedJ}
 import org.apache.kafka.streams.processor.StreamPartitioner
 
+@deprecated("Use `org.apache.kafka.streams.kstream.Repartitioned` instead", "4.3.0")
 object Repartitioned {
 
   /**

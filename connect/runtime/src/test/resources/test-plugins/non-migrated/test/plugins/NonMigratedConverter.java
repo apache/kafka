@@ -43,4 +43,9 @@ public final class NonMigratedConverter implements Converter {
   public SchemaAndValue toConnectData(final String topic, final byte[] value) {
     return null;
   }
+
+    @Override
+    public String version() {
+        return "1.0.0";
+    }
 }

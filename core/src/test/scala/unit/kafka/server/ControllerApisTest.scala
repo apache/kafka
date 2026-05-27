@@ -52,15 +52,14 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.KRaftMetadataCache
-import org.apache.kafka.network.{Session, SocketServerConfigs}
+import org.apache.kafka.network.{Request, Session, SocketServerConfigs}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig, RaftManager}
 import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
 import org.apache.kafka.server.config.ServerConfigs
-import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager}
-import org.apache.kafka.server.util.FutureUtils
+import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -183,7 +182,7 @@ class ControllerApisTest {
   }
 
   /**
-   * Build a RequestChannel.Request from the AbstractRequest
+   * Build a Request from the AbstractRequest
    *
    * @param request - AbstractRequest
    * @param listenerName - Default listener for the RequestChannel
@@ -193,15 +192,14 @@ class ControllerApisTest {
   private def buildRequest[T <: AbstractRequest](
     request: AbstractRequest,
     listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-  ): RequestChannel.Request = {
+  ): Request = {
     val buffer = request.serializeWithHeader(new RequestHeader(request.apiKey, request.version, clientID, 0))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
-    new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
-      requestChannelMetrics)
+    new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics)
   }
 
   def createDenyAllAuthorizer(): Plugin[Authorizer] = {
@@ -334,26 +332,26 @@ class ControllerApisTest {
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
-            setValue("100000")).iterator())),
+            setValue("100000")))),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
-            setValue("100000")).iterator())),
+            setValue("100000")))),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
-            setValue("100000")).iterator())),
+            setValue("100000")))),
         new OldAlterConfigsResource().
           setResourceName("baz").
           setResourceType(123.toByte).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
             setName("foo").
-            setValue("bar")).iterator())),
-        ).iterator()))
+            setValue("bar")))),
+        )))
     val request = buildRequest(new AlterConfigsRequest(requestData, 0))
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
     controllerApis.handleLegacyAlterConfigs(request)
@@ -489,29 +487,29 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("foo").
           setResourceType(ConfigResource.Type.TOPIC.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(TopicConfig.FLUSH_MS_CONFIG).
             setValue("1000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("sub").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("100000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("group-foo").
           setResourceType(ConfigResource.Type.GROUP.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
-        ).iterator()))
+            setConfigOperation(AlterConfigOp.OpType.SET.id()))))
+        )))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
     controllerApis = createControllerApis(Some(createDenyAllAuthorizer()),
       new MockController.Builder().build())
@@ -558,71 +556,71 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("kafka.server.ControllerApisTest").
             setValue("DEBUG").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("foo").
           setResourceType(124.toByte).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("foo").
             setValue("bar").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("sub").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("1").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("sub1").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("1").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("sub1").
           setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("1").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("group-foo").
           setResourceType(ConfigResource.Type.GROUP.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("group-foo1").
           setResourceType(ConfigResource.Type.GROUP.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+            setConfigOperation(AlterConfigOp.OpType.SET.id())))),
         new AlterConfigsResource().
           setResourceName("group-foo1").
           setResourceType(ConfigResource.Type.GROUP.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("consumer.session.timeout.ms").
             setValue("50000").
-            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
-        ).iterator()))
+            setConfigOperation(AlterConfigOp.OpType.SET.id()))))
+        )))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
     val authorizer = if (denyAllAuthorizer) {
       Some(createDenyAllAuthorizer())
@@ -719,7 +717,7 @@ class ControllerApisTest {
         new CreatableTopic().setName("indescribable").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName("quux").setNumPartitions(2).setReplicationFactor(3),
         new CreatableTopic().setName(Topic.CLUSTER_METADATA_TOPIC_NAME).setNumPartitions(2).setReplicationFactor(3),
-      ).iterator()))
+      )))
     val expectedResponse = Set(new CreatableTopicResult().setName("foo").
       setErrorCode(INVALID_REQUEST.code()).
       setErrorMessage("Duplicate topic name."),
@@ -745,7 +743,8 @@ class ControllerApisTest {
     assertEquals(expectedResponse, controllerApis.createTopics(ANONYMOUS_CONTEXT, request,
       hasClusterAuth = false,
       _ => Set("baz", "indescribable"),
-      _ => Set("baz")).get().topics().asScala.toSet)
+      _ => Set("baz"),
+      forwarded = false).get().topics().asScala.toSet)
   }
 
   @ParameterizedTest(name = "testCreateTopicsMutationQuota with throttle: {0}")
@@ -755,7 +754,7 @@ class ControllerApisTest {
     controllerApis = createControllerApis(None, controller, new Properties(), throttle)
     val topicName = "foo"
     val requestData = new CreateTopicsRequestData().setTopics(new CreatableTopicCollection(
-      util.Collections.singletonList(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)).iterator()))
+      util.Collections.singletonList(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1))))
     val request = new CreateTopicsRequest.Builder(requestData).build()
     val expectedResponseDataUnthrottled = Set(new CreatableTopicResult().setName(topicName).
       setErrorCode(NONE.code()).
@@ -1230,7 +1229,7 @@ class ControllerApisTest {
     )))))
       .thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
     when(controller.assignReplicasToDirs(any[ControllerRequestContext], ArgumentMatchers.eq(request.data)))
-      .thenReturn(FutureUtils.failedFuture[AssignReplicasToDirsResponseData](Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()))
+      .thenReturn(CompletableFuture.failedFuture[AssignReplicasToDirsResponseData](Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()))
 
     val response = handleRequest[AssignReplicasToDirsResponse](request, controllerApis)
     assertEquals(new AssignReplicasToDirsResponseData().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()), response.data)

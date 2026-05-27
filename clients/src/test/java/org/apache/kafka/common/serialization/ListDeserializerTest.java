@@ -19,17 +19,27 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 public class ListDeserializerTest {
@@ -247,6 +257,24 @@ public class ListDeserializerTest {
             () -> initializedListDeserializer.configure(props, true)
         );
         assertEquals("List deserializer was already initialized using a non-default constructor", exception.getMessage());
+    }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingDeserializer() {
+        final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
+        when(mockDeserializer.deserialize(anyString(), any(Headers.class), any(byte[].class))).thenReturn("test-value");
+
+        final String topic = "topic";
+        final List<String> data = List.of("test-value");
+        final byte[] serializedData = new ListSerializer<>(Serdes.String().serializer()).serialize(topic, data);
+        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
+
+        final ListDeserializer<String> testDeserializer = new ListDeserializer<>(ArrayList.class, mockDeserializer);
+
+        testDeserializer.deserialize(topic, headers, serializedData);
+
+        verify(mockDeserializer).deserialize(eq(topic), eq(headers), any(byte[].class));
+        verify(mockDeserializer, never()).deserialize(anyString(), any(byte[].class));
     }
 
 }

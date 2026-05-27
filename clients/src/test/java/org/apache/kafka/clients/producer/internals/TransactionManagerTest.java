@@ -54,12 +54,12 @@ import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
@@ -79,9 +79,9 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -1249,8 +1249,36 @@ public class TransactionManagerTest {
             assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
             assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
             assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
-            return txnOffsetCommitRequest.data().generationId() != generationId;
+            return txnOffsetCommitRequest.data().generationIdOrMemberEpoch() != generationId;
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.ILLEGAL_GENERATION)));
+
+        runUntil(transactionManager::hasError);
+        assertInstanceOf(CommitFailedException.class, transactionManager.lastError());
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertInstanceOf(CommitFailedException.class, sendOffsetsResult.error());
+        assertAbortableError(CommitFailedException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"GROUP_ID_NOT_FOUND", "STALE_MEMBER_EPOCH"})
+    public void testGroupMetadataMismatchErrorInTxnOffsetCommit(Errors error) {
+        // GROUP_ID_NOT_FOUND and STALE_MEMBER_EPOCH from TxnOffsetCommit (v6+)
+        // must abort the transaction with a CommitFailedException, matching the
+        // behavior for ILLEGAL_GENERATION returned by older broker versions.
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            Map.of(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, Map.of(tp, error));
 
         runUntil(transactionManager::hasError);
         assertInstanceOf(CommitFailedException.class, transactionManager.lastError());
@@ -4475,7 +4503,7 @@ public class TransactionManagerTest {
             assertEquals(producerEpoch, txnOffsetCommitRequest.data().producerEpoch());
             assertEquals(groupInstanceId, txnOffsetCommitRequest.data().groupInstanceId());
             assertEquals(memberId, txnOffsetCommitRequest.data().memberId());
-            assertEquals(generationId, txnOffsetCommitRequest.data().generationId());
+            assertEquals(generationId, txnOffsetCommitRequest.data().generationIdOrMemberEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
     }

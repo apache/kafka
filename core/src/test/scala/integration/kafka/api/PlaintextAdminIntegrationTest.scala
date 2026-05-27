@@ -43,7 +43,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
-import org.apache.kafka.common.record.FileRecords
+import org.apache.kafka.common.record.internal.FileRecords
 import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
@@ -70,7 +70,7 @@ import scala.collection.Seq
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
-import scala.util.{Random, Using}
+import scala.util.{Failure, Random, Success, Try, Using}
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -1154,7 +1154,53 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertFutureThrows(classOf[InvalidConfigurationException],
       alterResult.values.get(groupResource),
-      "consumer.session.timeout.ms must be greater than or equal to group.consumer.min.session.timeout.ms")
+      "consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.")
+  }
+
+  @Test
+  def testGroupConfigEvaluatedAfterBrokerRestart(): Unit = {
+    client = createAdminClient
+    val groupId = "evaluated-config-test-group"
+    val groupResource = new ConfigResource(ConfigResource.Type.GROUP, groupId)
+
+    // Set a valid group config (55000 is within default [45000, 60000])
+    val alterOps = util.List.of(
+      new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "55000"), AlterConfigOp.OpType.SET)
+    )
+    val alterResult = client.incrementalAlterConfigs(util.Map.of(groupResource, alterOps))
+    alterResult.all.get(15, TimeUnit.SECONDS)
+    ensureConsistentKRaftMetadata()
+
+    // Verify stored value and effective value before restart
+    var describeResult = client.describeConfigs(util.List.of(groupResource))
+    var configs = describeResult.all.get(15, TimeUnit.SECONDS)
+    assertEquals("55000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    // Before restart, 55000 is within [45000, 60000], so no adjustment needed
+    assertEquals(Optional.of(55000), brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
+
+    // Kill all brokers
+    client.close()
+    for (i <- 0 until brokerCount) {
+      killBroker(i)
+    }
+
+    // Change broker-level max to 50000 (making stored 55000 exceed the new max)
+    serverConfig.setProperty(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, "50000")
+
+    // Restart brokers with new config (should not block startup)
+    restartDeadBrokers(reconfigure = true)
+    client = createAdminClient
+    ensureConsistentKRaftMetadata()
+
+    // Verify stored value is preserved (describeConfigs returns raw value)
+    describeResult = client.describeConfigs(util.List.of(groupResource))
+    configs = describeResult.all.get(15, TimeUnit.SECONDS)
+    assertEquals("55000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
+    assertEquals(ConfigSource.DYNAMIC_GROUP_CONFIG,
+      configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
+
+    // Verify effective value is adjusted (55000 evaluated to new max 50000)
+    assertEquals(Optional.of(50000), brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
   }
 
   @Test
@@ -1506,7 +1552,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val result1 = client.deleteRecords(util.Map.of(topicPartition, RecordsToDelete.beforeOffset(117L)))
     result1.all().get()
     restartDeadBrokers()
-    TestUtils.waitForBrokersInIsr(client, topicPartition, Set(followerIndex))
+    waitForBrokersInIsr(client, topicPartition, Set(followerIndex))
     waitForFollowerLog(expectedStartOffset=117L, expectedEndOffset=200L)
   }
 
@@ -1629,7 +1675,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // delete records in corrupt segment (the first segment)
     client.deleteRecords(util.Map.of(topicPartition, RecordsToDelete.beforeOffset(firstSegmentRecordsSize))).all.get
     // verify reassignment is finished after delete records
-    TestUtils.waitForBrokersInIsr(client, topicPartition, Set(partitionLeaderId, partitionFollowerId))
+    waitForBrokersInIsr(client, topicPartition, Set(partitionLeaderId, partitionFollowerId))
     // seek to beginning and make sure we can consume all records
     consumer.seekToBeginning(util.List.of(topicPartition))
     assertEquals(19, TestUtils.consumeRecords(consumer, 20 - firstSegmentRecordsSize).last.offset())
@@ -1808,24 +1854,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(endTimeMs > startTimeMs, "Expected the timeout to take at least one millisecond.")
   }
 
-  /**
-    * Test injecting timeouts for calls that are in flight.
-    */
-  @Test
-  def testCallInFlightTimeouts(): Unit = {
-    val config = createConfig
-    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100000000")
-    config.put(AdminClientConfig.RETRIES_CONFIG, "0")
-    val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
-    client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
-        new CreateTopicsOptions().validateOnly(true)).all()
-    assertFutureThrows(classOf[TimeoutException], future)
-    val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1.toShort)).asJava,
-      new CreateTopicsOptions().validateOnly(true)).all()
-    future2.get
-    assertEquals(1, factory.failuresInjected)
-  }
+
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
@@ -2023,8 +2052,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           assertTrue(testGroupDescription.groupEpoch.isEmpty)
           assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
         } else {
-          assertEquals(Optional.of(3), testGroupDescription.groupEpoch)
-          assertEquals(Optional.of(3), testGroupDescription.targetAssignmentEpoch)
+          assertEquals(Optional.of(4), testGroupDescription.groupEpoch)
+          assertEquals(Optional.of(4), testGroupDescription.targetAssignmentEpoch)
         }
 
         assertEquals(testGroupId, testGroupDescription.groupId())
@@ -3106,25 +3135,25 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
         10000)
       // Check the leader hasn't moved
-      TestUtils.assertLeader(client, partition1, prior1)
-      TestUtils.assertLeader(client, partition2, prior2)
+      assertLeader(client, partition1, prior1)
+      assertLeader(client, partition2, prior2)
     }
 
     // Check current leaders are 0
-    TestUtils.assertLeader(client, partition1, 0)
-    TestUtils.assertLeader(client, partition2, 0)
+    assertLeader(client, partition1, 0)
+    assertLeader(client, partition2, 0)
 
     // Noop election
     var electResult = client.electLeaders(ElectionType.PREFERRED, util.Set.of(partition1))
     val exception = electResult.partitions.get.get(partition1).get
     assertEquals(classOf[ElectionNotNeededException], exception.getClass)
-    TestUtils.assertLeader(client, partition1, 0)
+    assertLeader(client, partition1, 0)
 
     // Noop election with null partitions
     electResult = client.electLeaders(ElectionType.PREFERRED, null)
     assertTrue(electResult.partitions.get.isEmpty)
-    TestUtils.assertLeader(client, partition1, 0)
-    TestUtils.assertLeader(client, partition2, 0)
+    assertLeader(client, partition1, 0)
+    assertLeader(client, partition2, 0)
 
     // Now change the preferred leader to 1
     waitForBrokerMetadataPropagation(partition1)
@@ -3136,18 +3165,18 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(util.Set.of(partition1), electResult.partitions.get.keySet)
     electResult.partitions.get.get(partition1)
       .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
-    TestUtils.assertLeader(client, partition1, 1)
+    assertLeader(client, partition1, 1)
 
     // topic 2 unchanged
     assertFalse(electResult.partitions.get.containsKey(partition2))
-    TestUtils.assertLeader(client, partition2, 0)
+    assertLeader(client, partition2, 0)
 
     // meaningful election with null partitions
     electResult = client.electLeaders(ElectionType.PREFERRED, null)
     assertEquals(Set(partition2), electResult.partitions.get.keySet.asScala)
     electResult.partitions.get.get(partition2)
       .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition2"))
-    TestUtils.assertLeader(client, partition2, 1)
+    assertLeader(client, partition2, 1)
 
     def assertUnknownTopicOrPartition(
       topicPartition: TopicPartition,
@@ -3163,8 +3192,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     electResult = client.electLeaders(ElectionType.PREFERRED, util.Set.of(unknownPartition))
     assertEquals(util.Set.of(unknownPartition), electResult.partitions.get.keySet)
     assertUnknownTopicOrPartition(unknownPartition, electResult)
-    TestUtils.assertLeader(client, partition1, 1)
-    TestUtils.assertLeader(client, partition2, 1)
+    assertLeader(client, partition1, 1)
+    assertLeader(client, partition2, 1)
 
     // Now change the preferred leader to 2
     waitForBrokerMetadataPropagation(partition1)
@@ -3174,15 +3203,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // mixed results
     electResult = client.electLeaders(ElectionType.PREFERRED, util.Set.of(unknownPartition, partition1))
     assertEquals(util.Set.of(unknownPartition, partition1), electResult.partitions.get.keySet)
-    TestUtils.assertLeader(client, partition1, 2)
-    TestUtils.assertLeader(client, partition2, 1)
+    assertLeader(client, partition1, 2)
+    assertLeader(client, partition2, 1)
     assertUnknownTopicOrPartition(unknownPartition, electResult)
 
     // elect preferred leader for partition 2
     electResult = client.electLeaders(ElectionType.PREFERRED, util.Set.of(partition2))
     assertEquals(util.Set.of(partition2), electResult.partitions.get.keySet)
     assertFalse(electResult.partitions.get.get(partition2).isPresent)
-    TestUtils.assertLeader(client, partition2, 2)
+    assertLeader(client, partition2, 2)
 
     // Now change the preferred leader to 1
     waitForBrokerMetadataPropagation(partition1)
@@ -3192,7 +3221,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     killBroker(1)
     waitForBrokerMetadataPropagation(partition1)
     waitForBrokerMetadataPropagation(partition2)
-    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
+    waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(1))
 
     def assertPreferredLeaderNotAvailable(
       topicPartition: TopicPartition,
@@ -3211,17 +3240,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(util.Set.of(partition1), electResult.partitions.get.keySet)
 
     assertPreferredLeaderNotAvailable(partition1, electResult)
-    TestUtils.assertLeader(client, partition1, 2)
+    assertLeader(client, partition1, 2)
 
     // preferred leader unavailable with null argument
     electResult = client.electLeaders(ElectionType.PREFERRED, null, shortTimeout)
     assertTrue(Set(partition1, partition2).subsetOf(electResult.partitions.get.keySet.asScala))
 
     assertPreferredLeaderNotAvailable(partition1, electResult)
-    TestUtils.assertLeader(client, partition1, 2)
+    assertLeader(client, partition1, 2)
 
     assertPreferredLeaderNotAvailable(partition2, electResult)
-    TestUtils.assertLeader(client, partition2, 2)
+    assertLeader(client, partition2, 2)
   }
 
   @Test
@@ -3237,19 +3266,19 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val partition1 = new TopicPartition("unclean-test-topic-1", 0)
     createTopicWithAssignment(partition1.topic, Map[Int, Seq[Int]](partition1.partition -> assignment1))
 
-    TestUtils.assertLeader(client, partition1, broker1)
+    assertLeader(client, partition1, broker1)
 
     killBroker(broker2)
-    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
+    waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     killBroker(broker1)
-    TestUtils.assertNoLeader(client, partition1)
+    assertNoLeader(client, partition1)
     brokers(broker2).startup()
-    TestUtils.waitForOnlineBroker(client, broker2)
+    waitForOnlineBroker(client, broker2)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, util.Set.of(partition1))
     electResult.partitions.get.get(partition1)
       .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
-    TestUtils.assertLeader(client, partition1, broker2)
+    assertLeader(client, partition1, broker2)
   }
 
   @Test
@@ -3272,24 +3301,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Map(partition1.partition -> assignment1, partition2.partition -> assignment2)
     )
 
-    TestUtils.assertLeader(client, partition1, broker1)
-    TestUtils.assertLeader(client, partition2, broker1)
+    assertLeader(client, partition1, broker1)
+    assertLeader(client, partition2, broker1)
 
     killBroker(broker2)
-    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(broker2))
+    waitForBrokersOutOfIsr(client, Set(partition1, partition2), Set(broker2))
     killBroker(broker1)
-    TestUtils.assertNoLeader(client, partition1)
-    TestUtils.assertNoLeader(client, partition2)
+    assertNoLeader(client, partition1)
+    assertNoLeader(client, partition2)
     brokers(broker2).startup()
-    TestUtils.waitForOnlineBroker(client, broker2)
+    waitForOnlineBroker(client, broker2)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, util.Set.of(partition1, partition2))
     electResult.partitions.get.get(partition1)
       .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
     electResult.partitions.get.get(partition2)
       .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition2"))
-    TestUtils.assertLeader(client, partition1, broker2)
-    TestUtils.assertLeader(client, partition2, broker2)
+    assertLeader(client, partition1, broker2)
+    assertLeader(client, partition2, broker2)
   }
 
   @Test
@@ -3313,23 +3342,23 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Map(partition1.partition -> assignment1, partition2.partition -> assignment2)
     )
 
-    TestUtils.assertLeader(client, partition1, broker1)
-    TestUtils.assertLeader(client, partition2, broker1)
+    assertLeader(client, partition1, broker1)
+    assertLeader(client, partition2, broker1)
 
     killBroker(broker2)
-    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
+    waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     killBroker(broker1)
-    TestUtils.assertNoLeader(client, partition1)
-    TestUtils.assertLeader(client, partition2, broker3)
+    assertNoLeader(client, partition1)
+    assertLeader(client, partition2, broker3)
     brokers(broker2).startup()
-    TestUtils.waitForOnlineBroker(client, broker2)
+    waitForOnlineBroker(client, broker2)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, null)
     electResult.partitions.get.get(partition1)
       .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
     assertFalse(electResult.partitions.get.containsKey(partition2))
-    TestUtils.assertLeader(client, partition1, broker2)
-    TestUtils.assertLeader(client, partition2, broker3)
+    assertLeader(client, partition1, broker2)
+    assertLeader(client, partition2, broker3)
   }
 
   @Test
@@ -3351,7 +3380,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Map(0 -> assignment1)
     )
 
-    TestUtils.assertLeader(client, new TopicPartition(topic, 0), broker1)
+    assertLeader(client, new TopicPartition(topic, 0), broker1)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, util.Set.of(unknownPartition, unknownTopic))
     assertTrue(electResult.partitions.get.get(unknownPartition).get.isInstanceOf[UnknownTopicOrPartitionException])
@@ -3376,12 +3405,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Map(partition1.partition -> assignment1)
     )
 
-    TestUtils.assertLeader(client, partition1, broker1)
+    assertLeader(client, partition1, broker1)
 
     killBroker(broker2)
-    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
+    waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     killBroker(broker1)
-    TestUtils.assertNoLeader(client, partition1)
+    assertNoLeader(client, partition1)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, util.Set.of(partition1))
     assertTrue(electResult.partitions.get.get(partition1).get.isInstanceOf[EligibleLeadersNotAvailableException])
@@ -3405,10 +3434,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Map(partition1.partition -> assignment1)
     )
 
-    TestUtils.assertLeader(client, partition1, broker1)
+    assertLeader(client, partition1, broker1)
 
     killBroker(broker1)
-    TestUtils.assertLeader(client, partition1, broker2)
+    assertLeader(client, partition1, broker2)
     brokers(broker1).startup()
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, util.Set.of(partition1))
@@ -3436,23 +3465,23 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       Map(partition1.partition -> assignment1, partition2.partition -> assignment2)
     )
 
-    TestUtils.assertLeader(client, partition1, broker1)
-    TestUtils.assertLeader(client, partition2, broker1)
+    assertLeader(client, partition1, broker1)
+    assertLeader(client, partition2, broker1)
 
     killBroker(broker2)
-    TestUtils.waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
+    waitForBrokersOutOfIsr(client, Set(partition1), Set(broker2))
     killBroker(broker1)
-    TestUtils.assertNoLeader(client, partition1)
-    TestUtils.assertLeader(client, partition2, broker3)
+    assertNoLeader(client, partition1)
+    assertLeader(client, partition2, broker3)
     brokers(broker2).startup()
-    TestUtils.waitForOnlineBroker(client, broker2)
+    waitForOnlineBroker(client, broker2)
 
     val electResult = client.electLeaders(ElectionType.UNCLEAN, util.Set.of(partition1, partition2))
     electResult.partitions.get.get(partition1)
       .ifPresent(t => fail(s"Unexpected exception during leader election: $t for partition $partition1"))
     assertTrue(electResult.partitions.get.get(partition2).get.isInstanceOf[ElectionNotNeededException])
-    TestUtils.assertLeader(client, partition1, broker2)
-    TestUtils.assertLeader(client, partition2, broker3)
+    assertLeader(client, partition1, broker2)
+    assertLeader(client, partition2, broker3)
   }
 
   @Test
@@ -4277,7 +4306,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
       util.Map.of(controllerNodeResource,
         util.Map.of(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP,
-          new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
+          new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false, false).get()
     ensureConsistentKRaftMetadata()
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
@@ -5014,5 +5043,83 @@ object PlaintextAdminIntegrationTest {
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
     assertEquals(ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
+  }
+
+  private def waitForBrokersInIsr(client: Admin, partition: TopicPartition, brokerIds: Set[Int]): Unit = {
+    waitUntilTrue(
+      () => {
+        val isr = client.describeTopics(util.Set.of(partition.topic))
+          .allTopicNames
+          .get
+          .get(partition.topic)
+          .partitions.asScala
+          .filter(_.partition == partition.partition)
+          .flatMap(_.isr.asScala)
+          .map(_.id)
+          .toSet
+        brokerIds.subsetOf(isr)
+      },
+      s"Expected brokers $brokerIds to be in the ISR for $partition"
+    )
+  }
+
+  private def waitForBrokersOutOfIsr(client: Admin, partition: Set[TopicPartition], brokerIds: Set[Int]): Unit = {
+    waitUntilTrue(
+      () => {
+        val description = client.describeTopics(partition.map(_.topic).asJava).allTopicNames.get.asScala
+        val isr = description
+          .flatMap { case (topic, desc) =>
+            desc.partitions.asScala
+              .filter(info => partition.contains(new TopicPartition(topic, info.partition)))
+              .flatMap(_.isr.asScala)
+          }
+          .map(_.id)
+          .toSet
+
+        brokerIds.intersect(isr).isEmpty
+      },
+      s"Expected brokers $brokerIds to no longer be in the ISR for $partition"
+    )
+  }
+
+  private def waitForOnlineBroker(client: Admin, brokerId: Int): Unit = {
+    waitUntilTrue(() => {
+      val nodes = client.describeCluster().nodes().get()
+      nodes.asScala.exists(_.id == brokerId)
+    }, s"Timed out waiting for brokerId $brokerId to come online")
+  }
+
+  private def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
+    waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
+  }
+
+  private def assertNoLeader(client: Admin, topicPartition: TopicPartition): Unit = {
+    waitForLeaderToBecome(client, topicPartition, None)
+  }
+
+  private def waitForLeaderToBecome(
+    client: Admin,
+    topicPartition: TopicPartition,
+    expectedLeaderOpt: Option[Int]
+  ): Unit = {
+    val topic = topicPartition.topic
+    val partitionId = topicPartition.partition
+
+    def currentLeader: Try[Option[Int]] = Try {
+      val topicDescription = client.describeTopics(util.List.of(topic)).allTopicNames.get.get(topic)
+      topicDescription.partitions.asScala
+        .find(_.partition == partitionId)
+        .flatMap(partitionState => Option(partitionState.leader))
+        .map(_.id)
+    }
+
+    val (lastLeaderCheck, isLeaderElected) = computeUntilTrue(currentLeader) {
+      case Success(leaderOpt) => leaderOpt == expectedLeaderOpt
+      case Failure(e: ExecutionException) if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => false
+      case Failure(e) => throw e
+    }
+
+    assertTrue(isLeaderElected, s"Timed out waiting for leader to become $expectedLeaderOpt. " +
+      s"Last metadata lookup returned leader = ${lastLeaderCheck.getOrElse("unknown")}")
   }
 }

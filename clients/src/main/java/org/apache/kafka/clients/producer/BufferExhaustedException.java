@@ -30,6 +30,11 @@ public class BufferExhaustedException extends TimeoutException {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Constructs a new BufferExhaustedException with the specified detail message.
+     *
+     * @param message The error message
+     */
     public BufferExhaustedException(String message) {
         super(message);
     }

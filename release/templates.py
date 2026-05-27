@@ -230,7 +230,7 @@ https://github.com/apache/kafka/releases/tag/{rc_tag}
 https://kafka.apache.org/{docs_version}/documentation.html
 
 * Protocol:
-https://kafka.apache.org/{docs_version}/protocol.html
+https://kafka.apache.org/{docs_version}/design/protocol
 
 * Successful CI builds for the {dev_branch} branch:
 Unit/integration tests: https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>

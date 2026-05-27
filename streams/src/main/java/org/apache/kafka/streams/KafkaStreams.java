@@ -36,10 +36,10 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -489,7 +489,10 @@ public class KafkaStreams implements AutoCloseable {
             closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
-        deadThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        // Use DEFAULT so the consumer layer decides: classic protocol maps to REMAIN_IN_GROUP
+        // (avoiding an unnecessary rebalance before the replacement thread joins), while Streams
+        // protocol adapts to static vs dynamic membership.
+        deadThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
         addStreamThread();
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
@@ -640,9 +643,6 @@ public class KafkaStreams implements AutoCloseable {
             if (globalThreadState != null && globalThreadState != GlobalStreamThread.State.RUNNING) {
                 return;
             }
-
-            // all (alive) threads have received their assignment, close any remaining startup tasks, they're not needed
-            stateDirectory.closeStartupTasks();
 
             setState(State.RUNNING);
         }
@@ -1039,7 +1039,9 @@ public class KafkaStreams implements AutoCloseable {
             globalStreamThread.setStateListener(streamStateListener);
         }
 
-        queryableStoreProvider = new QueryableStoreProvider(globalStateStoreProvider);
+        queryableStoreProvider = new QueryableStoreProvider(
+            globalStateStoreProvider,
+            applicationConfigs::defaultInteractiveQueryIsolationLevel);
         for (int i = 1; i <= numStreamThreads; i++) {
             createAndAddStreamThread(cacheSizePerThread, i);
         }
@@ -1369,18 +1371,35 @@ public class KafkaStreams implements AutoCloseable {
      * {@link #setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler) register an uncaught exception handler}
      * before starting the {@code KafkaStreams} instance.
      * <p>
-     * Note, for brokers with version {@code 0.9.x} or lower, the broker version cannot be checked.
-     * There will be no error and the client will hang and retry to verify the broker version until it
-     * {@link StreamsConfig#REQUEST_TIMEOUT_MS_CONFIG times out}.
-
+     * <b>Note on broker compatibility:</b>
+     * <ul>
+     *   <li>Kafka Streams 4.x requires brokers on version 2.1 or higher. Connection attempts to
+     *       older brokers will fail due to unsupported protocol versions.</li>
+     *   <li>When {@link StreamsConfig#PROCESSING_GUARANTEE_CONFIG processing.guarantee} is set to
+     *       {@link StreamsConfig#EXACTLY_ONCE_V2 exactly_once_v2}, brokers must be version 2.5 or higher.
+     *       If the broker version is too old, the application will detect this during the first rebalance
+     *       and transition to {@link State#ERROR ERROR} state.</li>
+     * </ul>
+     * <p>
+     * Broker compatibility issues are typically detected asynchronously after {@code start()} returns.
+     * Use {@link #setStateListener(StateListener)} or
+     * {@link #setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} to be notified of such failures.
+     *
      * @throws IllegalStateException if process was already started
-     * @throws StreamsException if the Kafka brokers have version 0.10.0.x or
-     *                          if {@link StreamsConfig#PROCESSING_GUARANTEE_CONFIG exactly-once} is enabled for pre 0.11.0.x brokers
+     * @throws StreamsException if the Kafka Streams instance has fatal error and cannot be restarted
+     *
+     * @see #setStateListener(StateListener)
+     * @see #setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
         if (setState(State.REBALANCING)) {
-            log.debug("Initializing STANDBY tasks for existing local state");
-            stateDirectory.initializeStartupTasks(topologyMetadata, streamsMetrics, logContext);
+            final Long dirMaxAgeMs = applicationConfigs.getLong(StreamsConfig.STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG);
+            if (dirMaxAgeMs != StreamsConfig.STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED) {
+                log.debug("Start cleaning outdated directories");
+                stateDirectory.cleanOutdatedDirsOnStartup(dirMaxAgeMs);
+            }
+            log.debug("Initializing store offsets for existing local state");
+            stateDirectory.initializeStartupStores(topologyMetadata, logContext, streamsMetrics);
 
             log.debug("Starting Streams client");
 
@@ -1439,9 +1458,18 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Shutdown this {@code KafkaStreams} instance by signaling all the threads to stop, and then wait for them to join.
      * This will block until all threads have stopped.
+     * <p>
+     * Uses {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#DEFAULT DEFAULT} behavior,
+     * which adapts based on the active protocol:
+     * <ul>
+     *   <li>Classic protocol: the consumer remains in the group (no explicit leave).</li>
+     *   <li>Streams protocol ({@code group.protocol=streams}): dynamic members leave the group;
+     *       static members (with {@code group.instance.id}) remain in the group and are removed
+     *       by the broker after the session timeout.</li>
+     * </ul>
      */
     public void close() {
-        close(Optional.empty(), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        close(Optional.empty(), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
     }
 
     private Thread shutdownHelper(
@@ -1568,7 +1596,7 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void closeToError() {
+    void closeToError() {
         if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in {}", state());
         } else {
@@ -1584,6 +1612,15 @@ public class KafkaStreams implements AutoCloseable {
      * threads to join.
      * A {@code timeout} of {@link Duration#ZERO} (or any other zero duration) makes the close operation asynchronous.
      * Negative-duration timeouts are rejected.
+     * <p>
+     * Uses {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#DEFAULT DEFAULT} behavior,
+     * which adapts based on the active protocol:
+     * <ul>
+     *   <li>Classic protocol: the consumer remains in the group (no explicit leave).</li>
+     *   <li>Streams protocol ({@code group.protocol=streams}): dynamic members leave the group;
+     *       static members (with {@code group.instance.id}) remain in the group and are removed
+     *       by the broker after the session timeout.</li>
+     * </ul>
      *
      * @param timeout how long to wait for the threads to shut down
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
@@ -1598,7 +1635,7 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        return close(Optional.of(timeoutMs), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        return close(Optional.of(timeoutMs), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
     }
 
     /**
@@ -2103,7 +2140,10 @@ public class KafkaStreams implements AutoCloseable {
                                     request.isRequireActive()
                                         ? PositionBound.unbounded()
                                         : request.getPositionBound(),
-                                    new QueryConfig(request.executionInfoEnabled())
+                                    new QueryConfig(
+                                        request.executionInfoEnabled(),
+                                        request.isolationLevel()
+                                            .orElseGet(applicationConfigs::defaultInteractiveQueryIsolationLevel))
                                 );
                                 result.addResult(partition, r);
                             }

@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.message.AbortedTxn;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
 import java.io.IOException;
 import java.util.Comparator;

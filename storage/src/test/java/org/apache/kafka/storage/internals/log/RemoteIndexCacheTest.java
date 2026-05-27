@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -1189,10 +1190,10 @@ public class RemoteIndexCacheTest {
         txnIdxFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(metadata.startOffset(), txnIdxFile);
         List<AbortedTxn> abortedTxns = List.of(
-                new AbortedTxn(0L, 0, 10, 11),
-                new AbortedTxn(1L, 5, 15, 13),
-                new AbortedTxn(2L, 18, 35, 25),
-                new AbortedTxn(3L, 32, 50, 40));
+                new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(11),
+                new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(13),
+                new AbortedTxn().setProducerId(2L).setFirstOffset(18).setLastOffset(35).setLastStableOffset(25),
+                new AbortedTxn().setProducerId(3L).setFirstOffset(32).setLastOffset(50).setLastStableOffset(40));
         for (AbortedTxn abortedTxn : abortedTxns) {
             txnIndex.append(abortedTxn);
         }

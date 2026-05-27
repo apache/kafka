@@ -17,9 +17,7 @@
 
 package org.apache.kafka.trogdor.agent;
 
-import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.basic.BasicNode;
@@ -28,8 +26,10 @@ import org.apache.kafka.trogdor.basic.BasicTopology;
 import org.apache.kafka.trogdor.common.ExpectedTasks;
 import org.apache.kafka.trogdor.common.ExpectedTasks.ExpectedTaskBuilder;
 import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.trogdor.common.MockScheduler;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
+import org.apache.kafka.trogdor.common.Scheduler;
 import org.apache.kafka.trogdor.fault.FilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.fault.Kibosh;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshControlFile;

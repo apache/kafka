@@ -17,14 +17,15 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.UnalignedFileRecords;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
-import org.apache.kafka.common.utils.BufferSupplier.GrowableBufferSupplier;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.record.internal.UnalignedFileRecords;
+import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
+import org.apache.kafka.common.requests.ByteBufferChannel;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.test.TestUtils;
 
@@ -157,12 +158,12 @@ public final class FileRawSnapshotTest {
             UnalignedFileRecords record1 = (UnalignedFileRecords) snapshot.slice(0, totalSize / 2);
             UnalignedFileRecords record2 = (UnalignedFileRecords) snapshot.slice(totalSize / 2, totalSize - totalSize / 2);
 
-            assertEquals(buffer1, TestUtils.toBuffer(record1));
-            assertEquals(buffer2, TestUtils.toBuffer(record2));
+            assertEquals(buffer1, ByteBufferChannel.toBuffer(record1));
+            assertEquals(buffer2, ByteBufferChannel.toBuffer(record2));
 
             ByteBuffer readBuffer = ByteBuffer.allocate(record1.sizeInBytes() + record2.sizeInBytes());
-            readBuffer.put(TestUtils.toBuffer(record1));
-            readBuffer.put(TestUtils.toBuffer(record2));
+            readBuffer.put(ByteBufferChannel.toBuffer(record1));
+            readBuffer.put(ByteBufferChannel.toBuffer(record2));
             readBuffer.flip();
             assertEquals(expectedBuffer, readBuffer);
         }

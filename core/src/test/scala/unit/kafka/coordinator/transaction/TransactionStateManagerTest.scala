@@ -28,7 +28,8 @@ import org.apache.kafka.common.errors.InvalidRegularExpression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics}
 import org.apache.kafka.common.protocol.{Errors, MessageUtil}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
@@ -917,7 +918,7 @@ class TransactionStateManagerTest {
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
         records.records.forEach { record =>
-          val transactionalId = TransactionLog.readTxnRecordKey(record.key).asInstanceOf[String]
+          val transactionalId = TransactionLog.read(record.key, record.value()).asInstanceOf[TransactionLog.TxnTombstone].transactionId()
           assertNull(record.value)
           expiredTransactionalIds += transactionalId
           assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
@@ -1105,7 +1106,7 @@ class TransactionStateManagerTest {
     capturedAppends: mutable.Map[TopicIdPartition, mutable.Buffer[MemoryRecords]]
   ): Unit = {
     val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
+    val callbackCapture: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
       anyLong(),
@@ -1129,7 +1130,7 @@ class TransactionStateManagerTest {
         batches += records
 
         topicPartition -> new PartitionResponse(appendError, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-      }.toMap
+      }.toMap.asJava
     ))
   }
 
@@ -1260,7 +1261,7 @@ class TransactionStateManagerTest {
   private def prepareForTxnMessageAppend(error: Errors): Unit = {
     reset(replicaManager)
 
-    val capturedArgument: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
+    val capturedArgument: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
     when(replicaManager.appendRecords(anyLong(),
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
@@ -1272,8 +1273,8 @@ class TransactionStateManagerTest {
       any(),
       any()
     )).thenAnswer(_ => capturedArgument.getValue.apply(
-      Map(new TopicIdPartition(transactionTopicId, partitionId, TRANSACTION_STATE_TOPIC_NAME) ->
-        new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+      util.Map.of(new TopicIdPartition(transactionTopicId, partitionId, TRANSACTION_STATE_TOPIC_NAME),
+              new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
     )
     when(replicaManager.topicIdPartition(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, 0))).thenReturn(new TopicIdPartition(transactionTopicId, 0, TRANSACTION_STATE_TOPIC_NAME))
     when(replicaManager.topicIdPartition(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, 1))).thenReturn(new TopicIdPartition(transactionTopicId, 1, TRANSACTION_STATE_TOPIC_NAME))

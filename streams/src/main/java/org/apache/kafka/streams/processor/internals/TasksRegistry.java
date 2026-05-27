@@ -37,19 +37,31 @@ public interface TasksRegistry {
 
     Set<Task> drainPendingTasksToInit();
 
-    Set<Task> drainPendingActiveTasksToInit();
+    Set<StreamTask> drainPendingActiveTasksToInit();
+
+    Set<StandbyTask> drainPendingStandbyTasksToInit();
 
     Set<Task> pendingTasksToInit();
 
-    void addPendingTasksToInit(final Collection<Task> tasks);
+    void addPendingTasksToInit(final Collection<? extends Task> tasks);
 
     boolean hasPendingTasksToInit();
 
-    void addActiveTasks(final Collection<Task> tasks);
+    Set<Task> pendingTasksToClose();
 
-    void addStandbyTasks(final Collection<Task> tasks);
+    void addPendingTasksToClose(final Collection<? extends Task> tasks);
+
+    boolean hasPendingTasksToClose();
+
+    void addActiveTasks(final Collection<StreamTask> tasks);
+
+    void addStandbyTasks(final Collection<StandbyTask> tasks);
 
     void addTask(final Task task);
+
+    void addActiveTask(final StreamTask task);
+
+    void addStandbyTask(final StandbyTask task);
 
     void addFailedTask(final Task task);
 
@@ -57,27 +69,29 @@ public interface TasksRegistry {
 
     void replaceStandbyWithActive(final StreamTask activeTask);
 
-    boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions);
+    boolean updateActiveTaskInputPartitions(final StreamTask task, final Set<TopicPartition> topicPartitions);
 
     void clear();
 
-    Task activeTasksForInputPartition(final TopicPartition partition);
+    StreamTask activeInitializedTasksForInputPartition(final TopicPartition partition);
 
-    Task task(final TaskId taskId);
+    Task initializedTask(final TaskId taskId);
 
-    Collection<Task> tasks(final Collection<TaskId> taskIds);
+    Collection<Task> initializedTasks(final Collection<TaskId> taskIds);
 
-    Collection<TaskId> activeTaskIds();
+    Collection<TaskId> activeInitializedTaskIds();
 
-    Collection<Task> activeTasks();
+    Collection<StreamTask> activeInitializedTasks();
 
-    Set<Task> allTasks();
+    Collection<StandbyTask> standbyInitializedTasks();
 
-    Set<Task> allNonFailedTasks();
+    Set<Task> allInitializedTasks();
 
-    Map<TaskId, Task> allTasksPerId();
+    Set<Task> allNonFailedInitializedTasks();
 
-    Set<TaskId> allTaskIds();
+    Map<TaskId, Task> allInitializedTasksPerId();
 
-    boolean contains(final TaskId taskId);
+    Set<TaskId> allInitializedTaskIds();
+
+    boolean containsInitialized(final TaskId taskId);
 }

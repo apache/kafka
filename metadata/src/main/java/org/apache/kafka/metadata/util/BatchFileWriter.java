@@ -20,7 +20,7 @@ package org.apache.kafka.metadata.util;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -97,7 +97,7 @@ public class BatchFileWriter implements AutoCloseable {
             new BatchMemoryPool(5, MAX_BATCH_SIZE_BYTES),
             time,
             Compression.NONE,
-            new MetadataRecordSerde()
+            MetadataRecordSerde.INSTANCE
         );
 
         // Append the snapshot header control record and force it to create a batch

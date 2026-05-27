@@ -200,7 +200,7 @@ class BrokerRegistrationRequestTest {
                 .setIncarnationId(Uuid.randomUuid())
                 .setIsMigratingZkBroker(zkEpoch != null)
                 .setFeatures(features)
-                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(List.of(listener).iterator()));
+                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(List.of(listener)));
 
         BrokerRegistrationResponse resp = this.sendAndReceive(
                 channelManager,

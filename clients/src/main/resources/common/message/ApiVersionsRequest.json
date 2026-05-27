@@ -23,12 +23,19 @@
   // Version 3 is the first flexible version and adds ClientSoftwareName and ClientSoftwareVersion.
   //
   // Version 4 fixes KAFKA-17011, which blocked SupportedFeatures.MinVersion in the response from being 0.
-  "validVersions": "0-4",
+  //
+  // Version 5 introduces ClusterId and NodeId checking and REBOOTSTRAP_REQUIRED error (KIP-1242).
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
+  "latestVersionUnstable": true,
   "fields": [
     { "name": "ClientSoftwareName", "type": "string", "versions": "3+",
       "ignorable": true, "about": "The name of the client." },
     { "name": "ClientSoftwareVersion", "type": "string", "versions": "3+",
-      "ignorable": true, "about": "The version of the client." }
+      "ignorable": true, "about": "The version of the client." },
+    { "name": "ClusterId", "type": "string", "versions": "5+", "nullableVersions": "5+", "default": "null",
+      "ignorable": true, "about": "The cluster ID the client intends to connect to, if known." },
+    { "name": "NodeId", "type": "int32", "versions": "5+", "default": -1,
+      "ignorable": true, "about": "The node ID the client intends to connect to, if known." }
   ]
 }

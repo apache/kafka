@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.VersionedBytesStore;
@@ -39,7 +41,7 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     @Override
     public long put(final Bytes key, final byte[] value, final long timestamp) {
         final long validTo = inner.put(key, value, timestamp);
-        log(key, value, timestamp);
+        log(key, value, timestamp, new RecordHeaders());
         return validTo;
     }
 
@@ -51,17 +53,17 @@ public class ChangeLoggingVersionedKeyValueBytesStore extends ChangeLoggingKeyVa
     @Override
     public byte[] delete(final Bytes key, final long timestamp) {
         final byte[] oldValue = inner.delete(key, timestamp);
-        log(key, null, timestamp);
+        log(key, null, timestamp, new RecordHeaders());
         return oldValue;
     }
 
-    @Override
-    public void log(final Bytes key, final byte[] value, final long timestamp) {
+    @Override public void log(final Bytes key, final byte[] value, final long timestamp, final Headers headers) {
         internalContext.logChange(
             name(),
             key,
             value,
             timestamp,
+            headers,
             wrapped().getPosition()
         );
     }

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 
@@ -31,6 +32,7 @@ public class StreamsGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int targetAssignmentEpoch;
+    private long targetAssignmentTimestamp;
     private StreamsTopology topology;
     private final Map<String, StreamsGroupMember> members = new HashMap<>();
     private final Map<String, TasksTuple> targetAssignments = new HashMap<>();
@@ -41,7 +43,8 @@ public class StreamsGroupBuilder {
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
-        this.targetAssignmentEpoch = 0;
+        this.targetAssignmentEpoch = TargetAssignmentMetadata.INITIAL.assignmentEpoch();
+        this.targetAssignmentTimestamp = TargetAssignmentMetadata.INITIAL.assignmentTimestamp();
         this.topology = null;
     }
 
@@ -72,6 +75,11 @@ public class StreamsGroupBuilder {
 
     public StreamsGroupBuilder withTargetAssignmentEpoch(int targetAssignmentEpoch) {
         this.targetAssignmentEpoch = targetAssignmentEpoch;
+        return this;
+    }
+
+    public StreamsGroupBuilder withTargetAssignmentTimestamp(long targetAssignmentTimestamp) {
+        this.targetAssignmentTimestamp = targetAssignmentTimestamp;
         return this;
     }
 
@@ -110,8 +118,8 @@ public class StreamsGroupBuilder {
         }
 
         // Add target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId,
-            targetAssignmentEpoch));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId,
+            targetAssignmentEpoch, targetAssignmentTimestamp));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->

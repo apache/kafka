@@ -17,7 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset;
+import org.apache.kafka.common.record.internal.FileRecords.TimestampAndOffset;
 
 import java.util.Objects;
 import java.util.Optional;

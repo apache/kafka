@@ -14,8 +14,9 @@
 // limitations under the License.
 
 // Version 1 adds Zk broker epoch to the request if the broker is migrating from Zk mode to KRaft mode.
-//
 // Version 2 adds the PreviousBrokerEpoch to the request for the KIP-966
+// Version 3 is the same as version 2 (new field in request).
+// Version 4 is the same as version 2 (new field in request).
 {
   "apiKey": 62,
   "type": "response",

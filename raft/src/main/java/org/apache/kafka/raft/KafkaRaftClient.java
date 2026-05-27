@@ -51,11 +51,11 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.UnalignedMemoryRecords;
-import org.apache.kafka.common.record.UnalignedRecords;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
+import org.apache.kafka.common.record.internal.UnalignedRecords;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
@@ -63,10 +63,10 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.AddVoterHandler;
 import org.apache.kafka.raft.internals.BatchAccumulator;
@@ -171,7 +171,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int MAX_FETCH_WAIT_MS = 500;
     // visible for testing
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
-    public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final OptionalInt nodeId;
     private final Uuid nodeDirectoryId;
@@ -434,7 +433,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // Re-read the expected offset in case the snapshot had to be reloaded
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < highWatermark) {
-                    LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
+                    LogFetchInfo readInfo = log.read(
+                        nextExpectedOffset,
+                        Isolation.COMMITTED,
+                        Integer.MAX_VALUE
+                    );
                     listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
                 }
             });
@@ -1517,6 +1520,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             requestMetadata.apiVersion(),
             replicaKey,
             fetchPartition,
+            request.maxBytes(),
             currentTimeMs
         );
         FetchResponseData.PartitionData partitionResponse =
@@ -1587,6 +1591,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     requestMetadata.apiVersion(),
                     replicaKey,
                     fetchPartition,
+                    request.maxBytes(),
                     completionTimeMs
                 );
             }
@@ -1598,6 +1603,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         short apiVersion,
         ReplicaKey replicaKey,
         FetchRequestData.FetchPartition request,
+        int maxSizeBytes,
         long currentTimeMs
     ) {
         try {
@@ -1622,7 +1628,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             final Records records;
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
-                LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
+                LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED, maxSizeBytes);
 
                 if (state.updateReplicaState(replicaKey, currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
@@ -2989,7 +2995,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         return request
-            .setMaxBytes(MAX_FETCH_SIZE_BYTES)
+            .setMaxBytes(quorumConfig.fetchMaxBytes())
             .setMaxWaitMs(fetchMaxWaitMs)
             .setClusterId(clusterId)
             .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(quorum.localIdOrSentinel()));
@@ -3013,7 +3019,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             log.topicPartition(),
             quorum.epoch(),
             snapshotId,
-            MAX_FETCH_SIZE_BYTES,
+            quorumConfig.fetchSnapshotMaxBytes(),
             snapshotSize
         );
     }
@@ -4028,8 +4034,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 lastSent = null;
             }
 
-            logger.debug("Notifying listener {} of snapshot {}", listenerName(), reader.snapshotId());
-            listener.handleLoadSnapshot(reader);
+            if (reader.snapshotId().equals(BOOTSTRAP_SNAPSHOT_ID)) {
+                logger.debug("Notifying listener {} of bootstrap snapshot {}", listenerName(), reader.snapshotId());
+                listener.handleLoadBootstrap(reader);
+            } else {
+                logger.debug("Notifying listener {} of committed snapshot {}", listenerName(), reader.snapshotId());
+                listener.handleLoadSnapshot(reader);
+            }
         }
 
         /**

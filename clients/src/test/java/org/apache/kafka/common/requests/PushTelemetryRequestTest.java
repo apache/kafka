@@ -19,7 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.telemetry.internals.MetricKey;
 import org.apache.kafka.common.telemetry.internals.SinglePointMetric;
@@ -62,7 +62,7 @@ public class PushTelemetryRequestTest {
         MetricsData metricsData = getMetricsData();
         PushTelemetryRequest req = getPushTelemetryRequest(metricsData, compressionType);
 
-        ByteBuffer receivedMetricsBuffer = req.metricsData();
+        ByteBuffer receivedMetricsBuffer = req.metricsData(1024 * 1024);
         assertNotNull(receivedMetricsBuffer);
         assertTrue(receivedMetricsBuffer.capacity() > 0);
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
@@ -139,10 +140,15 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         @Override
-        protected CoordinatorRecord newTargetAssignmentEpochRecord(String groupId, int assignmentEpoch) {
-            return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(
+        protected CoordinatorRecord newTargetAssignmentMetadataRecord(
+            String groupId,
+            int assignmentEpoch,
+            long assignmentTimestamp
+        ) {
+            return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(
                 groupId,
-                assignmentEpoch
+                assignmentEpoch,
+                assignmentTimestamp
             );
         }
 
@@ -208,10 +214,15 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         @Override
-        protected CoordinatorRecord newTargetAssignmentEpochRecord(String groupId, int assignmentEpoch) {
-            return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(
+        protected CoordinatorRecord newTargetAssignmentMetadataRecord(
+            String groupId,
+            int assignmentEpoch,
+            long assignmentTimestamp
+        ) {
+            return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(
                 groupId,
-                assignmentEpoch
+                assignmentEpoch,
+                assignmentTimestamp
             );
         }
 
@@ -229,6 +240,11 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
             );
         }
     }
+
+    /**
+     * The time.
+     */
+    private Time time;
 
     /**
      * The group id.
@@ -302,6 +318,17 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
+    }
+
+    /**
+     * Sets the time.
+     *
+     * @param time The time.
+     * @return This object.
+     */
+    public U withTime(Time time) {
+        this.time = time;
+        return self();
     }
 
     /**
@@ -491,7 +518,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         // Bump the target assignment epoch.
-        records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(newTargetAssignmentMetadataRecord(groupId, groupEpoch, time.milliseconds()));
 
         return new TargetAssignmentResult(records, newGroupAssignment.members());
     }
@@ -504,9 +531,10 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         Map<Uuid, Set<Integer>> partitions
     );
 
-    protected abstract CoordinatorRecord newTargetAssignmentEpochRecord(
+    protected abstract CoordinatorRecord newTargetAssignmentMetadataRecord(
         String groupId,
-        int assignmentEpoch
+        int assignmentEpoch,
+        long timestampMs
     );
 
     protected abstract MemberSubscriptionAndAssignmentImpl newMemberSubscriptionAndAssignment(

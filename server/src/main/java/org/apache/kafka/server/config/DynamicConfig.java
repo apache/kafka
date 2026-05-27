@@ -24,8 +24,9 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * Class used to hold dynamic configs. These are configs which have no physical manifestation in the server.properties
- * and can only be set dynamically.
+ * Holds dynamic configs, including both dynamic-only configs which have no physical manifestation in server.properties and
+ * can only be set dynamically (i.e., {@link QuotaConfig#brokerQuotaConfigs()}), and dual-mode configs that can be set
+ * statically or dynamically.
  */
 public class DynamicConfig {
 

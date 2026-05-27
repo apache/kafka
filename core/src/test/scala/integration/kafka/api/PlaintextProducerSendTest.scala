@@ -24,7 +24,8 @@ import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
-import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
+import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.record.internal.{DefaultRecord, DefaultRecordBatch, Records}
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
