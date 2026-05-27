@@ -51,6 +51,7 @@ import java.time.Duration;
  * @see Transformer
  */
 
+@Deprecated
 public interface ValueTransformerWithKey<K, V, VR> {
 
     /**
