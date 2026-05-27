@@ -171,7 +171,7 @@ None
 
 ### bootstrap.servers
 
-> (Required) The Kafka bootstrap servers. This is the same [setting](/43/documentation.html#producerconfigs) that is used by the underlying producer and consumer clients to connect to the Kafka cluster. Example: `"kafka-broker1:9092,kafka-broker2:9092"`.
+> (Required) The Kafka bootstrap servers. This is the same [setting](/44/documentation.html#producerconfigs) that is used by the underlying producer and consumer clients to connect to the Kafka cluster. Example: `"kafka-broker1:9092,kafka-broker2:9092"`.
 
 ## Recommended configuration parameters for resiliency
 
@@ -284,7 +284,7 @@ Increasing the replication factor to 3 ensures that the internal Kafka Streams t
 
 ### min.insync.replicas
 
-The minimum number of in-sync replicas available for replication if the producer is configured with `acks="all"` (see [topic configs](/43/documentation/#topicconfigs_min.insync.replicas)). 
+The minimum number of in-sync replicas available for replication if the producer is configured with `acks="all"` (see [topic configs](/44/documentation/#topicconfigs_min.insync.replicas)). 
 
 ### num.standby.replicas
 
@@ -1439,7 +1439,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 > The maximum number of warmup replicas (extra standbys beyond the configured `num.standbys`) that can be assigned at once for the purpose of keeping the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker traffic and cluster state can be used for high availability. Increasing this will allow Streams to warm up more tasks at once, speeding up the time for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1. 
 > 
-> Note that one warmup replica corresponds to one [Stream Task](/43/documentation/streams/architecture#streams_architecture_tasks). Furthermore, note that each warmup task can only be promoted to an active task during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the `probing.rebalance.interval.ms` config). This means that the maximum rate at which active tasks can be migrated from one Kafka Streams instance to another instance can be determined by (`max.warmup.replicas` / `probing.rebalance.interval.ms`). 
+> Note that one warmup replica corresponds to one [Stream Task](/44/documentation/streams/architecture#streams_architecture_tasks). Furthermore, note that each warmup task can only be promoted to an active task during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the `probing.rebalance.interval.ms` config). This means that the maximum rate at which active tasks can be migrated from one Kafka Streams instance to another instance can be determined by (`max.warmup.replicas` / `probing.rebalance.interval.ms`). 
 
 ### num.standby.replicas
 
@@ -1752,7 +1752,7 @@ If you call `streamsBuilder.build()` without passing the `Properties` object, op
  
  #### Default Values
  
- Kafka Streams uses different default values for some of the underlying client configs, which are summarized below. For detailed descriptions of these configs, see [Producer Configs](/43/documentation.html#producerconfigs) and [Consumer Configs](/43/documentation.html#consumerconfigs).  
+ Kafka Streams uses different default values for some of the underlying client configs, which are summarized below. For detailed descriptions of these configs, see [Producer Configs](/44/documentation.html#producerconfigs) and [Consumer Configs](/44/documentation.html#consumerconfigs).  
    
  <table>  
  <tr>  
@@ -2049,7 +2049,7 @@ Admin
 
 > The consumer auto commit. To guarantee at-least-once processing semantics and turn off auto commits, Kafka Streams overrides this consumer config value to `false`. Consumers will only commit explicitly via _commitSync_ calls when the Kafka Streams library or a user decides to commit the current processing state.
  
- [Previous](/43/documentation/streams/developer-guide/write-streams) [Next](/43/documentation/streams/developer-guide/dsl-api)
+ [Previous](/44/documentation/streams/developer-guide/write-streams) [Next](/44/documentation/streams/developer-guide/dsl-api)
  
    * [Documentation](/documentation)
    * [Kafka Streams](/documentation/streams)

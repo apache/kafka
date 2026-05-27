@@ -4187,10 +4187,23 @@ Use `testFixtures(project('${projectPath}'))` instead of `project('${projectPath
 
 
 
-ext.getDocsIndexVersionTargets = { rawVersion ->
+ext.getDocsMarkdownVersionTargets = { rawVersion ->
     def docsArtifactVersion = rawVersion.replace("-SNAPSHOT", "")
     def docsDisplayVersion = docsArtifactVersion.replaceFirst(/\.\d+$/, "")
     def docsPathVersion = docsDisplayVersion.replace(".", "")
+    def docsPathMajorVersion = docsDisplayVersion.tokenize(".")[0]
+    def docsPathVersionPattern = "${docsPathMajorVersion}(?:0|[1-9][0-9]?)"
+
+    def docsVersionPatternsByFile = [:].withDefault { [] }
+
+    def addDocsVersionPattern = { paths, pattern, replace ->
+      paths.each { path ->
+        docsVersionPatternsByFile[path] += [
+          pattern: pattern,
+          replace: replace
+        ]
+      }
+    }
 
     def docsIndexPatterns = [
       [
@@ -4206,22 +4219,136 @@ ext.getDocsIndexVersionTargets = { rawVersion ->
         replace: { "\$1${docsArtifactVersion}\$3" }
       ],
       [
-        pattern: /\/[0-9]+\/documentation\/streams/,
+        pattern: "\\/${docsPathVersionPattern}\\/documentation\\/streams",
         replace: "/${docsPathVersion}/documentation/streams"
       ]
     ]
 
-    return fileTree("${project.rootDir}/docs") {
+    fileTree("${project.rootDir}/docs") {
       include "**/_index.md"
-    }.files.sort { it.path }.collectMany { docsIndexFile ->
-      def content = docsIndexFile.text
+    }.files.sort { it.path }.each { docsIndexFile ->
       def relativePath = project.rootDir.toPath().relativize(docsIndexFile.toPath()).toString().replace(File.separator, "/")
+      docsVersionPatternsByFile[relativePath].addAll(docsIndexPatterns)
+    }
 
-      docsIndexPatterns.findAll { item ->
+    def docsDownloadVersionFiles = [
+      "docs/getting-started/quickstart.md",
+      "docs/streams/quickstart.md"
+    ]
+
+    addDocsVersionPattern(docsDownloadVersionFiles, /\/kafka\/[0-9]+\.[0-9]+\.[0-9]+\//, "/kafka/${docsArtifactVersion}/")
+    addDocsVersionPattern(docsDownloadVersionFiles, /kafka_2\.13-[0-9]+\.[0-9]+\.[0-9]+/, "kafka_2.13-${docsArtifactVersion}")
+
+    def docsKafkaImageVersionFiles = [
+      "docs/getting-started/docker.md",
+      "docs/getting-started/quickstart.md"
+    ]
+
+    addDocsVersionPattern(docsKafkaImageVersionFiles, /(apache\/kafka(?:-native)?:)[0-9]+\.[0-9]+\.[0-9]+/, { "\$1${docsArtifactVersion}" })
+
+    def docsConnectFileVersionFiles = [
+      "docs/getting-started/quickstart.md",
+      "docs/kafka-connect/user-guide.md"
+    ]
+
+    addDocsVersionPattern(docsConnectFileVersionFiles, /connect-file-[0-9]+\.[0-9]+\.[0-9]+\.jar/, "connect-file-${docsArtifactVersion}.jar")
+
+    def docsMavenDependencyVersionFiles = [
+      "docs/streams/developer-guide/datatypes.md",
+      "docs/streams/developer-guide/dsl-api.md",
+      "docs/streams/developer-guide/testing.md",
+      "docs/streams/developer-guide/write-streams-app.md"
+    ]
+
+    addDocsVersionPattern(docsMavenDependencyVersionFiles,
+      /(?s)(<artifactId>kafka-(?:clients|streams|streams-scala_2\.13|streams-test-utils)<\/artifactId>\s*<version>)([^<]+)(<\/version>)/,
+      { "\$1${docsArtifactVersion}\$3" }
+    )
+
+    docsVersionPatternsByFile["docs/streams/quickstart.md"] += [
+      pattern: /(the )[0-9]+\.[0-9]+\.[0-9]+( release)/,
+      replace: { "\$1${docsArtifactVersion}\$2" }
+    ]
+
+    docsVersionPatternsByFile["docs/streams/tutorial.md"] += [
+      pattern: /-DarchetypeVersion=[0-9]+\.[0-9]+\.[0-9]+/,
+      replace: "-DarchetypeVersion=${docsArtifactVersion}"
+    ]
+
+    docsVersionPatternsByFile["docs/streams/developer-guide/write-streams-app.md"] += [
+      pattern: /(?s)(`kafka-(?:streams|clients|streams-scala)`\s*<\/td>\s*<td>\s*`)[0-9]+\.[0-9]+\.[0-9]+(`)/,
+      replace: { "\$1${docsArtifactVersion}\$2" }
+    ]
+
+    docsVersionPatternsByFile["docs/operations/tiered-storage.md"].addAll([
+      [
+        pattern: /git checkout [0-9]+\.[0-9]+\.[0-9]+/,
+        replace: "git checkout ${docsArtifactVersion}"
+      ],
+      [
+        pattern: /kafka-storage-[0-9]+\.[0-9]+\.[0-9]+-test\.jar/,
+        replace: "kafka-storage-${docsArtifactVersion}-test.jar"
+      ]
+    ])
+
+    def docsPathVersionFiles = [
+      "docs/design/design.md",
+      "docs/implementation/log.md",
+      "docs/getting-started/quickstart.md",
+      "docs/getting-started/upgrade.md",
+      "docs/kafka-connect/user-guide.md",
+      "docs/streams/architecture.md",
+      "docs/streams/core-concepts.md",
+      "docs/streams/introduction.md",
+      "docs/streams/quickstart.md",
+      "docs/streams/tutorial.md",
+      "docs/streams/upgrade-guide.md",
+      "docs/streams/developer-guide/config-streams.md",
+      "docs/streams/developer-guide/dsl-api.md",
+      "docs/streams/developer-guide/dsl-topology-naming.md",
+      "docs/streams/developer-guide/interactive-queries.md",
+      "docs/streams/developer-guide/memory-mgmt.md",
+      "docs/streams/developer-guide/running-app.md",
+      "docs/streams/developer-guide/security.md",
+      "docs/documentation/legacy-redirect.md"
+    ]
+
+    docsPathVersionFiles.each { path ->
+      docsVersionPatternsByFile[path] += [
+        pattern: "\\/${docsPathVersionPattern}\\/(?=(?:documentation|generated|images|getting-started|operations|streams))",
+        replace: "/${docsPathVersion}/"
+      ]
+    }
+
+    def docsGithubBranchFiles = [
+      "docs/streams/quickstart.md",
+      "docs/streams/developer-guide/datatypes.md"
+    ]
+
+    docsGithubBranchFiles.each { path ->
+      docsVersionPatternsByFile[path] += [
+        pattern: /github\.com\/apache\/kafka\/blob\/[0-9]+\.[0-9]+\//,
+        replace: "github.com/apache/kafka/blob/${docsDisplayVersion}/"
+      ]
+    }
+
+    docsVersionPatternsByFile["docs/streams/developer-guide/dsl-api.md"] += [
+      pattern: /("org\.apache\.kafka"\s+%%\s+"kafka-streams-scala"\s+%\s+")[^"]+(")/,
+      replace: { "\$1${docsArtifactVersion}\$2" }
+    ]
+
+    return docsVersionPatternsByFile.keySet().sort().collectMany { path ->
+      def docsFile = file("${project.rootDir}/${path}")
+      if (!docsFile.exists()) {
+        throw new GradleException("File not found: ${path}")
+      }
+
+      def content = docsFile.text
+      docsVersionPatternsByFile[path].findAll { item ->
         (content =~ item.pattern).find()
       }.collect { item ->
         [
-          path: relativePath,
+          path: path,
           pattern: item.pattern,
           replace: item.replace
         ]
@@ -4274,12 +4401,12 @@ ext.getVersionTargets = { rawVersion ->
         pattern: /(<kafka\.version>)([^<]+)(<\/kafka\.version>)/,
         replace: { "\$1${rawVersion}\$3" }
       ]
-    ] + getDocsIndexVersionTargets(rawVersion)
+    ] + getDocsMarkdownVersionTargets(rawVersion)
 }
 
 def updateVersionTask = tasks.register('updateVersion') {
   group = "Release"
-  description = "Syncs python, pom, script, and docs index versions with gradle.properties. Fails if files or patterns are missing. Use -PnewVersion=X.Y.Z to set a new version."
+  description = "Syncs python, pom, script, and docs versions with gradle.properties. Fails if files or patterns are missing. Use -PnewVersion=X.Y.Z to set a new version."
 
   doLast {
     def rawVersion
@@ -4336,7 +4463,7 @@ def updateVersionTask = tasks.register('updateVersion') {
 
 def verifyVersionConsistencyTask = tasks.register('verifyVersionConsistency') {
   group = "Verification"
-  description = "Verifies that python, pom, script, and docs index versions match gradle.properties."
+  description = "Verifies that python, pom, script, and docs versions match gradle.properties."
 
   doLast {
     def rawVersion = project.version.toString()

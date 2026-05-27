@@ -39,7 +39,7 @@ type: docs
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0
 
-Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.3.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.3.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.3.x.
+Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.3.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.3.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/44/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.3.x.
 
 **For a rolling upgrade:**
 
@@ -67,7 +67,7 @@ Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been remove
 
 ### Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x
 
-Note: Apache Kafka 4.2 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.2.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.2.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.2.x.
+Note: Apache Kafka 4.2 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.2.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.2.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/44/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.2.x.
 
 **For a rolling upgrade:**
 
@@ -169,7 +169,7 @@ The rolling upgrade procedure for 4.1.x is identical to the 4.0 upgrade. Please 
     * The filename for rotated `state-change.log` files has been updated from `stage-change.log.[date]` to `state-change.log.[date]` in the log4j2.yaml configuration file. 
   * **Broker**
     * The configuration `log.cleaner.enable` is deprecated. Users should no longer set it to `false` to prepare for future removal. After the removal, `log.cleaner.threads` will also have a lower bound of 1. For further details, please refer to [KIP-1148](https://cwiki.apache.org/confluence/x/XAyWF). 
-    * The KIP-966 part 1: Eligible Leader Replicas(ELR) will be enabled by default on the new clusters. After the ELR feature enabled, the previously set `min.insync.replicas` value at the broker-level config will be removed. Please set at the cluster-level if necessary. For further details, please refer to [here](/43/documentation.html#eligible_leader_replicas). 
+    * The KIP-966 part 1: Eligible Leader Replicas(ELR) will be enabled by default on the new clusters. After the ELR feature enabled, the previously set `min.insync.replicas` value at the broker-level config will be removed. Please set at the cluster-level if necessary. For further details, please refer to [here](/44/documentation.html#eligible_leader_replicas). 
   * **Producer**
     * The `flush` method now detects potential deadlocks and prohibits its use inside a callback. This change prevents unintended blocking behavior, which was a known risk in earlier versions. 
   * **Command**
@@ -191,13 +191,13 @@ The rolling upgrade procedure for 4.1.x is identical to the 4.0 upgrade. Please 
 **For a rolling upgrade:**
 
   1. Upgrade the clients one at a time: shut down the client, update the code, and restart it.
-  2. Clients (including Streams and Connect) must be on version 2.1 or higher before upgrading to 4.0. Many deprecated APIs were removed in Kafka 4.0. For more information about the compatibility, please refer to the [compatibility matrix](/43/getting-started/compatibility) or [KIP-1124](https://cwiki.apache.org/confluence/x/y4kgF).
+  2. Clients (including Streams and Connect) must be on version 2.1 or higher before upgrading to 4.0. Many deprecated APIs were removed in Kafka 4.0. For more information about the compatibility, please refer to the [compatibility matrix](/44/getting-started/compatibility) or [KIP-1124](https://cwiki.apache.org/confluence/x/y4kgF).
 
 
 
 ### Upgrading Servers to 4.0.1 from any version 3.3.x through 3.9.x
 
-Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.0.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.0.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.0.x. 
+Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.0.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.0.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/44/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.0.x. 
 
 **For a rolling upgrade:**
 
@@ -210,18 +210,18 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
 ### Notable changes in 4.0.1
 
   * The filename for rotated `state-change.log` files has been updated from `stage-change.log.[date]` to `state-change.log.[date]` in the log4j2.yaml configuration file. See [KAFKA-19576](https://issues.apache.org/jira/browse/KAFKA-19576) for details. 
-  * Kafka Streams include a critical fix to upgrade from `KStreams#transformValues()` (remove with 4.0.0 release) to `KStreams#processValues()`. For more details, see the [migration guide](/43/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
+  * Kafka Streams include a critical fix to upgrade from `KStreams#transformValues()` (remove with 4.0.0 release) to `KStreams#processValues()`. For more details, see the [migration guide](/44/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
 
 
 
 ### Notable changes in 4.0.0
 
   * Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading Java clients (including Connect and Kafka Streams which use the clients internally) to 4.0. Similarly, users should ensure their Java clients (including Connect and Kafka Streams) version is 2.1 or higher before upgrading brokers to 4.0. Finally, care also needs to be taken when it comes to kafka clients that are not part of Apache Kafka, please see [KIP-896](https://cwiki.apache.org/confluence/x/K5sODg) for the details. 
-  * Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. About version upgrade, check [Upgrading to 4.0.1 from any version 3.3.x through 3.9.x](/43/getting-started/upgrade/#upgrading-servers-to-401-from-any-version-33x-through-39x) for more info. 
+  * Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. About version upgrade, check [Upgrading to 4.0.1 from any version 3.3.x through 3.9.x](/44/getting-started/upgrade/#upgrading-servers-to-401-from-any-version-33x-through-39x) for more info. 
   * Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See [here](https://cwiki.apache.org/confluence/x/HhD1D)). Functionally speaking, it implements all the same APIs. There are reasonable defaults, but the behavior of the new group coordinator can be tuned by setting the configurations with prefix `group.coordinator`. 
-  * The Next Generation of the Consumer Rebalance Protocol ([KIP-848](https://cwiki.apache.org/confluence/x/HhD1D)) is now Generally Available (GA) in Apache Kafka 4.0. The protocol is automatically enabled on the server when the upgrade to 4.0 is finalized. Note that once the new protocol is used by consumer groups, the cluster can only be downgraded to version 3.4.1 or newer. For more information check [here](/43/documentation.html#consumer_rebalance_protocol). 
-  * Transactions Server-Side Defense ([KIP-890](https://cwiki.apache.org/confluence/x/B40ODg)) brings a strengthened transactional protocol to Apache Kafka 4.0. The new and improved transactional protocol is enabled when the upgrade to 4.0 is finalized. When using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not written as part of the next transaction. Downgrading the protocol is safe. For more information check [here](/43/documentation.html#transaction_protocol). 
-  * Eligible Leader Replicas ([KIP-966 Part 1](https://cwiki.apache.org/confluence/x/mpOzDw)) enhances the replication protocol for the Apache Kafka 4.0. Now the KRaft controller keeps track of the data partition replicas that are not included in ISR but are safe to be elected as leader without data loss. Such replicas are stored in the partition metadata as the `Eligible Leader Replicas`(ELR). For more information check [here](/43/documentation.html#eligible_leader_replicas). 
+  * The Next Generation of the Consumer Rebalance Protocol ([KIP-848](https://cwiki.apache.org/confluence/x/HhD1D)) is now Generally Available (GA) in Apache Kafka 4.0. The protocol is automatically enabled on the server when the upgrade to 4.0 is finalized. Note that once the new protocol is used by consumer groups, the cluster can only be downgraded to version 3.4.1 or newer. For more information check [here](/44/documentation.html#consumer_rebalance_protocol). 
+  * Transactions Server-Side Defense ([KIP-890](https://cwiki.apache.org/confluence/x/B40ODg)) brings a strengthened transactional protocol to Apache Kafka 4.0. The new and improved transactional protocol is enabled when the upgrade to 4.0 is finalized. When using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not written as part of the next transaction. Downgrading the protocol is safe. For more information check [here](/44/documentation.html#transaction_protocol). 
+  * Eligible Leader Replicas ([KIP-966 Part 1](https://cwiki.apache.org/confluence/x/mpOzDw)) enhances the replication protocol for the Apache Kafka 4.0. Now the KRaft controller keeps track of the data partition replicas that are not included in ISR but are safe to be elected as leader without data loss. Such replicas are stored in the partition metadata as the `Eligible Leader Replicas`(ELR). For more information check [here](/44/documentation.html#eligible_leader_replicas). 
   * Since Apache Kafka 4.0.0, we have added a system property (`org.apache.kafka.sasl.oauthbearer.allowed.urls`) to set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. By default, the value is an empty list. Users should explicitly set the allowed list if necessary. 
   * A number of deprecated classes, methods, configurations and tools have been removed. 
     * **Common**
@@ -248,7 +248,7 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
       * The `remote.log.manager.thread.pool.size` configuration default value was changed to 2 from 10. See [KIP-1030](https://cwiki.apache.org/confluence/x/FAqpEQ)
       * The minimum `segment.bytes/log.segment.bytes` has changed from 14 bytes to 1MB. See [KIP-1030](https://cwiki.apache.org/confluence/x/FAqpEQ)
     * **MirrorMaker**
-      * The original MirrorMaker (MM1) and related classes were removed. Please use the Connect-based MirrorMaker (MM2), as described in the [Geo-Replication section.](/43/documentation/#georeplication). 
+      * The original MirrorMaker (MM1) and related classes were removed. Please use the Connect-based MirrorMaker (MM2), as described in the [Geo-Replication section.](/44/documentation/#georeplication). 
       * The `use.incremental.alter.configs` configuration was removed from `MirrorSourceConnector`. The modified behavior is now identical to the previous `required` configuration, therefore users should ensure that brokers in the target cluster are at least running 2.3.0. 
       * The `add.source.alias.to.metrics` configuration was removed from `MirrorSourceConnector`. The source cluster alias is now always added to the metrics. 
       * The `config.properties.blacklist` was removed from the `org.apache.kafka.connect.mirror.MirrorSourceConfig` Please use `config.properties.exclude` instead. 
@@ -297,9 +297,9 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
       * The `all()` method was removed from the `org.apache.kafka.clients.admin.DescribeTopicsResult`. Please use `allTopicNames()` instead. 
     * **Kafka Streams**
       * All public APIs, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of `JoinWindows.of()` and `JoinWindows#grace()`. See [KAFKA-17531](https://issues.apache.org/jira/browse/KAFKA-17531) for details. 
-      * The most important changes are highlighted in the [Kafka Streams upgrade guide](/43/streams/upgrade-guide/#streams-api-changes-in-400). 
+      * The most important changes are highlighted in the [Kafka Streams upgrade guide](/44/streams/upgrade-guide/#streams-api-changes-in-400). 
       * For a full list of changes, see [KAFKA-12822](https://issues.apache.org/jira/browse/KAFKA-12822). 
-      * If you are using `KStream#transformValues()` which was removed with Apache Kafka 4.0.0 release, and you need to rewrite your program to use `KStreams#processValues()` instead, pay close attention to the [migration guide](/43/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
+      * If you are using `KStream#transformValues()` which was removed with Apache Kafka 4.0.0 release, and you need to rewrite your program to use `KStreams#processValues()` instead, pay close attention to the [migration guide](/44/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
   * Other changes: 
     * The minimum Java version required by clients and Kafka Streams applications has been increased from Java 8 to Java 11 while brokers, connect and tools now require Java 17. See [KIP-750](https://cwiki.apache.org/confluence/x/P4vOCg) and [KIP-1013](https://cwiki.apache.org/confluence/x/Bov5E) for more details. 
     * Java 23 support has been added in Apache Kafka 4.0. 
@@ -309,7 +309,7 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
     * The `--delete-config` option in the `kafka-topics` command line tool has been deprecated. 
     * For implementors of RemoteLogMetadataManager (RLMM), a new API `nextSegmentWithTxnIndex` is introduced in RLMM to allow the implementation to return the next segment metadata with a transaction index. This API is used when the consumers are enabled with isolation level as READ_COMMITTED. See [KIP-1058](https://cwiki.apache.org/confluence/x/BwuTEg) for more details. 
     * The criteria for identifying internal topics in ReplicationPolicy and DefaultReplicationPolicy have been updated to enable the replication of topics that appear to be internal but aren't truly internal to Kafka and Mirror Maker 2. See [KIP-1074](https://cwiki.apache.org/confluence/x/jA3OEg) for more details. 
-    * [KIP-714](https://cwiki.apache.org/confluence/x/2xRRCg) is now enabled for Kafka Streams via [KIP-1076](https://cwiki.apache.org/confluence/x/XA-OEg). This allows to not only collect the metric of the internally used clients of a Kafka Streams application via a broker-side plugin, but also to collect the [metrics](/43/documentation/#kafka_streams_monitoring) of the Kafka Streams runtime itself. 
+    * [KIP-714](https://cwiki.apache.org/confluence/x/2xRRCg) is now enabled for Kafka Streams via [KIP-1076](https://cwiki.apache.org/confluence/x/XA-OEg). This allows to not only collect the metric of the internally used clients of a Kafka Streams application via a broker-side plugin, but also to collect the [metrics](/44/documentation/#kafka_streams_monitoring) of the Kafka Streams runtime itself. 
     * The default value of `num.recovery.threads.per.data.dir` has been changed from 1 to 2. The impact of this is faster recovery post unclean shutdown at the expense of extra IO cycles. See [KIP-1030](https://cwiki.apache.org/confluence/x/FAqpEQ)
     * The default value of `message.timestamp.after.max.ms` has been changed from Long.Max to 1 hour. The impact of this messages with a timestamp of more than 1 hour in the future will be rejected when message.timestamp.type=CreateTime is set. See [KIP-1030](https://cwiki.apache.org/confluence/x/FAqpEQ)
     * Introduced in [KIP-890](https://cwiki.apache.org/confluence/x/B40ODg), the `TransactionAbortableException` enhances error handling within transactional operations by clearly indicating scenarios where transactions should be aborted due to errors. It is important for applications to properly manage both `TimeoutException` and `TransactionAbortableException` when working with transaction producers.

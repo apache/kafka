@@ -938,7 +938,7 @@ Available stateful transformations in the DSL include:
 
 The following diagram shows their relationships:
 
-![](/43/images/streams-stateful_operations.png)
+![](/44/images/streams-stateful_operations.png)
 
 Stateful transformations in the DSL.
 
@@ -4539,7 +4539,7 @@ The following code defines a hopping window with a size of 5 minutes and an adva
     Duration advance = Duration.ofMinutes(1);
     TimeWindows.ofSizeWithNoGrace(windowSize).advanceBy(advance);
 
-![](/43/images/streams-time-windows-hopping.png)
+![](/44/images/streams-time-windows-hopping.png)
 
 This diagram shows windowing a stream of data records with hopping windows. In this diagram the time numbers represent minutes; e.g. t=5 means "at the five-minute mark". In reality, the unit of time in Kafka Streams is milliseconds, which means the time numbers would need to be multiplied with 60 * 1,000 to convert from minutes to milliseconds (e.g. t=5 would become t=300,000).
 
@@ -4551,7 +4551,7 @@ Unlike non-windowed aggregates that we have seen previously, windowed aggregates
 
 Tumbling time windows are a special case of hopping time windows and, like the latter, are windows based on time intervals. They model fixed-size, non-overlapping, gap-less windows. A tumbling window is defined by a single property: the window's _size_. A tumbling window is a hopping window whose window size is equal to its advance interval. Since tumbling windows never overlap, a data record will belong to one and only one window.
 
-![](/43/images/streams-time-windows-tumbling.png)
+![](/44/images/streams-time-windows-tumbling.png)
 
 This diagram shows windowing a stream of data records with tumbling windows. Windows do not overlap because, by definition, the advance interval is identical to the window size. In this diagram the time numbers represent minutes; e.g. t=5 means "at the five-minute mark". In reality, the unit of time in Kafka Streams is milliseconds, which means the time numbers would need to be multiplied with 60 * 1,000 to convert from minutes to milliseconds (e.g. t=5 would become t=300,000).
 
@@ -4588,7 +4588,7 @@ The following code defines a sliding window with a time difference of 10 minutes
     Duration gracePeriod = Duration.ofMinutes(30);
     SlidingWindows.ofTimeDifferenceAndGrace(timeDifference, gracePeriod);
 
-![](/43/images/streams-sliding-windows.png)
+![](/44/images/streams-sliding-windows.png)
 
 This diagram shows windowing a stream of data records with sliding windows. The overlap of the sliding window snapshots varies depending on the record times. In this diagram, the time numbers represent milliseconds. For example, t=5 means "at the five millisecond mark".
 
@@ -4618,13 +4618,13 @@ The following code defines a session window with an inactivity gap of 5 minutes:
 
 Given the previous session window example, here's what would happen on an input stream of six records. When the first three records arrive (upper part of in the diagram below), we'd have three sessions (see lower part) after having processed those records: two for the green record key, with one session starting and ending at the 0-minute mark (only due to the illustration it looks as if the session goes from 0 to 1), and another starting and ending at the 6-minute mark; and one session for the blue record key, starting and ending at the 2-minute mark.
 
-![](/43/images/streams-session-windows-01.png)
+![](/44/images/streams-session-windows-01.png)
 
 Detected sessions after having received three input records: two records for the green record key at t=0 and t=6, and one record for the blue record key at t=2. In this diagram the time numbers represent minutes; e.g. t=5 means "at the five-minute mark". In reality, the unit of time in Kafka Streams is milliseconds, which means the time numbers would need to be multiplied with 60 * 1,000 to convert from minutes to milliseconds (e.g. t=5 would become t=300,000).
 
 If we then receive three additional records (including two out-of-order records), what would happen is that the two existing sessions for the green record key will be merged into a single session starting at time 0 and ending at time 6, consisting of a total of three records. The existing session for the blue record key will be extended to end at time 5, consisting of a total of two records. And, finally, there will be a new session for the blue key starting and ending at time 11.
 
-![](/43/images/streams-session-windows-02.png)
+![](/44/images/streams-session-windows-02.png)
 
 Detected sessions after having received six input records. Note the two out-of-order data records at t=4 (green) and t=5 (blue), which lead to a merge of sessions and an extension of a session, respectively.
 
@@ -5633,11 +5633,11 @@ For more detailed information, see the JavaDoc on the `Suppressed` config object
 
 # Using timestamp-based semantics for table processors
 
-By default, tables in Kafka Streams use offset-based semantics. When multiple records arrive for the same key, the one with the largest record offset is considered the latest record for the key, and is the record that appears in aggregation and join results computed on the table. This is true even in the event of [out-of-order data](/43/documentation/streams/core-concepts.html#streams_out_of_ordering). The record with the largest offset is considered to be the latest record for the key, even if this record does not have the largest timestamp.
+By default, tables in Kafka Streams use offset-based semantics. When multiple records arrive for the same key, the one with the largest record offset is considered the latest record for the key, and is the record that appears in aggregation and join results computed on the table. This is true even in the event of [out-of-order data](/44/documentation/streams/core-concepts.html#streams_out_of_ordering). The record with the largest offset is considered to be the latest record for the key, even if this record does not have the largest timestamp.
 
 An alternative to offset-based semantics is timestamp-based semantics. With timestamp-based semantics, the record with the largest timestamp is considered the latest record, even if there is another record with a larger offset (and smaller timestamp). If there is no out-of-order data (per key), then offset-based semantics and timestamp-based semantics are equivalent; the difference only appears when there is out-of-order data.
 
-Starting with Kafka Streams 3.5, Kafka Streams supports timestamp-based semantics through the use of [versioned state stores](/43/documentation/streams/developer-guide/processor-api.html#versioned-state-stores). When a table is materialized with a versioned state store, it is a versioned table and will result in different processor semantics in the presence of out-of-order data.
+Starting with Kafka Streams 3.5, Kafka Streams supports timestamp-based semantics through the use of [versioned state stores](/44/documentation/streams/developer-guide/processor-api.html#versioned-state-stores). When a table is materialized with a versioned state store, it is a versioned table and will result in different processor semantics in the presence of out-of-order data.
 
   * When performing a stream-table join, stream-side records will join with the latest-by-timestamp table record which has a timestamp less than or equal to the stream record's timestamp. This is in contrast to joining a stream to an unversioned table, in which case the latest-by-offset table record will be joined, even if the stream-side record is out-of-order and has a lower timestamp.
   * Aggregations computed on the table will include the latest-by-timestamp record for each key, instead of the latest-by-offset record. Out-of-order updates (per key) will not trigger a new aggregation result. This is true for `count` and `reduce` operations as well, in addition to `aggregate` operations.
@@ -5662,7 +5662,7 @@ The results of certain processors should not be materialized with versioned stor
 
 
 
-For more on versioned stores and how to start using them in your application, see [here](/43/documentation/streams/developer-guide/processor-api.html#versioned-state-stores).
+For more on versioned stores and how to start using them in your application, see [here](/44/documentation/streams/developer-guide/processor-api.html#versioned-state-stores).
 
 # Writing streams back to Kafka
 
@@ -5791,7 +5791,7 @@ The library is cross-built with Scala 2.12 and 2.13. To reference the library co
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-streams-scala_2.13</artifactId>
-      <version>4.3.0</version>
+      <version>4.4.0</version>
     </dependency>
 
 To use the library compiled against Scala 2.12 replace the `artifactId` with `kafka-streams-scala_2.12`.
@@ -5799,7 +5799,7 @@ To use the library compiled against Scala 2.12 replace the `artifactId` with `ka
 When using SBT then you can reference the correct library using the following:
     
     
-    libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "4.3.0"
+    libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "4.4.0"
 
 ## Sample Usage
 

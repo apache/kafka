@@ -32,7 +32,7 @@ This tutorial assumes you are starting fresh and have no existing Kafka data. Ho
 
 Kafka Streams is a client library for building mission-critical real-time applications and microservices, where the input and/or output data is stored in Kafka clusters. Kafka Streams combines the simplicity of writing and deploying standard Java and Scala applications on the client side with the benefits of Kafka's server-side cluster technology to make these applications highly scalable, elastic, fault-tolerant, distributed, and much more. 
 
-This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist of the `[WordCountDemo](https://github.com/apache/kafka/blob/4.3/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java)` example code. 
+This quickstart example will demonstrate how to run a streaming application coded in this library. Here is the gist of the `[WordCountDemo](https://github.com/apache/kafka/blob/4.4/streams/examples/src/main/java/org/apache/kafka/streams/examples/wordcount/WordCountDemo.java)` example code. 
     
     
     // Serializers/deserializers (serde) for String and Long types
@@ -66,11 +66,11 @@ As the first step, we will start Kafka (unless you already have it started) and 
 
 ### Step 1: Download the code
 
-[Download](https://www.apache.org/dyn/closer.cgi?path=/kafka/4.3.0/kafka_2.13-4.3.0.tgz "Kafka downloads") the 4.3.0 release and un-tar it. Note that there are multiple downloadable Scala versions and we choose to use the recommended version (2.13) here: 
+[Download](https://www.apache.org/dyn/closer.cgi?path=/kafka/4.4.0/kafka_2.13-4.4.0.tgz "Kafka downloads") the 4.4.0 release and un-tar it. Note that there are multiple downloadable Scala versions and we choose to use the recommended version (2.13) here: 
     
     
-    $ tar -xzf kafka_2.13-4.3.0.tgz
-    $ cd kafka_2.13-4.3.0
+    $ tar -xzf kafka_2.13-4.4.0.tgz
+    $ cd kafka_2.13-4.4.0
 
 ### Step 2: Start the Kafka server
 
@@ -241,7 +241,7 @@ As one can see, outputs of the Wordcount application is actually a continuous st
 
 The two diagrams below illustrate what is essentially happening behind the scenes. The first column shows the evolution of the current state of the `KTable<String, Long>` that is counting word occurrences for `count`. The second column shows the change records that result from state updates to the KTable and that are being sent to the output Kafka topic **streams-wordcount-output**. 
 
-![](/43/images/streams-table-updates-02.png) ![](/43/images/streams-table-updates-01.png)
+![](/44/images/streams-table-updates-02.png) ![](/44/images/streams-table-updates-01.png)
 
 First the text line "all streams lead to kafka" is being processed. The `KTable` is being built up as each new word results in a new table entry (highlighted with a green background), and a corresponding change record is sent to the downstream `KStream`. 
 

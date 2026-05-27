@@ -28,11 +28,11 @@ type: docs
 
 ## Step 1: Get Kafka
 
-[Download](https://www.apache.org/dyn/closer.cgi?path=/kafka/4.3.0/kafka_2.13-4.3.0.tgz) the latest Kafka release and extract it: 
+[Download](https://www.apache.org/dyn/closer.cgi?path=/kafka/4.4.0/kafka_2.13-4.4.0.tgz) the latest Kafka release and extract it: 
 
 ```bash
-$ tar -xzf kafka_2.13-4.3.0.tgz
-$ cd kafka_2.13-4.3.0
+$ tar -xzf kafka_2.13-4.4.0.tgz
+$ cd kafka_2.13-4.4.0
 ```
 
 ## Step 2: Start the Kafka environment
@@ -68,13 +68,13 @@ Once the Kafka server has successfully launched, you will have a basic Kafka env
 Get the Docker image:
 
 ```bash
-$ docker pull apache/kafka:4.3.0
+$ docker pull apache/kafka:4.4.0
 ```
 
 Start the Kafka Docker container: 
 
 ```bash
-$ docker run -p 9092:9092 apache/kafka:4.3.0
+$ docker run -p 9092:9092 apache/kafka:4.4.0
 ```
 
 ### Using GraalVM Based Native Apache Kafka Docker Image
@@ -82,13 +82,13 @@ $ docker run -p 9092:9092 apache/kafka:4.3.0
 Get the Docker image:
 
 ```bash
-$ docker pull apache/kafka-native:4.3.0
+$ docker pull apache/kafka-native:4.4.0
 ```
 
 Start the Kafka Docker container:
 
 ```bash
-$ docker run -p 9092:9092 apache/kafka-native:4.3.0
+$ docker run -p 9092:9092 apache/kafka-native:4.4.0
 ```
 
 ## Step 3: Create a topic to store your events
@@ -147,12 +147,12 @@ You probably have lots of data in existing systems like relational databases or 
 
 In this quickstart we'll see how to run Kafka Connect with simple connectors that import data from a file to a Kafka topic and export data from a Kafka topic to a file. 
 
-First, make sure to add `connect-file-4.3.0.jar` to the `plugin.path` property in the Connect worker's configuration. For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory. However, it's worth noting that for production deployments using absolute paths is always preferable. See [plugin.path](../../configuration/kafka-connect-configs/#connectconfigs_plugin.path) for a detailed description of how to set this config. 
+First, make sure to add `connect-file-4.4.0.jar` to the `plugin.path` property in the Connect worker's configuration. For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory. However, it's worth noting that for production deployments using absolute paths is always preferable. See [plugin.path](../../configuration/kafka-connect-configs/#connectconfigs_plugin.path) for a detailed description of how to set this config. 
 
 Edit the `config/connect-standalone.properties` file, add or change the `plugin.path` configuration property match the following, and save the file: 
 
 ```bash
-$ echo "plugin.path=libs/connect-file-4.3.0.jar" >> config/connect-standalone.properties
+$ echo "plugin.path=libs/connect-file-4.4.0.jar" >> config/connect-standalone.properties
 ```
 
 Then, start by creating some seed data to test with: 
@@ -219,7 +219,7 @@ KTable<String, Long> wordCounts = textLines
 wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.Long()));
 ```
 
-The [Kafka Streams demo](/documentation/streams/quickstart) and the [app development tutorial](/43/documentation/streams/tutorial) demonstrate how to code and run such a streaming application from start to finish. 
+The [Kafka Streams demo](/documentation/streams/quickstart) and the [app development tutorial](/44/documentation/streams/tutorial) demonstrate how to code and run such a streaming application from start to finish. 
 
 ## Step 8: Terminate the Kafka environment
 

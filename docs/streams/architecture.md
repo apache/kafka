@@ -30,7 +30,7 @@ Kafka Streams simplifies application development by building on the Kafka produc
 
 The picture below shows the anatomy of an application that uses the Kafka Streams library. Let's walk through some details. 
 
-![](/43/images/streams-architecture-overview.jpg)
+![](/44/images/streams-architecture-overview.jpg)
 
 ## Stream Partitions and Tasks
 
@@ -52,14 +52,14 @@ It is important to understand that Kafka Streams is not a resource manager, but 
 
 The following diagram shows two tasks each assigned with one partition of the input streams. 
 
-![](/43/images/streams-architecture-tasks.jpg)   
+![](/44/images/streams-architecture-tasks.jpg)   
 
 
 ## Threading Model
 
 Kafka Streams allows the user to configure the number of **threads** that the library can use to parallelize processing within an application instance. Each thread can execute one or more tasks with their processor topologies independently. For example, the following diagram shows one stream thread running two stream tasks. 
 
-![](/43/images/streams-architecture-threads.jpg)
+![](/44/images/streams-architecture-threads.jpg)
 
 Starting more stream threads or more instances of the application merely amounts to replicating the topology and having it process a different subset of Kafka partitions, effectively parallelizing processing. It is worth noting that there is no shared state amongst the threads, so no inter-thread coordination is necessary. This makes it very simple to run topologies in parallel across the application instances and threads. The assignment of Kafka topic partitions amongst the various stream threads is transparently handled by Kafka Streams leveraging [Kafka's coordination](https://cwiki.apache.org/confluence/x/foynAw) functionality. 
 
@@ -72,26 +72,26 @@ As of Kafka 2.8 you can scale stream threads much in the same way you can scale 
 
 ## Local State Stores
 
-Kafka Streams provides so-called **state stores** , which can be used by stream processing applications to store and query data, which is an important capability when implementing stateful operations. The [Kafka Streams DSL](/43/documentation/streams/developer-guide/dsl-api.html), for example, automatically creates and manages such state stores when you are calling stateful operators such as `join()` or `aggregate()`, or when you are windowing a stream. 
+Kafka Streams provides so-called **state stores** , which can be used by stream processing applications to store and query data, which is an important capability when implementing stateful operations. The [Kafka Streams DSL](/44/documentation/streams/developer-guide/dsl-api.html), for example, automatically creates and manages such state stores when you are calling stateful operators such as `join()` or `aggregate()`, or when you are windowing a stream. 
 
 Every stream task in a Kafka Streams application may embed one or more local state stores that can be accessed via APIs to store and query data required for processing. Kafka Streams offers fault-tolerance and automatic recovery for such local state stores. 
 
 The following diagram shows two stream tasks with their dedicated local state stores. 
 
-![](/43/images/streams-architecture-states.jpg)   
+![](/44/images/streams-architecture-states.jpg)   
 
 
 ## Fault Tolerance
 
 Kafka Streams builds on fault-tolerance capabilities integrated natively within Kafka. Kafka partitions are highly available and replicated; so when stream data is persisted to Kafka it is available even if the application fails and needs to re-process it. Tasks in Kafka Streams leverage the fault-tolerance capability offered by the Kafka consumer client to handle failures. If a task runs on a machine that fails, Kafka Streams automatically restarts the task in one of the remaining running instances of the application. 
 
-In addition, Kafka Streams makes sure that the local state stores are robust to failures, too. For each state store, it maintains a replicated changelog Kafka topic in which it tracks any state updates. These changelog topics are partitioned as well so that each local state store instance, and hence the task accessing the store, has its own dedicated changelog topic partition. [Log compaction](/43/documentation/#compaction) is enabled on the changelog topics so that old data can be purged safely to prevent the topics from growing indefinitely. If tasks run on a machine that fails and are restarted on another machine, Kafka Streams guarantees to restore their associated state stores to the content before the failure by replaying the corresponding changelog topics prior to resuming the processing on the newly started tasks. As a result, failure handling is completely transparent to the end user. 
+In addition, Kafka Streams makes sure that the local state stores are robust to failures, too. For each state store, it maintains a replicated changelog Kafka topic in which it tracks any state updates. These changelog topics are partitioned as well so that each local state store instance, and hence the task accessing the store, has its own dedicated changelog topic partition. [Log compaction](/44/documentation/#compaction) is enabled on the changelog topics so that old data can be purged safely to prevent the topics from growing indefinitely. If tasks run on a machine that fails and are restarted on another machine, Kafka Streams guarantees to restore their associated state stores to the content before the failure by replaying the corresponding changelog topics prior to resuming the processing on the newly started tasks. As a result, failure handling is completely transparent to the end user. 
 
-Note that the cost of task (re)initialization typically depends primarily on the time for restoring the state by replaying the state stores' associated changelog topics. To minimize this restoration time, users can configure their applications to have **standby replicas** of local states (i.e. fully replicated copies of the state). When a task migration happens, Kafka Streams will assign a task to an application instance where such a standby replica already exists in order to minimize the task (re)initialization cost. See `num.standby.replicas` in the [**Kafka Streams Configs**](/43/documentation/#streamsconfigs) section. Starting in 2.6, Kafka Streams will guarantee that a task is only ever assigned to an instance with a fully caught-up local copy of the state, if such an instance exists. Standby tasks will increase the likelihood that a caught-up instance exists in the case of a failure. 
+Note that the cost of task (re)initialization typically depends primarily on the time for restoring the state by replaying the state stores' associated changelog topics. To minimize this restoration time, users can configure their applications to have **standby replicas** of local states (i.e. fully replicated copies of the state). When a task migration happens, Kafka Streams will assign a task to an application instance where such a standby replica already exists in order to minimize the task (re)initialization cost. See `num.standby.replicas` in the [**Kafka Streams Configs**](/44/documentation/#streamsconfigs) section. Starting in 2.6, Kafka Streams will guarantee that a task is only ever assigned to an instance with a fully caught-up local copy of the state, if such an instance exists. Standby tasks will increase the likelihood that a caught-up instance exists in the case of a failure. 
 
-You can also configure standby replicas with rack awareness. When configured, Kafka Streams will attempt to distribute a standby task on a different "rack" than the active one, thus having a faster recovery time when the rack of the active tasks fails. See `rack.aware.assignment.tags` in the [**Kafka Streams Developer Guide**](/43/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-tags) section. 
+You can also configure standby replicas with rack awareness. When configured, Kafka Streams will attempt to distribute a standby task on a different "rack" than the active one, thus having a faster recovery time when the rack of the active tasks fails. See `rack.aware.assignment.tags` in the [**Kafka Streams Developer Guide**](/44/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-tags) section. 
 
-There is also a client config `client.rack` which can set the rack for a Kafka consumer. If brokers also have their rack set via `broker.rack`, then rack aware task assignment can be enabled via `rack.aware.assignment.strategy` (cf. [**Kafka Streams Developer Guide**](/43/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy)) to compute a task assignment which can reduce cross rack traffic by trying to assign tasks to clients with the same rack. Note that `client.rack` can also be used to distribute standby tasks to different racks from the active ones, which has a similar functionality as `rack.aware.assignment.tags`. Currently, `rack.aware.assignment.tag` takes precedence in distributing standby tasks which means if both configs present, `rack.aware.assignment.tag` will be used for distributing standby tasks on different racks from the active ones because it can configure more tag keys. 
+There is also a client config `client.rack` which can set the rack for a Kafka consumer. If brokers also have their rack set via `broker.rack`, then rack aware task assignment can be enabled via `rack.aware.assignment.strategy` (cf. [**Kafka Streams Developer Guide**](/44/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy)) to compute a task assignment which can reduce cross rack traffic by trying to assign tasks to clients with the same rack. Note that `client.rack` can also be used to distribute standby tasks to different racks from the active ones, which has a similar functionality as `rack.aware.assignment.tags`. Currently, `rack.aware.assignment.tag` takes precedence in distributing standby tasks which means if both configs present, `rack.aware.assignment.tag` will be used for distributing standby tasks on different racks from the active ones because it can configure more tag keys. 
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)

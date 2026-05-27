@@ -104,7 +104,7 @@ The effect of these two configurations is described in the figure below. The rec
 
 
 
-![](/43/images/streams-cache-and-commit-interval.png)
+![](/44/images/streams-cache-and-commit-interval.png)
 
 # Record caches in the Processor API
 
