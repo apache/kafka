@@ -43,4 +43,3 @@ public class SimpleApiVersionManagerTest {
             "Finalized features epoch should be -1 when no quorum exists");
     }
 }
-
