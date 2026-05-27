@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -29,10 +30,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DefaultSslEngineFactoryTest {
 
@@ -325,6 +329,34 @@ public class DefaultSslEngineFactoryTest {
         assertNotNull(keyStore.getCertificate("kafka"), "Certificate not found");
         assertNotNull(keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()), "Private key not found");
         assertEquals(KeyStore.getDefaultType(), keyStore.getType());
+    }
+    
+    @Test
+    public void testNoCipherSuitesConfiguredUsesJdkDefaults() throws Exception {
+        factory.configure(configs);
+        assertNotNull(factory.createServerSslEngine("localhost", 9092));
+    }
+
+    @Test
+    public void testAllSupportedCipherSuitesPassThrough() {
+        List<String> configured = Arrays.asList("TLS_CIPHER_A", "TLS_CIPHER_B");
+        Set<String> supported = Set.of("TLS_CIPHER_A", "TLS_CIPHER_B", "TLS_CIPHER_C");
+        assertArrayEquals(configured.toArray(new String[0]), DefaultSslEngineFactory.filterCipherSuites(configured, supported));
+    }
+
+    @Test
+    public void testUnsupportedCipherSuiteIsFiltered() {
+        List<String> configured = Arrays.asList("TLS_CIPHER_A", "TLS_FAKE_CIPHER_DOES_NOT_EXIST");
+        Set<String> supported = Set.of("TLS_CIPHER_A", "TLS_CIPHER_B");
+        assertArrayEquals(new String[]{"TLS_CIPHER_A"}, DefaultSslEngineFactory.filterCipherSuites(configured, supported));
+    }
+
+    @Test
+    public void testAllUnsupportedCipherSuitesThrows() {
+        List<String> configured = Arrays.asList("TLS_FAKE_CIPHER_A", "TLS_FAKE_CIPHER_B");
+        Set<String> supported = Set.of("TLS_CIPHER_A", "TLS_CIPHER_B");
+        assertThrows(InvalidConfigurationException.class,
+                () -> DefaultSslEngineFactory.filterCipherSuites(configured, supported));
     }
 
     private String pemFilePath(String pem) throws Exception {
