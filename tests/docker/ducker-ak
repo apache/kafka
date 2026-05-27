@@ -39,7 +39,8 @@ tmp_native_dir=${ducker_dir}/native
 docker_build_memory_limit="3200m"
 
 # The maximum memory consumption to allow in containers.
-docker_run_memory_limit="2000m"
+# Can be overridden by DUCKER_RUN_MEMORY environment variable or --memory flag.
+default_docker_run_memory_limit="2000m"
 
 # The default number of cluster nodes to bring up if a number is not specified.
 default_num_nodes=14
@@ -78,6 +79,7 @@ help|-h|--help
 
 up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
         [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6]
+        [--memory MEMORY_LIMIT]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
@@ -95,6 +97,10 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     the ducker container. Defaults to ${default_jdk}. Example: -j docker.io/library/eclipse-temurin:17-jdk-jammy
 
     If --ipv6 is specified, we will create a Docker network with IPv6 enabled.
+
+    If --memory is specified, sets the memory limit for each container node.
+    Defaults to ${default_docker_run_memory_limit}. Can also be set via the DUCKER_RUN_MEMORY
+    environment variable. The --memory flag takes precedence over the environment variable.
 
     Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678
     on your local machine to enable debugging in VS Code.
@@ -396,6 +402,7 @@ ducker_up() {
             -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
             -e|--expose-ports) set_once expose_ports "${2}" "the ports to expose"; shift 2;;
             -m|--kafka_mode) set_once kafka_mode "${2}" "the mode in which kafka will run"; shift 2;;
+            --memory) set_once docker_run_memory_limit "${2}" "the container memory limit"; shift 2;;
             --ipv6) set_once ipv6 "true" "enable IPv6"; shift;;
             *) set_once image_name "${1}" "container image name"; shift;;
         esac
@@ -403,6 +410,7 @@ ducker_up() {
     [[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
     [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
     [[ -n "${kafka_mode}" ]] || kafka_mode="${default_kafka_mode}"
+    [[ -n "${docker_run_memory_limit}" ]] || docker_run_memory_limit="${DUCKER_RUN_MEMORY:-${default_docker_run_memory_limit}}"
     [[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
     [[ -n "${ipv6}" ]] || ipv6="false"
     [[ "${num_nodes}" =~ ^-?[0-9]+$ ]] || \

@@ -37,7 +37,7 @@ public class ShareGroupConfigProviderTest {
     void testRecordLockDurationMsOrDefaultWithGroupConfig() {
         GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         GroupConfig groupConfig = mock(GroupConfig.class);
-        when(groupConfig.shareRecordLockDurationMs()).thenReturn(1000);
+        when(groupConfig.shareRecordLockDurationMs()).thenReturn(Optional.of(1000));
         when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
         provider = new ShareGroupConfigProvider(groupConfigManager);
 
@@ -57,7 +57,7 @@ public class ShareGroupConfigProviderTest {
     void testDeliveryCountLimitOrDefaultWithGroupConfig() {
         GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         GroupConfig groupConfig = mock(GroupConfig.class);
-        when(groupConfig.shareDeliveryCountLimit()).thenReturn(8);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(Optional.of(8));
         when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
         provider = new ShareGroupConfigProvider(groupConfigManager);
 
@@ -77,7 +77,7 @@ public class ShareGroupConfigProviderTest {
     void testPartitionMaxRecordLocksOrDefaultWithGroupConfig() {
         GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         GroupConfig groupConfig = mock(GroupConfig.class);
-        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(5000);
+        when(groupConfig.sharePartitionMaxRecordLocks()).thenReturn(Optional.of(5000));
         when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
         provider = new ShareGroupConfigProvider(groupConfigManager);
 
@@ -97,7 +97,7 @@ public class ShareGroupConfigProviderTest {
     void testIsRenewAcknowledgeDisabledWithGroupConfig() {
         GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         GroupConfig groupConfig = mock(GroupConfig.class);
-        when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(false);
+        when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(Optional.of(false));
         when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
         provider = new ShareGroupConfigProvider(groupConfigManager);
 
@@ -117,7 +117,7 @@ public class ShareGroupConfigProviderTest {
     void testAutoOffsetResetWithGroupConfig() {
         GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         GroupConfig groupConfig = mock(GroupConfig.class);
-        when(groupConfig.shareAutoOffsetReset()).thenReturn(ShareGroupAutoOffsetResetStrategy.EARLIEST);
+        when(groupConfig.shareAutoOffsetReset()).thenReturn(Optional.of(ShareGroupAutoOffsetResetStrategy.EARLIEST));
         when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
         provider = new ShareGroupConfigProvider(groupConfigManager);
 

@@ -23,8 +23,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
-import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ConfigUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

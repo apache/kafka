@@ -17,7 +17,7 @@
 package org.apache.kafka.network;
 
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.Sanitizer;
+import org.apache.kafka.common.utils.internals.Sanitizer;
 
 import java.net.InetAddress;
 

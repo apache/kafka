@@ -33,6 +33,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
@@ -76,6 +77,8 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -526,6 +529,35 @@ public class ClusterTestExtensionsTest {
         }
     )
     public void testSaslPlaintextWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        assertSecurityProtocol(clusterInstance, SecurityProtocol.SASL_PLAINTEXT, "Expected broker to have SASL_PLAINTEXT data-plane listener");
+        testSecurityProtocol(clusterInstance);
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT, Type.CO_KRAFT},
+        brokerSecurityProtocol = SecurityProtocol.SASL_SSL,
+        controllerSecurityProtocol = SecurityProtocol.SASL_SSL,
+        serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+        }
+    )
+    public void testSaslSslWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+        assertSecurityProtocol(clusterInstance, SecurityProtocol.SASL_SSL, "Expected broker to have SASL_SSL data-plane listener");
+        testSecurityProtocol(clusterInstance);
+    }
+
+    private static void assertSecurityProtocol(ClusterInstance clusterInstance, SecurityProtocol saslPlaintext, String message) {
+        clusterInstance.aliveBrokers().values().forEach(broker -> {
+            List<Endpoint> endpoints = CollectionConverters.asJava(broker.config().dataPlaneListeners());
+            assertTrue(
+                    endpoints.stream().anyMatch(ep -> ep.securityProtocol() == saslPlaintext),
+                    message
+            );
+        });
+    }
+
+    private static void testSecurityProtocol(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         // default ClusterInstance#admin helper with admin credentials
         try (Admin admin = clusterInstance.admin(Map.of(), true)) {
             admin.describeAcls(AclBindingFilter.ANY).values().get();

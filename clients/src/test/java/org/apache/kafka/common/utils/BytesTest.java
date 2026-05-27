@@ -16,106 +16,100 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.utils.internals.ByteUtils;
-
 import org.junit.jupiter.api.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.util.Comparator;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BytesTest {
-
     @Test
-    public void testIncrement() {
-        byte[] input = new byte[]{(byte) 0xAB, (byte) 0xCD, (byte) 0xFF};
-        byte[] expected = new byte[]{(byte) 0xAB, (byte) 0xCE, (byte) 0x00};
-        Bytes output = ByteUtils.increment(Bytes.wrap(input));
-        assertArrayEquals(output.get(), expected);
+    public void equalsReflectsContentIdentityAndType() {
+        Bytes a = Bytes.wrap(new byte[]{0x01, 0x02, 0x03});
+        Bytes b = Bytes.wrap(new byte[]{0x01, 0x02, 0x03});
+        Bytes c = Bytes.wrap(new byte[]{0x01, 0x02, 0x04});
+        Bytes d = Bytes.wrap(new byte[]{0x01, 0x02});
+        Bytes empty1 = Bytes.wrap(new byte[]{});
+        Bytes empty2 = Bytes.wrap(new byte[]{});
+
+        assertEquals(a, a);
+        assertEquals(a, b);
+        assertEquals(b, a);
+        assertEquals(empty1, empty2);
+        assertNotEquals(a, c);
+        assertNotEquals(a, d);
+        assertNotEquals(null, a);
+        assertNotEquals("notABytesObject", a);
     }
 
     @Test
-    public void testIncrementUpperBoundary() {
-        byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
-        assertThrows(IndexOutOfBoundsException.class, () -> ByteUtils.increment(Bytes.wrap(input)));
+    public void hashCodeIsConsistentAndContentBased() {
+        Bytes a = Bytes.wrap(new byte[]{0x01, 0x02, 0x03});
+        Bytes b = Bytes.wrap(new byte[]{0x01, 0x02, 0x03});
+        Bytes c = Bytes.wrap(new byte[]{0x04, 0x05, 0x06});
+        Bytes empty = Bytes.wrap(new byte[]{});
+
+        assertEquals(a.hashCode(), a.hashCode());
+        assertEquals(a.hashCode(), b.hashCode());
+        assertEquals(empty.hashCode(), empty.hashCode());
+        assertNotEquals(a.hashCode(), c.hashCode());
     }
 
     @Test
-    public void testIncrementWithSubmap() {
-        final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
-        Bytes key1 = Bytes.wrap(new byte[]{(byte) 0xAA});
-        byte[] val = new byte[]{(byte) 0x00};
-        map.put(key1, val);
+    public void compareToReflectsLexicographicUnsignedOrdering() {
+        Bytes a = Bytes.wrap(new byte[]{0x01, 0x02, 0x03});
+        Bytes b = Bytes.wrap(new byte[]{0x01, 0x02, 0x03});
+        Bytes smaller = Bytes.wrap(new byte[]{0x01, 0x02});
+        Bytes larger = Bytes.wrap(new byte[]{0x01, 0x03});
+        Bytes prefix = Bytes.wrap(new byte[]{0x01, 0x02});
+        Bytes extended = Bytes.wrap(new byte[]{0x01, 0x02, 0x03});
+        Bytes empty = Bytes.wrap(new byte[]{});
+        Bytes nonEmpty = Bytes.wrap(new byte[]{0x01});
+        Bytes high = Bytes.wrap(new byte[]{(byte) 0xFF});
+        Bytes low = Bytes.wrap(new byte[]{0x01});
 
-        Bytes key2 = Bytes.wrap(new byte[]{(byte) 0xAA, (byte) 0xAA});
-        map.put(key2, val);
-
-        Bytes key3 = Bytes.wrap(new byte[]{(byte) 0xAA, (byte) 0x00, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF});
-        map.put(key3, val);
-
-        Bytes key4 = Bytes.wrap(new byte[]{(byte) 0xAB, (byte) 0x00});
-        map.put(key4, val);
-
-        Bytes key5 = Bytes.wrap(new byte[]{(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01});
-        map.put(key5, val);
-
-        Bytes prefix = key1;
-        Bytes prefixEnd = ByteUtils.increment(prefix);
-
-        Comparator<? super Bytes> comparator = map.comparator();
-        final int result = comparator == null ? prefix.compareTo(prefixEnd) : comparator.compare(prefix, prefixEnd);
-        NavigableMap<Bytes, byte[]> subMapResults;
-        if (result > 0) {
-            //Prefix increment would cause a wrap-around. Get the submap from toKey to the end of the map
-            subMapResults = map.tailMap(prefix, true);
-        } else {
-            subMapResults = map.subMap(prefix, true, prefixEnd, false);
-        }
-
-        NavigableMap<Bytes, byte[]> subMapExpected = new TreeMap<>();
-        subMapExpected.put(key1, val);
-        subMapExpected.put(key2, val);
-        subMapExpected.put(key3, val);
-
-        assertEquals(subMapExpected.keySet(), subMapResults.keySet());
+        assertEquals(0, a.compareTo(a));
+        assertEquals(0, a.compareTo(b));
+        assertEquals(0, empty.compareTo(Bytes.wrap(new byte[]{})));
+        assertTrue(smaller.compareTo(larger) < 0);
+        assertTrue(larger.compareTo(smaller) > 0);
+        assertTrue(prefix.compareTo(extended) < 0);
+        assertTrue(extended.compareTo(prefix) > 0);
+        assertTrue(empty.compareTo(nonEmpty) < 0);
+        assertTrue(high.compareTo(low) > 0);
     }
 
     @Test
-    public void testBytesLexicographicCases() {
-        assertEquals(0, cmp("", ""));
-        assertTrue(cmp("", "aaa") < 0);
-        assertTrue(cmp("aaa", "") > 0);
-
-        assertEquals(0, cmp("aaa", "aaa"));
-        assertTrue(cmp("aaa", "bbb") < 0);
-        assertTrue(cmp("bbb", "aaa") > 0);
-
-        assertTrue(cmp("aaaaaa", "bbb") < 0);
-        assertTrue(cmp("aaa", "bbbbbb") < 0);
-        assertTrue(cmp("bbbbbb", "aaa") > 0);
-        assertTrue(cmp("bbb", "aaaaaa") > 0);
-
-        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbb") < 0);
-        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaa") > 0);
-
-        assertTrue(cmp("common_prefix_aaaaaa", "common_prefix_bbb") < 0);
-        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbbbbb") < 0);
-        assertTrue(cmp("common_prefix_bbbbbb", "common_prefix_aaa") > 0);
-        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaaaaa") > 0);
-
-        assertTrue(cmp("common_prefix", "common_prefix_aaa") < 0);
-        assertTrue(cmp("common_prefix_aaa", "common_prefix") > 0);
+    public void wrapReturnsBytesBackedBySameArray() {
+        byte[] raw = new byte[]{0x01, 0x02, 0x03};
+        Bytes wrapped = Bytes.wrap(raw);
+        assertSame(raw, wrapped.get());
     }
 
-    private int cmp(String l, String r) {
-        return ByteUtils.BYTES_LEXICO_COMPARATOR.compare(
-            l.getBytes(StandardCharsets.UTF_8),
-            r.getBytes(StandardCharsets.UTF_8));
+    @Test
+    public void wrapReturnsNullForNullInput() {
+        assertNull(Bytes.wrap(null));
+    }
+
+    @Test
+    public void wrapEmptyArrayProducesEmptyBytes() {
+        Bytes wrapped = Bytes.wrap(new byte[]{});
+        assertArrayEquals(new byte[]{}, wrapped.get());
+    }
+
+    @Test
+    public void constructorThrowsForNullInput() {
+        assertThrows(NullPointerException.class, () -> new Bytes(null));
+    }
+
+    @Test
+    public void getReturnsUnderlyingArray() {
+        byte[] raw = new byte[]{0x0A, 0x0B, 0x0C};
+        Bytes bytes = Bytes.wrap(raw);
+        assertArrayEquals(raw, bytes.get());
     }
 }

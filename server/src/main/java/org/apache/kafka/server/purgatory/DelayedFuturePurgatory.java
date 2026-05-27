@@ -17,7 +17,7 @@
 
 package org.apache.kafka.server.purgatory;
 
-import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;

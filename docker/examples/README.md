@@ -73,6 +73,18 @@ It is also possible to use the input file to have a common set of configurations
           - Assuming that `KAFKA_LOG4J_LOGGERS='property1=value1,property2=value2'` environment variable is provided to Docker container.
           - `log4j.logger.property1=value1` and `log4j.logger.property2=value2` will be added to the `log4j2.yaml` file inside Docker container.
 
+Running in SASL mode
+--------------------
+
+- SASL mode requires a JAAS configuration file to be mounted into the Docker container and referenced via the `KAFKA_OPTS` environment variable.
+- Mount the directory containing the JAAS config file to `/etc/kafka/secrets` in the Docker container.
+- Set `KAFKA_OPTS` to `-Djava.security.auth.login.config=/etc/kafka/secrets/<jaas_config_filename>`.
+- Set `KAFKA_SASL_ENABLED_MECHANISMS` to the desired SASL mechanism (e.g. `GSSAPI` , `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`).
+- Ensure `KAFKA_ADVERTISED_LISTENERS` contains a `SASL_PLAINTEXT://` or `SASL_SSL://` listener.
+- For inter-broker SASL communication, set `KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL` to the desired SASL *mechanism* (e.g. `PLAIN`, `SCRAM-SHA-256`). To choose between `SASL_PLAINTEXT` and `SASL_SSL` for inter-broker traffic, set `KAFKA_INTER_BROKER_LISTENER_NAME` to a listener whose security protocol is mapped accordingly in `KAFKA_LISTENER_SECURITY_PROTOCOL_MAP`.
+- The Docker image `configure` script will log a warning if `KAFKA_OPTS` does not contain the `java.security.auth.login.config` property when SASL listeners are detected.
+- For more details on SASL mechanisms and configuration, refer to the [Kafka SASL authentication documentation](https://kafka.apache.org/documentation/#security_sasl).
+
 Running in SSL mode
 -------------------
         
@@ -169,6 +181,25 @@ Single Node
     # Run from root of the repo
     $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
+- SASL_PLAINTEXT:
+    - Here we use SASL/PLAIN mechanism for authentication.
+    - A JAAS configuration file is mounted into the container via a volume mount.
+    - `KAFKA_OPTS` is set to point to the JAAS config file.
+    - Similar to the plaintext example, two listeners are configured: one for inter-broker communication and one for client-to-broker communication. Both use the `SASL_PLAINTEXT` security protocol.
+    - Two users are configured in the JAAS file: `admin` (for inter-broker) and `alice` (for clients).
+    - Note: SASL is currently not supported with the GraalVM based native image (`apache/kafka-native`) due to missing reflection configuration for `java.security.AccessController`. See [KAFKA-19584](https://issues.apache.org/jira/browse/KAFKA-19584) for details.
+    - To run the example:
+    ```
+    # Run from root of the repo
+
+    # JVM based Apache Kafka Docker Image
+    $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/sasl_plaintext/docker-compose.yml up
+    ```
+    - To produce messages using client scripts (Ensure that java version >= 17):
+    ```
+    # Run from root of the repo
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9094 --command-config ./docker/examples/fixtures/client-secrets/client-sasl.properties
+    ```
 
 Multi Node Cluster
 ------------------
@@ -221,6 +252,23 @@ Multi Node Cluster
         # Run from root of the repo
         $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
         ```
+    - SASL_PLAINTEXT:
+        - Similar to Plaintext example, with SASL/PLAIN authentication added.
+        - Similar to Plaintext example, two listeners are configured for inter-broker and client-to-broker communication, both using the `SASL_PLAINTEXT` security protocol. Controllers use `PLAINTEXT`.
+        - Each broker mounts the same JAAS config file. In production, each broker should have its own credentials.
+        - Note: SASL is currently not supported with the GraalVM based native image (`apache/kafka-native`) due to missing reflection configuration for `java.security.AccessController`. See [KAFKA-19584](https://issues.apache.org/jira/browse/KAFKA-19584) for details.
+        - To run the example:
+        ```
+        # Run from root of the repo
+
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/sasl_plaintext/docker-compose.yml up
+        ```
+        - To produce messages using client scripts (Ensure that java version >= 17):
+        ```
+        # Run from root of the repo
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29094 --command-config ./docker/examples/fixtures/client-secrets/client-sasl.properties
+        ```
 - Isolated:
     - Examples are present in `docker-compose-files/cluster/isolated` directory.
     - Plaintext:
@@ -259,6 +307,22 @@ Multi Node Cluster
         ```
         # Run from root of the repo
         $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        ```
+    - SASL_PLAINTEXT:
+        - Same as combined SASL_PLAINTEXT example, with controllers and brokers separated.
+        - `SASL_PLAINTEXT` is only for inter-broker and client communication. Controllers use `PLAINTEXT`.
+        - Note: SASL is currently not supported with the GraalVM based native image (`apache/kafka-native`) due to missing reflection configuration for `java.security.AccessController`. See [KAFKA-19584](https://issues.apache.org/jira/browse/KAFKA-19584) for details.
+        - To run the example:
+        ```
+        # Run from root of the repo
+
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/sasl_plaintext/docker-compose.yml up
+        ```
+        - To produce messages using client scripts (Ensure that java version >= 17):
+        ```
+        # Run from root of the repo
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29094 --command-config ./docker/examples/fixtures/client-secrets/client-sasl.properties
         ```
 
 - Note that the examples are meant to be tried one at a time, make sure you close an example server before trying out the other to avoid conflicts.

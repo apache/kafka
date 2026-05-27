@@ -40,9 +40,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1246,6 +1246,45 @@ public class ConsumerMembershipManagerTest {
         verify(subscriptionState).unsubscribe();
         assertTrue(leaveResult1.isDone());
         assertEquals(MemberState.STALE, membershipManager.state());
+    }
+
+    /**
+     * Test that when unsubscribe/leaveGroup is called during an ongoing reconciliation and the pending
+     * assignment event is completed exceptionally, the member can still rejoin and start
+     * a new reconciliation.
+     */
+    @Test
+    public void testLeaveGroupDuringReconciliationThenRejoin() {
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic1";
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+
+        // Start reconciliation - assignment event is pending
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.maybeReconcile(true);
+        PartitionsAssignedEvent pendingAssignmentEvent = (PartitionsAssignedEvent) backgroundEventQueue.poll();
+        assertNotNull(pendingAssignmentEvent);
+
+        // Call leaveGroup while reconciliation is in progress
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+
+        // Complete the pending assignment event exceptionally (simulating unsubscribe skipping it)
+        pendingAssignmentEvent.future().completeExceptionally(
+            new KafkaException("Assignment event skipped because consumer is unsubscribing"));
+
+        // Complete leave and rejoin
+        membershipManager.onHeartbeatRequestGenerated();
+        clearInvocations(membershipManager);
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+        membershipManager.transitionToJoining();
+
+        // Receive assignment - verify new reconciliation starts
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.maybeReconcile(true);
+        verifyReconciliationTriggered(membershipManager);
     }
 
     @Test

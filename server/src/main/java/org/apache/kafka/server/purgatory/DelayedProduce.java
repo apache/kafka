@@ -18,6 +18,7 @@ package org.apache.kafka.server.purgatory;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
@@ -200,14 +201,14 @@ public class DelayedProduce extends DelayedOperation {
                 key -> METRICS_GROUP.newMeter("ExpiresPerSec",
                         "requests",
                         TimeUnit.SECONDS,
-                        Map.of("topic", key.topic(), "partition", String.valueOf(key.partition())))
+                        MetricsUtils.getTags("topic", key.topic(), "partition", String.valueOf(key.partition())))
         ).mark();
     }
 
     public static void removePartitionMetrics(TopicPartition partition) {
         if (PARTITION_EXPIRATION_METERS.remove(partition) != null) {
             METRICS_GROUP.removeMetric("ExpiresPerSec",
-                    Map.of("topic", partition.topic(),
+                    MetricsUtils.getTags("topic", partition.topic(),
                             "partition", String.valueOf(partition.partition())));
         }
     }

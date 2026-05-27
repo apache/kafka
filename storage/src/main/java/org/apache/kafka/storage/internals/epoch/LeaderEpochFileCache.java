@@ -17,7 +17,7 @@
 package org.apache.kafka.storage.internals.epoch;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.log.EpochEntry;

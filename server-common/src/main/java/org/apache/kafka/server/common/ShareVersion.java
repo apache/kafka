@@ -25,7 +25,10 @@ public enum ShareVersion implements FeatureVersion {
 
     // Version 1 enables share groups (KIP-932).
     // This was a preview in 4.1 which required enabling explicitly.
-    SV_1(1, MetadataVersion.IBP_4_2_IV0, Map.of());
+    SV_1(1, MetadataVersion.IBP_4_2_IV0, Map.of()),
+
+    // Version 2 adds supports for DLQ (KIP-1191)
+    SV_2(2, MetadataVersion.IBP_4_4_IV0, Map.of());
 
     public static final String FEATURE_NAME = "share.version";
 
@@ -69,12 +72,18 @@ public enum ShareVersion implements FeatureVersion {
         return featureLevel >= SV_1.featureLevel;
     }
 
+    public boolean supportsShareGroupDLQ() {
+        return featureLevel >= SV_2.featureLevel;
+    }
+
     public static ShareVersion fromFeatureLevel(short version) {
         switch (version) {
             case 0:
                 return SV_0;
             case 1:
                 return SV_1;
+            case 2:
+                return SV_2;
             default:
                 throw new RuntimeException("Unknown share feature level: " + (int) version);
         }

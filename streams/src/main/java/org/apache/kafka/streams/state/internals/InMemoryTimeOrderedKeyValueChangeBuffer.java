@@ -436,12 +436,13 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     @Override
     public Maybe<ValueTimestampHeaders<V>> priorValueForBuffered(final K key) {
-        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
+        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, context.headers(), key));
         if (index.containsKey(serializedKey)) {
             final byte[] serializedValue = internalPriorValueForBuffered(serializedKey);
 
             final V deserializedValue = valueSerde.innerSerde().deserializer().deserialize(
                 changelogTopic,
+                context.headers(),
                 serializedValue
             );
 

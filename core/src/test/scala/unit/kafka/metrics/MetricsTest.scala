@@ -36,11 +36,14 @@ import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import java.io.File
 import scala.jdk.OptionConverters.RichOptional
 
 @Timeout(120)
@@ -64,7 +67,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val topic = "test-topic-metric"
     createTopic(topic)
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(topic, 1, brokers)
+    verifyTopicDeletion(topic, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
@@ -78,7 +81,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics don't exist")
     brokers.foreach(b => assertNotNull(b.brokerTopicStats.topicStats(topic)))
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(topic, 1, brokers)
+    verifyTopicDeletion(topic, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
@@ -243,5 +246,42 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   private def filterByTopicMetricRegex(metrics: Set[String], topic: Option[String]): Set[String] = {
     val pattern = (".*BrokerTopicMetrics.*" + topic.map(t => s"($t)$$").getOrElse("")).r.pattern
     metrics.filter(pattern.matcher(_).matches())
+  }
+
+  private def verifyTopicDeletion[B <: KafkaBroker](topic: String, brokers: Seq[B]): Unit = {
+    val topicPartitions = (0 until 1).map(new TopicPartition(topic, _))
+    // ensure that the topic-partition has been deleted from all brokers' replica managers
+    TestUtils.waitUntilTrue(() =>
+      brokers.forall(broker => topicPartitions.forall(tp => broker.replicaManager.onlinePartition(tp).isEmpty)),
+      "Replica manager's should have deleted all of this topic's partitions")
+    // ensure that logs from all replicas are deleted
+    TestUtils.waitUntilTrue(() => brokers.forall(broker => topicPartitions.forall(tp => broker.logManager.getLog(tp).isEmpty)),
+      "Replica logs not deleted after delete topic is complete")
+    // ensure that topic is removed from all cleaner offsets
+    TestUtils.waitUntilTrue(() => brokers.forall(broker => topicPartitions.forall { tp =>
+      val checkpoints = broker.logManager.liveLogDirs.asScala.map { logDir =>
+        new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read()
+      }
+      checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.containsKey(tp))
+    }), "Cleaner offset for deleted partition should have been removed")
+    TestUtils.waitUntilTrue(() => brokers.forall(broker =>
+      broker.config.logDirs.stream().allMatch { logDir =>
+        topicPartitions.forall { tp =>
+          !new File(logDir, tp.topic + "-" + tp.partition).exists()
+        }
+      }
+    ), "Failed to soft-delete the data to a delete directory")
+    TestUtils.waitUntilTrue(() => brokers.forall(broker =>
+      broker.config.logDirs.stream().allMatch { logDir =>
+        topicPartitions.forall { tp =>
+          !util.List.of(new File(logDir).list()).asScala.exists { partitionDirectoryNames =>
+            partitionDirectoryNames.exists { directoryName =>
+              directoryName.startsWith(tp.topic + "-" + tp.partition) &&
+                directoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)
+            }
+          }
+        }
+      }
+    ), "Failed to hard-delete the delete directory")
   }
 }

@@ -1341,10 +1341,10 @@ public class KStreamImplTest {
     public void shouldPropagateRepartitionFlagAfterGlobalKTableJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
         final GlobalKTable<String, String> globalKTable = builder.globalTable("globalTopic");
-        final KeyValueMapper<String, String, String> kvMappper = (k, v) -> k + v;
+        final KeyValueMapper<String, String, String> kvMapper = (k, v) -> k + v;
         final ValueJoiner<String, String, String> valueJoiner = (v1, v2) -> v1 + v2;
         builder.<String, String>stream("topic").selectKey((k, v) -> v)
-            .join(globalKTable, kvMappper, valueJoiner)
+            .join(globalKTable, kvMapper, valueJoiner)
             .groupByKey()
             .count();
 

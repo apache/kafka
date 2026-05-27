@@ -245,6 +245,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         log.info("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
+        stateUpdatesListeners.forEach(listener -> listener.onMemberStateChange(nextState));
     }
 
     private static boolean isCompletingRebalance(MemberState currentState, MemberState nextState) {
@@ -838,9 +839,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
-        if (autoCommitEnabled && !canCommit) return;
-        markReconciliationInProgress();
-
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
         // being reconciled. Needed for interactions with the centralized subscription state that
         // does not support topic IDs yet, and for the callbacks.
@@ -857,6 +855,14 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         revokedPartitions.addAll(ownedPartitions);
         revokedPartitions.removeAll(assignedTopicPartitions);
+
+        // If canCommit is false (called from background poll(), not from AsyncPollEvent), skip
+        // reconciliation if it would involve revocation or auto-commit.
+        // Reconciliations revoking partitions cannot be triggered from the background because the app thread could be returning records for those partitions already.
+        // Reconciliations just adding new partitions are safe to trigger from the background thread since new partitions won't have buffered records.
+        if (!canCommit && (autoCommitEnabled || !revokedPartitions.isEmpty())) return;
+
+        markReconciliationInProgress();
 
         log.info("Reconciling assignment with local epoch {}\n" +
                         "\tMember:                                    {}\n" +

@@ -205,6 +205,24 @@ public class InternalMockProcessorContext<KOut, VOut>
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
                                         final Serde<?> valueSerde,
+                                        final RecordCollector collector,
+                                        final ThreadCache cache,
+                                        final StreamsConfig config) {
+        this(
+                stateDir,
+                keySerde,
+                valueSerde,
+                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+                config,
+                () -> collector,
+                cache,
+                Time.SYSTEM
+        );
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,

@@ -31,8 +31,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -970,8 +970,8 @@ public class StoreChangelogReader implements ChangelogReader {
     private void prepareChangelogs(final Map<TaskId, Task> tasks,
                                    final Set<ChangelogMetadata> newPartitionsToRestore) {
         // separate those who do not have the current offset loaded from checkpoint
-        final Set<TopicPartition> newPartitionsWithoutStartOffset = new HashSet<>();
-        final Map<TopicPartition, Long> newPartitionsWithTimestampSeek = new HashMap<>();
+        final Set<TopicPartition> newSeekToBeginningPartitions = new HashSet<>();
+        final Map<TopicPartition, Long> newWindowedPartitionsRetention = new HashMap<>();
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -989,21 +989,17 @@ public class StoreChangelogReader implements ChangelogReader {
                     partition, currentOffset, recordEndOffset(endOffset));
             } else {
                 final long retentionPeriod = storeMetadata.retentionPeriod();
-                final long seekTimestamp = retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE
-                    ? time.milliseconds() - retentionPeriod : -1L;
-                if (seekTimestamp > 0) {
-                    newPartitionsWithTimestampSeek.put(partition, seekTimestamp);
-                    log.debug("Start restoring windowed changelog partition {} from timestamp {} to end offset {}.",
-                        partition, seekTimestamp, recordEndOffset(endOffset));
+                if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE) {
+                    newWindowedPartitionsRetention.put(partition, retentionPeriod);
                 } else {
                     log.debug("Start restoring changelog partition {} from the beginning offset to end offset {} " +
                         "since we cannot find current offset.", partition, recordEndOffset(endOffset));
-                    newPartitionsWithoutStartOffset.add(partition);
+                    newSeekToBeginningPartitions.add(partition);
                 }
             }
         }
 
-        seekToTimestampOrBeginning(newPartitionsWithTimestampSeek, newPartitionsWithoutStartOffset);
+        seekNewPartitions(newWindowedPartitionsRetention, newSeekToBeginningPartitions);
 
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
@@ -1045,26 +1041,96 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private void seekToTimestampOrBeginning(final Map<TopicPartition, Long> partitionsWithTimestampSeek,
-                                            final Set<TopicPartition> partitionsWithoutStartOffset) {
-        // optimization: seek windowed stores by timestamp to skip expired data
-        if (!partitionsWithTimestampSeek.isEmpty()) {
-            final Map<TopicPartition, OffsetAndTimestamp> offsetsByTimestamp =
-                restoreConsumer.offsetsForTimes(partitionsWithTimestampSeek);
-            offsetsByTimestamp.forEach((key, value) -> {
-                if (value != null) {
-                    restoreConsumer.seek(key, value.offset());
-                } else {
-                    // no offset found for the timestamp, fall back to seeking to the beginning
-                    partitionsWithoutStartOffset.add(key);
-                }
-            });
+    private void seekNewPartitions(final Map<TopicPartition, Long> windowedPartitionsRetention,
+                                    final Set<TopicPartition> seekToBeginningPartitions) {
+        // Seek non-windowed partitions to beginning.
+        if (!seekToBeginningPartitions.isEmpty()) {
+            restoreConsumer.seekToBeginning(seekToBeginningPartitions);
         }
 
-        // optimization: batch all seek-to-beginning offsets in a single request
-        //               seek is not a blocking call so there's nothing to capture
-        if (!partitionsWithoutStartOffset.isEmpty()) {
-            restoreConsumer.seekToBeginning(partitionsWithoutStartOffset);
+        // Try to optimize windowed partitions by seeking past expired data.
+        if (!windowedPartitionsRetention.isEmpty()) {
+            final Set<TopicPartition> allAssigned = restoreConsumer.assignment();
+            final Set<TopicPartition> previouslyPaused = new HashSet<>(restoreConsumer.paused());
+
+            try {
+                restoreConsumer.pause(allAssigned);
+                restoreConsumer.resume(windowedPartitionsRetention.keySet());
+
+                final Map<TopicPartition, Long> endOffsets =
+                    restoreConsumer.endOffsets(windowedPartitionsRetention.keySet());
+
+                for (final TopicPartition partition : windowedPartitionsRetention.keySet()) {
+                    final Long endOffset = endOffsets.get(partition);
+                    if (endOffset != null && endOffset > 0) {
+                        restoreConsumer.seek(partition, endOffset - 1);
+                    } else {
+                        restoreConsumer.seekToBeginning(Collections.singleton(partition));
+                        seekToBeginningPartitions.add(partition);
+                    }
+                }
+                windowedPartitionsRetention.keySet().removeAll(seekToBeginningPartitions);
+
+                final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
+
+                seekByRetentionFromPolledRecords(polledRecords, windowedPartitionsRetention, seekToBeginningPartitions);
+            } catch (final TimeoutException e) {
+                log.debug("Could not seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
+                    windowedPartitionsRetention.keySet(), e);
+                seekToBeginningPartitions.addAll(windowedPartitionsRetention.keySet());
+            } catch (final KafkaException e) {
+                log.warn("Failed to seek by timestamp for changelog partitions {}, falling back to seek-to-beginning",
+                    windowedPartitionsRetention.keySet(), e);
+                seekToBeginningPartitions.addAll(windowedPartitionsRetention.keySet());
+            } finally {
+                restoreConsumer.pause(allAssigned);
+                final Set<TopicPartition> toResume = new HashSet<>(allAssigned);
+                toResume.removeAll(previouslyPaused);
+                if (!toResume.isEmpty()) {
+                    restoreConsumer.resume(toResume);
+                }
+            }
+        }
+
+        // Seek any windowed partitions that failed during the optimization back to the beginning.
+        // Their position was moved by seek+poll above.
+        if (!seekToBeginningPartitions.isEmpty()) {
+            restoreConsumer.seekToBeginning(seekToBeginningPartitions);
+        }
+    }
+
+    private void seekByRetentionFromPolledRecords(final ConsumerRecords<byte[], byte[]> polledRecords,
+                                                   final Map<TopicPartition, Long> windowedPartitionsRetention,
+                                                   final Set<TopicPartition> seekToBeginningPartitions) {
+        final Map<TopicPartition, Long> seekTimestamps = new HashMap<>();
+        for (final Map.Entry<TopicPartition, Long> entry : windowedPartitionsRetention.entrySet()) {
+            final TopicPartition partition = entry.getKey();
+            final long retentionPeriod = entry.getValue();
+            final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
+            if (!records.isEmpty()) {
+                final long latestTimestamp = records.get(0).timestamp();
+                final long seekTimestamp = latestTimestamp - retentionPeriod;
+                if (seekTimestamp > 0) {
+                    seekTimestamps.put(partition, seekTimestamp);
+                    log.debug("Start restoring windowed changelog partition {} from stream-time-based timestamp {} " +
+                        "(maxStreamTime={}, retention={}).", partition, seekTimestamp, latestTimestamp, retentionPeriod);
+                    continue;
+                }
+            }
+            log.debug("Start restoring changelog partition {} from the beginning.", partition);
+            seekToBeginningPartitions.add(partition);
+        }
+
+        if (!seekTimestamps.isEmpty()) {
+            final Map<TopicPartition, OffsetAndTimestamp> offsetsByTimestamp =
+                restoreConsumer.offsetsForTimes(seekTimestamps);
+            offsetsByTimestamp.forEach((partition, offsetAndTimestamp) -> {
+                if (offsetAndTimestamp != null) {
+                    restoreConsumer.seek(partition, offsetAndTimestamp.offset());
+                } else {
+                    seekToBeginningPartitions.add(partition);
+                }
+            });
         }
     }
 

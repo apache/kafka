@@ -26,12 +26,30 @@ type: docs
 -->
 
 
+## Upgrading to 4.4.0
+
+### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0
+
+### Notable changes in 4.4.0
+
+  * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
+  * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.   
+
 ## Upgrading to 4.3.0
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0
 
+Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.3.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.3.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.3.x.
+
+**For a rolling upgrade:**
+
+  1. Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
+  2. Once the cluster's behavior and performance have been verified, finalize the upgrade by running `bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.3`
+  3. Note that cluster metadata downgrade is not supported in this version since it has metadata changes. Every [MetadataVersion](https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java) has a boolean parameter that indicates if there are metadata changes (i.e. `IBP_4_3_IV0(30, "4.3", "IV0", true)` means this version has metadata changes). Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.
+
 ### Notable changes in 4.3.0
 
+  * `kafka-configs.sh --alter --delete-config` no longer requires the specified config keys to exist on the target resource. Previously, attempting to delete a non-existent config key raised an `InvalidConfigurationException`. The deletion is now a no-op when the key does not exist, which allows managing configs for offline brokers via `--bootstrap-controller`. For further details, please refer to [KAFKA-20506](https://issues.apache.org/jira/browse/KAFKA-20506).
   * Support dynamically changing configs for dynamic quorum controllers. Previously only brokers and static quorum controllers were supported. For further details, please refer to [KAFKA-18928](https://issues.apache.org/jira/browse/KAFKA-18928). 
   * Two new configs have been introduced: `group.coordinator.cached.buffer.max.bytes` and `share.coordinator.cached.buffer.max.bytes`. They allow the respective coordinators to set the maximum buffer size retained for reuse. For further details, please refer to [KIP-1196](https://cwiki.apache.org/confluence/x/hA5JFg). 
   * The new config have been introduced: `remote.log.metadata.topic.min.isr` with 2 as default value. You can correct the min.insync.replicas for the existed __remote_log_metadata topic via kafka-configs.sh if needed. For further details, please refer to [KIP-1235](https://cwiki.apache.org/confluence/x/yommFw).
@@ -40,10 +58,23 @@ type: docs
   * Support for cordoning log directories: For further details, please refer to [KIP-1066](https://cwiki.apache.org/confluence/x/Lg_TEg).
   * The `group.coordinator.rebalance.protocols` configuration is deprecated and will be removed in Kafka 5.0. In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions (`group.version`, `streams.version`, `share.version`) via `kafka-features.sh`. For further details, please refer to [KIP-1237](https://cwiki.apache.org/confluence/x/jIqmFw).
   * New group configs have been introduced: `share.delivery.count.limit`, `share.partition.max.record.locks` and `share.renew.acknowledge.enable`, along with equivalent broker configs for specifying minimum and maximum values. In addition, the validation of group configs has been improved. For further details, please refer to [KIP-1240](https://cwiki.apache.org/confluence/x/tIHMFw).
+  * A new `group.coordinator.background.threads` config has been added to control the size of the group coordinator's thread pool used to updating regular expression subscriptions. Previously, the thread pool only had a single thread. Now the thread pool has two threads by default and its size is configurable. For further details, please refer to [KIP-1263](https://cwiki.apache.org/confluence/x/DIE8G).
+  * New `group.consumer.assignment.interval.ms`, `group.share.assignment.interval.ms` and `group.streams.assignment.interval.ms` configs have been added to set the interval between assignment updates for consumer, share and streams groups, along with broker configs for specifying minimum and maximum values and group configs. These default to an interval of 1 second and previously had an effective value of 0. For further details, please refer to [KIP-1263](https://cwiki.apache.org/confluence/x/DIE8G).
+  * A new dynamic broker configuration `follower.fetch.last.tiered.offset.enable` (default: `false`) has been added. When enabled on a cluster with tiered storage, a newly added follower replica that has no local data will skip directly to the earliest pending upload offset on the leader, avoiding re-fetching data that is already stored in remote storage. This reduces bootstrap time significantly for large tiered-storage topics. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
+  * The `ListOffsets` API has been extended to version 11, adding support for the `EARLIEST_PENDING_UPLOAD_TIMESTAMP` (-6) timestamp type. This allows clients to query the earliest offset on the leader that has not yet been uploaded to tiered storage. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
 
 ## Upgrading to 4.2.0
 
 ### Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x
+
+Note: Apache Kafka 4.2 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.2.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.2.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.2.x.
+
+**For a rolling upgrade:**
+
+  1. Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
+  2. Once the cluster's behavior and performance have been verified, finalize the upgrade by running `bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.2`
+  3. Note that cluster metadata downgrade is supported in this version since it has no metadata changes. Every [MetadataVersion](https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java) has a boolean parameter that indicates if there are metadata changes (i.e. `IBP_4_2_IV1(29, "4.2", "IV1", false)` means this version has no metadata changes). Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.
+
 
   * If you wish to use share groups in a cluster with fewer than 3 brokers, you must set the broker configurations `share.coordinator.state.topic.replication.factor` and `share.coordinator.state.topic.min.isr` to 1 before you start using share groups. This is because share groups make use of a new internal topic called `__share_group_state` which is automatically created when you first use share groups. In common with the other internal topics, the default configuration uses 3 replicas and requires at least 3 brokers.
 
@@ -105,11 +136,30 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
   * Added an optional `--node-id` flag to the `FeatureCommand` command. It specifies the node to describe. If not provided, an arbitrary node is used.
 
 
+## Upgrading to 4.1.2
+
+### Notable changes in 4.1.2
+
+* Includes a fix for the rare Kafka producer bug ([KAFKA-19012](https://issues.apache.org/jira/browse/KAFKA-19012)), in which a record could end up on the incorrect topic.
+
+
+
+## Upgrading to 4.1.1
+
+### Notable changes in 4.1.1
+
+* Includes a fix for the critical Kafka Streams bug ([KAFKA-19748](https://issues.apache.org/jira/browse/KAFKA-19748)), solving the memory leak issues that affected users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins).
+* Includes a fix for the critical Kafka Streams bug ([KAFKA-19479](https://issues.apache.org/jira/browse/KAFKA-19479)), related to potential data loss.
+
+
+
 ## Upgrading to 4.1.0
 
 **Note:** Kafka Streams 4.1.0 contains a critical memory leak bug ([KAFKA-19748](https://issues.apache.org/jira/browse/KAFKA-19748)) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1, which includes the fix for it.
 
 ### Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x
+
+The rolling upgrade procedure for 4.1.x is identical to the 4.0 upgrade. Please refer to the [Upgrading Servers to 4.0.x](#upgrading-servers-to-401-from-any-version-33x-through-39x) section for detailed step-by-step instructions.
 
 ### Notable changes in 4.1.0
 

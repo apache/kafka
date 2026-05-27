@@ -38,8 +38,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -92,7 +95,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     protected abstract void writeTestSpecifications(TieredStorageTestBuilder builder);
 
-    protected void overrideConsumerConfig(Properties consumerConfig) {
+    protected void overrideConsumerConfig(Map<String, Object> consumerConfig) {
     }
 
     @BeforeEach
@@ -101,8 +104,9 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         testClassName = testInfo.getTestClass().get().getSimpleName().toLowerCase(Locale.getDefault());
         storageDirPath = TestUtils.tempDirectory("kafka-remote-tier-" + testClassName).getAbsolutePath();
         super.setUp(testInfo);
-        overrideConsumerConfig(consumerConfig());
-        context = new TieredStorageTestContext(this);
+        Map<String, Object> extraConsumerProps = new HashMap<>();
+        overrideConsumerConfig(extraConsumerProps);
+        context = new TieredStorageTestContext(new HarnessBackedClusterInstance(this), extraConsumerProps);
     }
 
     // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
@@ -132,9 +136,9 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         }
     }
 
-    public static List<LocalTieredStorage> remoteStorageManagers(Seq<KafkaBroker> brokers) {
+    public static List<LocalTieredStorage> remoteStorageManagers(Collection<KafkaBroker> brokers) {
         List<LocalTieredStorage> storages = new ArrayList<>();
-        CollectionConverters.asJava(brokers).forEach(broker -> {
+        brokers.forEach(broker -> {
             if (broker.remoteLogManagerOpt().isDefined()) {
                 RemoteLogManager remoteLogManager = broker.remoteLogManagerOpt().get();
                 RemoteStorageManager storageManager = remoteLogManager.storageManager();
@@ -153,8 +157,8 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         return storages;
     }
 
-    public static List<BrokerLocalStorage> localStorages(Seq<KafkaBroker> brokers) {
-        return CollectionConverters.asJava(brokers).stream()
+    public static List<BrokerLocalStorage> localStorages(Collection<KafkaBroker> brokers) {
+        return brokers.stream()
                 .map(b -> new BrokerLocalStorage(b.config().brokerId(), Set.copyOf(b.config().logDirs()),
                         STORAGE_WAIT_TIMEOUT_SEC))
                 .collect(Collectors.toList());

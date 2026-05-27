@@ -52,8 +52,8 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.SimpleRecord;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
@@ -628,12 +628,11 @@ public class DumpLogSegmentsTest {
 
         List<SimpleRecord> records = new ArrayList<>();
         for (ApiMessageAndVersion message : metadataRecords) {
-            MetadataRecordSerde serde = MetadataRecordSerde.INSTANCE;
             ObjectSerializationCache cache = new ObjectSerializationCache();
-            int size = serde.recordSize(message, cache);
+            int size = MetadataRecordSerde.INSTANCE.recordSize(message, cache);
             ByteBuffer buf = ByteBuffer.allocate(size);
             ByteBufferAccessor writer = new ByteBufferAccessor(buf);
-            serde.write(message, cache, writer);
+            MetadataRecordSerde.INSTANCE.write(message, cache, writer);
             buf.flip();
             records.add(new SimpleRecord(null, buf.array()));
         }

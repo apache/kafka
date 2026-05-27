@@ -30,7 +30,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache

@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import java.util.Optional;
 
 /**
- * Record representing information needed from callers of {@link ShareGroupDLQ#enqueue}. Inclusion
+ * Record representing information needed from callers of {@link ShareGroupDLQManager#enqueue}. Inclusion
  * of first and last offset allows passing batch information as well.
  *
  * @param groupId            The share group id of the message being recorded.
@@ -38,7 +38,7 @@ public record ShareGroupDLQRecordParameter(
     TopicIdPartition topicIdPartition,
     long firstOffset,
     long lastOffset,
-    Optional<Integer> deliveryCount,
+    Optional<Short> deliveryCount,
     Optional<Throwable> cause,
     boolean preserveRecordData
 ) {

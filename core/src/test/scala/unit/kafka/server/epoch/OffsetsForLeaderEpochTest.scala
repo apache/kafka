@@ -28,7 +28,7 @@ import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.common.{KRaftVersion, OffsetAndEpoch}
-import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.util.{MockAlterPartitionManager, MockTime}
 import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -42,7 +42,7 @@ class OffsetsForLeaderEpochTest {
   private val config = TestUtils.createBrokerConfigs(1).map(KafkaConfig.fromProps).head
   private val time = new MockTime
   private val metrics = new Metrics
-  private val alterIsrManager = TestUtils.createAlterIsrManager()
+  private val alterIsrManager = new MockAlterPartitionManager()
   private val tp = new TopicPartition("topic", 1)
   private var replicaManager: ReplicaManager = _
   private var quotaManager: QuotaManagers = _

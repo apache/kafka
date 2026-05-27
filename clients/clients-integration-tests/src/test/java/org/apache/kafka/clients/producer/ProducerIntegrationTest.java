@@ -66,10 +66,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
 })
-class ProducerIntegrationTest {
+public class ProducerIntegrationTest {
 
     @ClusterTest(metadataVersion = MetadataVersion.IBP_3_3_IV3)
-    void testUniqueProducerIds(ClusterInstance clusterInstance) {
+    public void testUniqueProducerIds(ClusterInstance clusterInstance) {
         // Request enough PIDs from each broker to ensure each broker generates two blocks
         var ids = clusterInstance.brokers().values().stream().flatMap(broker -> {
             int port = broker.boundPort(clusterInstance.clientListener());
@@ -97,7 +97,7 @@ class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)}),
     })
-    void testTransactionWithAndWithoutSend(ClusterInstance cluster) {
+    public void testTransactionWithAndWithoutSend(ClusterInstance cluster) {
         Map<String, Object> properties = Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, "foobar",
             ProducerConfig.CLIENT_ID_CONFIG, "test",
@@ -121,7 +121,7 @@ class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)}),
     })
-    void testTransactionWithInvalidSendAndEndTxnRequestSent(ClusterInstance cluster) {
+    public void testTransactionWithInvalidSendAndEndTxnRequestSent(ClusterInstance cluster) {
         var topic = new NewTopic("foobar", 1, (short) 1)
             .configs(Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "100"));
         String txnId = "test-txn";
@@ -153,7 +153,7 @@ class ProducerIntegrationTest {
         @ClusterTest(features = {
             @ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 2)}),
     })
-    void testTransactionWithSendOffset(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+    public void testTransactionWithSendOffset(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         String inputTopic = "my-input-topic";
         try (var producer = cluster.producer()) {
             for (int i = 0; i < 5; i++) {

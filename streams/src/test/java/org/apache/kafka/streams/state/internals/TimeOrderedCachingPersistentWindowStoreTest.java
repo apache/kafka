@@ -25,7 +25,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -171,8 +171,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                 ofHours(1L),
                 ofMinutes(1),
                 false,
-                hasIndex,
-                false
+                hasIndex
             ), Serdes.String(), Serdes.String())
             .withCachingEnabled();
 

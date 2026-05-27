@@ -40,9 +40,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
@@ -1273,10 +1273,6 @@ public class GroupCoordinatorShardTest {
             any(), eq(image)
         );
 
-        verify(offsetMetadataManager, times(1)).onMetadataUpdate(
-            any(), eq(image)
-        );
-
         verify(groupMetadataManager, times(1)).onLoaded();
     }
 
@@ -1302,10 +1298,6 @@ public class GroupCoordinatorShardTest {
         coordinator.onMetadataUpdate(delta, image);
 
         verify(groupMetadataManager, times(1)).onMetadataUpdate(
-            eq(delta), eq(image)
-        );
-
-        verify(offsetMetadataManager, times(1)).onMetadataUpdate(
             eq(delta), eq(image)
         );
     }

@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 
 @ClusterTestDefaults(types = {Type.KRAFT})
-class ProducerCompressionTest {
+public class ProducerCompressionTest {
 
     private final String topicName = "topic";
     private final int numRecords = 2000;
@@ -61,7 +61,7 @@ class ProducerCompressionTest {
      * Compressed messages should be able to sent and consumed correctly
      */
     @ClusterTest
-    void testCompression(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+    public void testCompression(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         for (CompressionType compression : CompressionType.values()) {
             processCompressionTest(cluster, compression);
         }

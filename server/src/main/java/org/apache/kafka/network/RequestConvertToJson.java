@@ -384,6 +384,7 @@ import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.DoubleNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
@@ -766,7 +767,7 @@ public class RequestConvertToJson {
         ObjectNode node = JsonNodeFactory.instance.objectNode();
         node.set("isForwarded", isForwarded ? BooleanNode.TRUE : BooleanNode.FALSE);
         node.set("requestHeader", requestHeaderNode(header));
-        node.set("request", requestNode.orElse(new TextNode("")));
+        node.set("request", requestNode.orElse(NullNode.getInstance()));
         return node;
     }
 
@@ -784,7 +785,7 @@ public class RequestConvertToJson {
                                               double responseSendTimeMs, long temporaryMemoryBytes,
                                               double messageConversionsTimeMs) {
         ObjectNode node = (ObjectNode) requestDesc(header, requestNode, isForwarded);
-        node.set("response", responseNode.orElse(new TextNode("")));
+        node.set("response", responseNode.orElse(NullNode.getInstance()));
         node.set("connection", new TextNode(context.connectionId));
         node.set("totalTimeMs", new DoubleNode(totalTimeMs));
         node.set("requestQueueTimeMs", new DoubleNode(requestQueueTimeMs));

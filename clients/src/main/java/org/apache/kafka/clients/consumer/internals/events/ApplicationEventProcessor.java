@@ -38,7 +38,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -759,6 +759,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         // as we're processing before any new fetching starts
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
+
+        // We completed checking pending reconciliations (commits triggered, revoked partitions marked to prevent fetching)
+        // so the application thread poll loop can safely continue progress now (fetching)
+        event.markReconciliationCheckComplete();
 
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();

@@ -38,9 +38,9 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
@@ -1510,15 +1510,15 @@ class ShareCoordinatorServiceTest {
             .thenReturn(List.of(tp1, tp2));
 
         when(writer.deleteRecords(
-            any(),
-            eq(10L)
+            eq(tp1),
+            anyLong()
         )).thenReturn(
             CompletableFuture.completedFuture(null)
         );
 
         when(writer.deleteRecords(
-            any(),
-            eq(20L)
+            eq(tp2),
+            anyLong()
         )).thenReturn(
             CompletableFuture.failedFuture(new Exception("bad stuff"))
         );

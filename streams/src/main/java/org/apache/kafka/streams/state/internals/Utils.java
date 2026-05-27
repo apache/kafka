@@ -20,9 +20,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.internals.ByteUtils;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.nio.ByteBuffer;
@@ -52,38 +50,6 @@ public class Utils {
 
         final ByteBuffer buffer = ByteBuffer.wrap(valueWithHeaders);
         return readHeaders(buffer);
-    }
-
-    /**
-     * Serialize the key with headers into bytes
-     * @param key the key to serialize
-     * @param headers the Headers as context
-     * @param serdes the StateSerdes as serializer
-     * @return the Bytes of the key
-     */
-    public static <K> Bytes keyBytes(final K key, final Headers headers, final StateSerdes<K, ?> serdes) {
-        return Bytes.wrap(serdes.rawKey(key, headers));
-    }
-
-    /**
-     * Serialize the key into bytes
-     * @param key the key to serialize
-     * @param serdes the StateSerdes as serializer
-     * @return the Bytes of the key
-     */
-    static <K> Bytes keyBytes(final K key, final StateSerdes<K, ?> serdes) {
-        return keyBytes(key, new RecordHeaders(), serdes);
-    }
-
-    /**
-     * Serialize the session key with headers into bytes
-     * @param sessionKey the Windowed session key to serialize
-     * @param headers the Headers as context
-     * @param serdes the StateSerdes as serializer
-     * @return the Bytes of the key
-     */
-    static <K> Bytes keyBytes(final Windowed<K> sessionKey, final Headers headers, final StateSerdes<K, ?> serdes) {
-        return keyBytes(sessionKey.key(), headers, serdes);
     }
 
     /**

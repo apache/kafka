@@ -18,7 +18,7 @@ import kafka.server._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.internals.Sanitizer
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 class UserClientIdQuotaTest extends BaseQuotaTest {

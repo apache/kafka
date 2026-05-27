@@ -34,9 +34,9 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -832,6 +832,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
+     * <p>
+     * <b>Note:</b> Unlike {@link #close()}, this method does not commit the pending offsets before
+     * unsubscribing, even if {@code enable.auto.commit} is enabled. To avoid duplicate processing upon re-joining,
+     * it is recommended to explicitly call {@link #commitSync()} before invoking this method.
      *
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. rebalance callback errors)
      */
@@ -1425,7 +1429,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param topic The topic to get partition metadata for
      *
-     * @return The list of partitions, which will be empty when the given topic is not found
+     * @return The list of partitions, which will be empty when the given topic is not found.
+     *         Note: when both the broker config {@code auto.create.topics.enable} and the consumer
+     *         config {@code allow.auto.create.topics} are {@code true}, this method may return an
+     *         empty list even though the topic is being auto-created in the background. Callers
+     *         should not assume the topic does not exist based solely on an empty result.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1448,7 +1456,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param topic The topic to get partition metadata for
      * @param timeout The maximum of time to await topic metadata
      *
-     * @return The list of partitions, which will be empty when the given topic is not found
+     * @return The list of partitions, which will be empty when the given topic is not found.
+     *         Note: when both the broker config {@code auto.create.topics.enable} and the consumer
+     *         config {@code allow.auto.create.topics} are {@code true}, this method may return an
+     *         empty list even though the topic is being auto-created in the background. Callers
+     *         should not assume the topic does not exist based solely on an empty result.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
