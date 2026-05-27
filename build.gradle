@@ -4187,6 +4187,48 @@ Use `testFixtures(project('${projectPath}'))` instead of `project('${projectPath
 
 
 
+ext.getDocsIndexVersionTargets = { rawVersion ->
+    def docsArtifactVersion = rawVersion.replace("-SNAPSHOT", "")
+    def docsDisplayVersion = docsArtifactVersion.replaceFirst(/\.\d+$/, "")
+    def docsPathVersion = docsDisplayVersion.replace(".", "")
+
+    def docsIndexPatterns = [
+      [
+        pattern: /AK \d+\.\d+\.X/,
+        replace: "AK ${docsDisplayVersion}.X"
+      ],
+      [
+        pattern: /Kafka\s+[0-9]+\.[0-9]+\s+Javadoc/,
+        replace: "Kafka ${docsDisplayVersion} Javadoc"
+      ],
+      [
+        pattern: /(?s)(<artifactId>kafka-(?:clients|streams|streams-scala_2\.13)<\/artifactId>\s*<version>)([^<]+)(<\/version>)/,
+        replace: { "\$1${docsArtifactVersion}\$3" }
+      ],
+      [
+        pattern: /\/[0-9]+\/documentation\/streams/,
+        replace: "/${docsPathVersion}/documentation/streams"
+      ]
+    ]
+
+    return fileTree("${project.rootDir}/docs") {
+      include "**/_index.md"
+    }.files.sort { it.path }.collectMany { docsIndexFile ->
+      def content = docsIndexFile.text
+      def relativePath = project.rootDir.toPath().relativize(docsIndexFile.toPath()).toString().replace(File.separator, "/")
+
+      docsIndexPatterns.findAll { item ->
+        (content =~ item.pattern).find()
+      }.collect { item ->
+        [
+          path: relativePath,
+          pattern: item.pattern,
+          replace: item.replace
+        ]
+      }
+    }
+}
+
 // Helper to get version targets and expected patterns
 ext.getVersionTargets = { rawVersion ->
     // Python Package Version (PEP 440): 4.3.0.dev0
@@ -4232,12 +4274,12 @@ ext.getVersionTargets = { rawVersion ->
         pattern: /(<kafka\.version>)([^<]+)(<\/kafka\.version>)/,
         replace: { "\$1${rawVersion}\$3" }
       ]
-    ]
+    ] + getDocsIndexVersionTargets(rawVersion)
 }
 
 def updateVersionTask = tasks.register('updateVersion') {
   group = "Release"
-  description = "Syncs python, pom, and script versions with gradle.properties. Fails if files or patterns are missing. Use -PnewVersion=X.Y.Z to set a new version."
+  description = "Syncs python, pom, script, and docs index versions with gradle.properties. Fails if files or patterns are missing. Use -PnewVersion=X.Y.Z to set a new version."
 
   doLast {
     def rawVersion
@@ -4261,6 +4303,7 @@ def updateVersionTask = tasks.register('updateVersion') {
     }
 
     def targets = getVersionTargets(rawVersion)
+    def updatedFiles = [] as Set
 
     targets.each { item ->
       def f = file("${project.rootDir}/${item.path}")
@@ -4283,7 +4326,9 @@ def updateVersionTask = tasks.register('updateVersion') {
 
       if (content != newContent) {
         f.text = newContent
-        println "Updated ${item.path}"
+        if (updatedFiles.add(item.path)) {
+          println "Updated ${item.path}"
+        }
       }
     }
   }
@@ -4291,12 +4336,12 @@ def updateVersionTask = tasks.register('updateVersion') {
 
 def verifyVersionConsistencyTask = tasks.register('verifyVersionConsistency') {
   group = "Verification"
-  description = "Verifies that python, pom, and script versions match gradle.properties."
+  description = "Verifies that python, pom, script, and docs index versions match gradle.properties."
 
   doLast {
     def rawVersion = project.version.toString()
     def targets = getVersionTargets(rawVersion)
-    def inconsistentFiles = []
+    def inconsistentFiles = [] as Set
 
     targets.each { item ->
       def f = file("${project.rootDir}/${item.path}")
