@@ -1041,6 +1041,7 @@ project(':server') {
     testFixturesImplementation testFixtures(project(':clients'))
     testFixturesImplementation project(':metadata')
     testFixturesImplementation project(':server-common')
+    testFixturesImplementation testFixtures(project(':server-common'))
     testFixturesImplementation libs.junitJupiter
 
     testRuntimeOnly runtimeTestLibs
