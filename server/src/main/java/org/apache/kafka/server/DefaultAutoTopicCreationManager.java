@@ -38,7 +38,6 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.quota.ControllerMutationQuota;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,7 +109,6 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     @Override
     public List<MetadataResponseTopic> createTopics(
             Set<String> topics,
-            ControllerMutationQuota controllerMutationQuota,
             RequestContext metadataRequestContext
     ) {
         var creatableTopics = new HashMap<String, CreatableTopic>();

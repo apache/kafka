@@ -44,7 +44,6 @@ import org.apache.kafka.server.config.AbstractKafkaConfig;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.quota.ControllerMutationQuota;
 import org.apache.kafka.server.util.MockTime;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -208,7 +207,7 @@ public class DefaultAutoTopicCreationManagerTest {
         var response = new CreateTopicsResponse(createTopicsResponseData);
         topicCreator.setResponseForWithPrincipal(response);
 
-        autoTopicCreationManager.createTopics(Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA, requestContext);
+        autoTopicCreationManager.createTopics(Set.of(topicName), requestContext);
 
         assertEquals(1, topicCreator.withPrincipalCallCount(),
                 "Should have called createTopicWithPrincipal once");
@@ -710,7 +709,7 @@ public class DefaultAutoTopicCreationManagerTest {
             String topicName,
             boolean isInternal
     ) {
-        var topicResponses = autoTopicCreationManager.createTopics(Set.of(topicName), ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA);
+        var topicResponses = autoTopicCreationManager.createTopics(Set.of(topicName));
 
         var expectedResponses = List.of(new MetadataResponseTopic()
                 .setErrorCode(error.code())
