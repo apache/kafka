@@ -364,6 +364,7 @@ public class SharePartition {
     }
 
     // Visible for testing
+    @SuppressWarnings("ParameterNumber")
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
