@@ -886,7 +886,8 @@ org.apache.kafka.tiered.storage.integration.AlterLogDirTest:
 - testAlterLogDirWithClassicGroupProtocol
 - testAlterLogDirWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.DeleteSegmentsDueToLogStartOffsetBreachTest:
-- executeTieredStorageTest
+- testDeleteSegmentsDueToLogStartOffsetBreachWithClassicGroupProtocol
+- testDeleteSegmentsDueToLogStartOffsetBreachWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.DeleteSegmentsTest:
 - testDeleteSegmentsByRetentionSizeWithClassicGroupProtocol
 - testDeleteSegmentsByRetentionSizeWithConsumerGroupProtocol
