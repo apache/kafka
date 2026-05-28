@@ -42,7 +42,6 @@ import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.PartitionMetadataProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
-import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQRecordParameter;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimeoutHandler;
@@ -331,15 +330,16 @@ public class SharePartition {
     private long fetchLockIdleDurationMs;
 
     /**
-     * Reference to the dlq manager implementation.
-     */
-    private final ShareGroupDLQManager shareGroupDLQ = new NoOpShareGroupDLQManager();
-
-    /**
-     * Supplier to toggle dlq support.
+     * Supplier to toggle DLQ support.
      */
     private final Supplier<Boolean> shareGroupDlqEnableSupplier;
 
+    /**
+     * Reference to the DLQ manager implementation.
+     */
+    private final ShareGroupDLQManager shareGroupDLQManager;
+
+    @SuppressWarnings("ParameterNumber")
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -354,11 +354,13 @@ public class SharePartition {
         Consumer<DelayedShareFetchKey> delayedRequestNotifier,
         ShareGroupConfigProvider configProvider,
         SharePartitionListener listener,
-        Supplier<Boolean> shareGroupDlqEnableSupplier
+        Supplier<Boolean> shareGroupDlqEnableSupplier,
+        ShareGroupDLQManager shareGroupDLQManager
     ) {
         this(groupId, topicIdPartition, leaderEpoch, defaultMaxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
             timer, time, persister, metadataProvider, delayedRequestNotifier, configProvider, SharePartitionState.EMPTY, listener,
-            new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()), shareGroupDlqEnableSupplier);
+            new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()), shareGroupDlqEnableSupplier,
+            shareGroupDLQManager);
     }
 
     // Visible for testing
@@ -378,7 +380,8 @@ public class SharePartition {
         SharePartitionState sharePartitionState,
         SharePartitionListener listener,
         SharePartitionMetrics sharePartitionMetrics,
-        Supplier<Boolean> shareGroupDlqEnableSupplier
+        Supplier<Boolean> shareGroupDlqEnableSupplier,
+        ShareGroupDLQManager shareGroupDLQManager
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -406,6 +409,7 @@ public class SharePartition {
         this.registerGaugeMetrics();
         this.deliveryCompleteCount = new AtomicInteger(0);
         this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+        this.shareGroupDLQManager = shareGroupDLQManager;
     }
 
     /**
@@ -3340,7 +3344,7 @@ public class SharePartition {
     void initiateDLQAndArchive(InFlightState updatedState, long firstOffset,
                                long lastOffset, short deliveryCount, Throwable dlqCause) {
         // Step 1: Enqueue to DLQ
-        shareGroupDLQ.enqueue(new ShareGroupDLQRecordParameter(
+        shareGroupDLQManager.enqueue(new ShareGroupDLQRecordParameter(
             groupId, topicIdPartition, firstOffset, lastOffset,
             Optional.of(deliveryCount), Optional.ofNullable(dlqCause), false
         )).whenComplete((v1, dlqException) -> {
