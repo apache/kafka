@@ -32,8 +32,10 @@ import java.util.Set;
  *   <li>Validating the new configuration before applying it via {@link #validateReconfiguration(AbstractConfig)}</li>
  *   <li>Applying the new configuration via {@link #reconfigure(AbstractConfig, AbstractConfig)}</li>
  * </ol>
+ *
+ * @param <T> the configuration type used by the reconfigurable component
  */
-public interface BrokerReconfigurable {
+public interface BrokerReconfigurable<T extends AbstractConfig> {
     /**
      * Returns the set of configuration keys that can be dynamically reconfigured.
      *
@@ -53,7 +55,7 @@ public interface BrokerReconfigurable {
      *
      * @param newConfig the new configuration to validate
      */
-    void validateReconfiguration(AbstractConfig newConfig);
+    void validateReconfiguration(T newConfig);
 
     /**
      * Applies the new configuration.
@@ -63,5 +65,5 @@ public interface BrokerReconfigurable {
      * @param oldConfig the previous configuration
      * @param newConfig the new configuration to apply
      */
-    void reconfigure(AbstractConfig oldConfig, AbstractConfig newConfig);
+    void reconfigure(T oldConfig, T newConfig);
 }

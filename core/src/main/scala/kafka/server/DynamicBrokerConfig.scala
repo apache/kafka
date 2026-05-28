@@ -231,7 +231,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     reconfigurables.add(reconfigurable)
   }
 
-  def addBrokerReconfigurable(reconfigurable: config.BrokerReconfigurable): Unit = {
+  def addBrokerReconfigurable(reconfigurable: config.BrokerReconfigurable[_ >: KafkaConfig]): Unit = {
     verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs)
     brokerReconfigurables.add(new BrokerReconfigurable {
       override def reconfigurableConfigs: util.Set[String] = reconfigurable.reconfigurableConfigs

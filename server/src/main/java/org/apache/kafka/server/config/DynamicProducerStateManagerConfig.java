@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 
-public class DynamicProducerStateManagerConfig implements BrokerReconfigurable {
+public class DynamicProducerStateManagerConfig implements BrokerReconfigurable<AbstractConfig> {
     private final Logger log = LoggerFactory.getLogger(DynamicProducerStateManagerConfig.class);
     private final ProducerStateManagerConfig producerStateManagerConfig;
 

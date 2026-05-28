@@ -95,7 +95,7 @@ import java.util.stream.IntStream;
  *    tombstone deletion.</li>
  * </ol>
  */
-public class LogCleaner implements BrokerReconfigurable {
+public class LogCleaner implements BrokerReconfigurable<AbstractConfig> {
     private static final Logger LOG = LoggerFactory.getLogger(LogCleaner.class);
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
