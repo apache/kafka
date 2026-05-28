@@ -26,6 +26,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -49,6 +50,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
@@ -299,7 +301,13 @@ public class GlobalStreamThread extends Thread {
                 if (size != -1L) {
                     cache.resize(size);
                 }
-                stateConsumer.pollAndUpdate();
+                try {
+                    stateConsumer.pollAndUpdate();
+                } catch (final WakeupException e) {
+                    if (!inErrorState()) {
+                        throw e;
+                    }
+                }
 
                 if (fetchDeadlineClientInstanceId != -1) {
                     if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
@@ -382,7 +390,8 @@ public class GlobalStreamThread extends Thread {
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                config
+                config,
+                () -> inErrorState()
             );
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
@@ -428,9 +437,22 @@ public class GlobalStreamThread extends Thread {
                     recoverableException
                 );
             }
+            
+            if (inErrorState()) {
+                closeStateConsumer(stateConsumer, false);
+                return null;
+            }
 
             setState(RUNNING);
             return stateConsumer;
+        } catch (final WakeupException e) {
+            closeStateConsumer(stateConsumer, false);
+            if (inErrorState()) {
+                log.info("Global thread initialization interrupted by shutdown");
+            } else {
+                startupException = new StreamsException(
+                    "Unexpected wakeup during initialization of GlobalStreamThread", e);
+            }
         } catch (final StreamsException fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = fatalException;
@@ -477,6 +499,7 @@ public class GlobalStreamThread extends Thread {
         // if already shutting down or dead
         setState(PENDING_SHUTDOWN);
         initializationLatch.countDown();
+        globalConsumer.wakeup();
     }
 
     public Map<MetricName, Metric> consumerMetrics() {

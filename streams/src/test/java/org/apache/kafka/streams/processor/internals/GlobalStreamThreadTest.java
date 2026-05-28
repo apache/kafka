@@ -25,6 +25,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -57,6 +58,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
@@ -67,6 +69,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -241,6 +244,99 @@ public class GlobalStreamThreadTest {
             "Thread never started.");
 
         globalStreamThread.shutdown();
+    }
+
+    @Test
+    @Timeout(value = 30000, unit = TimeUnit.MILLISECONDS)
+    public void shouldShutdownDuringBootstrap() throws Exception {
+        initializeConsumer();
+        mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 1_000_000L));
+
+        final Thread shutdownThread = new Thread(() -> {
+            try {
+                TestUtils.waitForCondition(
+                    () -> stateRestoreListener.storeNameCalledStates.containsKey(MockStateRestoreListener.RESTORE_START),
+                    10 * 1000L,
+                    "Bootstrap restore never started.");
+            } catch (final Exception e) {
+                throw new RuntimeException(e);
+            }
+            globalStreamThread.shutdown();
+        });
+        shutdownThread.start();
+
+        startAndSwallowError();
+        shutdownThread.join();
+        globalStreamThread.join(5_000);
+
+        assertEquals(DEAD, globalStreamThread.state());
+    }
+
+    @Test
+    @Timeout(value = 30000, unit = TimeUnit.MILLISECONDS)
+    public void shouldNotInvokeUncaughtExceptionHandlerOnCloseAfterStart() throws Exception {
+        final AtomicReference<Throwable> caughtException = new AtomicReference<>();
+        globalStreamThread.setUncaughtExceptionHandler(caughtException::set);
+
+        initializeConsumer();
+        startAndSwallowError();
+
+        TestUtils.waitForCondition(
+            () -> globalStreamThread.state() == RUNNING,
+            10 * 1000,
+            "Thread never started.");
+
+        mockConsumer.setMaxPollRecords(1L);
+        mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 50L));
+        for (long offset = 0L; offset < 50L; offset++) {
+            mockConsumer.addRecord(record(GLOBAL_STORE_TOPIC_NAME, 0, offset, "k".getBytes(), "v".getBytes()));
+        }
+
+        TestUtils.waitForCondition(
+            () -> mockConsumer.position(topicPartition) >= 1L,
+            10 * 1000,
+            "First record never consumed by the main loop.");
+
+        // Capture position before shutdown
+        // Else, afterwards the consumer is closed and calling position() throws IllegalStateException.
+        final long positionBeforeShutdown = mockConsumer.position(topicPartition);
+
+        globalStreamThread.shutdown();
+        globalStreamThread.join();
+
+        assertEquals(DEAD, globalStreamThread.state());
+        assertNull(caughtException.get());
+        assertTrue(positionBeforeShutdown < 10L,
+            "Shutdown should have interrupted the main loop before all records were consumed; position was "
+                + positionBeforeShutdown);
+    }
+    
+    @Test
+    public void shouldThrowStreamsExceptionOnStartupIfWakeupOccursWithoutShutdown() throws Exception {
+        final MockConsumer<byte[], byte[]> wakeupOnPartitionsFor = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
+            @Override
+            public List<PartitionInfo> partitionsFor(final String topic) {
+                throw new WakeupException();
+            }
+        };
+        globalStreamThread = new GlobalStreamThread(
+            builder.rewriteTopology(config).buildGlobalStateTopology(),
+            config,
+            wakeupOnPartitionsFor,
+            new StateDirectory(config, time, true, false),
+            0,
+            new StreamsMetricsImpl(new Metrics(), "test-client", time),
+            time,
+            "clientId",
+            stateRestoreListener,
+            e -> { }
+        );
+
+        final StreamsException e = assertThrows(StreamsException.class, () -> globalStreamThread.start());
+        assertThat(e.getCause(), instanceOf(WakeupException.class));
+
+        globalStreamThread.join();
+        assertFalse(globalStreamThread.stillRunning());
     }
 
     @Test

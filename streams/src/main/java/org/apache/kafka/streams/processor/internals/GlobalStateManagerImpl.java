@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Time;
@@ -64,6 +65,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
@@ -123,6 +125,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private DeserializationExceptionHandler deserializationExceptionHandler;
     private ProcessingExceptionHandler processingExceptionHandler;
     private Sensor droppedRecordsSensor;
+    private BooleanSupplier shouldShutDownSupplier;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -130,7 +133,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final Consumer<byte[], byte[]> globalConsumer,
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
-                                  final StreamsConfig config) {
+                                  final StreamsConfig config,
+                                  final BooleanSupplier shouldShutDown) {
         this.time = time;
         this.topology = topology;
         this.stateDirectory = stateDirectory;
@@ -147,6 +151,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         logPrefix = logContext.logPrefix();
         this.globalConsumer = globalConsumer;
         this.stateRestoreListener = stateRestoreListener;
+        this.shouldShutDownSupplier = shouldShutDown;
 
         final Map<String, Object> consumerProps = config.getGlobalConsumerConfigs("dummy");
         // need to add mandatory configs; otherwise `QuietConsumerConfig` throws
@@ -209,6 +214,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         LegacyCheckpointingStateStore.migrateLegacyOffsets(logPrefix, stateDirectory, null, wrappedStores);
 
         for (final StateStoreMetadata metadata : storeMetadata.values()) {
+            if(shouldShutDownSupplier.getAsBoolean()) {
+                log.info("Global store bootstrap interrupted by shutdown before starting {}", metadata.stateStore.name());
+                break;
+            }
             // load the committed offsets from the store
             final StateStore store = metadata.stateStore;
             if (store.persistent()) {
@@ -348,7 +357,22 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
                 //      `poll(pollMS)` without adding the request timeout and do a more precise
                 //      timeout handling
-                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
+                if(shouldShutDownSupplier.getAsBoolean()) {
+                    log.info("Global store bootstrap interrupted by shutdown before starting {}", storeMetadata.stateStore.name());
+                    return;
+                }
+
+                final ConsumerRecords<byte[], byte[]> records;
+                try {
+                    records = globalConsumer.poll(pollMsPlusRequestTimeout);
+                } catch (final WakeupException e) {
+                    if (shouldShutDownSupplier.getAsBoolean()) {
+                        log.info("Bootstrap interrupted by shutdown for {}",
+                            storeMetadata.stateStore.name());
+                        return;
+                    }
+                    throw e;
+                }
                 if (records.isEmpty()) {
                     currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
                 } else {
@@ -493,7 +517,21 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
                 //      `poll(pollMS)` without adding the request timeout and do a more precise
                 //      timeout handling
-                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
+                if(shouldShutDownSupplier.getAsBoolean()) {
+                    log.info("Global store bootstrap interrupted by shutdown before starting {}", storeMetadata.stateStore.name());
+                    return;
+                }
+                final ConsumerRecords<byte[], byte[]> records;
+                try {
+                    records = globalConsumer.poll(pollMsPlusRequestTimeout);
+                } catch (final WakeupException e) {
+                    if (shouldShutDownSupplier.getAsBoolean()) {
+                        log.info("Bootstrap interrupted by shutdown for {}",
+                            storeMetadata.stateStore.name());
+                        return;
+                    }
+                    throw e;
+                }
                 if (records.isEmpty()) {
                     currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
                 } else {

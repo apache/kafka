@@ -441,7 +441,8 @@ public class TopologyTestDriver implements Closeable {
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                streamsConfig
+                streamsConfig,
+                () -> false
             );
 
             final GlobalProcessorContextImpl globalProcessorContext =
