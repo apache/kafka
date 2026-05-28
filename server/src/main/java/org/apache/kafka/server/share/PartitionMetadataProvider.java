@@ -21,8 +21,6 @@ import org.apache.kafka.server.partition.PartitionListener;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 
-import java.util.Optional;
-
 /**
  * Abstraction for partition metadata operations.
  */
@@ -44,12 +42,11 @@ public interface PartitionMetadataProvider {
     long offsetForTimestamp(TopicIdPartition topicIdPartition, long timestamp, int leaderEpoch);
 
     /**
-     * Get the end offset metadata for minBytes estimation.
+     * Get the end offset metadata for partition.
      *
-     * @return The end offset metadata based on the given fetch isolation, or
-     *         {@link Optional#empty()} when no local partition metadata is available.
+     * @return The end offset metadata based on the given fetch isolation.
      */
-    Optional<LogOffsetMetadata> endOffsetMetadata(TopicIdPartition topicIdPartition, FetchIsolation isolation);
+    LogOffsetMetadata endOffsetMetadata(TopicIdPartition topicIdPartition, FetchIsolation isolation);
 
     /**
      * Get the leader epoch for a partition.
