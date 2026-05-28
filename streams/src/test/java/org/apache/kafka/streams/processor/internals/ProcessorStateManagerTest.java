@@ -924,6 +924,109 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldRestoreViaReprocessFactoryWhenPresent() {
+        final java.util.concurrent.atomic.AtomicInteger processedCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        final java.util.List<String> processedKeys = new java.util.ArrayList<>();
+        final MockKeyValueStore store = new MockKeyValueStore(persistentStoreName, true);
+
+        final org.apache.kafka.streams.processor.api.ProcessorSupplier<String, String, Void, Void> processorSupplier =
+            () -> new org.apache.kafka.streams.processor.api.Processor<>() {
+                @Override
+                public void init(final org.apache.kafka.streams.processor.api.ProcessorContext<Void, Void> context) {
+                    // no-op: we'll write to the store directly
+                }
+
+                @Override
+                public void process(final org.apache.kafka.streams.processor.api.Record<String, String> record) {
+                    processedCount.incrementAndGet();
+                    processedKeys.add(record.key());
+                }
+            };
+
+        final org.apache.kafka.common.serialization.StringDeserializer stringDeserializer =
+            new org.apache.kafka.common.serialization.StringDeserializer();
+
+        final InternalTopologyBuilder.ReprocessFactory<String, String, Void, Void> reprocessFactory =
+            new InternalTopologyBuilder.ReprocessFactory<>(processorSupplier, stringDeserializer, stringDeserializer, "testProcessor");
+
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            Task.TaskType.ACTIVE,
+            false,
+            logContext,
+            stateDirectory,
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
+            ),
+            emptySet(),
+            null,
+            mkMap(mkEntry(persistentStoreName, java.util.Optional.of(reprocessFactory)))
+        );
+
+        try {
+            // Register store directly (like other tests) and set context
+            stateMgr.registerStore(store, store.stateRestoreCallback, null);
+            // set the processorContext so that reprocessRestore can use it
+            stateMgr.registerStateStores(java.util.Collections.emptyList(), context);
+
+            final StateStoreMetadata storeMetadataObj = stateMgr.storeMetadata(persistentStorePartition);
+            assertThat(storeMetadataObj, notNullValue());
+
+            final byte[] testKey = "myKey".getBytes(StandardCharsets.UTF_8);
+            final byte[] testValue = "myValue".getBytes(StandardCharsets.UTF_8);
+            final ConsumerRecord<byte[], byte[]> record =
+                new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, 1000L,
+                    org.apache.kafka.common.record.TimestampType.CREATE_TIME,
+                    testKey.length, testValue.length, testKey, testValue,
+                    new org.apache.kafka.common.header.internals.RecordHeaders(),
+                    java.util.Optional.empty());
+
+            stateMgr.restore(storeMetadataObj, singletonList(record), OptionalLong.of(2L));
+
+            // verify the processor was called instead of the callback
+            assertEquals(1, processedCount.get());
+            assertEquals("myKey", processedKeys.get(0));
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldFallbackToCallbackWhenNoReprocessFactory() {
+        final MockRestoreCallback restoreCallback = new MockRestoreCallback();
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            Task.TaskType.ACTIVE,
+            false,
+            logContext,
+            stateDirectory,
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
+            ),
+            emptySet(),
+            null,
+            java.util.Collections.emptyMap()
+        );
+
+        try {
+            stateMgr.registerStore(persistentStore, restoreCallback, null);
+            final StateStoreMetadata storeMetadataObj = stateMgr.storeMetadata(persistentStorePartition);
+            assertThat(storeMetadataObj, notNullValue());
+
+            stateMgr.restore(storeMetadataObj, singletonList(consumerRecord), OptionalLong.of(2L));
+
+            // verify the restore callback was used (not the processor)
+            assertThat(restoreCallback.restored.size(), is(1));
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
     public void shouldCommitGoodStoresEvenSomeThrowsException() {
         final AtomicBoolean committedStore = new AtomicBoolean(false);
 

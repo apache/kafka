@@ -34,6 +34,9 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 import org.apache.kafka.streams.state.internals.WithRetentionPeriod;
@@ -49,6 +52,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -207,10 +211,13 @@ public class ProcessorStateManager implements StateManager {
     private final StateDirectory stateDirectory;
     private final File baseDir;
     private final UpgradeFromValues upgradeFrom;
+    private final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore;
 
     private TaskType taskType;
     private Logger log;
     private Task.State taskState;
+    private InternalProcessorContext<?, ?> processorContext;
+    private final Map<String, Processor<?, ?, ?, ?>> reprocessorCache = new HashMap<>();
 
     public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {
@@ -232,6 +239,19 @@ public class ProcessorStateManager implements StateManager {
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions,
                                  final UpgradeFromValues upgradeFrom) throws ProcessorStateException {
+        this(taskId, taskType, eosEnabled, logContext, stateDirectory, storeToChangelogTopic,
+            sourcePartitions, upgradeFrom, Collections.emptyMap());
+    }
+
+    public ProcessorStateManager(final TaskId taskId,
+                                 final TaskType taskType,
+                                 final boolean eosEnabled,
+                                 final LogContext logContext,
+                                 final StateDirectory stateDirectory,
+                                 final Map<String, String> storeToChangelogTopic,
+                                 final Collection<TopicPartition> sourcePartitions,
+                                 final UpgradeFromValues upgradeFrom,
+                                 final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -241,6 +261,7 @@ public class ProcessorStateManager implements StateManager {
         this.transactionalStateStoresEnabled = transactionalStateStoresEnabled;
         this.sourcePartitions = sourcePartitions;
         this.upgradeFrom = upgradeFrom;
+        this.storeNameToReprocessOnRestore = storeNameToReprocessOnRestore;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.stateDirectory = stateDirectory;
@@ -279,6 +300,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
+        this.processorContext = processorContext;
         processorContext.uninitialize();
         final Map<TopicPartition, StateStore> storesToMigrate = new HashMap<>(stores.size());
         for (final StateStore store : allStores) {
@@ -491,6 +513,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // used by the changelog reader only
+    @SuppressWarnings({"rawtypes", "unchecked"})
     void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords, final OptionalLong optionalLag) {
         if (!stores.containsValue(storeMetadata)) {
             throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
@@ -500,18 +523,27 @@ public class ProcessorStateManager implements StateManager {
         if (!restoreRecords.isEmpty()) {
             // restore states from changelog records and update the snapshot offset as the batch end record's offset
             final Long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
-            final RecordBatchingStateRestoreCallback restoreCallback = adapt(storeMetadata.restoreCallback);
-            final List<ConsumerRecord<byte[], byte[]>> convertedRecords = restoreRecords.stream()
-                .map(storeMetadata.recordConverter::convert)
-                .collect(Collectors.toList());
 
-            try {
-                restoreCallback.restoreBatch(convertedRecords);
-            } catch (final RuntimeException e) {
-                throw new ProcessorStateException(
-                    format("%sException caught while trying to restore state from %s", logPrefix, storeMetadata.changelogPartition),
-                    e
-                );
+            final String storeName = storeMetadata.store().name();
+            final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory =
+                storeNameToReprocessOnRestore.getOrDefault(storeName, Optional.empty());
+
+            if (reprocessFactory.isPresent() && processorContext != null) {
+                reprocessRestore(storeMetadata, restoreRecords, reprocessFactory.get());
+            } else {
+                final RecordBatchingStateRestoreCallback restoreCallback = adapt(storeMetadata.restoreCallback);
+                final List<ConsumerRecord<byte[], byte[]>> convertedRecords = restoreRecords.stream()
+                    .map(storeMetadata.recordConverter::convert)
+                    .collect(Collectors.toList());
+
+                try {
+                    restoreCallback.restoreBatch(convertedRecords);
+                } catch (final RuntimeException e) {
+                    throw new ProcessorStateException(
+                        format("%sException caught while trying to restore state from %s", logPrefix, storeMetadata.changelogPartition),
+                        e
+                    );
+                }
             }
 
             storeMetadata.setOffset(batchEndOffset);
@@ -522,6 +554,44 @@ public class ProcessorStateManager implements StateManager {
             }
 
             stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void reprocessRestore(final StateStoreMetadata storeMetadata,
+                                  final List<ConsumerRecord<byte[], byte[]>> restoreRecords,
+                                  final InternalTopologyBuilder.ReprocessFactory reprocessFactory) {
+        final String storeName = storeMetadata.store().name();
+        final Processor processor = reprocessorCache.computeIfAbsent(storeName, k -> {
+            final Processor p = reprocessFactory.processorSupplier().get();
+            p.init((ProcessorContext) processorContext);
+            return p;
+        });
+
+        for (final ConsumerRecord<byte[], byte[]> record : restoreRecords) {
+            final ConsumerRecord<byte[], byte[]> converted = storeMetadata.recordConverter.convert(record);
+            if (converted.key() != null) {
+                final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+                    converted.timestamp(),
+                    converted.offset(),
+                    converted.partition(),
+                    converted.topic(),
+                    converted.headers());
+                processorContext.setRecordContext(recordContext);
+
+                try {
+                    final Object key = reprocessFactory.keyDeserializer().deserialize(converted.topic(), converted.key());
+                    final Object value = reprocessFactory.valueDeserializer().deserialize(converted.topic(), converted.value());
+                    final long timestamp = Math.max(0L, converted.timestamp());
+                    processor.process(new Record<>(key, value, timestamp, converted.headers()));
+                } catch (final RuntimeException e) {
+                    throw new ProcessorStateException(
+                        format("%sException caught while trying to reprocess-restore state from %s",
+                            logPrefix, storeMetadata.changelogPartition),
+                        e
+                    );
+                }
+            }
         }
     }
 
@@ -638,6 +708,16 @@ public class ProcessorStateManager implements StateManager {
     @Override
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
+
+        // close any cached reprocess processors
+        for (final Processor<?, ?, ?, ?> processor : reprocessorCache.values()) {
+            try {
+                processor.close();
+            } catch (final RuntimeException e) {
+                log.warn("Failed to close reprocess processor: ", e);
+            }
+        }
+        reprocessorCache.clear();
 
         final Map<TopicPartition, Long> allOffsets = new HashMap<>();
         RuntimeException firstException = null;

@@ -154,7 +154,8 @@ class ActiveTaskCreator {
                 stateDirectory,
                 topology.storeToChangelogTopic(),
                 partitions,
-                upgradeFrom);
+                upgradeFrom,
+                topology.storeNameToReprocessOnRestore());
 
             final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                 taskId,

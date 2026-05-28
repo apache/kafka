@@ -209,7 +209,8 @@ public class InternalTopologyBuilder {
         private final Deserializer<VIn> valueDeserializer;
         private final String processorName;
 
-        private ReprocessFactory(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
+        // package-private for testing
+        ReprocessFactory(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
                                  final Deserializer<KIn> key,
                                  final Deserializer<VIn> value,
                                  final String processorName) {
@@ -749,6 +750,15 @@ public class InternalTopologyBuilder {
 
     public String storeForChangelogTopic(final String topicName) {
         return changelogTopicToStore.get(topicName);
+    }
+
+    public <KIn, VIn> void registerReadOnlyStoreReprocessFactory(final String storeName,
+                                                                final ProcessorSupplier<KIn, VIn, Void, Void> processorSupplier,
+                                                                final Deserializer<KIn> keyDeserializer,
+                                                                final Deserializer<VIn> valueDeserializer,
+                                                                final String processorName) {
+        storeNameToReprocessOnRestore.put(storeName,
+            Optional.of(new ReprocessFactory<>(processorSupplier, keyDeserializer, valueDeserializer, processorName)));
     }
 
     public void connectSourceStoreAndTopic(final String sourceStoreName,
