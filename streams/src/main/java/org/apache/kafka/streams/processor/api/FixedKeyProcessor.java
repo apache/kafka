@@ -40,6 +40,12 @@ public interface FixedKeyProcessor<KIn, VIn, VOut> {
      * The provided {@link FixedKeyProcessorContext context} can be used to access topology and record metadata, to
      * {@link FixedKeyProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule} a method to be
      * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
+     * <p>
+     * State stores attached to this processor are fully restored from their changelog topics before {@code init()} is called.
+     * However, for stores that report approximate sizes (notably the default RocksDB-backed stores), size estimates such as
+     * {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore#approximateNumEntries()} may not yet reflect post-compaction
+     * counts at this point and can include duplicate writes and tombstones replayed during restoration; see that method's
+     * Javadoc for details.
      *
      * @param context the context; may not be null
      */
