@@ -907,9 +907,11 @@ org.apache.kafka.tiered.storage.integration.ListOffsetsTest:
 - testListOffsetsWithClassicGroupProtocol
 - testListOffsetsWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.OffloadAndConsumeFromLeaderTest:
-- executeTieredStorageTest
+- testOffloadAndConsumeFromLeaderWithClassicGroupProtocol
+- testOffloadAndConsumeFromLeaderWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.OffloadAndTxnConsumeFromLeaderTest:
-- executeTieredStorageTest
+- testOffloadAndTxnConsumeFromLeaderWithClassicGroupProtocol
+- testOffloadAndTxnConsumeFromLeaderWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.PartitionsExpandTest:
 - executeTieredStorageTest
 org.apache.kafka.tiered.storage.integration.ReassignReplicaMoveAndExpandTest:
