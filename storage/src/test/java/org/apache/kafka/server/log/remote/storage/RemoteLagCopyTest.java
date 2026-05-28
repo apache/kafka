@@ -288,9 +288,9 @@ public class RemoteLagCopyTest {
 
         Map<String, Long> logProps = new HashMap<>();
         logProps.put(TopicConfig.RETENTION_MS_CONFIG, 10_000L);
-        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, LogConfig.DEFAULT_REMOTE_COPY_LAG_MS);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_MS);
         logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, 10_000L);
-        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LogConfig.DEFAULT_REMOTE_COPY_LAG_BYTES);
+        logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, RemoteLogManagerConfig.DEFAULT_LOG_REMOTE_COPY_LAG_BYTES);
         LogConfig logConfig = new LogConfig(logProps);
         when(log.config()).thenReturn(logConfig);
         when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(List.of(segment1, segment2, activeSegment));
