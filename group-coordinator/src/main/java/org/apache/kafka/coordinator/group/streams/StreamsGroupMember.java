@@ -345,9 +345,9 @@ public record StreamsGroupMember(String memberId,
                 resetActiveTasks.put(entry.getKey(), resetActiveTaskEpochs);
             }
             this.assignedTasks = new TasksTupleWithEpochs(
-                    resetActiveTasks,
-                    this.assignedTasks.standbyTasks(),
-                    this.assignedTasks.warmupTasks()
+                resetActiveTasks,
+                this.assignedTasks.standbyTasks(),
+                this.assignedTasks.warmupTasks()
             );
             return this;
         }

@@ -1706,9 +1706,9 @@ public class GroupMetadataManager {
         if (member.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // The new member can't join.
             log.info("[GroupId {}] Static member {} with instance id {} cannot join the group because the instance id is" +
-                    " owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
+                " owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
             throw Errors.UNRELEASED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
-                    + receivedInstanceId + " cannot join the group because the instance id is owned by " + member.memberId() + " member.");
+                + receivedInstanceId + " cannot join the group because the instance id is owned by " + member.memberId() + " member.");
         }
     }
     
@@ -1744,9 +1744,9 @@ public class GroupMetadataManager {
     private void throwIfInstanceIdIsFenced(StreamsGroupMember member, String groupId, String receivedMemberId, String receivedInstanceId) {
         if (!member.memberId().equals(receivedMemberId)) {
             log.info("[GroupId {}] Static member {} with instance id {} is fenced by existing member {}.",
-                    groupId, receivedMemberId, receivedInstanceId, member.memberId());
+                groupId, receivedMemberId, receivedInstanceId, member.memberId());
             throw Errors.FENCED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
-                    + receivedInstanceId + " was fenced by member " + member.memberId() + ".");
+                + receivedInstanceId + " was fenced by member " + member.memberId() + ".");
         }
     }
     
@@ -2103,11 +2103,11 @@ public class GroupMetadataManager {
 
         if (isJoining) {
             StreamsGroupMemberMetadataValue.Endpoint userEndpointMetadata = userEndpoint == null ? null :
-                    new StreamsGroupMemberMetadataValue.Endpoint().setHost(userEndpoint.host()).setPort(userEndpoint.port());
+                new StreamsGroupMemberMetadataValue.Endpoint().setHost(userEndpoint.host()).setPort(userEndpoint.port());
             updatedMemberBuilder.setUserEndpoint(userEndpointMetadata);
         } else {
             updatedMemberBuilder
-                    .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
+                .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())));
         }
         StreamsGroupMember updatedMember = updatedMemberBuilder.build();
         
@@ -3329,15 +3329,15 @@ public class GroupMetadataManager {
      * @return The resolved streams group member.
      */
     private StreamsGroupMember getOrMaybeCreateStaticStreamsGroupMember(
-            StreamsGroup group,
-            String memberId,
-            int memberEpoch,
-            String instanceId,
-            List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks,
-            List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
-            List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks,
-            boolean memberIsJoining,
-            List<CoordinatorRecord> records
+        StreamsGroup group,
+        String memberId,
+        int memberEpoch,
+        String instanceId,
+        List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks,
+        List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
+        List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks,
+        boolean memberIsJoining,
+        List<CoordinatorRecord> records
     ) {
         StreamsGroupMember existingStaticMemberOrNull = group.staticMember(instanceId);
         if (memberIsJoining) {
@@ -3346,22 +3346,22 @@ public class GroupMetadataManager {
                 // New static member.
                 StreamsGroupMember newMember = group.getOrCreateDefaultMember(memberId);
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} joins the streams group.",
-                        group.groupId(), memberId, memberId, instanceId);
+                    group.groupId(), memberId, memberId, instanceId);
                 return newMember;
             } else {
                 throwIfInstanceIdIsUnreleased(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
 
                 // Copy the member but with its new member id.
                 StreamsGroupMember newMember = new StreamsGroupMember.Builder(existingStaticMemberOrNull, memberId)
-                        .setMemberEpoch(0)
-                        .setPreviousMemberEpoch(0)
-                        .build();
+                    .setMemberEpoch(0)
+                    .setPreviousMemberEpoch(0)
+                    .build();
 
                 replaceStreamsMember(records, group, existingStaticMemberOrNull, newMember);
 
                 log.info("[GroupId {}][MemberId {}] Static member with instance id {} re-joins the streams group " +
-                                "using the streams protocol. Created a new member {} to replace the existing member {}.",
-                        group.groupId(), memberId, instanceId, memberId, existingStaticMemberOrNull.memberId());
+                        "using the streams protocol. Created a new member {} to replace the existing member {}.",
+                    group.groupId(), memberId, instanceId, memberId, existingStaticMemberOrNull.memberId());
 
                 return newMember;
             }
@@ -3369,11 +3369,11 @@ public class GroupMetadataManager {
             throwIfStaticMemberIsUnknown(existingStaticMemberOrNull, instanceId);
             throwIfInstanceIdIsFenced(existingStaticMemberOrNull, group.groupId(), memberId, instanceId);
             throwIfStreamsGroupMemberEpochIsInvalid(
-                    existingStaticMemberOrNull,
-                    memberEpoch,
-                    ownedActiveTasks,
-                    ownedStandbyTasks,
-                    ownedWarmupTasks
+                existingStaticMemberOrNull,
+                memberEpoch,
+                ownedActiveTasks,
+                ownedStandbyTasks,
+                ownedWarmupTasks
             );
             return existingStaticMemberOrNull;
         }
@@ -4454,11 +4454,11 @@ public class GroupMetadataManager {
             throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
             if (memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} temporarily left the streams group.",
-                        group.groupId(), memberId, memberId, instanceId);
+                    group.groupId(), memberId, memberId, instanceId);
                 return streamsGroupStaticMemberGroupLeave(group, member);
             } else {
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} left the streams group.",
-                        group.groupId(), memberId, memberId, instanceId);
+                    group.groupId(), memberId, memberId, instanceId);
                 return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of()));
             }
         }
@@ -4510,8 +4510,8 @@ public class GroupMetadataManager {
      * @return A CoordinatorResult with a single record signifying that the static member is leaving.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupStaticMemberGroupLeave(
-            StreamsGroup group,
-            StreamsGroupMember member
+        StreamsGroup group,
+        StreamsGroupMember member
     ) {
         // A static member leaving with epoch -2 may later be replaced with a new
         // member id for the same instance id. Since we clear the pending revocations
@@ -4521,25 +4521,25 @@ public class GroupMetadataManager {
         // member as waiting for revocation acknowledgement. Move it back to STABLE so
         // the rejoining static member can be reconciled from the reset assignment.
         org.apache.kafka.coordinator.group.streams.MemberState nextState = 
-                member.state() == org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS ?
+            member.state() == org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS ?
                 org.apache.kafka.coordinator.group.streams.MemberState.STABLE :
                 member.state();
         StreamsGroupMember leavingStaticMember = new StreamsGroupMember.Builder(member)
-                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-                .setState(nextState)
-                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
-                .resetAssignedTasksEpochsToZero()
-                .build();
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setState(nextState)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+            .resetAssignedTasksEpochsToZero()
+            .build();
 
         CoordinatorRecord record = newStreamsGroupCurrentAssignmentRecord(group.groupId(), leavingStaticMember);
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
-                .setMemberId(member.memberId())
-                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-                .setStatus(List.of());
+            .setMemberId(member.memberId())
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setStatus(List.of());
 
         return new CoordinatorResult<>(
-                List.of(record),
-                new StreamsGroupHeartbeatResult(response, Map.of())
+            List.of(record),
+            new StreamsGroupHeartbeatResult(response, Map.of())
         );
     }
 
@@ -4761,10 +4761,10 @@ public class GroupMetadataManager {
      * @param newMember The new member.
      */
     private void replaceStreamsMember(
-            List<CoordinatorRecord> records,
-            StreamsGroup group,
-            StreamsGroupMember oldMember,
-            StreamsGroupMember newMember
+        List<CoordinatorRecord> records,
+        StreamsGroup group,
+        StreamsGroupMember oldMember,
+        StreamsGroupMember newMember
     ) {
         String groupId = group.groupId();
 
@@ -4774,17 +4774,17 @@ public class GroupMetadataManager {
 
         // Generate records.
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(
-                groupId,
-                newMember
+            groupId,
+            newMember
         ));
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(
-                groupId,
-                newMember.memberId(),
-                group.targetAssignment(oldMember.memberId(), Optional.empty())
+            groupId,
+            newMember.memberId(),
+            group.targetAssignment(oldMember.memberId(), Optional.empty())
         ));
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(
-                groupId,
-                newMember
+            groupId,
+            newMember
         ));
     }
     
@@ -9330,15 +9330,15 @@ public class GroupMetadataManager {
     }
 
     private static boolean hasEpochRelevantMemberConfigChanged(
-            StreamsGroupMember oldMember,
-            StreamsGroupMember newMember
+        StreamsGroupMember oldMember,
+        StreamsGroupMember newMember
     ) {
         // The group epoch is bumped: (KIP-1071)
         // - When a member updates its topology metadata, rack ID, client tags or process ID. 
         return !Objects.equals(oldMember.topologyEpoch(), newMember.topologyEpoch())
-                || !Objects.equals(oldMember.rackId(), newMember.rackId())
-                || !Objects.equals(oldMember.clientTags(), newMember.clientTags())
-                || !Objects.equals(oldMember.processId(), newMember.processId());
+            || !Objects.equals(oldMember.rackId(), newMember.rackId())
+            || !Objects.equals(oldMember.clientTags(), newMember.clientTags())
+            || !Objects.equals(oldMember.processId(), newMember.processId());
     }
 
     /**
