@@ -480,9 +480,6 @@ org.apache.kafka.clients.producer.ProducerSendWhileDeletionTest:
 - testSendWithRecreatedTopic
 - testSendWithTopicDeletionMidWay
 - testSendWithTopicReassignmentIsMidWay
-org.apache.kafka.clients.producer.SocketServerMemoryPoolTest:
-- testProduceRequestWithCorruptBody
-- testProduceRequestWithUnsupportedVersion
 org.apache.kafka.clients.security.GroupAuthorizerIntegrationTest:
 - testAsyncConsumeCloseWithGroupPermission
 - testAsyncConsumeUnsubscribeWithGroupPermission
@@ -494,6 +491,9 @@ org.apache.kafka.clients.security.GroupAuthorizerIntegrationTest:
 - testClassicConsumeUnsubscribeWithoutGroupPermission
 - testUnauthorizedProduceAndConsumeWithAsyncConsumer
 - testUnauthorizedProduceAndConsumeWithClassicConsumer
+org.apache.kafka.common.SocketServerMemoryPoolTest:
+- testRequestWithCorruptBody
+- testRequestWithUnsupportedVersion
 org.apache.kafka.server.quota.CustomQuotaCallbackTest:
 - testCustomQuotaCallbackWithControllerServer
 - testMonitorableCustomQuotaCallbackWithCombinedMode
