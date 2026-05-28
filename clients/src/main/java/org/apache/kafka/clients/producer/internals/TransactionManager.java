@@ -481,25 +481,9 @@ public class TransactionManager {
                 "(currentState= " + currentState + ")");
         }
 
-        TxnRequestHandler handler;
-        if (isTransactionV2Enabled()) {
-            log.debug("Begin staging share acks {} for share group {} to transaction with transaction protocol V2",
-                acknowledgements, groupMetadata);
-            handler = txnShareAcknowledgeHandler(null, acknowledgements, groupMetadata);
-            transactionStarted = true;
-        } else {
-            log.debug("Begin staging share acks {} for share group {} to transaction",
-                acknowledgements, groupMetadata);
-            AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
-                new AddOffsetsToTxnRequestData()
-                    .setTransactionalId(transactionalId)
-                    .setProducerId(producerIdAndEpoch.producerId)
-                    .setProducerEpoch(producerIdAndEpoch.epoch)
-                    .setGroupId(groupMetadata.groupId())
-            );
-            handler = new AddShareAcksToTxnHandler(builder, acknowledgements, groupMetadata);
-        }
-
+        log.debug("Begin staging share acks {} for share group {} to transaction", acknowledgements, groupMetadata);
+        TxnShareAcknowledgeHandler handler = txnShareAcknowledgeHandler(null, acknowledgements, groupMetadata);
+        transactionStarted = true;
         enqueueRequest(handler);
         return handler.result;
     }
@@ -2073,62 +2057,6 @@ public class TransactionManager {
             return new TxnShareAcknowledgeHandler(builder);
         }
         return new TxnShareAcknowledgeHandler(result, builder);
-    }
-
-    private class AddShareAcksToTxnHandler extends TxnRequestHandler {
-        private final AddOffsetsToTxnRequest.Builder builder;
-        private final Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements;
-        private final ShareGroupMetadata groupMetadata;
-
-        private AddShareAcksToTxnHandler(AddOffsetsToTxnRequest.Builder builder,
-                                         Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
-                                         ShareGroupMetadata groupMetadata) {
-            super("AddShareAcksToTxn");
-            this.builder = builder;
-            this.acknowledgements = acknowledgements;
-            this.groupMetadata = groupMetadata;
-        }
-
-        @Override
-        AddOffsetsToTxnRequest.Builder requestBuilder() {
-            return builder;
-        }
-
-        @Override
-        Priority priority() {
-            return Priority.ADD_PARTITIONS_OR_OFFSETS;
-        }
-
-        @Override
-        public void handleResponse(AbstractResponse response) {
-            AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
-            Errors error = Errors.forCode(addOffsetsToTxnResponse.data().errorCode());
-
-            if (error == Errors.NONE) {
-                log.debug("Successfully registered share group {} for transactional acks", builder.data.groupId());
-                pendingRequests.add(txnShareAcknowledgeHandler(result, acknowledgements, groupMetadata));
-                transactionStarted = true;
-            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
-                reenqueue();
-            } else if (error.exception() instanceof RetriableException) {
-                reenqueue();
-            } else if (error == Errors.UNKNOWN_PRODUCER_ID) {
-                abortableErrorIfPossible(error.exception());
-            } else if (error == Errors.INVALID_PRODUCER_EPOCH || error == Errors.PRODUCER_FENCED) {
-                fatalError(Errors.PRODUCER_FENCED.exception());
-            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
-                    || error == Errors.INVALID_TXN_STATE
-                    || error == Errors.INVALID_PRODUCER_ID_MAPPING) {
-                fatalError(error.exception());
-            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
-            } else if (error == Errors.TRANSACTION_ABORTABLE) {
-                abortableError(error.exception());
-            } else {
-                fatalError(new KafkaException("Unexpected error in AddOffsetsToTxnResponse for share acks: " + error.message()));
-            }
-        }
     }
 
     private class TxnShareAcknowledgeHandler extends TxnRequestHandler {

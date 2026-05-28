@@ -182,6 +182,7 @@ public class InFlightBatch {
         return inFlightState().revertStagedTxnAcknowledge(producerId, producerEpoch);
     }
 
+    // Visible for testing.
     public long batchStagedProducerId() {
         return inFlightState().stagedProducerId();
     }
