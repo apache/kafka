@@ -1586,8 +1586,9 @@ public class StoreChangelogReaderTest {
         when(storeMetadata.offset()).thenReturn(3L);
         when(storeMetadata.endOffset()).thenReturn(20L);
 
+        final int restoreBufferedRecordsPerPartition = 3;
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG, 3);
+        properties.put(StreamsConfig.RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG, restoreBufferedRecordsPerPartition);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         final StreamsConfig cappedConfig =
             new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
@@ -1603,19 +1604,19 @@ public class StoreChangelogReaderTest {
         assertEquals(Collections.emptySet(), consumer.paused());
 
         // committed offset is 7, so offsets >=7 stay buffered
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 5L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 6L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 7L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 8L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 9L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 10L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 11L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 5L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 6L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 7L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 8L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 9L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 10L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 11L, "key".getBytes(), "value".getBytes()));
 
         // first tick fills the buffer, second tick sees it full and pauses
         changelogReader.restore(mockTasks);
         changelogReader.restore(mockTasks);
 
-        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() >= 3);
+        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() >= restoreBufferedRecordsPerPartition);
         assertEquals(Collections.singleton(tp), consumer.paused());
     }
 
@@ -1634,8 +1635,9 @@ public class StoreChangelogReaderTest {
         when(storeMetadata.endOffset()).thenReturn(20L);
 
         final long now = time.milliseconds();
+        final int restoreBufferedRecordsPerPartition = 3;
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG, 3);
+        properties.put(StreamsConfig.RESTORE_BUFFERED_RECORDS_PER_PARTITION_CONFIG, restoreBufferedRecordsPerPartition);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         final StreamsConfig cappedConfig =
             new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
@@ -1648,18 +1650,18 @@ public class StoreChangelogReaderTest {
         changelogReader.register(tp, standbyStateManager);
 
         changelogReader.restore(mockTasks);
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 5L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 6L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 7L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 8L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 9L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 10L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 11L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 5L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 6L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 7L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 8L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 9L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 10L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(topicName, tp.partition(), 11L, "key".getBytes(), "value".getBytes()));
 
         // fill the buffer past the cap and confirm the pause
         changelogReader.restore(mockTasks);
         changelogReader.restore(mockTasks);
-        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() >= 3);
+        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() >= restoreBufferedRecordsPerPartition);
         assertEquals(Collections.singleton(tp), consumer.paused());
 
         // bump the committed offset so the buffered records can drain
@@ -1670,7 +1672,7 @@ public class StoreChangelogReaderTest {
         changelogReader.restore(mockTasks);
         changelogReader.restore(mockTasks);
 
-        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() < 3);
+        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().size() < restoreBufferedRecordsPerPartition);
         assertEquals(Collections.emptySet(), consumer.paused());
     }
 
