@@ -91,27 +91,39 @@ public class CachingSessionStore
         }
 
         @Override
-        public byte[] fetchSession(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        public byte[] fetchSession(final Bytes key,
+                                   final long earliestSessionEndTime,
+                                   final long latestSessionStartTime) {
             return fetchSessionInternal(key, earliestSessionEndTime, latestSessionStartTime, underlying);
         }
 
         @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
+                                                                      final long earliestSessionEndTime,
+                                                                      final long latestSessionStartTime) {
             return findSessionsInternal(key, earliestSessionEndTime, latestSessionStartTime, underlying);
         }
 
         @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
+                                                                              final long earliestSessionEndTime,
+                                                                              final long latestSessionStartTime) {
             return backwardFindSessionsInternal(key, earliestSessionEndTime, latestSessionStartTime, underlying);
         }
 
         @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom, final Bytes keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
+                                                                      final Bytes keyTo,
+                                                                      final long earliestSessionEndTime,
+                                                                      final long latestSessionStartTime) {
             return findSessionsInternal(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime, underlying);
         }
 
         @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom, final Bytes keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
+                                                                              final Bytes keyTo,
+                                                                              final long earliestSessionEndTime,
+                                                                              final long latestSessionStartTime) {
             return backwardFindSessionsInternal(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime, underlying);
         }
 
