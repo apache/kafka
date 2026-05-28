@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -300,7 +301,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
             for (Entry<String, JsonNode> entry : jsonNode.properties()) {
                 retval.put(entry.getKey(), convert(entry.getValue()));
             }
-            return Map.copyOf(retval);
+            return Collections.unmodifiableMap(retval);
         } catch (IllegalArgumentException e) {
             // potentially thrown by java.util.Base64.Decoder implementations
             throw new OAuthBearerIllegalTokenException(
@@ -317,7 +318,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
         if (tmpSplits.size() != 3)
             throw new OAuthBearerIllegalTokenException(OAuthBearerValidationResult.newFailure(
                     "Unsecured JWS compact serializations must have 3 dot-separated Base64URL-encoded values"));
-        return List.copyOf(tmpSplits);
+        return Collections.unmodifiableList(tmpSplits);
     }
 
     private static Object convert(JsonNode value) {
@@ -360,6 +361,6 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
                 retval.add(scope.trim());
             }
         }
-        return Set.copyOf(retval);
+        return Collections.unmodifiableSet(retval);
     }
 }
