@@ -1571,44 +1571,23 @@ public class GroupMetadataManager {
      * Checks whether the consumer group can accept a new member or not based on the
      * max group size defined.
      *
-     * @param group     The consumer group.
-     * @param memberId  The member id.
+     * @param group      The consumer group.
+     * @param memberId   The member id.
+     * @param instanceId The instance id.
      *
      * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
      */
     private void throwIfConsumerGroupIsFull(
         ConsumerGroup group,
-        String memberId
-    ) throws GroupMaxSizeReachedException {
-        // If the consumer group has reached its maximum capacity, the member is rejected if it is not
-        // already a member of the consumer group.
-        if (group.numMembers() >= config.consumerGroupMaxSize() && (memberId.isEmpty() || !group.hasMember(memberId))) {
-            throw new GroupMaxSizeReachedException("The consumer group has reached its maximum capacity of "
-                + config.consumerGroupMaxSize() + " members.");
-        }
-    }
-
-    /**
-     * Checks whether the consumer group can accept a new member or not based on the
-     * max group size defined.
-     *
-     * @param group      The consumer group.
-     * @param memberId   The member id.
-     * @param instanceId The instance Id.
-     *
-     * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
-     */
-    private void throwIfConsumerGroupIsFull(
-            ConsumerGroup group,
-            String memberId,
-            String instanceId
+        String memberId,
+        String instanceId
     ) throws GroupMaxSizeReachedException {
         // If a static member already exists, we do not enforce the maximum group size check.
         // An existing static member will fall into one of the following two cases,
         // and neither affects the group size:
         // 1. The member is replaced due to the static member rejoining.
         // 2. 'UnreleasedInstanceIdException' is raised due to an epoch mismatch.
-        if (instanceId != null && group.hasStaticMember(instanceId))
+        if (group.hasStaticMember(instanceId))
             return;
 
         // If the consumer group has reached its maximum capacity, the member is rejected if it is not
@@ -2662,7 +2641,7 @@ public class GroupMetadataManager {
         final boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
         if (isUnknownMember) memberId = Uuid.randomUuid().toString();
 
-        throwIfConsumerGroupIsFull(group, memberId);
+        throwIfConsumerGroupIsFull(group, memberId, instanceId);
         throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
 
         if (JoinGroupRequest.requiresKnownMemberId(request, context.requestVersion())) {
