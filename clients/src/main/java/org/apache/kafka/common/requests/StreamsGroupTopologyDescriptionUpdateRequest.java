@@ -56,6 +56,7 @@ public class StreamsGroupTopologyDescriptionUpdateRequest extends AbstractReques
             new StreamsGroupTopologyDescriptionUpdateResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(Errors.forException(e).code())
+                .setErrorMessage(Errors.forException(e).message())
         );
     }
 

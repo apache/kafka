@@ -32,18 +32,18 @@
   ],
   "commonStructs": [
     { "name": "TopologyDescription", "versions": "0+", "fields": [
-      { "name": "Subtopologies", "type": "[]Subtopology", "versions": "0+",
+      { "name": "Subtopologies", "type": "[]TopologyDescriptionSubtopology", "versions": "0+",
         "about": "The subtopologies that make up this topology." },
-      { "name": "GlobalStores", "type": "[]GlobalStore", "versions": "0+",
+      { "name": "GlobalStores", "type": "[]TopologyDescriptionGlobalStore", "versions": "0+",
         "about": "Global state stores used by this topology." }
     ]},
-    { "name": "Subtopology", "versions": "0+", "fields": [
+    { "name": "TopologyDescriptionSubtopology", "versions": "0+", "fields": [
       { "name": "SubtopologyId", "type": "string", "versions": "0+",
         "about": "The subtopology identifier, unique within the topology." },
-      { "name": "Nodes", "type": "[]TopologyNode", "versions": "0+",
+      { "name": "Nodes", "type": "[]TopologyDescriptionNode", "versions": "0+",
         "about": "The processing nodes in this subtopology." }
     ]},
-    { "name": "TopologyNode", "versions": "0+", "fields": [
+    { "name": "TopologyDescriptionNode", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+",
         "about": "The name of this node (e.g., KSTREAM-SOURCE-0000000000)." },
       { "name": "NodeType", "type": "int8", "versions": "0+",
@@ -58,10 +58,10 @@
       { "name": "Successors", "type": "[]string", "versions": "0+",
         "about": "The names of successor nodes in the processing graph. Predecessor relationships are reconstructed from this field." }
     ]},
-    { "name": "GlobalStore", "versions": "0+", "fields": [
-      { "name": "Source", "type": "TopologyNode", "versions": "0+",
+    { "name": "TopologyDescriptionGlobalStore", "versions": "0+", "fields": [
+      { "name": "Source", "type": "TopologyDescriptionNode", "versions": "0+",
         "about": "The source node providing data to the global store." },
-      { "name": "Processor", "type": "TopologyNode", "versions": "0+",
+      { "name": "Processor", "type": "TopologyDescriptionNode", "versions": "0+",
         "about": "The processor node that populates the global store." }
     ]}
   ]

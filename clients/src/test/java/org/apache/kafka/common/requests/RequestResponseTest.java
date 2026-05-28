@@ -3896,11 +3896,51 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createStreamsGroupTopologyDescriptionUpdateRequest(final short version) {
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode sourceNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SOURCE-0000000000")
+                .setNodeType((byte) 1)
+                .setSourceTopics(List.of("input-topic"))
+                .setSuccessors(List.of("KSTREAM-PROCESSOR-0000000001"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode processorNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-PROCESSOR-0000000001")
+                .setNodeType((byte) 2)
+                .setStores(List.of("store-1"))
+                .setSuccessors(List.of("KSTREAM-SINK-0000000002"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode sinkNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SINK-0000000002")
+                .setNodeType((byte) 3)
+                .setSinkTopic("output-topic");
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology subtopology =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology()
+                .setSubtopologyId("0")
+                .setNodes(List.of(sourceNode, processorNode, sinkNode));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode globalSource =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-GLOBAL-SOURCE-0000000003")
+                .setNodeType((byte) 1)
+                .setSourceTopics(List.of("global-topic"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode globalProcessor =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KTABLE-SOURCE-0000000004")
+                .setNodeType((byte) 2)
+                .setStores(List.of("global-store"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore globalStore =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore()
+                .setSource(globalSource)
+                .setProcessor(globalProcessor);
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription topology =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription()
+                .setSubtopologies(List.of(subtopology))
+                .setGlobalStores(List.of(globalStore));
         return new StreamsGroupTopologyDescriptionUpdateRequest.Builder(
             new StreamsGroupTopologyDescriptionUpdateRequestData()
                 .setGroupId("test-group")
+                .setMemberId("test-member")
                 .setTopologyEpoch(1)
-                .setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription())
+                .setTopologyDescription(topology)
         ).build(version);
     }
 
