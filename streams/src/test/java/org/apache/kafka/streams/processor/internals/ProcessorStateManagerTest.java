@@ -972,6 +972,144 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldSkipNullKeyRecordsDuringReprocessRestore() {
+        final java.util.concurrent.atomic.AtomicInteger processedCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        final java.util.List<String> processedKeys = new java.util.ArrayList<>();
+        final MockKeyValueStore store = new MockKeyValueStore(persistentStoreName, true);
+
+        final org.apache.kafka.streams.processor.api.ProcessorSupplier<String, String, Void, Void> processorSupplier =
+            () -> new org.apache.kafka.streams.processor.api.Processor<>() {
+                @Override
+                public void process(final org.apache.kafka.streams.processor.api.Record<String, String> record) {
+                    processedCount.incrementAndGet();
+                    processedKeys.add(record.key());
+                }
+            };
+
+        final org.apache.kafka.common.serialization.StringDeserializer stringDeserializer =
+            new org.apache.kafka.common.serialization.StringDeserializer();
+
+        final InternalTopologyBuilder.ReprocessFactory<String, String, Void, Void> reprocessFactory =
+            new InternalTopologyBuilder.ReprocessFactory<>(processorSupplier, stringDeserializer, stringDeserializer, "testProcessor");
+
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            Task.TaskType.ACTIVE,
+            false,
+            logContext,
+            stateDirectory,
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
+            ),
+            emptySet(),
+            null,
+            mkMap(mkEntry(persistentStoreName, java.util.Optional.of(reprocessFactory)))
+        );
+
+        try {
+            stateMgr.registerStore(store, store.stateRestoreCallback, null);
+            stateMgr.registerStateStores(java.util.Collections.emptyList(), context);
+
+            final StateStoreMetadata storeMetadataObj = stateMgr.storeMetadata(persistentStorePartition);
+            assertThat(storeMetadataObj, notNullValue());
+
+            final byte[] testKey = "myKey".getBytes(StandardCharsets.UTF_8);
+            final byte[] testValue = "myValue".getBytes(StandardCharsets.UTF_8);
+            final ConsumerRecord<byte[], byte[]> nullKeyRecord =
+                new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, 999L,
+                    org.apache.kafka.common.record.TimestampType.CREATE_TIME,
+                    -1, testValue.length, null, testValue,
+                    new org.apache.kafka.common.header.internals.RecordHeaders(),
+                    java.util.Optional.empty());
+            final ConsumerRecord<byte[], byte[]> validRecord =
+                new ConsumerRecord<>(persistentStoreTopicName, 1, 101L, 1000L,
+                    org.apache.kafka.common.record.TimestampType.CREATE_TIME,
+                    testKey.length, testValue.length, testKey, testValue,
+                    new org.apache.kafka.common.header.internals.RecordHeaders(),
+                    java.util.Optional.empty());
+
+            stateMgr.restore(storeMetadataObj, java.util.Arrays.asList(nullKeyRecord, validRecord), OptionalLong.of(2L));
+
+            // null-key records are silently skipped (see the `converted.key() != null` guard in
+            // reprocessRestore); only the valid record should reach the processor.
+            assertEquals(1, processedCount.get());
+            assertEquals("myKey", processedKeys.get(0));
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldFallBackToDefaultDeserializersWhenReprocessFactoryDeserializersAreNull() {
+        final java.util.concurrent.atomic.AtomicInteger processedCount = new java.util.concurrent.atomic.AtomicInteger(0);
+        final java.util.List<String> processedKeys = new java.util.ArrayList<>();
+        final MockKeyValueStore store = new MockKeyValueStore(persistentStoreName, true);
+
+        final org.apache.kafka.streams.processor.api.ProcessorSupplier<String, String, Void, Void> processorSupplier =
+            () -> new org.apache.kafka.streams.processor.api.Processor<>() {
+                @Override
+                public void process(final org.apache.kafka.streams.processor.api.Record<String, String> record) {
+                    processedCount.incrementAndGet();
+                    processedKeys.add(record.key());
+                }
+            };
+
+        // Topology.addReadOnlyStateStore permits null key/value deserializers (per its Javadoc null
+        // contract): they must fall back to the configured default serdes from the processor
+        // context, the same way SourceNode does for normal processing.
+        final InternalTopologyBuilder.ReprocessFactory<String, String, Void, Void> reprocessFactoryWithNulls =
+            new InternalTopologyBuilder.ReprocessFactory<>(processorSupplier, null, null, "testProcessor");
+
+        final org.apache.kafka.common.serialization.Serde<String> stringSerde =
+            org.apache.kafka.common.serialization.Serdes.String();
+        Mockito.doReturn(stringSerde).when(context).keySerde();
+        Mockito.doReturn(stringSerde).when(context).valueSerde();
+
+        final ProcessorStateManager stateMgr = new ProcessorStateManager(
+            taskId,
+            Task.TaskType.ACTIVE,
+            false,
+            logContext,
+            stateDirectory,
+            mkMap(
+                mkEntry(persistentStoreName, persistentStoreTopicName),
+                mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
+                mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
+            ),
+            emptySet(),
+            null,
+            mkMap(mkEntry(persistentStoreName, java.util.Optional.of(reprocessFactoryWithNulls)))
+        );
+
+        try {
+            stateMgr.registerStore(store, store.stateRestoreCallback, null);
+            stateMgr.registerStateStores(java.util.Collections.emptyList(), context);
+
+            final StateStoreMetadata storeMetadataObj = stateMgr.storeMetadata(persistentStorePartition);
+            assertThat(storeMetadataObj, notNullValue());
+
+            final byte[] testKey = "myKey".getBytes(StandardCharsets.UTF_8);
+            final byte[] testValue = "myValue".getBytes(StandardCharsets.UTF_8);
+            final ConsumerRecord<byte[], byte[]> record =
+                new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, 1000L,
+                    org.apache.kafka.common.record.TimestampType.CREATE_TIME,
+                    testKey.length, testValue.length, testKey, testValue,
+                    new org.apache.kafka.common.header.internals.RecordHeaders(),
+                    java.util.Optional.empty());
+
+            // Before the fix, this would NPE on reprocessFactory.keyDeserializer().deserialize(...).
+            stateMgr.restore(storeMetadataObj, singletonList(record), OptionalLong.of(2L));
+
+            assertEquals(1, processedCount.get());
+            assertEquals("myKey", processedKeys.get(0));
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
     public void shouldCommitGoodStoresEvenSomeThrowsException() {
         final AtomicBoolean committedStore = new AtomicBoolean(false);
 

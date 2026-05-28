@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -56,6 +57,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeyDeserializer;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareValueDeserializer;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
@@ -193,7 +196,7 @@ public class ProcessorStateManager implements StateManager {
     private Logger log;
     private Task.State taskState;
     private InternalProcessorContext<?, ?> processorContext;
-    private final Map<String, Processor<?, ?, ?, ?>> reprocessorCache = new HashMap<>();
+    private final Map<String, ReprocessState> reprocessStateCache = new HashMap<>();
 
     public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {
@@ -531,11 +534,8 @@ public class ProcessorStateManager implements StateManager {
                                   final List<ConsumerRecord<byte[], byte[]>> restoreRecords,
                                   final InternalTopologyBuilder.ReprocessFactory reprocessFactory) {
         final String storeName = storeMetadata.store().name();
-        final Processor processor = reprocessorCache.computeIfAbsent(storeName, k -> {
-            final Processor p = reprocessFactory.processorSupplier().get();
-            p.init((ProcessorContext) processorContext);
-            return p;
-        });
+        final ReprocessState state = reprocessStateCache.computeIfAbsent(storeName,
+            k -> new ReprocessState(reprocessFactory, processorContext));
 
         for (final ConsumerRecord<byte[], byte[]> record : restoreRecords) {
             final ConsumerRecord<byte[], byte[]> converted = storeMetadata.recordConverter.convert(record);
@@ -549,11 +549,19 @@ public class ProcessorStateManager implements StateManager {
                 processorContext.setRecordContext(recordContext);
 
                 try {
-                    final Object key = reprocessFactory.keyDeserializer().deserialize(converted.topic(), converted.key());
-                    final Object value = reprocessFactory.valueDeserializer().deserialize(converted.topic(), converted.value());
+                    // mirror SourceNode: use the 3-arg headers-aware deserializer overload so that
+                    // header-dependent deserializers behave consistently between normal processing and restoration
+                    final Object key = state.keyDeserializer.deserialize(
+                        converted.topic(), converted.headers(), converted.key());
+                    final Object value = state.valueDeserializer.deserialize(
+                        converted.topic(), converted.headers(), converted.value());
                     final long timestamp = Math.max(0L, converted.timestamp());
-                    processor.process(new Record<>(key, value, timestamp, converted.headers()));
-                } catch (final RuntimeException e) {
+                    state.processor.process(new Record<>(key, value, timestamp, converted.headers()));
+                } catch (final Exception e) {
+                    // while Java distinguishes checked vs unchecked exceptions, other languages
+                    // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                    // (instead of `RuntimeException`) to work well with those languages.
+                    // Matches the pattern in GlobalStateManagerImpl.reprocessState.
                     throw new ProcessorStateException(
                         format("%sException caught while trying to reprocess-restore state from %s",
                             logPrefix, storeMetadata.changelogPartition),
@@ -561,6 +569,34 @@ public class ProcessorStateManager implements StateManager {
                     );
                 }
             }
+        }
+    }
+
+    /**
+     * Holds the initialized {@link Processor} and the resolved key/value deserializers for a
+     * reprocess-on-restore state store, so that null deserializers (which the
+     * {@link org.apache.kafka.streams.Topology#addReadOnlyStateStore Topology API} permits, falling
+     * back to the configured defaults) are resolved exactly once via the same mechanism as
+     * {@link SourceNode}.
+     */
+    private static final class ReprocessState {
+        @SuppressWarnings("rawtypes")
+        final Processor processor;
+        @SuppressWarnings("rawtypes")
+        final Deserializer keyDeserializer;
+        @SuppressWarnings("rawtypes")
+        final Deserializer valueDeserializer;
+
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        ReprocessState(final InternalTopologyBuilder.ReprocessFactory factory,
+                       final InternalProcessorContext<?, ?> processorContext) {
+            this.processor = factory.processorSupplier().get();
+            this.processor.init((ProcessorContext) processorContext);
+            // resolve null deserializers to the configured defaults, matching SourceNode behavior
+            this.keyDeserializer = prepareKeyDeserializer(
+                factory.keyDeserializer(), (ProcessorContext) processorContext);
+            this.valueDeserializer = prepareValueDeserializer(
+                factory.valueDeserializer(), (ProcessorContext) processorContext);
         }
     }
 
@@ -678,14 +714,17 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
         // close any cached reprocess processors
-        for (final Processor<?, ?, ?, ?> processor : reprocessorCache.values()) {
+        for (final ReprocessState state : reprocessStateCache.values()) {
             try {
-                processor.close();
-            } catch (final RuntimeException e) {
+                state.processor.close();
+            } catch (final Exception e) {
+                // catch `Exception` (not `RuntimeException`) so that checked exceptions thrown from
+                // user processors written in JVM languages without checked-exception enforcement
+                // (e.g. Scala, Kotlin) are still logged rather than propagating during close().
                 log.warn("Failed to close reprocess processor: ", e);
             }
         }
-        reprocessorCache.clear();
+        reprocessStateCache.clear();
 
         final Map<TopicPartition, Long> allOffsets = new HashMap<>();
         RuntimeException firstException = null;
