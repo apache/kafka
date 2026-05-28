@@ -1594,7 +1594,7 @@ public class GroupMetadataManager {
         // already a member of the consumer group.
         if (group.numMembers() >= config.consumerGroupMaxSize() && (memberId.isEmpty() || !group.hasMember(memberId))) {
             throw new GroupMaxSizeReachedException("The consumer group has reached its maximum capacity of "
-                    + config.consumerGroupMaxSize() + " members.");
+                + config.consumerGroupMaxSize() + " members.");
         }
     }
 
