@@ -1169,8 +1169,8 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateResponse();
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateResponse();
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryResponse();
-            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
-            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
+            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse(version);
+            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse(version);
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
@@ -3865,34 +3865,48 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createStreamsGroupDescribeRequest(final short version) {
-        return new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData()
+        StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
             .setGroupIds(Collections.singletonList("group"))
-            .setIncludeAuthorizedOperations(false)).build(version);
+            .setIncludeAuthorizedOperations(false);
+        if (version >= 1) {
+            data.setIncludeTopologyDescription(true);
+        }
+        return new StreamsGroupDescribeRequest.Builder(data).build(version);
     }
 
     private AbstractRequest createStreamsGroupHeartbeatRequest(final short version) {
         return new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData()).build(version);
     }
 
-    private AbstractResponse createStreamsGroupDescribeResponse() {
+    private AbstractResponse createStreamsGroupDescribeResponse(final short version) {
+        StreamsGroupDescribeResponseData.DescribedGroup group =
+            new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId("group")
+                .setErrorCode((short) 0)
+                .setErrorMessage(Errors.forCode((short) 0).message())
+                .setGroupState("EMPTY")
+                .setGroupEpoch(0)
+                .setAssignmentEpoch(0)
+                .setMembers(new ArrayList<>(0))
+                .setTopology(null);
+        if (version >= 1) {
+            group.setTopologyDescription(new StreamsGroupDescribeResponseData.TopologyDescription()
+                .setSubtopologies(new ArrayList<>(0))
+                .setGlobalStores(new ArrayList<>(0)));
+            group.setTopologyDescriptionStatus((byte) 3);
+        }
         StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
-            .setGroups(Collections.singletonList(
-                new StreamsGroupDescribeResponseData.DescribedGroup()
-                    .setGroupId("group")
-                    .setErrorCode((short) 0)
-                    .setErrorMessage(Errors.forCode((short) 0).message())
-                    .setGroupState("EMPTY")
-                    .setGroupEpoch(0)
-                    .setAssignmentEpoch(0)
-                    .setMembers(new ArrayList<>(0))
-                    .setTopology(null)
-            ))
+            .setGroups(Collections.singletonList(group))
             .setThrottleTimeMs(1000);
         return new StreamsGroupDescribeResponse(data);
     }
 
-    private AbstractResponse createStreamsGroupHeartbeatResponse() {
-        return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData());
+    private AbstractResponse createStreamsGroupHeartbeatResponse(final short version) {
+        StreamsGroupHeartbeatResponseData data = new StreamsGroupHeartbeatResponseData();
+        if (version >= 1) {
+            data.setTopologyDescriptionRequired(true);
+        }
+        return new StreamsGroupHeartbeatResponse(data);
     }
 
     private AbstractRequest createStreamsGroupTopologyDescriptionUpdateRequest(final short version) {
