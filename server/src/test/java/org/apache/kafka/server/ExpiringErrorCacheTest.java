@@ -308,20 +308,6 @@ public class ExpiringErrorCacheTest {
         assertTrue(cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).isEmpty());
     }
 
-    @Test
-    void testClearOperation() {
-        cache = new ExpiringErrorCache(10, mockTime);
-
-        cache.put("topic1", "error1", 1000L);
-        cache.put("topic2", "error2", 1000L);
-
-        assertEquals(2, cache.getErrorsForTopics(Set.of("topic1", "topic2"), mockTime.milliseconds()).size());
-
-        cache.clear();
-
-        assertTrue(cache.getErrorsForTopics(Set.of("topic1", "topic2"), mockTime.milliseconds()).isEmpty());
-    }
-
     // Concurrent Access Tests
 
     @Test

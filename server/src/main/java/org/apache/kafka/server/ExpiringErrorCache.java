@@ -88,14 +88,4 @@ class ExpiringErrorCache {
         }
         return result;
     }
-
-    void clear() {
-        lock.lock();
-        try {
-            byTopic.clear();
-            expiryQueue.clear();
-        } finally {
-            lock.unlock();
-        }
-    }
 }

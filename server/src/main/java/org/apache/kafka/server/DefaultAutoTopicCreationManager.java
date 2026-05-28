@@ -339,7 +339,5 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     }
 
     @Override
-    public void close() {
-        topicCreationErrorCache.clear();
-    }
+    public void close() { }
 }
