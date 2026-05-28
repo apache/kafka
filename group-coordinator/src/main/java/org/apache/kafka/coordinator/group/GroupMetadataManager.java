@@ -1797,7 +1797,7 @@ public class GroupMetadataManager {
         // and neither affects the group size:
         // 1. The member is replaced due to the static member rejoining.
         // 2. 'UnreleasedInstanceIdException' is raised due to an epoch mismatch.
-        if (instanceId != null && group.hasStaticMember(instanceId))
+        if (group.hasStaticMember(instanceId))
             return;
         
         // If the streams group has reached its maximum capacity, the member is rejected if it is not
