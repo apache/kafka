@@ -2180,6 +2180,7 @@ project(':clients:clients-integration-tests') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine
+    testImplementation libs.mockOAuth2Server
 
     testRuntimeOnly runtimeTestLibs
   }

@@ -108,10 +108,14 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String ATTACH_LISTENER_THREAD_PREFIX = "Attach Listener";
     private static final String PROCESS_REAPER_THREAD_PREFIX = "process reaper";
     private static final String RMI_THREAD_PREFIX = "RMI";
+    private static final String MOCK_WEB_SERVER_THREAD_PREFIX = "MockWebServer";
+    private static final String KEEP_ALIVE_TIMER_THREAD_PREFIX = "Keep-Alive-Timer";
+    private static final String POOL_THREAD_PREFIX = "pool-";
     private static final String DETECT_THREAD_LEAK_KEY = "detectThreadLeak";
     private static final Set<String> SKIPPED_THREAD_PREFIX = Set.of(METRICS_METER_TICK_THREAD_PREFIX, SCALA_THREAD_PREFIX,
             FORK_JOIN_POOL_THREAD_PREFIX, JUNIT_THREAD_PREFIX, ATTACH_LISTENER_THREAD_PREFIX, PROCESS_REAPER_THREAD_PREFIX,
-            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX);
+            RMI_THREAD_PREFIX, SystemTimer.SYSTEM_TIMER_THREAD_PREFIX, MOCK_WEB_SERVER_THREAD_PREFIX,
+            KEEP_ALIVE_TIMER_THREAD_PREFIX, POOL_THREAD_PREFIX);
 
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
