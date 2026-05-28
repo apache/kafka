@@ -106,7 +106,7 @@ public class ProducerPerformance {
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-                byte[] key = generateKey(config.keyDistribution, config.messageKeyRange, i, random);
+                byte[] key = generateKey(config.keyDistribution, config.recordKeyRange, i, random);
                 record = new ProducerRecord<>(config.topicName, null, key, payload);
 
                 long sendStartMs = System.currentTimeMillis();
@@ -416,12 +416,12 @@ public class ProducerPerformance {
                 .setDefault(5_000L)
                 .help("Interval in milliseconds at which to print progress info.");
 
-        parser.addArgument("--message-key-range")
+        parser.addArgument("--record-key-range")
                 .action(store())
                 .required(false)
                 .type(Integer.class)
                 .metavar("KEY-RANGE")
-                .dest("messageKeyRange")
+                .dest("recordKeyRange")
                 .help("The range of keys to use when --key-distribution is 'range' or 'random'. " +
                         "Keys will be integers in [0, KEY-RANGE). Required for range and random distributions.");
 
@@ -435,7 +435,7 @@ public class ProducerPerformance {
                 .setDefault("none")
                 .help("The key distribution to use: 'none' for null keys, 'range' for round-robin keys in " +
                         "[0, KEY-RANGE), or 'random' for random keys in [0, KEY-RANGE). " +
-                        "Requires --message-key-range when set to 'range' or 'random'.");
+                        "Requires --record-key-range when set to 'range' or 'random'.");
 
         parser.addArgument("--random-seed")
                 .action(store())
@@ -631,7 +631,7 @@ public class ProducerPerformance {
         final boolean transactionsEnabled;
         final List<byte[]> payloadByteList;
         final long reportingInterval;
-        final Integer messageKeyRange;
+        final Integer recordKeyRange;
         final KeyDistribution keyDistribution;
         final long randomSeed;
 
@@ -678,18 +678,18 @@ public class ProducerPerformance {
             if (reportingInterval <= 0) {
                 throw new ArgumentParserException("--reporting-interval should be greater than zero.", parser);
             }
-            this.messageKeyRange = namespace.getInt("messageKeyRange");
-            if (messageKeyRange != null && messageKeyRange <= 0) {
-                throw new ArgumentParserException("--message-key-range should be greater than zero.", parser);
+            this.recordKeyRange = namespace.getInt("recordKeyRange");
+            if (recordKeyRange != null && recordKeyRange <= 0) {
+                throw new ArgumentParserException("--record-key-range should be greater than zero.", parser);
             }
             this.keyDistribution = KeyDistribution.fromString(namespace.getString("keyDistribution"));
-            if (this.keyDistribution != KeyDistribution.NONE && messageKeyRange == null) {
+            if (this.keyDistribution != KeyDistribution.NONE && recordKeyRange == null) {
                 throw new ArgumentParserException(
-                        "--message-key-range is required when --key-distribution is 'range' or 'random'.", parser);
+                        "--record-key-range is required when --key-distribution is 'range' or 'random'.", parser);
             }
-            if (this.keyDistribution == KeyDistribution.NONE && messageKeyRange != null) {
+            if (this.keyDistribution == KeyDistribution.NONE && recordKeyRange != null) {
                 throw new ArgumentParserException(
-                        "--key-distribution must be 'range' or 'random' when --message-key-range is specified.", parser);
+                        "--key-distribution must be 'range' or 'random' when --record-key-range is specified.", parser);
             }
             this.randomSeed = namespace.getLong("randomSeed");
 

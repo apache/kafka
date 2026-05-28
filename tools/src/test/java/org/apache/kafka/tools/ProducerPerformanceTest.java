@@ -806,7 +806,7 @@ public class ProducerPerformanceTest {
             "--bootstrap-server", "localhost:9000"};
         ProducerPerformance.ConfigPostProcessor configs = new ProducerPerformance.ConfigPostProcessor(parser, args);
         assertEquals(ProducerPerformance.KeyDistribution.NONE, configs.keyDistribution);
-        assertNull(configs.messageKeyRange);
+        assertNull(configs.recordKeyRange);
     }
 
     @Test
@@ -825,7 +825,7 @@ public class ProducerPerformanceTest {
             "--throughput", "100",
             "--record-size", "100",
             "--key-distribution", "range",
-            "--message-key-range", "3",
+            "--record-key-range", "3",
             "--bootstrap-server", "localhost:9000"};
         producerPerformanceSpy.start(args);
 
@@ -853,7 +853,7 @@ public class ProducerPerformanceTest {
             "--throughput", "100",
             "--record-size", "100",
             "--key-distribution", "random",
-            "--message-key-range", "5",
+            "--record-key-range", "5",
             "--bootstrap-server", "localhost:9000"};
         producerPerformanceSpy.start(args);
 
@@ -890,7 +890,7 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testInvalidMessageKeyRange() {
+    public void testInvalidRecordKeyRange() {
         ArgumentParser parser = ProducerPerformance.argParser();
         String[] args = new String[]{
             "--topic", "Hello-Kafka",
@@ -899,8 +899,8 @@ public class ProducerPerformanceTest {
             "--record-size", "100",
             "--bootstrap-server", "localhost:9000",
             "--key-distribution", "range",
-            "--message-key-range", "0"};
-        assertEquals("--message-key-range should be greater than zero.",
+            "--record-key-range", "0"};
+        assertEquals("--record-key-range should be greater than zero.",
             assertThrows(ArgumentParserException.class,
                 () -> new ProducerPerformance.ConfigPostProcessor(parser, args)).getMessage());
     }
@@ -915,7 +915,7 @@ public class ProducerPerformanceTest {
             "--record-size", "100",
             "--bootstrap-server", "localhost:9000",
             "--key-distribution", "range"};
-        assertEquals("--message-key-range is required when --key-distribution is 'range' or 'random'.",
+        assertEquals("--record-key-range is required when --key-distribution is 'range' or 'random'.",
             assertThrows(ArgumentParserException.class,
                 () -> new ProducerPerformance.ConfigPostProcessor(parser, args)).getMessage());
     }
@@ -929,8 +929,8 @@ public class ProducerPerformanceTest {
             "--throughput", "100",
             "--record-size", "100",
             "--bootstrap-server", "localhost:9000",
-            "--message-key-range", "5"};
-        assertEquals("--key-distribution must be 'range' or 'random' when --message-key-range is specified.",
+            "--record-key-range", "5"};
+        assertEquals("--key-distribution must be 'range' or 'random' when --record-key-range is specified.",
             assertThrows(ArgumentParserException.class,
                 () -> new ProducerPerformance.ConfigPostProcessor(parser, args)).getMessage());
     }
