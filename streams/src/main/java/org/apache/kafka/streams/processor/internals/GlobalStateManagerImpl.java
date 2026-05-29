@@ -460,7 +460,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                             fatalUserException
                                     );
                                 }
-
+                                
                                 if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
                                     log.error("Processing exception handler is set to fail upon" +
                                             " a processing error. If you would rather have the streaming pipeline" +
