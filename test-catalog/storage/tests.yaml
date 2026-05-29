@@ -903,7 +903,8 @@ org.apache.kafka.tiered.storage.integration.EnableRemoteLogOnTopicTest:
 - testEnableRemoteLogOnTopicWithClassicGroupProtocol
 - testEnableRemoteLogOnTopicWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.FetchFromLeaderWithCorruptedCheckpointTest:
-- executeTieredStorageTest
+- testFetchFromLeaderWithCorruptedCheckpointWithClassicGroupProtocol
+- testFetchFromLeaderWithCorruptedCheckpointWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.ListOffsetsTest:
 - testListOffsetsWithClassicGroupProtocol
 - testListOffsetsWithConsumerGroupProtocol
@@ -914,7 +915,8 @@ org.apache.kafka.tiered.storage.integration.OffloadAndTxnConsumeFromLeaderTest:
 - testOffloadAndTxnConsumeFromLeaderWithClassicGroupProtocol
 - testOffloadAndTxnConsumeFromLeaderWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.PartitionsExpandTest:
-- executeTieredStorageTest
+- testPartitionsExpandWithClassicGroupProtocol
+- testPartitionsExpandWithConsumerGroupProtocol
 org.apache.kafka.tiered.storage.integration.ReassignReplicaMoveAndExpandTest:
 - testReassignReplicaExpandWithClassicGroupProtocol
 - testReassignReplicaExpandWithConsumerGroupProtocol
