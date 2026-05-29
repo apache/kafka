@@ -489,7 +489,7 @@ public class StandardAuthorizerData {
             return null;
         }
         // Check if the host matches. If it doesn't, return no result (null).
-        if (!acl.host().equals(WILDCARD) && !acl.host().equals(host) && !hostMatchesCidr(host, acl.host())) {
+        if (!acl.host().equals(WILDCARD) && !acl.host().equals(host) && !CidrUtils.isInRange(host, acl.host())) {
             return null;
         }
         // Check if the operation field matches. Here we hit a slight complication.
@@ -596,9 +596,5 @@ public class StandardAuthorizerData {
 
     AclCache getAclCache() {
         return aclCache;
-    }
-
-    static boolean hostMatchesCidr(String host, String cidrPattern) {
-        return CidrUtils.isInRange(host, cidrPattern);
     }
 }
