@@ -30,7 +30,7 @@ import java.util.Optional;
  *       formed. Used as the initial state in {@code FeaturesPublisher}. (use {@link #unknown()})</li>
  *   <li>Metadata version only - the metadata version is known but no additional features or
  *       epoch have been set. Used when only the metadata version needs to be represented
- *       without a full set of finalized features. (use {@link #fromKRaftVersion(MetadataVersion)})</li>
+ *       without a full set of finalized features. (use {@link #fromMetadataVersion(MetadataVersion)})</li>
  *   <li>Full features - metadata version, features map, and epoch are all known. Used after
  *       the controller has committed feature records. (use {@link #of(MetadataVersion, Map, long)})</li>
  * </ul>
@@ -70,7 +70,7 @@ public final class FinalizedFeatures {
      * @return a new FinalizedFeatures instance
      * @throws NullPointerException if version is null
      */
-    public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
+    public static FinalizedFeatures fromMetadataVersion(MetadataVersion version) {
         Objects.requireNonNull(version, "version cannot be null");
         return new FinalizedFeatures(Optional.of(version), Map.of(), -1);
     }

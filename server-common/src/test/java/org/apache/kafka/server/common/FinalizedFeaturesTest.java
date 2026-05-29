@@ -55,7 +55,7 @@ class FinalizedFeaturesTest {
 
     @Test
     public void testFromKRaftVersion() {
-        FinalizedFeatures features = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION);
+        FinalizedFeatures features = FinalizedFeatures.fromMetadataVersion(MINIMUM_VERSION);
 
         assertFalse(features.isUnknown());
         assertEquals(MINIMUM_VERSION, features.metadataVersionOrThrow());
@@ -66,7 +66,7 @@ class FinalizedFeaturesTest {
 
     @Test
     public void testFromKRaftVersionNullThrows() {
-        assertThrows(NullPointerException.class, () -> FinalizedFeatures.fromKRaftVersion(null));
+        assertThrows(NullPointerException.class, () -> FinalizedFeatures.fromMetadataVersion(null));
     }
 
     @Test

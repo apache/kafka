@@ -104,7 +104,7 @@ class BrokerMetadataPublisher(
   /**
    * The share version being used in the broker metadata.
    */
-  private var finalizedShareVersion: Short = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION).finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
+  private var finalizedShareVersion: Short = FinalizedFeatures.fromMetadataVersion(MINIMUM_VERSION).finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
 
   override def name(): String = "BrokerMetadataPublisher"
 
