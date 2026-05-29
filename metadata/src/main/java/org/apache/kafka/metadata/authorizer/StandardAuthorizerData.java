@@ -33,13 +33,9 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 
-import org.apache.commons.net.util.SubnetUtils;
-import org.apache.commons.net.util.SubnetUtils6;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetAddress;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -602,30 +598,7 @@ public class StandardAuthorizerData {
         return aclCache;
     }
 
-    /**
-     * Check if a host address matches a CIDR notation pattern.
-     * Supports both IPv4 (e.g., "192.168.1.0/24") and IPv6 (e.g., "2001:db8::/32") CIDR ranges.
-     *
-     * @param host       The host IP address to check.
-     * @param cidrPattern The CIDR notation pattern from the ACL.
-     * @return true if the host matches the CIDR range, false otherwise.
-     */
     static boolean hostMatchesCidr(String host, String cidrPattern) {
-        if (cidrPattern == null || !cidrPattern.contains("/")) {
-            return false;
-        }
-
-        try {
-            InetAddress address = CidrUtils.parseCidrAddress(cidrPattern);
-            if (CidrUtils.isIpv6(address)) {
-                return new SubnetUtils6(cidrPattern).getInfo().isInRange(host);
-            } else {
-                SubnetUtils subnet = new SubnetUtils(cidrPattern);
-                subnet.setInclusiveHostCount(true);
-                return subnet.getInfo().isInRange(host);
-            }
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
+        return CidrUtils.isInRange(host, cidrPattern);
     }
 }

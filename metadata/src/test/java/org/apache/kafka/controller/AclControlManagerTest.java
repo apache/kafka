@@ -517,7 +517,7 @@ public class AclControlManagerTest {
         // ::ffff:x.x.x.x/N is rejected: the JVM normalizes ::ffff:x.x.x.x to Inet4Address,
         // so isIpv6() returns false and SubnetUtils rejects the ::ffff: prefix.
         assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateCidrNotation("::ffff:192.168.1.0/24"));
+            AclControlManager.validateHostPattern("::ffff:192.168.1.0/24", true));
     }
 
     @Test

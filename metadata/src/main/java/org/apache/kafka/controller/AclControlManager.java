@@ -42,11 +42,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
 
-import org.apache.commons.net.util.SubnetUtils;
-import org.apache.commons.net.util.SubnetUtils6;
 import org.slf4j.Logger;
 
-import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -213,27 +210,11 @@ public class AclControlManager {
                     "CIDR-based ACL host patterns require metadata version " +
                     MetadataVersion.IBP_4_4_IV0 + " or higher.");
             }
-            validateCidrNotation(host);
-        }
-    }
-
-    /**
-     * Validates a CIDR notation pattern.
-     * Supports both IPv4 (e.g., "192.168.0.0/24") and IPv6 (e.g., "2001:db8::/32") CIDR patterns.
-     *
-     * @param cidrPattern The CIDR pattern to validate
-     * @throws InvalidRequestException if the CIDR pattern is invalid
-     */
-    static void validateCidrNotation(String cidrPattern) {
-        try {
-            InetAddress address = CidrUtils.parseCidrAddress(cidrPattern);
-            if (CidrUtils.isIpv6(address)) {
-                new SubnetUtils6(cidrPattern);
-            } else {
-                new SubnetUtils(cidrPattern);
+            try {
+                CidrUtils.validate(host);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidRequestException("Invalid CIDR notation '" + host + "': " + e.getMessage());
             }
-        } catch (IllegalArgumentException e) {
-            throw new InvalidRequestException("Invalid CIDR notation '" + cidrPattern + "': " + e.getMessage());
         }
     }
 

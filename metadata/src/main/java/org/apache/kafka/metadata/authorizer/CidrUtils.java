@@ -17,6 +17,9 @@
 
 package org.apache.kafka.metadata.authorizer;
 
+import org.apache.commons.net.util.SubnetUtils;
+import org.apache.commons.net.util.SubnetUtils6;
+
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -38,5 +41,40 @@ public final class CidrUtils {
 
     public static boolean isIpv6(InetAddress address) {
         return address instanceof Inet6Address;
+    }
+
+    /**
+     * Validates a CIDR pattern by parsing it and constructing the appropriate SubnetUtils.
+     * Throws {@link IllegalArgumentException} if the pattern is invalid.
+     */
+    public static void validate(String cidrPattern) {
+        InetAddress address = parseCidrAddress(cidrPattern);
+        if (isIpv6(address)) {
+            new SubnetUtils6(cidrPattern);
+        } else {
+            new SubnetUtils(cidrPattern);
+        }
+    }
+
+    /**
+     * Checks whether a host IP address falls within a CIDR range.
+     * Returns false if the pattern is null, not a CIDR notation, or invalid.
+     */
+    public static boolean isInRange(String host, String cidrPattern) {
+        if (cidrPattern == null || !cidrPattern.contains("/")) {
+            return false;
+        }
+        try {
+            InetAddress address = parseCidrAddress(cidrPattern);
+            if (isIpv6(address)) {
+                return new SubnetUtils6(cidrPattern).getInfo().isInRange(host);
+            } else {
+                SubnetUtils subnet = new SubnetUtils(cidrPattern);
+                subnet.setInclusiveHostCount(true);
+                return subnet.getInfo().isInRange(host);
+            }
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 }
