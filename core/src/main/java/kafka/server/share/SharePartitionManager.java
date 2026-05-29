@@ -177,8 +177,12 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final ShareGroupDLQManager shareGroupDLQManager;
 
+    @SuppressWarnings("ParameterNumber")
     public SharePartitionManager(
         ReplicaManager replicaManager,
+        LogReader logReader,
+        PartitionMetadataProvider metadataProvider,
+        Consumer<DelayedShareFetchKey> delayedRequestNotifier,
         Time time,
         ShareSessionCache cache,
         int defaultRecordLockDurationMs,
@@ -192,6 +196,9 @@ public class SharePartitionManager implements AutoCloseable {
         ShareGroupDLQManager shareGroupDLQManager
     ) {
         this(replicaManager,
+            logReader,
+            metadataProvider,
+            delayedRequestNotifier,
             time,
             cache,
             new SharePartitionCache(),
@@ -211,6 +218,9 @@ public class SharePartitionManager implements AutoCloseable {
     @SuppressWarnings("ParameterNumber")
     private SharePartitionManager(
         ReplicaManager replicaManager,
+        LogReader logReader,
+        PartitionMetadataProvider metadataProvider,
+        Consumer<DelayedShareFetchKey> delayedRequestNotifier,
         Time time,
         ShareSessionCache cache,
         SharePartitionCache partitionCache,
@@ -226,6 +236,9 @@ public class SharePartitionManager implements AutoCloseable {
         ShareGroupDLQManager shareGroupDLQManager
     ) {
         this(replicaManager,
+            logReader,
+            metadataProvider,
+            delayedRequestNotifier,
             time,
             cache,
             partitionCache,
@@ -248,6 +261,9 @@ public class SharePartitionManager implements AutoCloseable {
     @SuppressWarnings("ParameterNumber")
     SharePartitionManager(
             ReplicaManager replicaManager,
+            LogReader logReader,
+            PartitionMetadataProvider metadataProvider,
+            Consumer<DelayedShareFetchKey> delayedRequestNotifier,
             Time time,
             ShareSessionCache cache,
             SharePartitionCache partitionCache,
@@ -264,9 +280,9 @@ public class SharePartitionManager implements AutoCloseable {
             ShareGroupDLQManager shareGroupDLQManager
     ) {
         this.replicaManager = replicaManager;
-        this.logReader = new ReplicaManagerLogReader(replicaManager);
-        this.metadataProvider = new ReplicaManagerPartitionMetadataProvider(replicaManager);
-        this.delayedRequestNotifier = replicaManager::completeDelayedShareFetchRequest;
+        this.logReader = logReader;
+        this.metadataProvider = metadataProvider;
+        this.delayedRequestNotifier = delayedRequestNotifier;
         this.time = time;
         this.cache = cache;
         this.partitionCache = partitionCache;
@@ -369,7 +385,7 @@ public class SharePartitionManager implements AutoCloseable {
                 // If we have an acknowledgement completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
                 DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
-                replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
+                delayedRequestNotifier.accept(delayedShareFetchKey);
 
                 futures.put(topicIdPartition, future);
             } else {
@@ -437,7 +453,7 @@ public class SharePartitionManager implements AutoCloseable {
                 // If we have a release acquired request completed for a topic-partition, then we should check if
                 // there is a pending share fetch request for the topic-partition and complete it.
                 DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
-                replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
+                delayedRequestNotifier.accept(delayedShareFetchKey);
 
                 futuresMap.put(topicIdPartition, future);
             }
@@ -718,7 +734,7 @@ public class SharePartitionManager implements AutoCloseable {
                 // for the share partition.
                 if (!initialized) {
                     shareGroupMetrics.partitionLoadTime(sharePartition.loadStartTimeMs());
-                    replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
+                    delayedRequestNotifier.accept(delayedShareFetchKey);
                 }
             });
             sharePartitions.put(topicIdPartition, sharePartition);

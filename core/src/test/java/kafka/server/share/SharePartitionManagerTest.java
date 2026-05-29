@@ -3310,6 +3310,9 @@ public class SharePartitionManagerTest {
 
         public SharePartitionManager build() {
             return new SharePartitionManager(replicaManager,
+                new ReplicaManagerLogReader(replicaManager),
+                new ReplicaManagerPartitionMetadataProvider(replicaManager),
+                replicaManager::completeDelayedShareFetchRequest,
                 time,
                 cache,
                 partitionCache,
