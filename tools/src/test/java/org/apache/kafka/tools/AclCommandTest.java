@@ -33,7 +33,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.test.TestUtils;
@@ -49,7 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import javax.management.InstanceAlreadyExistsException;
@@ -81,7 +79,6 @@ import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -445,15 +442,12 @@ public class AclCommandTest {
     }
 
     private Map.Entry<String, String> callMain(List<String> args) {
-        Exit.setExitProcedure((status, message) -> {
-            if (status != 0)
-                throw new RuntimeException("Exiting command with status " + status);
+        return ToolsTestUtils.grabConsoleOutputAndError(() -> {
+            int exitCode = AclCommand.mainNoExit(args.toArray(new String[0]));
+            if (exitCode != 0) {
+                throw new RuntimeException("Exiting command with status " + exitCode);
+            }
         });
-        try {
-            return ToolsTestUtils.grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
-        } finally {
-            Exit.resetExitProcedure();
-        }
     }
 
     private void testAclCli(ClusterInstance cluster, List<String> cmdArgs) throws InterruptedException {
@@ -580,29 +574,13 @@ public class AclCommandTest {
     }
 
     private void assertInitializeInvalidOptionsExitCodeAndMsg(List<String> args, String expectedMsg) {
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(1, exitCode);
-            assertTrue(message.contains(expectedMsg));
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> new AclCommand.AclCommandOptions(args.toArray(new String[0])).checkArgs());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> new AclCommand.AclCommandOptions(args.toArray(new String[0])));
+        assertTrue(e.getMessage().contains(expectedMsg),
+            "Expected '" + expectedMsg + "' in '" + e.getMessage() + "'");
     }
 
     private void checkNotThrow(List<String> args) {
-        AtomicReference<Integer> exitStatus = new AtomicReference<>();
-        Exit.setExitProcedure((status, __) -> {
-            exitStatus.set(status);
-            throw new RuntimeException();
-        });
-        try {
-            assertDoesNotThrow(() -> new AclCommand.AclCommandOptions(args.toArray(new String[0])).checkArgs());
-            assertNull(exitStatus.get());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertDoesNotThrow(() -> new AclCommand.AclCommandOptions(args.toArray(new String[0])));
     }
 }

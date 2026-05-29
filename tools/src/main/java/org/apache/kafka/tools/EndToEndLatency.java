@@ -75,7 +75,12 @@ public class EndToEndLatency {
         try {
             execute(args);
             return 0;
-        } catch (TerseException e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException | TerseException e) {
             System.err.println(e.getMessage());
             return 1;
         } catch (Throwable e) {
@@ -428,7 +433,7 @@ public class EndToEndLatency {
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
             }
             checkArgs();
         }
@@ -442,28 +447,28 @@ public class EndToEndLatency {
             // validate 'producer-acks'
             String acksValue = options.valueOf(acksOpt);
             if (!List.of("1", "all").contains(acksValue)) {
-                CommandLineUtils.printUsageAndExit(parser, "Invalid value for --producer-acks. Latency testing requires synchronous acknowledgement. Please use '1' or 'all'.");
+                CommandLineUtils.printUsageAndThrow(parser, "Invalid value for --producer-acks. Latency testing requires synchronous acknowledgement. Please use '1' or 'all'.");
             }
 
             // validate for num-records and record-size
             if (options.valueOf(numRecordsOpt) <= 0) {
-                CommandLineUtils.printUsageAndExit(parser, "Value for --num-records must be a positive integer.");
+                CommandLineUtils.printUsageAndThrow(parser, "Value for --num-records must be a positive integer.");
             }
             if (options.valueOf(recordSizeOpt) < 0) {
-                CommandLineUtils.printUsageAndExit(parser, "Value for --record-size must be a non-negative integer.");
+                CommandLineUtils.printUsageAndThrow(parser, "Value for --record-size must be a non-negative integer.");
             }
 
             if (options.valueOf(recordKeySizeOpt) < 0) {
-                CommandLineUtils.printUsageAndExit(parser, "Value for --record-key-size must be a non-negative integer.");
+                CommandLineUtils.printUsageAndThrow(parser, "Value for --record-key-size must be a non-negative integer.");
             }
             if (options.valueOf(recordHeaderKeySizeOpt) < 0) {
-                CommandLineUtils.printUsageAndExit(parser, "Value for --record-header-key-size must be a non-negative integer.");
+                CommandLineUtils.printUsageAndThrow(parser, "Value for --record-header-key-size must be a non-negative integer.");
             }
             if (options.valueOf(recordHeaderValueSizeOpt) < -1) {
-                CommandLineUtils.printUsageAndExit(parser, "Value for --record-header-size must be a non-negative integer or -1 for null header value.");
+                CommandLineUtils.printUsageAndThrow(parser, "Value for --record-header-size must be a non-negative integer or -1 for null header value.");
             }
             if (options.valueOf(numHeadersOpt) < 0) {
-                CommandLineUtils.printUsageAndExit(parser, "Value for --num-headers must be a non-negative integer.");
+                CommandLineUtils.printUsageAndThrow(parser, "Value for --num-headers must be a non-negative integer.");
             }
         }
     }

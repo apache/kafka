@@ -29,7 +29,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
@@ -64,7 +63,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -74,7 +72,6 @@ import static org.apache.kafka.common.GroupState.EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -134,33 +131,15 @@ public class DeleteStreamsGroupTest {
     @Test
     public void testDeleteWithoutGroupOption() {
         final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete] takes one of these options: [all-groups], [group]"));
-            exited.set(true);
-        }));
-        try {
-            getStreamsGroupService(args);
-        } finally {
-            assertTrue(exited.get());
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
+        assertTrue(e.getMessage().contains("Option [delete] takes one of these options: [all-groups], [group]"));
     }
 
     @Test
     public void testDeleteWithDeleteInternalTopicOption() {
         final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete", "--all-groups", "--delete-internal-topic", "foo"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete-internal-topic] takes [reset-offsets] when [execute] is used."));
-            exited.set(true);
-        }));
-        try {
-            getStreamsGroupService(args);
-        } finally {
-            assertTrue(exited.get());
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
+        assertTrue(e.getMessage().contains("Option [delete-internal-topic] takes [reset-offsets] when [execute] is used."));
     }
 
     @Test

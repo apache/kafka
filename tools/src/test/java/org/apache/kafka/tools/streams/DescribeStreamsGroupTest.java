@@ -19,7 +19,6 @@ package org.apache.kafka.tools.streams;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -45,7 +44,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -53,7 +51,6 @@ import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -104,18 +101,8 @@ public class DescribeStreamsGroupTest {
     @Test
     public void testDescribeWithoutGroupOption() {
         final String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--describe"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [describe] takes one of these options: [all-groups], [group]"));
-            exited.set(true);
-        }));
-        try {
-            getStreamsGroupService(args);
-        } finally {
-            assertTrue(exited.get());
-            Exit.resetExitProcedure();
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
+        assertTrue(e.getMessage().contains("Option [describe] takes one of these options: [all-groups], [group]"));
     }
 
     @Test

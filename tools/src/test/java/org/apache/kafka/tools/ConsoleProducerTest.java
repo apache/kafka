@@ -21,7 +21,6 @@ import kafka.utils.TestUtils;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.tools.ConsoleProducer.ConsoleProducerOptions;
 import org.apache.kafka.tools.api.RecordReader;
 
@@ -110,14 +109,7 @@ public class ConsoleProducerTest {
 
     @Test
     public void testInvalidConfigs() {
-        Exit.setExitProcedure((statusCode, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-        try {
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(INVALID_ARGS));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(INVALID_ARGS));
     }
 
     @Test
@@ -270,10 +262,6 @@ public class ConsoleProducerTest {
 
     @Test
     public void shouldExitOnBothProducerPropertyAndCommandProperty() {
-        Exit.setExitProcedure((code, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -281,19 +269,11 @@ public class ConsoleProducerTest {
             "--command-property", "batch.size=16384"
         };
 
-        try {
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
     }
 
     @Test
     public void shouldExitOnBothProducerConfigAndCommandConfig() throws IOException {
-        Exit.setExitProcedure((code, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-
         Map<String, String> configs = new HashMap<>();
         configs.put("acks", "all");
         File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
@@ -309,19 +289,11 @@ public class ConsoleProducerTest {
             "--command-config", propsFile2.getAbsolutePath()
         };
 
-        try {
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
     }
 
     @Test
     public void shouldExitOnBothPropertyAndReaderProperty() {
-        Exit.setExitProcedure((code, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
             "--topic", "test",
@@ -329,11 +301,7 @@ public class ConsoleProducerTest {
             "--reader-property", "parse.headers=true"
         };
 
-        try {
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> new ConsoleProducerOptions(args));
     }
 
     @Test

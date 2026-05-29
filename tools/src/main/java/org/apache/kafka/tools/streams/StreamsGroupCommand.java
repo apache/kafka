@@ -93,10 +93,9 @@ public class StreamsGroupCommand {
     }
 
     public static int execute(String[] args) {
-        StreamsGroupCommandOptions opts = null;
         int exitCode = 0;
         try {
-            opts = new StreamsGroupCommandOptions(args);
+            StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
             opts.checkArgs();
             // should have exactly one action
             long numberOfActions = Stream.of(
@@ -107,18 +106,16 @@ public class StreamsGroupCommand {
                 opts.deleteOffsetsOpt
             ).filter(opts.options::has).count();
             if (numberOfActions != 1)
-                throw new IllegalArgumentException("Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
+                CommandLineUtils.printUsageAndThrow(opts.parser,
+                    "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
 
             run(opts);
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
         } catch (IllegalArgumentException | OptionException e) {
             System.err.println(e.getMessage());
-            if (opts != null) {
-                try {
-                    opts.parser.printHelpOn(System.err);
-                } catch (IOException ex) {
-                    printError(ex.getMessage(), Optional.of(ex));
-                }
-            }
             exitCode = 1;
         } catch (Throwable e) {
             printError("Executing streams group command failed due to " + e.getMessage(), Optional.of(e));
@@ -667,7 +664,7 @@ public class StreamsGroupCommand {
                 List<String> topics = opts.options.valuesOf(opts.inputTopicOpt);
                 res = deleteOffsets(groupId, topics);
             } else {
-                CommandLineUtils.printUsageAndExit(opts.parser, "Option " + opts.deleteOffsetsOpt +
+                CommandLineUtils.printUsageAndThrow(opts.parser, "Option " + opts.deleteOffsetsOpt +
                     " requires either" + opts.allInputTopicsOpt + " or " + opts.inputTopicOpt + " to be specified.");
                 return null;
             }
@@ -958,7 +955,7 @@ public class StreamsGroupCommand {
                 return partitions;
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
-                    CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
+                    CommandLineUtils.printUsageAndThrow(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
                 return List.of();
             }

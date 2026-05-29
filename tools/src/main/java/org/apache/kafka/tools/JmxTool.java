@@ -54,6 +54,7 @@ import javax.management.remote.JMXConnectorFactory;
 import javax.management.remote.JMXServiceURL;
 import javax.rmi.ssl.SslRMIClientSocketFactory;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 /**
@@ -72,7 +73,12 @@ public class JmxTool {
         try {
             execute(args);
             return 0;
-        } catch (TerseException e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.out.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException | TerseException e) {
             System.err.println(e.getMessage());
             return 1;
         } catch (Throwable e) {
@@ -361,7 +367,11 @@ public class JmxTool {
                 .defaultsTo(false);
             waitOpt = parser.accepts("wait", "Wait for requested JMX objects to become available before starting output. " +
                 "Only supported when the list of objects is non-empty and contains no object name patterns.");
-            options = parser.parse(args);
+            try {
+                options = parser.parse(args);
+            } catch (OptionException e) {
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
+            }
         }
 
         public JMXServiceURL jmxServiceURL() throws MalformedURLException {

@@ -214,10 +214,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-                CommandLineUtils.printUsageAndExit(parser,
+                CommandLineUtils.printUsageAndThrow(parser,
                     "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             if (options.has(inputTopicOpt) || options.has(allInputTopicsOpt))
-                CommandLineUtils.printUsageAndExit(parser, "Kafka Streams does not support topic-specific offset " +
+                CommandLineUtils.printUsageAndThrow(parser, "Kafka Streams does not support topic-specific offset " +
                     "deletion from a streams group.");
         }
         if (options.has(deleteOffsetsOpt)) {
@@ -233,7 +233,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         }
 
         if ((options.has(dryRunOpt) || options.has(executeOpt)) && !options.has(resetOffsetsOpt))
-            CommandLineUtils.printUsageAndExit(parser, "Only Option " + resetOffsetsOpt + " accepts " + executeOpt + " or " + dryRunOpt);
+            CommandLineUtils.printUsageAndThrow(parser, "Only Option " + resetOffsetsOpt + " accepts " + executeOpt + " or " + dryRunOpt);
 
         CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allGroupSelectionScopeOpts, groupOpt));
@@ -245,36 +245,36 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list all streams groups, describe a streams group, delete streams group info, or reset streams group offsets.");
 
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
         List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
         if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
         }
         if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + describeOpt + " does not take a value for " + stateOpt);
     }
 
     private void checkDeleteOffsetsArgs() {
         if ((!options.has(inputTopicOpt) && !options.has(allInputTopicsOpt)) || !options.has(groupOpt))
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + deleteOffsetsOpt + " takes the " + groupOpt + " and one of these options: " + allDeleteOffsetsOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
         if (options.valuesOf(groupOpt).size() > 1)
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + deleteOffsetsOpt + " supports only one " + groupOpt + " at a time, but found: " + options.valuesOf(groupOpt));
     }
 
     private void checkOffsetResetArgs() {
         if (options.has(dryRunOpt) && options.has(executeOpt))
-            CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
+            CommandLineUtils.printUsageAndThrow(parser, "Option " + resetOffsetsOpt + " only accepts one of " + executeOpt + " and " + dryRunOpt);
 
         if (!options.has(dryRunOpt) && !options.has(executeOpt))
-            CommandLineUtils.printUsageAndExit(parser, "Option " + resetOffsetsOpt + " takes the option: " + executeOpt + " or " + dryRunOpt);
+            CommandLineUtils.printUsageAndThrow(parser, "Option " + resetOffsetsOpt + " takes the option: " + executeOpt + " or " + dryRunOpt);
 
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + resetOffsetsOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
 
         CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
@@ -289,10 +289,10 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     private void checkDeleteAllInternalTopicsArgs() {
         if (!options.has(resetOffsetsOpt) && !options.has(deleteOpt)) {
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + deleteAllInternalTopicsOpt + " takes one of these options: " + allDeleteInternalGroupsOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
         } else if (options.has(resetOffsetsOpt) && !options.has(executeOpt)) {
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + deleteAllInternalTopicsOpt + " takes " + executeOpt + " when " + resetOffsetsOpt + " is used.");
         }
     }
@@ -301,7 +301,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteAllInternalTopicsOpt)) {
             checkDeleteAllInternalTopicsArgs();
         } else if (options.has(deleteInternalTopicOpt) && (!options.has(resetOffsetsOpt) || !options.has(executeOpt))) {
-            CommandLineUtils.printUsageAndExit(parser,
+            CommandLineUtils.printUsageAndThrow(parser,
                 "Option " + deleteInternalTopicOpt + " takes " + resetOffsetsOpt + " when " + executeOpt + " is used.");
         }
     }

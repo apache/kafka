@@ -30,7 +30,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -78,15 +77,7 @@ public class DeleteConsumerGroupsTest {
     @Test
     public void testDeleteWithTopicOption() {
         String[] cgcArgs = new String[]{"--bootstrap-server", "localhost:62241", "--delete", "--group", getDummyGroupId(), "--topic"};
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(1, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
     }
 
 
@@ -291,15 +282,7 @@ public class DeleteConsumerGroupsTest {
     @Test
     public void testDeleteWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", "localhost:62241", "--delete", "--group", getDummyGroupId()};
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(1, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
     }
 
     private String getDummyGroupId() {

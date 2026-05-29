@@ -139,6 +139,10 @@ public class ConfigCommand {
                     "This tool helps to manipulate and describe entity config for a topic, client, user, broker, ip, client-metrics or group");
             opts.checkArgs();
             processCommand(opts);
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
         } catch (UnsupportedVersionException uve) {
             LOG.debug("Unsupported API encountered in server when executing config command with args '{}'", String.join(" ", args));
             System.err.println(uve.getMessage());
@@ -934,7 +938,7 @@ public class ConfigCommand {
             // should have exactly one action
             long actions = Stream.of(alterOpt, describeOpt).filter(options::has).count();
             if (actions != 1)
-                CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --describe, --alter");
+                CommandLineUtils.printUsageAndThrow(parser, "Command must include exactly one action: --describe, --alter");
             // check required args
             CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, describeOpt);
             CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, alterOpt, addConfig, deleteConfig);

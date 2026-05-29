@@ -34,7 +34,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -123,15 +122,7 @@ public class ListConsumerGroupTest {
     @ClusterTest
     public void testListWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", clusterInstance.bootstrapServers(), "--list"};
-        Exit.setExitProcedure((exitCode, message) -> {
-            Assertions.assertEquals(1, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            Assertions.assertThrows(RuntimeException.class, () -> getConsumerGroupService(cgcArgs));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        Assertions.assertThrows(IllegalArgumentException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
     @ClusterTest

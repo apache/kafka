@@ -41,7 +41,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
-import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -61,8 +61,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -1115,67 +1113,30 @@ public class DescribeConsumerGroupTest {
     public void testDescribeWithUnrecognizedNewConsumerOption() {
         String group = GROUP_PREFIX +  "unrecognized";
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", "localhost:9092", "--describe", "--group", group};
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(1, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
     }
 
     @Test
     public void testDescribeWithMultipleSubActions() {
         String group = GROUP_PREFIX + "multiple.sub.actions";
-        AtomicInteger exitStatus = new AtomicInteger(0);
-        AtomicReference<String> exitMessage = new AtomicReference<>("");
-        Exit.setExitProcedure((status, err) -> {
-            exitStatus.set(status);
-            exitMessage.set(err);
-            throw new RuntimeException();
-        });
         String[] cgcArgs = new String[]{"--bootstrap-server", "localhost:9092", "--describe", "--group", group, "--members", "--state"};
-        try {
-            assertThrows(RuntimeException.class, () -> ConsumerGroupCommand.main(cgcArgs));
-        } finally {
-            Exit.resetExitProcedure();
-        }
-        assertEquals(1, exitStatus.get());
-        assertTrue(exitMessage.get().contains("Option [describe] takes at most one of these options"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        assertTrue(e.getMessage().contains("Option [describe] takes at most one of these options"));
     }
 
     @Test
     public void testDescribeWithStateValue() {
-        AtomicInteger exitStatus = new AtomicInteger(0);
-        AtomicReference<String> exitMessage = new AtomicReference<>("");
-        Exit.setExitProcedure((status, err) -> {
-            exitStatus.set(status);
-            exitMessage.set(err);
-            throw new RuntimeException();
-        });
         String[] cgcArgs = new String[]{"--bootstrap-server", "localhost:9092", "--describe", "--all-groups", "--state", "Stable"};
-        try {
-            assertThrows(RuntimeException.class, () -> ConsumerGroupCommand.main(cgcArgs));
-        } finally {
-            Exit.resetExitProcedure();
-        }
-        assertEquals(1, exitStatus.get());
-        assertTrue(exitMessage.get().contains("Option [describe] does not take a value for [state]"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommandOptions.fromArgs(cgcArgs));
+        assertTrue(e.getMessage().contains("Option [describe] does not take a value for [state]"));
     }
 
     @Test
     public void testPrintVersion() {
-        ToolsTestUtils.MockExitProcedure exitProcedure = new ToolsTestUtils.MockExitProcedure();
-        Exit.setExitProcedure(exitProcedure);
-        try {
-            String out = ToolsTestUtils.captureStandardOut(() -> ConsumerGroupCommandOptions.fromArgs(new String[]{"--version"}));
-            assertEquals(0, exitProcedure.statusCode());
-            assertEquals(AppInfoParser.getVersion(), out);
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String out = ToolsTestUtils.captureStandardOut(() ->
+            assertThrows(CommandLineUtils.HelpOrVersionException.class,
+                () -> ConsumerGroupCommandOptions.fromArgs(new String[]{"--version"})));
+        assertEquals(AppInfoParser.getVersion(), out);
     }
 
     private static ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {

@@ -86,9 +86,8 @@ public class ConsumerGroupCommand {
     }
 
     static int mainNoExit(String[] args) {
-        int exitCode = 0;
-        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         try {
+            ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
             List<OptionSpec<?>> actions = List.of(
                 opts.listOpt,
                 opts.describeOpt,
@@ -100,30 +99,28 @@ public class ConsumerGroupCommand {
 
             // Should have exactly one action.
             if (actions.stream().filter(opts.options::has).count() != 1) {
-                throw new IllegalArgumentException(
-                    String.format(
-                        "Command must include exactly one action: %s",
-                        actions.stream().map(opt ->
-                            "--" + opt.options().get(0)
-                        ).collect(Collectors.joining(", "))
-                    )
-                );
+                CommandLineUtils.printUsageAndThrow(opts.parser, String.format(
+                    "Command must include exactly one action: %s",
+                    actions.stream().map(opt ->
+                        "--" + opt.options().get(0)
+                    ).collect(Collectors.joining(", "))
+                ));
             }
 
             run(opts);
-        } catch (IllegalArgumentException e) {
-            try {
-                opts.parser.printHelpOn(System.err);
-            } catch (IOException ex) {
-                printError(ex.getMessage(), Optional.of(ex));
+            return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
             }
+            return 0;
+        } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
-            exitCode = 1;
+            return 1;
         } catch (Throwable e) {
             printError("Executing consumer group command failed due to " + e.getMessage(), Optional.of(e));
-            exitCode = 1;
+            return 1;
         }
-        return exitCode;
     }
 
     static void run(ConsumerGroupCommandOptions opts) throws Exception {
@@ -960,7 +957,7 @@ public class ConsumerGroupCommand {
                 return offsetsUtils.parseTopicPartitionsToReset(topics);
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
-                    CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
+                    CommandLineUtils.printUsageAndThrow(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
 
                 return List.of();
             }
@@ -1001,7 +998,7 @@ public class ConsumerGroupCommand {
                 return offsetsUtils.resetToCurrent(partitionsToReset, currentCommittedOffsets);
             }
 
-            CommandLineUtils.printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+            CommandLineUtils.printUsageAndThrow(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 

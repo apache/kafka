@@ -98,6 +98,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 public class DumpLogSegments {
@@ -113,7 +114,12 @@ public class DumpLogSegments {
         try {
             execute(args);
             return 0;
-        } catch (TerseException e) {
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.out.println(e.getMessage());
+            }
+            return 0;
+        } catch (IllegalArgumentException | TerseException e) {
             System.err.println(e.getMessage());
             return 1;
         } catch (Throwable e) {
@@ -897,7 +903,11 @@ public class DumpLogSegments {
             skipRecordMetadataOpt = parser.accepts("skip-record-metadata",
                 "Skip metadata when printing records. This flag also skips control records.");
 
-            this.options = parser.parse(args);
+            try {
+                this.options = parser.parse(args);
+            } catch (OptionException e) {
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
+            }
         }
 
         MessageParser<?, ?> messageParser() {

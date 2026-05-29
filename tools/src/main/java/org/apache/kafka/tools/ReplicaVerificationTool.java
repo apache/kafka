@@ -212,6 +212,13 @@ public class ReplicaVerificationTool {
                 System.out.printf("%s: verification process is started%n",
                     DATE_FORMAT.format(new Date(Time.SYSTEM.milliseconds())));
             }
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
+            }
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            Exit.exit(1);
         } catch (Throwable e) {
             System.err.println(e.getMessage());
             System.err.println(Utils.stackTrace(e));
@@ -311,7 +318,7 @@ public class ReplicaVerificationTool {
             try {
                 ToolsUtils.validateBootstrapServer(brokerList);
             } catch (IllegalArgumentException e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                CommandLineUtils.printUsageAndThrow(parser, e.getMessage());
             }
 
             return brokerList;

@@ -52,14 +52,11 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 import org.apache.kafka.tools.consumer.group.ShareGroupCommand.ShareGroupService;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatcher;
 import org.mockito.ArgumentMatchers;
@@ -78,7 +75,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -86,7 +82,6 @@ import static org.apache.kafka.common.KafkaFuture.completedFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -105,18 +100,6 @@ public class ShareGroupCommandTest {
     private static final List<List<String>> DESCRIBE_TYPE_MEMBERS = List.of(List.of("--members"), List.of("--members", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPE_STATE = List.of(List.of("--state"), List.of("--state", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPES = Stream.of(DESCRIBE_TYPE_OFFSETS, DESCRIBE_TYPE_MEMBERS, DESCRIBE_TYPE_STATE).flatMap(Collection::stream).toList();
-
-    @BeforeEach
-    public void setup() {
-        // nothing by default
-        Exit.setExitProcedure(((statusCode, message) -> {
-        }));
-    }
-
-    @AfterEach
-    public void teardown() {
-        Exit.resetExitProcedure();
-    }
 
     @Test
     public void testListShareGroups() throws Exception {
@@ -646,15 +629,7 @@ public class ShareGroupCommandTest {
     public void testListWithUnrecognizedOption() {
         String bootstrapServer = "localhost:9092";
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--list", "--verbose"};
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(1, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> getShareGroupService(cgcArgs, new MockAdminClient()));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> getShareGroupService(cgcArgs, new MockAdminClient()));
     }
 
     @Test
@@ -687,17 +662,8 @@ public class ShareGroupCommandTest {
 
         // no group spec args
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", "groupId"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete-offsets] takes the following options: [group], [topic]"));
-            exited.set(true);
-        }));
-        try {
-            getShareGroupService(cgcArgs, adminClient);
-        } finally {
-            assertTrue(exited.get());
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getShareGroupService(cgcArgs, adminClient));
+        assertTrue(e.getMessage().contains("Option [delete-offsets] takes the following options: [group], [topic]"));
     }
 
     @Test
@@ -707,17 +673,8 @@ public class ShareGroupCommandTest {
 
         // no group spec args
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete-offsets", "--topic", "t1"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete-offsets] takes the following options: [group], [topic]"));
-            exited.set(true);
-        }));
-        try {
-            getShareGroupService(cgcArgs, adminClient);
-        } finally {
-            assertTrue(exited.get());
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getShareGroupService(cgcArgs, adminClient));
+        assertTrue(e.getMessage().contains("Option [delete-offsets] takes the following options: [group], [topic]"));
     }
 
     @Test
@@ -887,17 +844,8 @@ public class ShareGroupCommandTest {
 
         // no group spec args
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete] takes the options [group] or [all-groups]"));
-            exited.set(true);
-        }));
-        try {
-            getShareGroupService(cgcArgs, adminClient);
-        } finally {
-            assertTrue(exited.get());
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getShareGroupService(cgcArgs, adminClient));
+        assertTrue(e.getMessage().contains("Option [delete] takes the options [group] or [all-groups]"));
     }
 
     @Test
@@ -1354,17 +1302,8 @@ public class ShareGroupCommandTest {
         Admin adminClient = mock(KafkaAdminClient.class);
         // no group spec args
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--reset-offsets", "--to-earliest", "--execute", "--group", group};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [reset-offsets] takes one of these options: [all-topics], [topic]"));
-            exited.set(true);
-        }));
-        try {
-            getShareGroupService(cgcArgs, adminClient);
-        } finally {
-            assertTrue(exited.get());
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getShareGroupService(cgcArgs, adminClient));
+        assertTrue(e.getMessage().contains("Option [reset-offsets] takes one of these options: [all-topics], [topic]"));
     }
 
     @Test
@@ -1398,12 +1337,9 @@ public class ShareGroupCommandTest {
         when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(group, KafkaFuture.completedFuture(exp)));
         when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
 
-        Exit.setExitProcedure((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Share group 'share-group' is not empty."));
-            throw new IllegalArgumentException(message);
-        });
-        assertThrows(IllegalArgumentException.class, () -> getShareGroupService(cgcArgs, adminClient).resetOffsets());
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> getShareGroupService(cgcArgs, adminClient).resetOffsets());
+        assertTrue(e.getMessage().contains("Share group 'share-group' is not empty."));
     }
 
     @Test
@@ -1413,17 +1349,8 @@ public class ShareGroupCommandTest {
         Admin adminClient = mock(KafkaAdminClient.class);
         // no reset-offsets spec args
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--execute", "--reset-offsets", "--group", group, "--topic", "topic"};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [reset-offsets] takes one of these options: [to-datetime], [to-earliest], [to-latest]"));
-            exited.set(true);
-        }));
-        try {
-            getShareGroupService(cgcArgs, adminClient);
-        } finally {
-            assertTrue(exited.get());
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getShareGroupService(cgcArgs, adminClient));
+        assertTrue(e.getMessage().contains("Option [reset-offsets] takes one of these options: [to-datetime], [to-earliest], [to-latest]"));
     }
     
     @Test

@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.common.utils.internals.AppInfoParser;
-import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -43,6 +42,7 @@ import javax.management.remote.JMXServiceURL;
 import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxToolTest {
@@ -82,40 +82,23 @@ public class JmxToolTest {
 
     @Test
     public void kafkaVersion() {
-        Exit.setExitProcedure((statusCode, message) -> {
-            lastExitCode = statusCode;
-            throw new RuntimeException();
-        });
-        try {
-            String out = ToolsTestUtils.captureStandardOut(() -> {
-                try {
-                    JmxTool.execute(new String[]{"--version"});
-                } catch (RuntimeException ignored) {
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            assertNormalExit();
-            assertTrue(out.contains(AppInfoParser.getVersion()));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String out = executeAndGetOut("--version");
+        assertNormalExit();
+        assertTrue(out.contains(AppInfoParser.getVersion()));
     }
 
     @Test
     public void unrecognizedOption() {
-        String err = executeAndGetErr("--foo");
-        assertCommandFailure();
-        assertTrue(err.contains("UnrecognizedOptionException"));
-        assertTrue(err.contains("foo"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> JmxTool.execute(new String[]{"--foo"}));
+        assertTrue(e.getMessage().contains("foo"), e.getMessage());
     }
 
     @Test
     public void missingRequired() {
-        String err = executeAndGetErr("--reporting-interval");
-        assertCommandFailure();
-        assertTrue(err.contains("OptionMissingRequiredArgumentException"));
-        assertTrue(err.contains("reporting-interval"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+            () -> JmxTool.execute(new String[]{"--reporting-interval"}));
+        assertTrue(e.getMessage().contains("reporting-interval"), e.getMessage());
     }
 
     @Test
@@ -127,30 +110,15 @@ public class JmxToolTest {
 
     @Test
     public void helpOptions() {
-        Exit.setExitProcedure((statusCode, message) -> {
-            lastExitCode = statusCode;
-            throw new RuntimeException();
-        });
-        try {
-            String[] expectedOptions = new String[]{
-                "--attributes", "--date-format", "--help", "--jmx-auth-prop",
-                "--jmx-ssl-enable", "--jmx-url", "--object-name", "--one-time",
-                "--report-format", "--reporting-interval", "--version", "--wait"
-            };
-            String err = ToolsTestUtils.captureStandardErr(() -> {
-                try {
-                    JmxTool.execute(new String[]{"--help"});
-                } catch (RuntimeException ignored) {
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            assertCommandFailure();
-            for (String option : expectedOptions) {
-                assertTrue(err.contains(option), option);
-            }
-        } finally {
-            Exit.resetExitProcedure();
+        String[] expectedOptions = new String[]{
+            "--attributes", "--date-format", "--help", "--jmx-auth-prop",
+            "--jmx-ssl-enable", "--jmx-url", "--object-name", "--one-time",
+            "--report-format", "--reporting-interval", "--version", "--wait"
+        };
+        String out = executeAndGetOut("--help");
+        assertNormalExit();
+        for (String option : expectedOptions) {
+            assertTrue(out.contains(option), option);
         }
     }
 

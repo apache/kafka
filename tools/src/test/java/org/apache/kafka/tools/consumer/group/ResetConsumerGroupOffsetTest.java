@@ -36,7 +36,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.BufferedWriter;
@@ -676,15 +675,7 @@ public class ResetConsumerGroupOffsetTest {
             "--bootstrap-server", cluster.bootstrapServers(),
             "--reset-offsets", "--group", group, "--all-topics",
             "--to-offset", "2", "--export"};
-        Exit.setExitProcedure((exitCode, message) -> {
-            assertEquals(1, exitCode);
-            throw new RuntimeException();
-        });
-        try {
-            assertThrows(RuntimeException.class, () -> getConsumerGroupService(cgcArgs));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        assertThrows(IllegalArgumentException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
     @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")})

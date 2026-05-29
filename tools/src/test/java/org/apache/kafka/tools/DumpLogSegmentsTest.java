@@ -53,7 +53,6 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
@@ -586,17 +585,10 @@ public class DumpLogSegmentsTest {
 
     @Test
     public void testDumpRemoteLogMetadataNoFilesFlag() {
-        Exit.setExitProcedure((statusCode, message) -> {
-            throw new IllegalArgumentException(message);
-        });
-        try {
-            String errOutput = captureStandardErr(
-                () -> assertEquals(1, DumpLogSegments.mainNoExit(
-                    new String[] {"--remote-log-metadata-decoder"})));
-            assertTrue(errOutput.contains("Missing required argument \"[files]\""));
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String errOutput = captureStandardErr(
+            () -> assertEquals(1, DumpLogSegments.mainNoExit(
+                new String[] {"--remote-log-metadata-decoder"})));
+        assertTrue(errOutput.contains("Missing required argument \"[files]\""));
     }
 
     @Test

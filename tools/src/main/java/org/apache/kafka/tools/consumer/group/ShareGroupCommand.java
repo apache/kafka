@@ -77,31 +77,31 @@ public class ShareGroupCommand {
     }
 
     static int mainNoExit(String[] args) {
-        int exitCode = 0;
-        ShareGroupCommandOptions opts = new ShareGroupCommandOptions(args);
         try {
+            ShareGroupCommandOptions opts = new ShareGroupCommandOptions(args);
             opts.checkArgs();
-            CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to list all share groups, describe a share group, delete share group info, or reset share group offsets.");
 
             // should have exactly one action
             long actions = Stream.of(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).filter(opts.options::has).count();
-            if (actions != 1)
-                throw new IllegalArgumentException("Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets.");
+            if (actions != 1) {
+                CommandLineUtils.printUsageAndThrow(opts.parser,
+                    "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets.");
+            }
 
             run(opts);
-        } catch (IllegalArgumentException e) {
-            try {
-                opts.parser.printHelpOn(System.err);
-            } catch (IOException ex) {
-                printError(ex.getMessage(), Optional.of(ex));
+            return 0;
+        } catch (CommandLineUtils.HelpOrVersionException e) {
+            if (e.getMessage() != null) {
+                System.err.println(e.getMessage());
             }
+            return 0;
+        } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage());
-            exitCode = 1;
+            return 1;
         } catch (Throwable e) {
             printError("Executing share group command failed due to " + e.getMessage(), Optional.of(e));
-            exitCode = 1;
+            return 1;
         }
-        return exitCode;
     }
 
     static void run(ShareGroupCommandOptions opts) throws Exception {
@@ -398,7 +398,7 @@ public class ShareGroupCommand {
             try {
                 ShareGroupDescription shareGroupDescription = describeShareGroups(List.of(groupId)).get(groupId);
                 if (!(GroupState.EMPTY.equals(shareGroupDescription.groupState()) || GroupState.DEAD.equals(shareGroupDescription.groupState()))) {
-                    CommandLineUtils.printErrorAndExit(String.format("Share group '%s' is not empty.", groupId));
+                    throw new IllegalArgumentException(String.format("Share group '%s' is not empty.", groupId));
                 }
                 resetOffsetsForInactiveGroup(groupId);
             } catch (InterruptedException ie) {
@@ -408,7 +408,7 @@ public class ShareGroupCommand {
                 if (cause instanceof GroupIdNotFoundException) {
                     resetOffsetsForInactiveGroup(groupId);
                 } else if (cause instanceof KafkaException) {
-                    CommandLineUtils.printErrorAndExit(cause.getMessage());
+                    throw (KafkaException) cause;
                 } else {
                     throw new RuntimeException(cause);
                 }
@@ -469,7 +469,7 @@ public class ShareGroupCommand {
                 return offsetsUtils.resetToDateTime(partitionsToReset);
             }
             CommandLineUtils
-                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+                .printUsageAndThrow(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 

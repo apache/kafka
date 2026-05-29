@@ -26,7 +26,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
@@ -59,13 +58,12 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.GroupState.EMPTY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
@@ -143,19 +141,9 @@ public class DeleteStreamsGroupOffsetTest {
         final String topic2 = generateRandomTopic();
 
         String[] args = new String[]{"--bootstrap-server", bootstrapServers, "--delete-offsets", "--group", group1, "--group", group2, "--input-topic", topic1, "--input-topic", topic2};
-        AtomicBoolean exited = new AtomicBoolean(false);
-        Exit.setExitProcedure(((statusCode, message) -> {
-            assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [delete-offsets] supports only one [group] at a time, but found:") &&
-                message.contains(group1) && message.contains(group2));
-            exited.set(true);
-        }));
-        try {
-            getStreamsGroupService(args);
-        } finally {
-            assertTrue(exited.get());
-            Exit.resetExitProcedure();
-        }
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> getStreamsGroupService(args));
+        assertTrue(e.getMessage().contains("Option [delete-offsets] supports only one [group] at a time, but found:") &&
+            e.getMessage().contains(group1) && e.getMessage().contains(group2));
     }
 
     @Test
