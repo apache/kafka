@@ -66,7 +66,7 @@
       "about": "Assigned warm-up tasks for this client. Null if unchanged since last heartbeat." },
 
     { "name": "TopologyDescriptionRequired", "type": "bool", "versions": "1+", "default": "false",
-      "about": "True if the broker's topology description plugin does not have an up-to-date topology description for this group. The client should send the topology description via StreamsGroupTopologyDescriptionUpdate." },
+      "about": "True if the broker does not have an up-to-date topology description for this group. The client should send the topology description via StreamsGroupTopologyDescriptionUpdate." },
 
     // IQ-related information
     { "name": "EndpointInformationEpoch", "type": "int32", "versions": "0+",

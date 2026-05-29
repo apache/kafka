@@ -110,9 +110,9 @@
           "about": "32-bit bitfield to represent authorized operations for this group." },
         { "name": "TopologyDescription", "type": "TopologyDescription", "versions": "1+",
           "nullableVersions": "1+", "default": "null",
-          "about": "Full topology description retrieved from the topology description plugin. Null if the client did not request it, no plugin is configured, no description is stored for the group, or retrieval failed." },
+          "about": "The full topology description for this group. Non-null if and only if TopologyDescriptionStatus is AVAILABLE (3); null otherwise." },
         { "name": "TopologyDescriptionStatus", "type": "int8", "versions": "1+", "default": "0",
-          "about": "The status of the topology description for this group: 0=NOT_REQUESTED (client did not set IncludeTopologyDescription), 1=NOT_STORED (no topology description has been recorded for this group), 2=ERROR (the broker failed to fetch the topology description; check broker logs), 3=AVAILABLE (a topology description is present in the TopologyDescription field). The broker MUST set this field to AVAILABLE whenever it attaches a TopologyDescription." }
+          "about": "The status of the topology description for this group, paired with TopologyDescription: 0=NOT_REQUESTED (client did not set IncludeTopologyDescription; TopologyDescription is null); 1=NOT_STORED (no description recorded for this group; TopologyDescription is null); 2=ERROR (broker failed to fetch the description, see broker logs; TopologyDescription is null); 3=AVAILABLE (TopologyDescription is non-null and carries the description)." }
       ]
     }
   ],

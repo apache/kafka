@@ -18,6 +18,9 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "StreamsGroupTopologyDescriptionUpdateRequest",
+  // The broker handler is not yet implemented (deferred to a later sub-task of KIP-1331),
+  // so the latest version is marked unstable to suppress ApiVersions advertisement.
+  "latestVersionUnstable": true,
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [

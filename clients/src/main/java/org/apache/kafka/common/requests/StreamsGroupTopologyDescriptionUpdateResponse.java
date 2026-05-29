@@ -23,6 +23,19 @@ import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Map;
 
+/**
+ * Possible error codes.
+ *
+ * - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ * - {@link Errors#NOT_COORDINATOR}
+ * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ * - {@link Errors#INVALID_REQUEST}
+ * - {@link Errors#UNSUPPORTED_VERSION}
+ * - {@link Errors#UNKNOWN_MEMBER_ID}
+ * - {@link Errors#GROUP_ID_NOT_FOUND}
+ * - {@link Errors#STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED}
+ */
 public class StreamsGroupTopologyDescriptionUpdateResponse extends AbstractResponse {
 
     private final StreamsGroupTopologyDescriptionUpdateResponseData data;

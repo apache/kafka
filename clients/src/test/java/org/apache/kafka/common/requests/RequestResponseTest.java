@@ -706,6 +706,17 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testDeleteGroupsResponseV3PreservesErrorMessage() {
+        DeleteGroupsResponse response = createDeleteGroupsResponse();
+        short version = ApiKeys.DELETE_GROUPS.latestVersion();
+        DeleteGroupsResponse parsed = DeleteGroupsResponse.parse(response.serialize(version), version);
+        DeletableGroupResult failed = parsed.data().results().find("failed-group");
+        assertNotNull(failed);
+        assertEquals(Errors.GROUP_DELETION_FAILED.code(), failed.errorCode());
+        assertEquals("plugin offline", failed.errorMessage());
+    }
+
+    @Test
     public void testFetchRequestIsolationLevel() {
         FetchRequest request = createFetchRequest((short) 4, IsolationLevel.READ_COMMITTED);
         FetchRequest deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey(), request.version(),
@@ -3895,8 +3906,25 @@ public class RequestResponseTest {
                 .setGlobalStores(new ArrayList<>(0)));
             group.setTopologyDescriptionStatus((byte) 3);
         }
+        List<StreamsGroupDescribeResponseData.DescribedGroup> groups = new ArrayList<>();
+        groups.add(group);
+        if (version >= 1) {
+            StreamsGroupDescribeResponseData.DescribedGroup notStoredGroup =
+                new StreamsGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId("group-without-description")
+                    .setErrorCode((short) 0)
+                    .setErrorMessage(Errors.forCode((short) 0).message())
+                    .setGroupState("EMPTY")
+                    .setGroupEpoch(0)
+                    .setAssignmentEpoch(0)
+                    .setMembers(new ArrayList<>(0))
+                    .setTopology(null)
+                    .setTopologyDescription(null)
+                    .setTopologyDescriptionStatus((byte) 1);
+            groups.add(notStoredGroup);
+        }
         StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
-            .setGroups(Collections.singletonList(group))
+            .setGroups(groups)
             .setThrottleTimeMs(1000);
         return new StreamsGroupDescribeResponse(data);
     }
@@ -3927,10 +3955,15 @@ public class RequestResponseTest {
                 .setName("KSTREAM-SINK-0000000002")
                 .setNodeType((byte) 3)
                 .setSinkTopic("output-topic");
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode dynamicSinkNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SINK-0000000005")
+                .setNodeType((byte) 3)
+                .setSinkTopic(null);
         StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology subtopology =
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology()
                 .setSubtopologyId("0")
-                .setNodes(List.of(sourceNode, processorNode, sinkNode));
+                .setNodes(List.of(sourceNode, processorNode, sinkNode, dynamicSinkNode));
         StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode globalSource =
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
                 .setName("KSTREAM-GLOBAL-SOURCE-0000000003")

@@ -19,9 +19,17 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
+/**
+ * Sent by a Streams client to push its topology description to the broker, in response
+ * to {@code TopologyDescriptionRequired=true} on a {@code StreamsGroupHeartbeatResponse}.
+ * The broker validates that {@code MemberId} still belongs to the group, checks the
+ * {@code TopologyEpoch} against the group's current epoch, and persists the description.
+ * See KIP-1331.
+ *
+ * <p>Legal error codes are documented on {@link StreamsGroupTopologyDescriptionUpdateResponse}.
+ */
 public class StreamsGroupTopologyDescriptionUpdateRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<StreamsGroupTopologyDescriptionUpdateRequest> {
@@ -52,11 +60,12 @@ public class StreamsGroupTopologyDescriptionUpdateRequest extends AbstractReques
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ApiError apiError = ApiError.fromThrowable(e);
         return new StreamsGroupTopologyDescriptionUpdateResponse(
             new StreamsGroupTopologyDescriptionUpdateResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(Errors.forException(e).code())
-                .setErrorMessage(Errors.forException(e).message())
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message())
         );
     }
 
