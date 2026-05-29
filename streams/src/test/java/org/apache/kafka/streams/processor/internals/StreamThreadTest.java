@@ -110,6 +110,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -1501,6 +1502,98 @@ public class StreamThreadTest {
         thread.run();
 
         verify(taskManager).shutdown(true);
+    }
+
+    @Test
+    public void shouldRouteDefaultToRemainInGroupForClassicProtocol() {
+        // Classic protocol: DEFAULT should map to consumer REMAIN_IN_GROUP
+        final TaskManager taskManager = mock(TaskManager.class);
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        // buildStreamThread uses Optional.empty() for streamsRebalanceData (Classic protocol)
+        thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
+            .updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
+
+        final ArgumentCaptor<org.apache.kafka.clients.consumer.CloseOptions> captor =
+                ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
+        // buildStreamThread passes consumer as mainConsumer, so close() is called on consumer
+        verify(consumer).close(captor.capture());
+        assertEquals(
+                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP,
+                captor.getValue().groupMembershipOperation()
+        );
+    }
+
+    @Test
+    public void shouldRouteDefaultToConsumerDefaultForStreamsProtocol() {
+        // Streams protocol: DEFAULT should map to consumer DEFAULT (dynamic member leaves)
+        final TaskManager taskManager = mock(TaskManager.class);
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        thread = new StreamThread(
+            mockTime, config, null,
+            mainConsumer, consumer,
+            changelogReader, null, taskManager, null,
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
+            new TopologyMetadata(internalTopologyBuilder, config),
+            PROCESS_ID, CLIENT_ID, new LogContext(""),
+            null, new AtomicLong(Long.MAX_VALUE), new LinkedList<>(),
+            null, HANDLER, null,
+            Optional.of(streamsRebalanceData), null, null
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
+
+        final ArgumentCaptor<org.apache.kafka.clients.consumer.CloseOptions> captor =
+                ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
+        verify(mainConsumer).close(captor.capture());
+        assertEquals(
+                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT,
+                captor.getValue().groupMembershipOperation()
+        );
+    }
+
+    @Test
+    public void shouldRouteRemainInGroupToRemainInGroupForStreamsProtocol() {
+        // Streams protocol: explicit REMAIN_IN_GROUP must always map to consumer REMAIN_IN_GROUP
+        final TaskManager taskManager = mock(TaskManager.class);
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        thread = new StreamThread(
+            mockTime, config, null,
+            mainConsumer, consumer,
+            changelogReader, null, taskManager, null,
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
+            new TopologyMetadata(internalTopologyBuilder, config),
+            PROCESS_ID, CLIENT_ID, new LogContext(""),
+            null, new AtomicLong(Long.MAX_VALUE), new LinkedList<>(),
+            null, HANDLER, null,
+            Optional.of(streamsRebalanceData), null, null
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+
+        final ArgumentCaptor<org.apache.kafka.clients.consumer.CloseOptions> captor =
+                ArgumentCaptor.forClass(org.apache.kafka.clients.consumer.CloseOptions.class);
+        verify(mainConsumer).close(captor.capture());
+        assertEquals(
+                org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP,
+                captor.getValue().groupMembershipOperation()
+        );
     }
 
     @ParameterizedTest

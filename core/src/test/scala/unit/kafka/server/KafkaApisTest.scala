@@ -1360,7 +1360,10 @@ class KafkaApisTest extends Logging {
         kafkaApis.handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
         val response = verifyNoThrottling[TxnOffsetCommitResponse](request)
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.data.topics.asScala
+          .find(_.name == invalidTopicPartition.topic)
+          .flatMap(_.partitions.asScala.find(_.partitionIndex == invalidTopicPartition.partition).map(p => Errors.forCode(p.errorCode)))
+          .orNull)
       } finally {
         kafkaApis.close()
       }

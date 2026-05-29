@@ -20,14 +20,12 @@ package org.apache.kafka.metadata.storage;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataRecordSerde;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.KafkaRaftClient;
-import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
@@ -103,6 +101,11 @@ public class Formatter {
     private BootstrapMetadata bootstrapMetadata;
 
     /**
+     * Additional bootstrap records to include beyond feature levels and SCRAM.
+     */
+    private List<ApiMessageAndVersion> additionalBootstrapRecords = List.of();
+
+    /**
      * True if we should enable unstable feature versions.
      */
     private boolean unstableFeatureVersionsEnabled = false;
@@ -132,6 +135,7 @@ public class Formatter {
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
     private boolean hasDynamicQuorum = false;
+    private boolean writeBootstrapSnapshot = true;
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -182,6 +186,11 @@ public class Formatter {
         return this;
     }
 
+    public Formatter setAdditionalBootstrapRecords(List<ApiMessageAndVersion> additionalBootstrapRecords) {
+        this.additionalBootstrapRecords = additionalBootstrapRecords;
+        return this;
+    }
+
     public Formatter setUnstableFeatureVersionsEnabled(boolean unstableFeatureVersionsEnabled) {
         this.unstableFeatureVersionsEnabled = unstableFeatureVersionsEnabled;
         return this;
@@ -214,6 +223,11 @@ public class Formatter {
 
     public Formatter setHasDynamicQuorum(boolean hasDynamicQuorum) {
         this.hasDynamicQuorum = hasDynamicQuorum;
+        return this;
+    }
+
+    public Formatter setWriteBootstrapSnapshot(boolean writeBootstrapSnapshot) {
+        this.writeBootstrapSnapshot = writeBootstrapSnapshot;
         return this;
     }
 
@@ -378,6 +392,9 @@ public class Formatter {
             }
             bootstrapRecords.addAll(ScramParser.parse(scramArguments));
         }
+        if (!additionalBootstrapRecords.isEmpty()) {
+            bootstrapRecords.addAll(additionalBootstrapRecords);
+        }
         return BootstrapMetadata.fromRecords(bootstrapRecords, "format command");
     }
 
@@ -432,11 +449,10 @@ public class Formatter {
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir);
-                bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
-                if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
-                    writeDynamicQuorumSnapshot(writeLogDir,
-                        initialControllers.get(),
+                if (writeBootstrapSnapshot) {
+                    writeBoostrapSnapshot(writeLogDir,
+                        bootstrapMetadata,
+                        initialControllers,
                         featureLevels.get(KRaftVersion.FEATURE_NAME),
                         controllerListenerName);
                 }
@@ -487,9 +503,10 @@ public class Formatter {
         }
     }
 
-    static void writeDynamicQuorumSnapshot(
+    public static void writeBoostrapSnapshot(
         String writeLogDir,
-        DynamicVoters initialControllers,
+        BootstrapMetadata bootstrapMetadata,
+        Optional<DynamicVoters> initialControllers,
         short kraftVersion,
         String controllerListenerName
     ) {
@@ -497,7 +514,6 @@ public class Formatter {
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
             setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
@@ -505,8 +521,10 @@ public class Formatter {
                 clusterMetadataDirectory.toPath(),
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
-            setVoterSet(Optional.of(voterSet));
+            setVoterSet(initialControllers.map(controllers -> controllers.toVoterSet(controllerListenerName)));
+
         try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(MetadataRecordSerde.INSTANCE)) {
+            writer.append(bootstrapMetadata.records());
             writer.freeze();
         }
     }
