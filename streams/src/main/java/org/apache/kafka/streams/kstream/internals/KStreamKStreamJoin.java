@@ -174,9 +174,9 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                     //
                     // See KStreamKStreamLeftJoinTest.testLowerWindowBound() tests
                     //
-                    // This condition below allows us to process the out-of-order records without the need
-                    // to hold it in the temporary outer store
-                    if (outerJoinStore.isEmpty() || timeTo < sharedTimeTracker.streamTime) {
+                    // This condition allows us to process out-of-order records whose grace period has
+                    // expired without holding them in the temporary outer store.
+                    if (outerJoinStore.isEmpty() || timeTo + joinGraceMs < sharedTimeTracker.streamTime) {
                         context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
