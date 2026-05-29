@@ -90,11 +90,6 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT, toVersion = 5)
     public void testConstructor(short version) {
-        var errorsMap = Map.of(
-            new TopicPartition(topicOne, partitionOne), Errors.NOT_COORDINATOR,
-            new TopicPartition(topicTwo, partitionTwo), Errors.NOT_COORDINATOR
-        );
-
         List<TxnOffsetCommitRequestTopic> expectedTopics = List.of(
             new TxnOffsetCommitRequestTopic()
                 .setName(topicOne)
@@ -124,7 +119,6 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
         var response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
 
-        assertEquals(errorsMap, response.errors());
         assertEquals(Map.of(Errors.NOT_COORDINATOR, 2), response.errorCounts());
         assertEquals(throttleTimeMs, response.throttleTimeMs());
     }

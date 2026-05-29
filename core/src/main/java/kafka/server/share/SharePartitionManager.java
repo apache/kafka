@@ -41,6 +41,7 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.context.FinalContext;
 import org.apache.kafka.server.share.context.ShareFetchContext;
 import org.apache.kafka.server.share.context.ShareSessionContext;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey;
@@ -154,6 +155,11 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final Supplier<Boolean> shareGroupDlqEnableSupplier;
 
+    /**
+     * Reference to the DLQ manager implementation.
+     */
+    private final ShareGroupDLQManager shareGroupDLQManager;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -165,7 +171,8 @@ public class SharePartitionManager implements AutoCloseable {
         Persister persister,
         ShareGroupConfigProvider configProvider,
         BrokerTopicStats brokerTopicStats,
-        Supplier<Boolean> shareGroupDlqEnableSupplier
+        Supplier<Boolean> shareGroupDlqEnableSupplier,
+        ShareGroupDLQManager shareGroupDLQManager
     ) {
         this(replicaManager,
             time,
@@ -179,10 +186,12 @@ public class SharePartitionManager implements AutoCloseable {
             configProvider,
             new ShareGroupMetrics(time),
             brokerTopicStats,
-            shareGroupDlqEnableSupplier
+            shareGroupDlqEnableSupplier,
+            shareGroupDLQManager
         );
     }
 
+    @SuppressWarnings("ParameterNumber")
     private SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -196,7 +205,8 @@ public class SharePartitionManager implements AutoCloseable {
         ShareGroupConfigProvider configProvider,
         ShareGroupMetrics shareGroupMetrics,
         BrokerTopicStats brokerTopicStats,
-        Supplier<Boolean> shareGroupDlqEnableSupplier
+        Supplier<Boolean> shareGroupDlqEnableSupplier,
+        ShareGroupDLQManager shareGroupDLQManager
     ) {
         this(replicaManager,
             time,
@@ -212,7 +222,8 @@ public class SharePartitionManager implements AutoCloseable {
             configProvider,
             shareGroupMetrics,
             brokerTopicStats,
-            shareGroupDlqEnableSupplier
+            shareGroupDlqEnableSupplier,
+            shareGroupDLQManager
         );
     }
 
@@ -232,7 +243,8 @@ public class SharePartitionManager implements AutoCloseable {
             ShareGroupConfigProvider configProvider,
             ShareGroupMetrics shareGroupMetrics,
             BrokerTopicStats brokerTopicStats,
-            Supplier<Boolean> shareGroupDlqEnableSupplier
+            Supplier<Boolean> shareGroupDlqEnableSupplier,
+            ShareGroupDLQManager shareGroupDLQManager
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -249,6 +261,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.brokerTopicStats = brokerTopicStats;
         this.cache.registerShareGroupListener(new ShareGroupListenerImpl());
         this.shareGroupDlqEnableSupplier = shareGroupDlqEnableSupplier;
+        this.shareGroupDLQManager = shareGroupDLQManager;
     }
 
     /**
@@ -733,7 +746,8 @@ public class SharePartitionManager implements AutoCloseable {
                             replicaManager,
                             configProvider,
                             listener,
-                            shareGroupDlqEnableSupplier
+                            shareGroupDlqEnableSupplier,
+                            shareGroupDLQManager
                     );
                 });
     }

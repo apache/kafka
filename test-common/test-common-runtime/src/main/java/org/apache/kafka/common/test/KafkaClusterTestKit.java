@@ -31,6 +31,8 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -48,6 +50,7 @@ import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -496,6 +499,25 @@ public class KafkaClusterTestKit implements AutoCloseable {
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
             formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
+
+            List<ApiMessageAndVersion> additionalRecords = new ArrayList<>();
+            for (ApiMessageAndVersion record : nodes.bootstrapMetadata().records()) {
+                if (record.message() instanceof FeatureLevelRecord featureRecord) {
+                    if (!featureRecord.name().equals(MetadataVersion.FEATURE_NAME)) {
+                        formatter.setFeatureLevel(featureRecord.name(), featureRecord.featureLevel());
+                    }
+                } else if (!(record.message() instanceof UserScramCredentialRecord)) {
+                    additionalRecords.add(record);
+                } else {
+                    throw new IllegalStateException("UserScramCredentialRecord is not supported in " +
+                        "bootstrap metadata. Use Formatter.setScramArguments() instead.");
+                }
+            }
+            for (String disabledFeature : nodes.disabledFeatures()) {
+                formatter.setFeatureLevel(disabledFeature, (short) 0);
+            }
+            formatter.setAdditionalBootstrapRecords(additionalRecords);
+
             StringBuilder dynamicVotersBuilder = new StringBuilder();
             String prefix = "";
             if (standalone) {

@@ -18,13 +18,13 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.network.Request
 import org.apache.kafka.server.ForwardingManagerUtil
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.metrics.ForwardingManagerMetrics
@@ -36,7 +36,7 @@ trait ForwardingManager {
   def close(): Unit
 
   def forwardRequest(
-    originalRequest: RequestChannel.Request,
+    originalRequest: Request,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
     val buffer = originalRequest.buffer.duplicate()
@@ -44,13 +44,13 @@ trait ForwardingManager {
     forwardRequest(originalRequest.context,
       buffer,
       originalRequest.startTimeNanos,
-      originalRequest.body[AbstractRequest],
+      originalRequest.body(classOf[AbstractRequest]),
       () => originalRequest.toString,
       responseCallback)
   }
 
   def forwardRequest(
-    originalRequest: RequestChannel.Request,
+    originalRequest: Request,
     newRequestBody: AbstractRequest,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {

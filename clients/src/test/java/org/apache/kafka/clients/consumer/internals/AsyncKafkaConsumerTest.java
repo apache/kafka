@@ -609,6 +609,7 @@ public class AsyncKafkaConsumerTest {
             // Do NOT mark reconciliation check complete - simulating background hasn't processed it yet
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+        consumer.setHasPendingReconciliation(true);
 
         // Poll should return empty because reconciliation check is not complete.
         ConsumerRecords<?, ?> result1 = consumer.poll(Duration.ZERO);
@@ -621,6 +622,60 @@ public class AsyncKafkaConsumerTest {
         // Next poll should return the records since reconciliation check is now complete
         ConsumerRecords<?, ?> result2 = consumer.poll(Duration.ZERO);
         assertEquals(2, result2.count(), "Expected 2 records after reconciliation check is complete");
+    }
+
+    @Test
+    public void testPollDoesNotWaitForReconciliationCheckIfNoPendingReconciliation() {
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+                new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+                new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                new ConsumerInterceptors<>(Collections.emptyList(), metrics),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions);
+
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        // PositionsValidator starts with metadataUpdateVersion=-1. Stub metadata.updateVersion() to match,
+        // so canSkipUpdateFetchPositions() passes and we test the reconciliation check path.
+        doReturn(-1).when(metadata).updateVersion();
+
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        // Simulate partition assignment from group coordinator
+        subscriptions.assignFromSubscribed(singleton(tp));
+
+        // Set up position so canSkipUpdateFetchPositions() returns true (partition in FETCHING state)
+        completeSeekUnvalidatedEventSuccessfully();
+        subscriptions.seek(tp, 0);
+
+        // Set up fetch collector to return records when called
+        doReturn(Fetch.forPartition(tp, records, true, new OffsetAndMetadata(4, Optional.of(0), "")))
+                .when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        // Capture the AsyncPollEvent but leave the reconciliation check incomplete.
+        // Since there is no pending reconciliation, poll should not wait for it.
+        AtomicReference<AsyncPollEvent> capturedEvent = new AtomicReference<>();
+        doAnswer(invocation -> {
+            AsyncPollEvent event = invocation.getArgument(0);
+            assertTrue(capturedEvent.compareAndSet(null, event));
+            // Do NOT mark reconciliation check complete - simulating background hasn't processed it yet
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+        consumer.setHasPendingReconciliation(false);
+        
+        // Poll does not wait AsyncPollEvent if there is no pending reconciliation.
+        ConsumerRecords<?, ?> result = consumer.poll(Duration.ZERO);
+
+        assertNotNull(capturedEvent.get(), "AsyncPollEvent should have been captured");
+        assertFalse(capturedEvent.get().isReconciliationCheckComplete(), "Reconciliation check should still be incomplete");
+        assertEquals(2, result.count(), "Expected records without waiting when no reconciliation is pending");
     }
 
     @Test

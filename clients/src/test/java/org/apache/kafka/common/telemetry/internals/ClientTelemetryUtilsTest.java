@@ -17,6 +17,7 @@
 package org.apache.kafka.common.telemetry.internals;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TelemetryTooLargeException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.utils.Utils;
@@ -154,7 +155,7 @@ public class ClientTelemetryUtilsTest {
         } else {
             assertArrayEquals(raw, Utils.toArray(compressed));
         }
-        ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType);
+        ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType, 1024 * 1024);
         assertNotNull(decompressed);
         byte[] actualResult = Utils.toArray(decompressed);
         assertArrayEquals(raw, actualResult);
@@ -190,5 +191,32 @@ public class ClientTelemetryUtilsTest {
         }
 
         return builder.build();
+    }
+
+    @Test
+    public void testDecompressExceedingMaxSizeThrows() throws IOException {
+        // Compress a large payload using the existing compress API (via MetricsData)
+        // then verify decompression with a small limit throws
+        MetricsData metricsData = getMetricsData();
+        ByteBuffer compressed = ClientTelemetryUtils.compress(metricsData, CompressionType.GZIP);
+        byte[] raw = metricsData.toByteArray();
+
+        // Set limit smaller than the actual decompressed size
+        int smallLimit = raw.length - 1;
+        TelemetryTooLargeException ex = assertThrows(TelemetryTooLargeException.class,
+            () -> ClientTelemetryUtils.decompress(compressed.duplicate(), CompressionType.GZIP, smallLimit));
+        assertTrue(ex.getMessage().contains("Decompressed telemetry metrics exceed maximum allowed size: " + smallLimit));
+    }
+
+    @Test
+    public void testDecompressWithPayloadSizeSucceeds() throws IOException {
+        MetricsData metricsData = getMetricsData();
+        byte[] raw = metricsData.toByteArray();
+        ByteBuffer compressed = ClientTelemetryUtils.compress(metricsData, CompressionType.GZIP);
+
+        // Set limit to exact limit prior compression.
+        ByteBuffer result = ClientTelemetryUtils.decompress(compressed, CompressionType.GZIP, raw.length);
+        assertNotNull(result);
+        assertArrayEquals(raw, Utils.toArray(result));
     }
 }
