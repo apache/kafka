@@ -478,6 +478,33 @@ org.apache.kafka.server.requests.ProduceRequestTest:
 - testZSTDProduceRequest
 org.apache.kafka.server.share.CachedSharePartitionTest:
 - testCachedSharePartitionEqualsAndHashCode
+org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
+- testConstructorRejectsNullCacheHelper
+- testConstructorRejectsNullClient
+- testConstructorRejectsNullTime
+- testConstructorRejectsNullTimer
+- testDlqCreateTopicFatalErrorFailsFuture
+- testDlqCreateTopicNoClusterNodesFailsFuture
+- testDlqCreateTopicPartialFailuresThenSucceeds
+- testDlqCreateTopicRetriesExhaustedFailsWithNetworkException
+- testDlqCreateTopicThenProduceSucceeds
+- testDlqEmptyTopicNameFailsValidation
+- testDlqExistingTopicWithoutDlqConfigFailsValidation
+- testDlqHappyPathExistingTopic
+- testDlqProduceDisconnectIsRetriedNotImmediatelyFailed
+- testDlqProduceEmptyResponseFailsFuture
+- testDlqProduceFatalErrorFailsFuture
+- testDlqProducePartialFailuresThenSucceeds
+- testDlqProduceRetriesExhaustedFailsWithNetworkException
+- testDlqResolvesSourceTopicNameViaCacheHelperWhenMissing
+- testDlqTopicMissingAndAutoCreateDisabledFailsValidation
+- testDlqTopicPrefixEmptyStringSkipsPrefixCheck
+- testDlqTopicPrefixMismatchFailsValidation
+- testDlqTopicStartingWithUnderscoreFailsValidation
+- testDlqTwoEnqueuedRecordsBothComplete
+- testDlqValidationFailureCompletesFutureBeforeStart
+- testStartIsIdempotent
+- testStopWithoutStartIsNoOp
 org.apache.kafka.server.share.fetch.DelayedShareFetchKeyTest:
 - testDelayedShareFetchEqualsAndHashcode
 org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategyTest:
