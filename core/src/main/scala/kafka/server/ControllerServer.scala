@@ -164,7 +164,7 @@ class ControllerServer(
         config.unstableApiVersionsEnabled,
         () => {
           val features = featuresPublisher.features()
-          if (features.isMetadataKnown)
+          if (!features.isUnknown)
             features.setFinalizedLevel(
               KRaftVersion.FEATURE_NAME,
               raftManager.client.kraftVersion().featureLevel())

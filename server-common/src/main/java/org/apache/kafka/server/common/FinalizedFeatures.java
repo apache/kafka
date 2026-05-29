@@ -29,7 +29,8 @@ import java.util.Optional;
  *   <li>Unknown - the metadata version has not been committed yet, e.g. before a quorum is
  *       formed. Used as the initial state in {@code FeaturesPublisher}. (use {@link #unknown()})</li>
  *   <li>Metadata version only - the metadata version is known but no additional features or
- *       epoch have been set. (use {@link #fromKRaftVersion(MetadataVersion)})</li>
+ *       epoch have been set. Used when only the metadata version needs to be represented
+ *       without a full set of finalized features. (use {@link #fromKRaftVersion(MetadataVersion)})</li>
  *   <li>Full features - metadata version, features map, and epoch are all known. Used after
  *       the controller has committed feature records. (use {@link #of(MetadataVersion, Map, long)})</li>
  * </ul>
@@ -90,12 +91,12 @@ public final class FinalizedFeatures {
     }
 
     /**
-     * Returns whether the metadata version is known.
+     * Returns whether the finalized features are unknown.
      *
-     * @return true if the metadata version is known, false otherwise
+     * @return true if the finalized features are unknown, false otherwise
      */
-    public boolean isMetadataKnown() {
-        return metadataVersion.isPresent();
+    public boolean isUnknown() {
+        return this == UNKNOWN;
     }
 
     /**
@@ -137,7 +138,7 @@ public final class FinalizedFeatures {
      * @throws IllegalStateException if this is the unknown instance
      */
     public FinalizedFeatures setFinalizedLevel(String key, short level) {
-        if (metadataVersion.isEmpty()) {
+        if (isUnknown()) {
             throw new IllegalStateException("Cannot set finalized level on unknown FinalizedFeatures");
         }
         if (level == (short) 0) {

@@ -36,7 +36,7 @@ class FinalizedFeaturesTest {
     public void testUnknownFeatures() {
         FinalizedFeatures features = FinalizedFeatures.unknown();
 
-        assertFalse(features.isMetadataKnown());
+        assertTrue(features.isUnknown());
         assertTrue(features.finalizedFeatures().isEmpty());
         assertEquals(-1, features.finalizedFeaturesEpoch());
     }
@@ -57,7 +57,7 @@ class FinalizedFeaturesTest {
     public void testFromKRaftVersion() {
         FinalizedFeatures features = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION);
 
-        assertTrue(features.isMetadataKnown());
+        assertFalse(features.isUnknown());
         assertEquals(MINIMUM_VERSION, features.metadataVersionOrThrow());
         assertEquals(MINIMUM_VERSION.featureLevel(), features.finalizedFeatures().get(FEATURE_NAME));
         assertEquals(1, features.finalizedFeatures().size());
