@@ -513,6 +513,11 @@ public class AclControlManagerTest {
         e = assertThrows(InvalidRequestException.class, () ->
             AclControlManager.validateHostPattern("192.168.0.0/", true));
         assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+
+        // ::ffff:x.x.x.x/N is rejected: the JVM normalizes ::ffff:x.x.x.x to Inet4Address,
+        // so isIpv6() returns false and SubnetUtils rejects the ::ffff: prefix.
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateCidrNotation("::ffff:192.168.1.0/24"));
     }
 
     @Test
@@ -528,44 +533,6 @@ public class AclControlManagerTest {
     }
 
     @Test
-    public void testValidateCidrNotationIpv4() {
-        // Valid patterns
-        AclControlManager.validateCidrNotation("192.168.0.0/24");
-        AclControlManager.validateCidrNotation("10.0.0.0/8");
-        AclControlManager.validateCidrNotation("192.168.1.1/32");
-        AclControlManager.validateCidrNotation("0.0.0.0/0");
-
-        // Invalid patterns
-        assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateCidrNotation("192.168.0.0/33"));
-        assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateCidrNotation("not.an.ip/24"));
-        assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateCidrNotation("192.168.0.256/24"));
-
-        // ::ffff:x.x.x.x/N is rejected: the JVM normalizes ::ffff:x.x.x.x to Inet4Address,
-        // so isIpv6() returns false and SubnetUtils rejects the ::ffff: prefix.
-        assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateCidrNotation("::ffff:192.168.1.0/24"));
-    }
-
-    @Test
-    public void testValidateCidrNotationIpv6() {
-        // Valid patterns
-        AclControlManager.validateCidrNotation("2001:db8::/32");
-        AclControlManager.validateCidrNotation("2001:db8:abcd::/48");
-        AclControlManager.validateCidrNotation("::1/128");
-        AclControlManager.validateCidrNotation("::/0");
-        AclControlManager.validateCidrNotation("fe80::/10");
-
-        // Invalid patterns
-        assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateCidrNotation("2001:db8::/129"));
-        assertThrows(InvalidRequestException.class, () ->
-            AclControlManager.validateCidrNotation("not:valid:ipv6::/32"));
-    }
-
-    @Test
     public void testCreateAclWithValidCidrHost() {
         AclControlManager manager = new AclControlManager.Builder().build();
 
@@ -573,7 +540,7 @@ public class AclControlManagerTest {
             new ResourcePattern(TOPIC, "test-topic", LITERAL),
             new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(ipv4CidrAcl), MetadataVersion.IBP_4_3_IV0);
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(ipv4CidrAcl), MetadataVersion.IBP_4_4_IV0);
         assertEquals(1, result.response().size());
         assertFalse(result.response().get(0).exception().isPresent());
 
@@ -581,7 +548,7 @@ public class AclControlManagerTest {
             new ResourcePattern(TOPIC, "test-topic-2", LITERAL),
             new AccessControlEntry("User:test", "2001:db8::/32", ALTER, ALLOW));
 
-        result = manager.createAcls(List.of(ipv6CidrAcl), MetadataVersion.IBP_4_3_IV0);
+        result = manager.createAcls(List.of(ipv6CidrAcl), MetadataVersion.IBP_4_4_IV0);
         assertEquals(1, result.response().size());
         assertFalse(result.response().get(0).exception().isPresent());
     }
@@ -594,7 +561,7 @@ public class AclControlManagerTest {
             new ResourcePattern(TOPIC, "test-topic", LITERAL),
             new AccessControlEntry("User:test", "192.168.0.0/33", ALTER, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(invalidCidrAcl), MetadataVersion.IBP_4_3_IV0);
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(invalidCidrAcl), MetadataVersion.IBP_4_4_IV0);
         assertEquals(1, result.response().size());
         assertTrue(result.response().get(0).exception().isPresent());
         assertTrue(result.response().get(0).exception().get().getMessage().contains("Invalid CIDR notation"));

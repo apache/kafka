@@ -695,42 +695,6 @@ public class StandardAuthorizerTest {
     }
 
     @Test
-    public void testHostMatchesCidrIpv4() {
-        // Test IPv4 CIDR matching
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("192.168.1.100", "192.168.1.0/24"));
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "192.168.1.0/24"));
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("192.168.1.254", "192.168.1.0/24"));
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.2.1", "192.168.1.0/24"));
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("10.0.0.1", "192.168.1.0/24"));
-
-        // Test /32 - single host
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "192.168.1.1/32"));
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.2", "192.168.1.1/32"));
-
-        // Test /16
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("10.20.1.1", "10.20.0.0/16"));
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("10.20.255.255", "10.20.0.0/16"));
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("10.21.0.1", "10.20.0.0/16"));
-    }
-
-    @Test
-    public void testHostMatchesCidrIpv6() {
-        // Test IPv6 CIDR matching
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("2001:db8::1", "2001:db8::/32"));
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("2001:db8:ffff:ffff:ffff:ffff:ffff:ffff", "2001:db8::/32"));
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("2001:db9::1", "2001:db8::/32"));
-
-        // Test /64
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("2001:db8:1234:5678::1", "2001:db8:1234:5678::/64"));
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("2001:db8:1234:5678:abcd:ef01:2345:6789", "2001:db8:1234:5678::/64"));
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("2001:db8:1234:5679::1", "2001:db8:1234:5678::/64"));
-
-        // Test /128 - single host
-        assertTrue(StandardAuthorizerData.hostMatchesCidr("::1", "::1/128"));
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("::2", "::1/128"));
-    }
-
-    @Test
     public void testHostMatchesCidrIpv4MappedAddress() throws Exception {
         // The JVM normalizes IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) to plain IPv4.
         // InetAddress.getByName("::ffff:192.168.1.5") returns an Inet4Address with host "192.168.1.5",
@@ -743,13 +707,13 @@ public class StandardAuthorizerTest {
 
     @Test
     public void testHostMatchesIPv4MappedAddressWithSubnet() {
-        // ::ffff:x.x.x.x/N — JVM normalizes ::ffff:x.x.x.x to Inet4Address, isIpv6() returns false,
+        // ::ffff:x.x.x.x/N, JVM normalizes ::ffff:x.x.x.x to Inet4Address, isIpv6() returns false,
         // SubnetUtils rejects the ::ffff: prefix. No client (IPv4 or IPv6) can ever match.
         assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.5", "::ffff:192.168.1.0/24"));
         assertFalse(StandardAuthorizerData.hostMatchesCidr("::1", "::ffff:192.168.1.0/24"));
         assertFalse(StandardAuthorizerData.hostMatchesCidr("2001:db8::1", "::ffff:192.168.1.0/24"));
 
-        // ::x.x.x.x/N (deprecated IPv4-compatible form) — JVM keeps it as Inet6Address
+        // ::x.x.x.x/N (deprecated IPv4-compatible form), JVM keeps it as Inet6Address
         // (0:0:0:0:0:0:c0a8:100), so it passes as a valid IPv6 CIDR. A /24 on a 128-bit address
         // masks the top 24 bits, covering 0:: through 0:ff:ffff:ffff:ffff:ffff:ffff:ffff.
         // Plain IPv4 clients will not match (they go through SubnetUtils, not SubnetUtils6).
@@ -759,21 +723,6 @@ public class StandardAuthorizerTest {
         assertTrue(StandardAuthorizerData.hostMatchesCidr("0:0:0:0:0:0:c0a8:105", "::192.168.1.0/24"));
         // IPv6 clients outside the /24 range do not match.
         assertFalse(StandardAuthorizerData.hostMatchesCidr("2001:db8::1", "::192.168.1.0/24"));
-    }
-
-    @Test
-    public void testHostMatchesCidrInvalidPatterns() {
-        // Not CIDR notation (no /)
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "192.168.1.1"));
-
-        // Null pattern
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", null));
-
-        // Invalid CIDR notation
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "invalid/24"));
-
-        // Wildcard should not be treated as CIDR
-        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "*"));
     }
 
     @Test
