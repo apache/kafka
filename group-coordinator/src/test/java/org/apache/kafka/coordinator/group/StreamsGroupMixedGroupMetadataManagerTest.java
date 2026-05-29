@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
@@ -47,14 +48,10 @@ import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessionTimeoutKey;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.StreamsTopicFixture;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.contextWithStreamsGroup;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.getDefaultAssignmentConfigs;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.heartbeatResponseWithActiveTasks;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.heartbeatResponseWithNullTasks;
+import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.mkResponseTasks;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticHeartbeat;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticJoinHeartbeat;
-import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.staticLeaveResponseWithNullTasks;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsGroupMemberBuilderWithDefaults;
 import static org.apache.kafka.coordinator.group.StreamsGroupTestUtil.streamsTopicFixture;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
@@ -122,19 +119,16 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         String groupId = "fooup";
 
         String subtopologyId = "subtopology-1";
-        StreamsTopicFixture topic = streamsTopicFixture(subtopologyId, "foo", 4);
-
+        StreamsGroupTestUtil.StreamsTopicFixture topic = streamsTopicFixture(subtopologyId, "foo", 4);
 
         String oldStaticMemberId = Uuid.randomUuid().toString();
         String newStaticMemberId = Uuid.randomUuid().toString();
         String staticInstanceId = Uuid.randomUuid().toString();
         String dynamicMemberId = Uuid.randomUuid().toString();
 
-        // GIVEN Task for static member
         TasksTupleWithEpochs staticAssignedTasks = topic.assignedTasks(groupEpoch, 0, 1);
         TasksTuple staticTargetAssignment = topic.targetAssignment(0, 1);
 
-        // GIVEN Task for dynamic member
         TasksTupleWithEpochs dynamicAssignedTasks = topic.assignedTasks(groupEpoch, 2, 3);
         TasksTuple dynamicTargetAssignment = topic.targetAssignment(2, 3);
 
@@ -163,13 +157,22 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             .build();
 
 
-        // WHEN - static member rejoin.
+        // static member rejoins.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> rejoinResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, newStaticMemberId, staticInstanceId, StreamsGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH)
         );
 
-        // THEN - At the maxsize, static member still can rejoin if static member leaves with epoch -2.
-        assertResponseEquals(heartbeatResponseWithActiveTasks(newStaticMemberId, groupEpoch, subtopologyId, 0, 1), rejoinResult.response().data());
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(newStaticMemberId)
+                .setMemberEpoch(groupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setActiveTasks(mkResponseTasks(subtopologyId, 0, 1))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of()),
+            rejoinResult.response().data()
+        );
 
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         assertFalse(group.hasMember(oldStaticMemberId));
@@ -198,7 +201,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         String groupId = "fooup";
 
         String subtopologyId = "subtopology-1";
-        StreamsTopicFixture topic = streamsTopicFixture(subtopologyId, "foo", 4);
+        StreamsGroupTestUtil.StreamsTopicFixture topic = streamsTopicFixture(subtopologyId, "foo", 4);
         StreamsGroupHeartbeatRequestData.Topology topology = topic.topology();
 
         String staticMemberId = Uuid.randomUuid().toString();
@@ -210,7 +213,6 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         String dynamicProcessId = "dynamic-process-id";
         String newDynamicProcessId = "new-dynamic-process-id";
 
-        // GIVEN assignment
         TasksTupleWithEpochs staticAssignedTasks = topic.assignedTasks(groupEpoch, 0, 1);
         TasksTuple staticTargetAssignment = topic.targetAssignment(0, 1);
 
@@ -247,13 +249,21 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             .build();
         context.onLoaded();
 
-        // WHEN1 - static member leaves with epoch -2.
+        // static member leaves with epoch -2.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> leaveResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, staticMemberId, staticInstanceId, StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH)
         );
 
-        // THEN1
-        assertResponseEquals(staticLeaveResponseWithNullTasks(staticMemberId, StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH), leaveResult.response().data());
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(staticMemberId)
+                .setMemberEpoch(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                .setStatus(List.of())
+                .setActiveTasks(null)
+                .setWarmupTasks(null)
+                .setStandbyTasks(null), 
+            leaveResult.response().data()
+        );
 
         // To prevent session timeout from dynamic member.
         // Sleep 1, and dynamic member send a heartbeat.
@@ -262,14 +272,22 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             staticHeartbeat(groupId, dynamicMemberId, null, groupEpoch)
         );
 
-        assertResponseEquals(heartbeatResponseWithNullTasks(dynamicMemberId, groupEpoch), dynamicHeartbeatResult.response().data());
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(dynamicMemberId)
+                .setMemberEpoch(groupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setActiveTasks(null)
+                .setWarmupTasks(null)
+                .setStandbyTasks(null),
+            dynamicHeartbeatResult.response().data());
         assertTrue(dynamicHeartbeatResult.records().isEmpty());
 
-        // WHEN2: static member session timeout.
+        // static member session timeout.
         context.assertSessionTimeout(groupId, staticMemberId, 45000 - 1);
         List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = context.sleep(45000 - 1);
 
-        // THEN2
         List<CoordinatorRecord> expectedTimeoutRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, staticMemberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, staticMemberId),
@@ -297,15 +315,24 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             newDynamicMemberId, staticTargetAssignment
         ));
 
-        // WHEN3 - new dynamic member try to join.
+        // new dynamic member try to join.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> joinResult = context.streamsGroupHeartbeat(
             staticJoinHeartbeat(groupId, newDynamicMemberId, null, newDynamicProcessId)
                 .setRebalanceTimeoutMs(1500)
                 .setTopology(topology)
         );
 
-        // THEN3 : accept join.
-        assertResponseEquals(heartbeatResponseWithActiveTasks(newDynamicMemberId, joinGroupEpoch, subtopologyId, 0, 1), joinResult.response().data());
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(newDynamicMemberId)
+                .setMemberEpoch(joinGroupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setActiveTasks(mkResponseTasks(subtopologyId, 0, 1))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of()),
+            joinResult.response().data()
+        );
 
         StreamsGroupMember expectedJoiningDynamicMember = streamsGroupMemberBuilderWithDefaults(newDynamicMemberId)
             .setProcessId(newDynamicProcessId)
@@ -365,31 +392,40 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         String dynamicMemberId = Uuid.randomUuid().toString();
 
 
-        StreamsTopicFixture topic = streamsTopicFixture("subtopology-1", "foo", 3);
+        StreamsGroupTestUtil.StreamsTopicFixture topic = streamsTopicFixture("subtopology-1", "foo", 3);
 
-        // GIVEN Task for static member
         TasksTupleWithEpochs staticAssignedTasks = topic.assignedTasks(groupEpoch, 0, 1);
         TasksTuple staticTargetAssignment = topic.targetAssignment(0, 1);
 
-        // GIVEN Task for dynamic member
         TasksTupleWithEpochs dynamicAssignedTasks = topic.assignedTasks(groupEpoch, 2);
         TasksTuple dynamicTargetAssignment = topic.targetAssignment(2);
 
-        GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, group -> group
-            .withMember(streamsGroupMemberBuilderWithDefaults(staticMemberId, staticInstanceId)
-                .setMemberEpoch(groupEpoch)
-                .setPreviousMemberEpoch(groupEpoch - 1)
-                .setAssignedTasks(staticAssignedTasks)
-                .build())
-            .withMember(streamsGroupMemberBuilderWithDefaults(dynamicMemberId)
-                .setMemberEpoch(groupEpoch)
-                .setPreviousMemberEpoch(groupEpoch - 1)
-                .setAssignedTasks(dynamicAssignedTasks)
-                .build())
-            .withTargetAssignment(staticMemberId, staticTargetAssignment)
-            .withTargetAssignment(dynamicMemberId, dynamicTargetAssignment));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(staticMemberId, staticInstanceId)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(staticAssignedTasks)
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(dynamicMemberId)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(dynamicAssignedTasks)
+                    .build())
+                .withTargetAssignment(staticMemberId, staticTargetAssignment)
+                .withTargetAssignment(dynamicMemberId, dynamicTargetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs())
+            )
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
 
-        // WHEN - static member leaves with epoch -2.
+        // static member leaves with epoch -2.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> leaveResult =
             context.streamsGroupHeartbeat(staticHeartbeat(
                 groupId,
@@ -398,13 +434,18 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 LEAVE_GROUP_STATIC_MEMBER_EPOCH
             ));
 
-        // THEN
         assertResponseEquals(
-            staticLeaveResponseWithNullTasks(staticMemberId, LEAVE_GROUP_STATIC_MEMBER_EPOCH),
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(staticMemberId)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                .setStatus(List.of())
+                .setActiveTasks(null)
+                .setWarmupTasks(null)
+                .setStandbyTasks(null),
             leaveResult.response().data()
         );
 
-        // WHEN2 - dynamic member send a heartbeat.
+        // dynamic member send a heartbeat.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> dynamicHeartbeatResult =
             context.streamsGroupHeartbeat(
                 new StreamsGroupHeartbeatRequestData()
@@ -413,8 +454,17 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                     .setMemberEpoch(groupEpoch)
             );
 
-        // THEN2 : There is no new assignment.
-        assertResponseEquals(heartbeatResponseWithNullTasks(dynamicMemberId, groupEpoch), dynamicHeartbeatResult.response().data());
+        // There is no new assignment.
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(dynamicMemberId)
+                .setMemberEpoch(groupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setActiveTasks(null)
+                .setWarmupTasks(null)
+                .setStandbyTasks(null),
+            dynamicHeartbeatResult.response().data());
         assertTrue(dynamicHeartbeatResult.records().isEmpty());
 
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
@@ -439,7 +489,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         int bumpedGroupEpoch = groupEpoch + 1;
 
         String subtopologyId = "subtopology-1";
-        StreamsTopicFixture topic = streamsTopicFixture(subtopologyId, "foo", 4);
+        StreamsGroupTestUtil.StreamsTopicFixture topic = streamsTopicFixture(subtopologyId, "foo", 4);
 
         String oldStaticMemberId = Uuid.randomUuid().toString();
         String rejoinStaticMemberId = Uuid.randomUuid().toString();
@@ -466,29 +516,45 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             dynamicMemberId, newDynamicTargetAssignment
         ));
 
-        GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, assignor, group -> group
-            .withMember(streamsGroupMemberBuilderWithDefaults(oldStaticMemberId, staticInstanceId)
-                .setMemberEpoch(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-                .setPreviousMemberEpoch(groupEpoch)
-                .setProcessId(oldProcessId)
-                .setAssignedTasks(staticAssignedTasks)
-                .build())
-            .withMember(streamsGroupMemberBuilderWithDefaults(dynamicMemberId)
-                .setMemberEpoch(groupEpoch)
-                .setPreviousMemberEpoch(groupEpoch - 1)
-                .setAssignedTasks(dynamicAssignedTasks)
-                .build())
-            .withTargetAssignment(oldStaticMemberId, oldStaticTargetAssignment)
-            .withTargetAssignment(dynamicMemberId, oldDynamicTargetAssignment));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(oldStaticMemberId, staticInstanceId)
+                    .setMemberEpoch(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch)
+                    .setProcessId(oldProcessId)
+                    .setAssignedTasks(staticAssignedTasks)
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(dynamicMemberId)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(dynamicAssignedTasks)
+                    .build())
+                .withTargetAssignment(oldStaticMemberId, oldStaticTargetAssignment)
+                .withTargetAssignment(dynamicMemberId, oldDynamicTargetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
 
-        // WHEN 1: static member try to rejoin with new process id.
+        // static member try to rejoin with new process id.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> rejoinResult = context.streamsGroupHeartbeat(
             staticJoinHeartbeat(groupId, rejoinStaticMemberId, staticInstanceId, newProcessId)
         );
 
-        // THEN 1:
         assertResponseEquals(
-            heartbeatResponseWithActiveTasks(rejoinStaticMemberId, bumpedGroupEpoch, topic, 0),
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(rejoinStaticMemberId)
+                .setMemberEpoch(bumpedGroupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setActiveTasks(topic.responseTasks(0))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of()),
             rejoinResult.response().data()
         );
 
@@ -502,7 +568,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         assertTrue(group.hasMember(rejoinStaticMemberId));
         assertEquals(rejoinStaticMemberId, group.staticMember(staticInstanceId).memberId());
 
-        // Because group epoch is bumped up, target assignment should be recomupted.
+        // Because group epoch is bumped up, target assignment should be recomputed.
         assertEquals(newStaticTargetAssignment, group.targetAssignment(rejoinStaticMemberId, Optional.of(staticInstanceId)));
         assertEquals(newDynamicTargetAssignment, group.targetAssignment(dynamicMemberId, Optional.empty()));
         assertEquals(dynamicAssignedTasks, group.getMemberOrThrow(dynamicMemberId).assignedTasks());
@@ -577,13 +643,20 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             rejoinResult.records().subList(10, 12)
         );
 
-        // WHEN 2: dynamic member send a heartbeat and reconciles to the new target assignment.
+        // dynamic member send a heartbeat and reconciles to the new target assignment.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> dynamicHeartbeatResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, dynamicMemberId, null, groupEpoch)
         );
 
         assertResponseEquals(
-            heartbeatResponseWithActiveTasks(dynamicMemberId, bumpedGroupEpoch, topic, 1, 2, 3),
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(dynamicMemberId)
+                .setMemberEpoch(bumpedGroupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setActiveTasks(topic.responseTasks(1, 2, 3))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of()),
             dynamicHeartbeatResult.response().data()
         );
 
@@ -631,39 +704,56 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         String staticProcessId = "static-process-id";
         String dynamicProcessId = "dynamic-process-id";
 
-        StreamsTopicFixture topic = streamsTopicFixture("subtopology-1", "foo", 4);
+        StreamsGroupTestUtil.StreamsTopicFixture topic = streamsTopicFixture("subtopology-1", "foo", 4);
 
-        // GIVEN Tasks
         TasksTupleWithEpochs staticAssignedTasks = topic.assignedTasks(groupEpoch, 0, 1);
         TasksTuple staticTargetAssignment = topic.targetAssignment(0, 1);
 
         TasksTupleWithEpochs dynamicAssignedTasks = topic.assignedTasks(groupEpoch, 2, 3);
         TasksTuple dynamicTargetAssignment = topic.targetAssignment(2, 3);
 
-        GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, group -> group
-            .withMember(streamsGroupMemberBuilderWithDefaults(oldStaticMemberId, staticInstanceId)
-                .setProcessId(staticProcessId)
-                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-                .setPreviousMemberEpoch(groupEpoch)
-                .setAssignedTasks(staticAssignedTasks)
-                .build())
-            .withMember(streamsGroupMemberBuilderWithDefaults(dynamicMemberId)
-                .setProcessId(dynamicProcessId)
-                .setMemberEpoch(groupEpoch)
-                .setPreviousMemberEpoch(groupEpoch - 1)
-                .setAssignedTasks(dynamicAssignedTasks)
-                .build())
-            .withTargetAssignment(oldStaticMemberId, staticTargetAssignment)
-            .withTargetAssignment(dynamicMemberId, dynamicTargetAssignment));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(oldStaticMemberId, staticInstanceId)
+                    .setProcessId(staticProcessId)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch)
+                    .setAssignedTasks(staticAssignedTasks)
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(dynamicMemberId)
+                    .setProcessId(dynamicProcessId)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(dynamicAssignedTasks)
+                    .build())
+                .withTargetAssignment(oldStaticMemberId, staticTargetAssignment)
+                .withTargetAssignment(dynamicMemberId, dynamicTargetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
 
-        // WHEN1 : static member try to rejoin with same process id.
+        // static member try to rejoin with same process id.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> rejoinResult = context.streamsGroupHeartbeat(
             staticJoinHeartbeat(groupId, newStaticMemberId, staticInstanceId, staticProcessId)
         );
 
-
-        // THEN1
-        assertResponseEquals(heartbeatResponseWithActiveTasks(newStaticMemberId, groupEpoch, topic, 0, 1), rejoinResult.response().data());
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(newStaticMemberId)
+                .setMemberEpoch(groupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setActiveTasks(topic.responseTasks(0, 1))
+                .setWarmupTasks(List.of())
+                .setStandbyTasks(List.of()),
+            rejoinResult.response().data()
+        );
 
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
 
@@ -703,13 +793,22 @@ class StreamsGroupMixedGroupMetadataManagerTest {
 
         assertRecordsEquals(expectedRejoinRecords, rejoinResult.records());
 
-        // WHEN2 - dynamic member send a heartbeat request
+        // dynamic member send a heartbeat request
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> dynamicHeartbeatResult = context.streamsGroupHeartbeat(
             staticHeartbeat(groupId, dynamicMemberId, null, groupEpoch)
         );
 
-        // THEN2 - no new target assignment.
-        assertResponseEquals(heartbeatResponseWithNullTasks(dynamicMemberId, groupEpoch), dynamicHeartbeatResult.response().data());
+        // no new target assignment.
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(dynamicMemberId)
+                .setMemberEpoch(groupEpoch)
+                .setHeartbeatIntervalMs(5000)
+                .setTaskOffsetIntervalMs(60000)
+                .setActiveTasks(null)
+                .setWarmupTasks(null)
+                .setStandbyTasks(null),
+            dynamicHeartbeatResult.response().data());
         assertTrue(dynamicHeartbeatResult.records().isEmpty());
 
         assertEquals(dynamicAssignedTasks, group.getMemberOrThrow(dynamicMemberId).assignedTasks());
@@ -735,7 +834,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         String staticProcessId = "static-process-id";
         String dynamicProcessId = "dynamic-process-id";
 
-        StreamsTopicFixture topic = streamsTopicFixture("subtopology-1", "foo", 4);
+        StreamsGroupTestUtil.StreamsTopicFixture topic = streamsTopicFixture("subtopology-1", "foo", 4);
 
         TasksTupleWithEpochs staticAssignedTasks = topic.assignedTasks(groupEpoch, 0, 1);
         TasksTuple staticTargetAssignment = topic.targetAssignment(0, 1);
@@ -743,28 +842,38 @@ class StreamsGroupMixedGroupMetadataManagerTest {
         TasksTupleWithEpochs dynamicAssignedTasks = topic.assignedTasks(groupEpoch, 2, 3);
         TasksTuple dynamicTargetAssignment = topic.targetAssignment(2, 3);
 
-        GroupMetadataManagerTestContext context = contextWithStreamsGroup(groupId, groupEpoch, topic, group -> group
-            .withMember(streamsGroupMemberBuilderWithDefaults(oldStaticMemberId, staticInstanceId)
-                .setProcessId(staticProcessId)
-                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-                .setPreviousMemberEpoch(groupEpoch)
-                .setAssignedTasks(staticAssignedTasks)
-                .build())
-            .withMember(streamsGroupMemberBuilderWithDefaults(dynamicMemberId)
-                .setProcessId(dynamicProcessId)
-                .setMemberEpoch(groupEpoch)
-                .setPreviousMemberEpoch(groupEpoch - 1)
-                .setAssignedTasks(dynamicAssignedTasks)
-                .build())
-            .withTargetAssignment(oldStaticMemberId, staticTargetAssignment)
-            .withTargetAssignment(dynamicMemberId, dynamicTargetAssignment));
-
-        // WHEN1 - static member try to rejoin with new member id.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(topic.metadataImage())
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, groupEpoch)
+                .withMember(streamsGroupMemberBuilderWithDefaults(oldStaticMemberId, staticInstanceId)
+                    .setProcessId(staticProcessId)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(groupEpoch)
+                    .setAssignedTasks(staticAssignedTasks)
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(dynamicMemberId)
+                    .setProcessId(dynamicProcessId)
+                    .setMemberEpoch(groupEpoch)
+                    .setPreviousMemberEpoch(groupEpoch - 1)
+                    .setAssignedTasks(dynamicAssignedTasks)
+                    .build())
+                .withTargetAssignment(oldStaticMemberId, staticTargetAssignment)
+                .withTargetAssignment(dynamicMemberId, dynamicTargetAssignment)
+                .withTargetAssignmentEpoch(groupEpoch)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
+                .withValidatedTopologyEpoch(0)
+                .withMetadataHash(topic.metadataHash())
+                .withLastAssignmentConfigs(getDefaultAssignmentConfigs()))
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT)
+            .build();
+        
+        // static member try to rejoin with new member id.
         context.streamsGroupHeartbeat(
             staticJoinHeartbeat(groupId, newStaticMemberId, staticInstanceId, staticProcessId)
         );
 
-        // WHEN2 + THEN2 - stale static member send a heartbeat with stale member id. 
+        // stale static member send a heartbeat with stale member id. 
         assertThrows(FencedInstanceIdException.class, () ->
             context.streamsGroupHeartbeat(staticHeartbeat(groupId, oldStaticMemberId, staticInstanceId, groupEpoch))
         );

@@ -734,24 +734,28 @@ public class GroupMetadataManagerTestContext {
     }
 
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
-        StreamsGroupHeartbeatRequestData request
+        StreamsGroupHeartbeatRequestData request,
+        String clientId,
+        InetAddress clientAddress
     ) {
-        return streamsGroupHeartbeat(request, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
+        return streamsGroupHeartbeat(request, clientId, clientAddress, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
     }
 
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
         StreamsGroupHeartbeatRequestData request,
+        String clientId,
+        InetAddress clientAddress,
         short version
     ) {
         RequestContext context = new RequestContext(
             new RequestHeader(
                 ApiKeys.STREAMS_GROUP_HEARTBEAT,
                 version,
-                "client",
+                clientId,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            clientAddress,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -770,6 +774,12 @@ public class GroupMetadataManagerTestContext {
         return result;
     }
 
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request
+    ) {
+        return streamsGroupHeartbeat(request, "client", InetAddress.getLoopbackAddress());
+    }
+    
     public List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> sleep(long ms) {
         time.sleep(ms);
         List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = timer.poll();

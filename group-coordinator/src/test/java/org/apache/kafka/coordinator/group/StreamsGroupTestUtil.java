@@ -23,10 +23,7 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.streams.MemberState;
-import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
-import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
-import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
@@ -115,22 +112,6 @@ class StreamsGroupTestUtil {
             .setWarmupTasks(List.of());
     }
 
-    static StreamsGroupHeartbeatResponseData staticLeaveResponse(String memberId, int leaveEpoch) {
-        return new StreamsGroupHeartbeatResponseData()
-            .setMemberId(memberId)
-            .setMemberEpoch(leaveEpoch)
-            .setStatus(List.of());
-    }
-
-
-    static StreamsGroupHeartbeatResponseData staticLeaveResponseWithNullTasks(String memberId, int leaveEpoch) {
-        return staticLeaveResponse(memberId, leaveEpoch)
-            .setActiveTasks(null)
-            .setWarmupTasks(null)
-            .setStandbyTasks(null);
-    }
-
-
     static class StreamsTopicFixture {
         private final String subtopologyId;
         private final String topicName;
@@ -207,110 +188,6 @@ class StreamsGroupTestUtil {
                     .setPartitions(partitions)
             );
         }
-    }
-
-    static GroupMetadataManagerTestContext contextWithStreamsGroup(
-        String groupId,
-        int groupEpoch,
-        StreamsTopicFixture topic,
-        java.util.function.UnaryOperator<StreamsGroupBuilder> configureGroup
-    ) {
-        return contextWithStreamsGroup(
-            groupId,
-            groupEpoch,
-            topic,
-            new MockTaskAssignor("sticky"),
-            configureGroup
-        );
-    }
-
-    static GroupMetadataManagerTestContext contextWithStreamsGroup(
-        String groupId,
-        int groupEpoch,
-        StreamsTopicFixture topic,
-        MockTaskAssignor assignor,
-        java.util.function.UnaryOperator<StreamsGroupBuilder> configureGroup
-    ) {
-        return contextWithStreamsGroup(groupId, groupEpoch, topic, assignor, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT, configureGroup);
-    }
-
-    static GroupMetadataManagerTestContext contextWithStreamsGroup(
-        String groupId,
-        int groupEpoch,
-        StreamsTopicFixture topic,
-        MockTaskAssignor assignor,
-        int initialRebalanceDelayMs,
-        java.util.function.UnaryOperator<StreamsGroupBuilder> configureGroup
-    ) {
-        StreamsGroupBuilder group = new StreamsGroupBuilder(groupId, groupEpoch)
-            .withTargetAssignmentEpoch(groupEpoch)
-            .withTopology(StreamsTopology.fromHeartbeatRequest(topic.topology()))
-            .withValidatedTopologyEpoch(0)
-            .withMetadataHash(topic.metadataHash())
-            .withLastAssignmentConfigs(getDefaultAssignmentConfigs());
-
-        return new GroupMetadataManagerTestContext.Builder()
-            .withStreamsGroupTaskAssignors(List.of(assignor))
-            .withMetadataImage(topic.metadataImage())
-            .withStreamsGroup(configureGroup.apply(group))
-            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, initialRebalanceDelayMs)
-            .build();
-    }
-
-    static StreamsGroupHeartbeatResponseData heartbeatResponseWithActiveTasks(
-        String memberId,
-        int memberEpoch,
-        StreamsTopicFixture topic,
-        Integer... activeTasks
-    ) {
-        return heartbeatResponseWithActiveTasks(
-            memberId,
-            memberEpoch,
-            topic.responseTasks(activeTasks)
-        );
-    }
-
-    static StreamsGroupHeartbeatResponseData heartbeatResponseWithActiveTasks(
-        String memberId,
-        int memberEpoch,
-        List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks
-    ) {
-        return new StreamsGroupHeartbeatResponseData()
-            .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch)
-            .setHeartbeatIntervalMs(5000)
-            .setTaskOffsetIntervalMs(60000)
-            .setActiveTasks(activeTasks)
-            .setWarmupTasks(List.of())
-            .setStandbyTasks(List.of());
-    }
-
-    static StreamsGroupHeartbeatResponseData heartbeatResponseWithActiveTasks(
-        String memberId,
-        int memberEpoch,
-        String subtopologyId,
-        Integer... activeTasks
-    ) {
-        return heartbeatResponseWithActiveTasks(
-            memberId,
-            memberEpoch,
-            mkResponseTasks(subtopologyId, activeTasks)
-        );
-    }
-
-
-    static StreamsGroupHeartbeatResponseData heartbeatResponseWithNullTasks(
-        String memberId,
-        int memberEpoch
-    ) {
-        return new StreamsGroupHeartbeatResponseData()
-            .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch)
-            .setHeartbeatIntervalMs(5000)
-            .setTaskOffsetIntervalMs(60000)
-            .setActiveTasks(null)
-            .setWarmupTasks(null)
-            .setStandbyTasks(null);
     }
 
     static StreamsGroupHeartbeatRequestData staticJoinHeartbeat(
