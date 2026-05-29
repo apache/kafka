@@ -166,6 +166,7 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
+import org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentView;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
@@ -4145,24 +4146,23 @@ public class GroupMetadataManager {
             updatedMember
         ).orElse(defaultConsumerGroupAssignor.name());
         try {
+            UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment =
+                new UpdatedMembersAndTargetAssignmentView<>(
+                    group.members(),
+                    group.staticMembers(),
+                    group.targetAssignment()
+                );
+            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
+
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withTime(time)
-                    .withMembers(group.members())
-                    .withStaticMembers(group.staticMembers())
+                    .withMembers(updatedMembersAndTargetAssignment.members())
                     .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(group.targetAssignment())
+                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withMetadataImage(metadataImage)
-                    .withResolvedRegularExpressions(group.resolvedRegularExpressions())
-                    .addOrUpdateMember(updatedMember.memberId(), updatedMember);
-
-            // If the instance id was associated to a different member, it means that the
-            // static member is replaced by the current member hence we remove the previous one.
-            String previousMemberId = group.staticMemberId(updatedMember.instanceId());
-            if (previousMemberId != null && !updatedMember.memberId().equals(previousMemberId)) {
-                assignmentResultBuilder.removeMember(previousMemberId);
-            }
+                    .withResolvedRegularExpressions(group.resolvedRegularExpressions());
 
             long startTimeMs = time.milliseconds();
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -4229,16 +4229,23 @@ public class GroupMetadataManager {
                 stripInitValue(shareGroupStatePartitionMetadata.get(group.groupId()).initializedTopics()) :
                 Map.of();
 
+            UpdatedMembersAndTargetAssignmentView<ShareGroupMember, Assignment> updatedMembersAndTargetAssignment =
+                new UpdatedMembersAndTargetAssignmentView<>(
+                    group.members(),
+                    Map.of(),
+                    group.targetAssignment()
+                );
+            updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
+
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
                     .withTime(time)
-                    .withMembers(group.members())
+                    .withMembers(updatedMembersAndTargetAssignment.members())
                     .withSubscriptionType(subscriptionType)
-                    .withTargetAssignment(group.targetAssignment())
+                    .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
                     .withTopicAssignablePartitionsMap(initializedTopicPartitions)
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withMetadataImage(metadataImage)
-                    .addOrUpdateMember(updatedMember.memberId(), updatedMember);
+                    .withMetadataImage(metadataImage);
 
             long startTimeMs = time.milliseconds();
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
