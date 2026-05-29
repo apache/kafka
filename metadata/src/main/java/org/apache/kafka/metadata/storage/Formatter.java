@@ -246,7 +246,8 @@ public class Formatter {
     /**
      * Validates the correctness of the given cluster id. A valid cluster id is a base64, urlencoded, no padding
      * representation of a {@link Uuid}. These checks do not validate the absence of <code>-</code> character as
-     * {@link Uuid#randomUuid()} avoids them only for convenience reasons.
+     * {@link Uuid#randomUuid()} avoids them only for convenience reasons and such a validation would break
+     * compatibility when attempting to format using an old cluster id.
      */
     private void validateClusterId(String clusterId) {
         if (clusterId == null) {
