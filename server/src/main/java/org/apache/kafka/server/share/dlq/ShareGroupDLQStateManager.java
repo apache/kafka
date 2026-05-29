@@ -45,6 +45,7 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.apache.kafka.server.util.timer.Timer;
@@ -80,6 +81,7 @@ public class ShareGroupDLQStateManager {
     private final Time time;
     private final Timer timer;
     private final ShareGroupDLQMetadataCacheHelper cacheHelper;
+    private final ShareGroupMetrics shareGroupMetrics;
     public static final long REQUEST_BACKOFF_MS = 1_000L;
     public static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
     private static final int MAX_REQUEST_ATTEMPTS = 5;
@@ -91,7 +93,18 @@ public class ShareGroupDLQStateManager {
     private final Map<Node, List<ProduceRequestHandler>> nodeRPCMap = new HashMap<>();
     private final Object nodeMapLock = new Object();
 
-    public ShareGroupDLQStateManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
+    // Called when the generateRequests method is executed by InterBrokerSendThread, returning requests.
+    // Mainly for testing and introspection purpose to inspect the state of the nodeRPC map
+    // when generateRequests is called.
+    private Runnable generateCallback;
+
+    public ShareGroupDLQStateManager(
+        KafkaClient client,
+        ShareGroupDLQMetadataCacheHelper cacheHelper,
+        Time time,
+        Timer timer,
+        ShareGroupMetrics shareGroupMetrics
+    ) {
         if (client == null) {
             throw new IllegalArgumentException("Kafkaclient must not be null.");
         }
@@ -108,9 +121,14 @@ public class ShareGroupDLQStateManager {
             throw new IllegalArgumentException("Timer must not be null.");
         }
 
+        if (shareGroupMetrics == null) {
+            throw new IllegalArgumentException("ShareGroupMetrics must not be null.");
+        }
+
         this.time = time;
         this.timer = timer;
         this.cacheHelper = cacheHelper;
+        this.shareGroupMetrics = shareGroupMetrics;
         this.sender = new SendThread(
             "ShareGroupDLQSendThread",
             client,
@@ -152,6 +170,16 @@ public class ShareGroupDLQStateManager {
         ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future, requestBackoffMs, requestBackoffMaxMs, maxRequestAttempts);
         enqueue(requestHandler);
         return future;
+    }
+
+    // Visibility for tests
+    void setGenerateCallback(Runnable generateCallback) {
+        this.generateCallback = generateCallback;
+    }
+
+    // Visibility for tests
+    Map<Node, List<ShareGroupDLQStateManager.ProduceRequestHandler>> nodeRPCMap() {
+        return nodeRPCMap;
     }
 
     private void enqueue(ProduceRequestHandler requestHandler) {
@@ -332,6 +360,10 @@ public class ShareGroupDLQStateManager {
                 Compression.NONE,
                 simpleRecords.toArray(new SimpleRecord[]{})
             );
+
+            // Update the metric to say a new request is created to se sent. This might not be the
+            // actual RPC count as we coalesce the requests before sending.
+            shareGroupMetrics.recordDLQProduce(param.groupId());
 
             return new ProduceRequestData.TopicProduceData()
                 .setName(dlqTopicPartitionData.topicName())
@@ -580,6 +612,7 @@ public class ShareGroupDLQStateManager {
                     switch (error) {
                         case NONE:
                             LOG.debug("Successfully produced records {} to dlq topic node {}.", this, dlqPartitionLeaderNode());
+                            shareGroupMetrics.recordDLQRecordWrite(param.groupId(), (int) (param.lastOffset() - param.firstOffset() + 1));
                             produceRequestBackoff.resetAttempts();
                             this.result.complete(null);
                             break;
@@ -588,6 +621,7 @@ public class ShareGroupDLQStateManager {
                             LOG.debug("Received retriable error produce response for {} to dlq topic node {} - {}.", this, dlqPartitionLeaderNode(), errorMessage);
                             if (!produceRequestBackoff.canAttempt()) {
                                 LOG.error("Exhausted max retries to produce {} to  DLQ topic node {}.", this, dlqPartitionLeaderNode());
+                                shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                                 requestErrorResponse(new Exception("Exhausted max retries to produce to DLQ topic without success."));
                                 break;
                             }
@@ -598,6 +632,7 @@ public class ShareGroupDLQStateManager {
                             LOG.error("Unable to produce {} to DLQ topic node {} - {}.", this, dlqPartitionLeaderNode(), errorMessage);
                             partitionResponse.recordErrors().forEach(recordError ->
                                 LOG.error("Records with errors {} - {}.", recordError.batchIndex(), recordError.batchIndexErrorMessage()));
+                            shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                             requestErrorResponse(error.exception());
                     }
                     break;
@@ -609,6 +644,7 @@ public class ShareGroupDLQStateManager {
                     if (!produceRequestBackoff.canAttempt()) {
                         LOG.error("Exhausted max retries to produce {} to  DLQ topic node {} due to client response error {}.",
                             param, dlqPartitionLeaderNode(), clientResponseErrorMessage);
+                        shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                         requestErrorResponse(clientResponseError.exception());
                         break;
                     }
@@ -618,6 +654,7 @@ public class ShareGroupDLQStateManager {
                 default:
                     LOG.error("Unable to produce {} to DLQ topic node {} due to client response error {}.",
                         param, dlqPartitionLeaderNode(), clientResponseErrorMessage);
+                    shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                     requestErrorResponse(clientResponseError.exception());
             }
         }
@@ -634,6 +671,11 @@ public class ShareGroupDLQStateManager {
 
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
+            // Introspection for testing - will be null in prod
+            if (generateCallback != null) {
+                generateCallback.run();
+            }
+
             List<RequestAndCompletionHandler> requests = new ArrayList<>();
 
             if (!queue.isEmpty()) {
@@ -772,13 +814,19 @@ public class ShareGroupDLQStateManager {
         }
     }
 
-    private record CoalesceResults(
+    // Visibility for tests
+    record CoalesceResults(
         AbstractRequest.Builder<? extends AbstractRequest> request,
         List<ProduceRequestHandler> liveHandlers
     ) {
     }
 
-    private static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers) {
+    // Visibility for tests
+    static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers) {
+        // Above handlers are destined for the same broker node - it could be for different DLQ topics and partitions
+        // but the same broker node. Now the produce request requires each topic data request to be
+        // scoped to a specific topic/topicId and the partition data could have all the record information
+        // and the destination DLQ partition. To accomplish this, we will map handlers by DLQ topic id.
         Map<Uuid, ProduceRequestData.TopicProduceData> produceHandlerMap = new HashMap<>();
         List<ProduceRequestHandler> liveHandlers = new ArrayList<>(handlers.size());
         handlers.forEach(handler -> {
