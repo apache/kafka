@@ -126,8 +126,7 @@ public final class KafkaMetric implements Metric {
     }
 
     /**
-     * Returns a human-readable representation of this metric, primarily useful for logging
-     * in contexts like {@link MetricsReporter#metricChange(KafkaMetric)}.
+     * Returns a human-readable representation of this metric.
      *
      * <p>The metricValueProvider is represented by its class name rather than its full
      * toString() to avoid dumping internal stat state (e.g. SampledStat's samples list) into

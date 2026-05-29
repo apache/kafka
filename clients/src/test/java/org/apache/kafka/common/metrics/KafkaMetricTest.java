@@ -92,8 +92,7 @@ public class KafkaMetricTest {
     }
 
     /**
-     * Verifies that toString produces a human-readable representation suitable for logging,
-     * e.g. in {@link org.apache.kafka.common.metrics.MetricsReporter#metricChange(KafkaMetric)}.
+     * Verifies that toString produces a human-readable representation suitable for logging.
      * Note that we skip the metric provider in this case, but this is still a
      * significant improvement over the default Object.toString() output (e.g. "KafkaMetric@62a7d6c6").
      */
