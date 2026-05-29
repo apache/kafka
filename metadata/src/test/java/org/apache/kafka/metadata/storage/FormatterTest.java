@@ -622,4 +622,14 @@ public class FormatterTest {
                             getMessage().substring(0, expectedPrefix.length()));
         }
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"iIygKoNNSpGzNeAEr_QW7w", "-w_KF-snTmuEnKPqZ0RDzA", "dZMgZA7nTLqZTdzb0zbvSQ", "hxqHyN2OSSmPajVhm_DR-Q"})
+    public void testFormatWithValidClusterId(String clusterId) throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setClusterId(clusterId);
+            formatter1.formatter.run();
+        }
+    }
 }
