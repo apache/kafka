@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.server.config;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.config.BrokerReconfigurable;
 import org.apache.kafka.server.common.DirectoryEventHandler;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -59,21 +57,12 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     }
 
     @Override
-    public void validateReconfiguration(AbstractConfig newConfig) {
-        AbstractKafkaConfig kafkaConfig = requireKafkaConfig(newConfig);
-        validateLogLocalRetentionMs(kafkaConfig);
-        validateLogLocalRetentionBytes(kafkaConfig);
-        validateLogRemoteCopyLagMs(kafkaConfig);
-        validateLogRemoteCopyLagBytes(kafkaConfig);
-        validateCordonedLogDirs(kafkaConfig);
-    }
-
-    private AbstractKafkaConfig requireKafkaConfig(AbstractConfig config) {
-        if (!(config instanceof AbstractKafkaConfig kafkaConfig)) {
-            throw new IllegalArgumentException("DynamicLogConfig requires AbstractKafkaConfig, got " +
-                config.getClass().getName());
-        }
-        return kafkaConfig;
+    public void validateReconfiguration(AbstractKafkaConfig newConfig) {
+        validateLogLocalRetentionMs(newConfig);
+        validateLogLocalRetentionBytes(newConfig);
+        validateLogRemoteCopyLagMs(newConfig);
+        validateLogRemoteCopyLagBytes(newConfig);
+        validateCordonedLogDirs(newConfig);
     }
 
     private void validateLogLocalRetentionMs(AbstractKafkaConfig config) {
@@ -157,14 +146,13 @@ public class DynamicLogConfig implements BrokerReconfigurable {
     }
 
     @Override
-    public void reconfigure(AbstractConfig oldConfig, AbstractConfig newConfig) {
-        AbstractKafkaConfig kafkaConfig = requireKafkaConfig(newConfig);
-        Map<String, Object> newBrokerDefaults = new HashMap<>(kafkaConfig.extractLogConfigMap());
+    public void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig) {
+        Map<String, Object> newBrokerDefaults = new HashMap<>(newConfig.extractLogConfigMap());
         logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults));
         updateLogsConfig(newBrokerDefaults);
 
-        logManager.updateCordonedLogDirs(Set.copyOf(kafkaConfig.cordonedLogDirs()));
-        directoryEventHandler.handleCordoned(kafkaConfig.cordonedLogDirs().stream()
+        logManager.updateCordonedLogDirs(Set.copyOf(newConfig.cordonedLogDirs()));
+        directoryEventHandler.handleCordoned(newConfig.cordonedLogDirs().stream()
             .flatMap(dir -> logManager.directoryId(dir).stream())
             .collect(Collectors.toSet()));
     }
