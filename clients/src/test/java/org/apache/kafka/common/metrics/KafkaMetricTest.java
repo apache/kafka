@@ -19,10 +19,9 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.MockTime;
-
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -31,12 +30,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaMetricTest {
 
-    private static final MetricName METRIC_NAME_1 = new MetricName("name", "group", "description", Collections.emptyMap());
+    private static final MetricName METRIC_NAME_1 = new MetricName("name", "group", "description", Map.of());
     private static final MetricName METRIC_NAME_2 = new MetricName(
             "request-latency-avg",
             "consumer-fetch-manager-metrics",
             "The average request latency in ms",
-            Collections.singletonMap("client-id", "consumer-1")
+            Map.of("client-id", "consumer-1")
     );
 
     @Test
@@ -82,8 +81,7 @@ public class KafkaMetricTest {
     }
 
     /**
-     * Verifies that toString produces a human-readable representation suitable for logging,
-     * e.g. in {@link org.apache.kafka.common.metrics.MetricsReporter#metricChange(KafkaMetric)}.
+     * Verifies that toString produces a human-readable representation suitable for logging.
      * Note that we skip the metric provider in this case, but this is still a
      * significant improvement over the default Object.toString() output (e.g. "KafkaMetric@62a7d6c6").
      */
@@ -111,20 +109,8 @@ public class KafkaMetricTest {
         testToStringOnLambdaOrAnonymousClass(metricValueProvider);
     }
 
-    private void testToStringOnLambdaOrAnonymousClass(Measurable metricValueProvider) {
-        KafkaMetric metric = new KafkaMetric(
-                new Object(), METRIC_NAME_2, metricValueProvider, new MetricConfig(), new MockTime());
-
-        String result = metric.toString();
-        assertEquals("KafkaMetric [metricName=MetricName [name=request-latency-avg, "
-                + "group=consumer-fetch-manager-metrics, "
-                + "description=The average request latency in ms, "
-                + "tags={client-id=consumer-1}]]",
-                result);
-    }
-
     @Test
-    public void testToStringWithRealStat() {
+    public void testToStringWithStatProvider() {
         Avg avg = new Avg();
         KafkaMetric metric = new KafkaMetric(new Object(), METRIC_NAME_2, avg, new MetricConfig(), new MockTime());
 
@@ -132,7 +118,19 @@ public class KafkaMetricTest {
                 + "group=consumer-fetch-manager-metrics, "
                 + "description=The average request latency in ms, "
                 + "tags={client-id=consumer-1}], "
-                + "metricValueProvider=Avg]",
+                + "metricValueProvider=org.apache.kafka.common.metrics.stats.Avg]",
                 metric.toString());
+    }
+
+    private void testToStringOnLambdaOrAnonymousClass(Measurable metricValueProvider) {
+        KafkaMetric metric = new KafkaMetric(
+                new Object(), METRIC_NAME_2, metricValueProvider, new MetricConfig(), new MockTime());
+
+        String result = metric.toString();
+        assertEquals("KafkaMetric [metricName=MetricName [name=request-latency-avg, "
+                        + "group=consumer-fetch-manager-metrics, "
+                        + "description=The average request latency in ms, "
+                        + "tags={client-id=consumer-1}]]",
+                result);
     }
 }

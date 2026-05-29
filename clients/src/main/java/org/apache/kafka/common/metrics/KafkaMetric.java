@@ -129,7 +129,7 @@ public final class KafkaMetric implements Metric {
      * Returns a human-readable representation of this metric, primarily useful for logging
      * in contexts like {@link MetricsReporter#metricChange(KafkaMetric)}.
      *
-     * <p>The metricValueProvider is represented by its simple class name rather than its full
+     * <p>The metricValueProvider is represented by its class name rather than its full
      * toString() to avoid dumping internal stat state (e.g. SampledStat's samples list) into
      * logs, which could be verbose and is rarely useful for identifying which metric changed.
      */
@@ -142,7 +142,7 @@ public final class KafkaMetric implements Metric {
 
         return "KafkaMetric [" +
                 "metricName=" + metricName +
-                ", metricValueProvider=" + metricValueProvider.getClass().getSimpleName() +
+                ", metricValueProvider=" + metricValueProvider.getClass().getName() +
                 ']';
     }
 }
