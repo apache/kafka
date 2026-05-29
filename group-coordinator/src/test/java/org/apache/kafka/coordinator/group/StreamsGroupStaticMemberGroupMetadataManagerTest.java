@@ -556,7 +556,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
     }
 
     @Test
-    public void testStaticMemberRejoinWithUpdatedProcessIdBumpsStreamsGroupEpoch1() throws UnknownHostException {
+    public void testStaticMemberRejoinWithSameProcessIdDoesNotBumpStreamsGroupEpoch() throws UnknownHostException {
         String groupId = "fooup";
         int groupEpoch = DEFAULT_GROUP_EPOCH;
 
