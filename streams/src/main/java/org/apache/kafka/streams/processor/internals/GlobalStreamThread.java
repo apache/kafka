@@ -50,7 +50,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BooleanSupplier;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
@@ -391,7 +390,7 @@ public class GlobalStreamThread extends Thread {
                 stateDirectory,
                 stateRestoreListener,
                 config,
-                () -> inErrorState()
+                this::inErrorState
             );
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
@@ -437,7 +436,7 @@ public class GlobalStreamThread extends Thread {
                     recoverableException
                 );
             }
-            
+
             if (inErrorState()) {
                 closeStateConsumer(stateConsumer, false);
                 return null;

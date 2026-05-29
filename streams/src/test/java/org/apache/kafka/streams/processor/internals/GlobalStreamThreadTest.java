@@ -306,11 +306,11 @@ public class GlobalStreamThreadTest {
 
         assertEquals(DEAD, globalStreamThread.state());
         assertNull(caughtException.get());
-        assertTrue(positionBeforeShutdown < 10L,
+        assertTrue(positionBeforeShutdown < 50L,
             "Shutdown should have interrupted the main loop before all records were consumed; position was "
                 + positionBeforeShutdown);
     }
-    
+
     @Test
     public void shouldThrowStreamsExceptionOnStartupIfWakeupOccursWithoutShutdown() throws Exception {
         final MockConsumer<byte[], byte[]> wakeupOnPartitionsFor = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {

@@ -1271,7 +1271,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldAbortRestoreWhenSupplierFlipsToShutdown() {
-        final AtomicBoolean shouldShutDown = new AtomicBoolean(false);
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
         stateManager = new GlobalStateManagerImpl(
             new LogContext("test"),
             time,
@@ -1280,7 +1280,7 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig,
-            shouldShutDown::get
+            inErrorState::get
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1288,7 +1288,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(6, 1, t1);
         initializeConsumer(0, 0, t2, t3, t4, t5);
 
-        shouldShutDown.set(true);
+        inErrorState.set(true);
 
         stateManager.initialize();
 
@@ -1297,8 +1297,8 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shutAbortRestoreWhenSupplierFlipsMidRestore() {
-        final AtomicBoolean shouldShutDown = new AtomicBoolean(false);
+    public void shouldAbortRestoreWhenSupplierFlipsMidRestore() {
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
         final AtomicInteger restoredCount = new AtomicInteger(0);
         final MockStateRestoreListener flippingRestoreListener = new MockStateRestoreListener() {
             @Override
@@ -1309,7 +1309,7 @@ public class GlobalStateManagerImplTest {
                 super.onBatchRestored(tp, storeName, batchEndOffset, numRestored);
                 restoredCount.addAndGet((int) numRestored);
                 if (numRestored > 0) {
-                    shouldShutDown.set(true);
+                    inErrorState.set(true);
                 }
             }
         };
@@ -1321,7 +1321,7 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             flippingRestoreListener,
             streamsConfig,
-            shouldShutDown::get
+            inErrorState::get
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1337,13 +1337,13 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldExitCleanlyOnWakeupDuringBootstrapWhenShuttingDown() {
-        final AtomicBoolean shouldShutDown = new AtomicBoolean(false);
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
         final AtomicInteger pollCount = new AtomicInteger(0);
         consumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
             @Override
             public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
                 pollCount.incrementAndGet();
-                shouldShutDown.set(true);
+                inErrorState.set(true);
                 throw new WakeupException();
             }
         };
@@ -1358,7 +1358,7 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig,
-            shouldShutDown::get
+            inErrorState::get
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1366,12 +1366,12 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
 
         assertEquals(1, pollCount.get());
-        assertTrue(shouldShutDown.get());
+        assertTrue(inErrorState.get());
     }
 
     @Test
     public void shouldPropagateWakeupDuringBootstrapWhenNotShuttingDown() {
-        final AtomicBoolean shouldShutDown = new AtomicBoolean(false);
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
         consumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
             @Override
             public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
@@ -1389,7 +1389,7 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig,
-            shouldShutDown::get
+            inErrorState::get
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1401,13 +1401,13 @@ public class GlobalStateManagerImplTest {
     public void shouldExitCleanlyOnWakeupDuringReprocessingWhenShuttingDown() {
         setUpReprocessing();
 
-        final AtomicBoolean shouldShutDown = new AtomicBoolean(false);
+        final AtomicBoolean inErrorState = new AtomicBoolean(false);
         final AtomicInteger pollCount = new AtomicInteger(0);
         consumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
             @Override
             public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
                 pollCount.incrementAndGet();
-                shouldShutDown.set(true);
+                inErrorState.set(true);
                 throw new WakeupException();
             }
         };
@@ -1422,7 +1422,7 @@ public class GlobalStateManagerImplTest {
             stateDirectory,
             stateRestoreListener,
             streamsConfig,
-            shouldShutDown::get
+            inErrorState::get
         );
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
@@ -1430,7 +1430,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
 
         assertEquals(1, pollCount.get());
-        assertTrue(shouldShutDown.get());
+        assertTrue(inErrorState.get());
     }
 
     private void writeCorruptCheckpoint() throws IOException {

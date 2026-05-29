@@ -125,7 +125,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private DeserializationExceptionHandler deserializationExceptionHandler;
     private ProcessingExceptionHandler processingExceptionHandler;
     private Sensor droppedRecordsSensor;
-    private BooleanSupplier shouldShutDownSupplier;
+    private BooleanSupplier inErrorStateSupplier;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -134,7 +134,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config,
-                                  final BooleanSupplier shouldShutDown) {
+                                  final BooleanSupplier inErrorStateSupplier) {
         this.time = time;
         this.topology = topology;
         this.stateDirectory = stateDirectory;
@@ -151,7 +151,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         logPrefix = logContext.logPrefix();
         this.globalConsumer = globalConsumer;
         this.stateRestoreListener = stateRestoreListener;
-        this.shouldShutDownSupplier = shouldShutDown;
+        this.inErrorStateSupplier = inErrorStateSupplier;
 
         final Map<String, Object> consumerProps = config.getGlobalConsumerConfigs("dummy");
         // need to add mandatory configs; otherwise `QuietConsumerConfig` throws
@@ -214,7 +214,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         LegacyCheckpointingStateStore.migrateLegacyOffsets(logPrefix, stateDirectory, null, wrappedStores);
 
         for (final StateStoreMetadata metadata : storeMetadata.values()) {
-            if(shouldShutDownSupplier.getAsBoolean()) {
+            if (inErrorStateSupplier.getAsBoolean()) {
                 log.info("Global store bootstrap interrupted by shutdown before starting {}", metadata.stateStore.name());
                 break;
             }
@@ -357,8 +357,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
                 //      `poll(pollMS)` without adding the request timeout and do a more precise
                 //      timeout handling
-                if(shouldShutDownSupplier.getAsBoolean()) {
-                    log.info("Global store bootstrap interrupted by shutdown before starting {}", storeMetadata.stateStore.name());
+                if (inErrorStateSupplier.getAsBoolean()) {
+                    logBootstrapInterrupted(storeMetadata);
                     return;
                 }
 
@@ -366,9 +366,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 try {
                     records = globalConsumer.poll(pollMsPlusRequestTimeout);
                 } catch (final WakeupException e) {
-                    if (shouldShutDownSupplier.getAsBoolean()) {
-                        log.info("Bootstrap interrupted by shutdown for {}",
-                            storeMetadata.stateStore.name());
+                    if (inErrorStateSupplier.getAsBoolean()) {
+                        logBootstrapInterrupted(storeMetadata);
                         return;
                     }
                     throw e;
@@ -461,7 +460,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                             fatalUserException
                                     );
                                 }
-                                
+
                                 if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
                                     log.error("Processing exception handler is set to fail upon" +
                                             " a processing error. If you would rather have the streaming pipeline" +
@@ -517,17 +516,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
                 //      `poll(pollMS)` without adding the request timeout and do a more precise
                 //      timeout handling
-                if(shouldShutDownSupplier.getAsBoolean()) {
-                    log.info("Global store bootstrap interrupted by shutdown before starting {}", storeMetadata.stateStore.name());
+                if (inErrorStateSupplier.getAsBoolean()) {
+                    logBootstrapInterrupted(storeMetadata);
                     return;
                 }
                 final ConsumerRecords<byte[], byte[]> records;
                 try {
                     records = globalConsumer.poll(pollMsPlusRequestTimeout);
                 } catch (final WakeupException e) {
-                    if (shouldShutDownSupplier.getAsBoolean()) {
-                        log.info("Bootstrap interrupted by shutdown for {}",
-                            storeMetadata.stateStore.name());
+                    if (inErrorStateSupplier.getAsBoolean()) {
+                        logBootstrapInterrupted(storeMetadata);
                         return;
                     }
                     throw e;
@@ -554,6 +552,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             stateRestoreListener.onRestoreEnd(topicPartition, storeMetadata.stateStore.name(), restoreCount);
             currentOffsets.put(topicPartition, offset);
         }
+    }
+
+    private void logBootstrapInterrupted(final StateStoreMetadata storeMetadata) {
+        log.info("Bootstrap interrupted by shutdown for {}", storeMetadata.stateStore.name());
     }
 
     private long getGlobalConsumerOffset(final TopicPartition topicPartition) {
