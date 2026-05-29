@@ -170,7 +170,7 @@ public class SharePartitionManager implements AutoCloseable {
         long remoteFetchMaxWaitMs,
         Persister persister,
         ShareGroupConfigProvider configProvider,
-        ShareGroupMetrics metrics,
+        ShareGroupMetrics shareGroupMetrics,
         BrokerTopicStats brokerTopicStats,
         Supplier<Boolean> shareGroupDlqEnableSupplier,
         ShareGroupDLQManager shareGroupDLQManager
@@ -185,7 +185,7 @@ public class SharePartitionManager implements AutoCloseable {
             remoteFetchMaxWaitMs,
             persister,
             configProvider,
-            metrics,
+            shareGroupMetrics,
             brokerTopicStats,
             shareGroupDlqEnableSupplier,
             shareGroupDLQManager
