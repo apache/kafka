@@ -2976,6 +2976,9 @@ project(':streams') {
             ':streams:upgrade-system-tests-38:test',
             ':streams:upgrade-system-tests-39:test',
             ':streams:upgrade-system-tests-40:test',
+            ':streams:upgrade-system-tests-41:test',
+            ':streams:upgrade-system-tests-42:test',
+            ':streams:upgrade-system-tests-43:test',
             ':streams:examples:test'
     ]
   )
@@ -3535,6 +3538,38 @@ project(':streams:upgrade-system-tests-41') {
 
   dependencies {
     testImplementation libs.kafkaStreams_41
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-42') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-42"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_42
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-43') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-43"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_43
     testRuntimeOnly libs.junitJupiter
     testRuntimeOnly runtimeTestLibs
   }

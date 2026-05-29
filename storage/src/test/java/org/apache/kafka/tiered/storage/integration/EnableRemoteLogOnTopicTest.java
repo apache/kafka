@@ -42,12 +42,13 @@ public final class EnableRemoteLogOnTopicTest {
     private static final int BROKER_COUNT = 3;
     private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 5;
 
+    @SuppressWarnings("unused")
     private static List<ClusterConfig> clusterConfig() {
         return List.of(ClusterConfig.defaultBuilder()
                 .setTypes(Set.of(Type.KRAFT))
                 .setBrokers(BROKER_COUNT)
                 .setServerProperties(createServerPropsForRemoteStorage(
-                        DisableRemoteLogOnTopicTest.class.getSimpleName().toLowerCase(Locale.ROOT),
+                        EnableRemoteLogOnTopicTest.class.getSimpleName().toLowerCase(Locale.ROOT),
                         BROKER_COUNT,
                         NUM_REMOTE_LOG_METADATA_PARTITIONS))
                 .build());

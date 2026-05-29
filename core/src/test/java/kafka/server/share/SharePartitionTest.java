@@ -55,10 +55,13 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
+import org.apache.kafka.server.share.PartitionMetadataProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
+import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.InFlightBatch;
 import org.apache.kafka.server.share.fetch.InFlightState;
 import org.apache.kafka.server.share.fetch.RecordState;
@@ -104,6 +107,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -241,7 +245,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -292,7 +296,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -353,7 +357,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
@@ -408,7 +412,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -455,7 +459,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -501,7 +505,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -555,7 +559,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -860,7 +864,7 @@ public class SharePartitionTest {
         Mockito.doReturn(new OffsetResultHolder(Optional.of(timestampAndOffset), Optional.empty())).
             when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
 
-        SharePartition sharePartition = SharePartitionBuilder.builder().withReplicaManager(replicaManager).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager)).build();
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
         assertTrue(result.isDone());
         assertFalse(result.isCompletedExceptionally());
@@ -2711,7 +2715,7 @@ public class SharePartitionTest {
             .thenReturn(140L) // for subsequent lock acquire
             .thenReturn(170L); // for subsequent lock release
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withTime(time)
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
@@ -2788,7 +2792,7 @@ public class SharePartitionTest {
     public void testAcknowledgeSingleRecordBatch() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -2823,7 +2827,8 @@ public class SharePartitionTest {
     public void testAcknowledgeMultipleRecordBatch() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
+            .withDelayedRequestNotifier(replicaManager::completeDelayedShareFetchRequest)
             .withState(SharePartitionState.ACTIVE)
             .build();
         MemoryRecords records = memoryRecords(5, 10);
@@ -12157,7 +12162,7 @@ public class SharePartitionTest {
     public void testInvalidAcknowledgeTypeInBatchAcknowledgement() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12177,7 +12182,7 @@ public class SharePartitionTest {
     public void testInvalidAcknowledgeTypeInSubsetAcknowledgement() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -13312,12 +13317,14 @@ public class SharePartitionTest {
         private int defaultMaxInflightRecords = DEFAULT_MAX_IN_FLIGHT_RECORDS;
 
         private Persister persister = new NoOpStatePersister();
-        private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        private PartitionMetadataProvider metadataProvider = Mockito.mock(PartitionMetadataProvider.class);
+        private Consumer<DelayedShareFetchKey> delayedRequestNotifier = Mockito.mock(Consumer.class);
         private ShareGroupConfigProvider configProvider = new ShareGroupConfigProvider(Mockito.mock(GroupConfigManager.class));
         private SharePartitionState state = SharePartitionState.EMPTY;
         private Time time = MOCK_TIME;
         private SharePartitionMetrics sharePartitionMetrics = Mockito.mock(SharePartitionMetrics.class);
         private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
+        private ShareGroupDLQManager shareGroupDLQManager = new NoOpShareGroupDLQManager();
 
         private SharePartitionBuilder withMaxInflightRecords(int defaultMaxInflightRecords) {
             this.defaultMaxInflightRecords = defaultMaxInflightRecords;
@@ -13339,8 +13346,13 @@ public class SharePartitionTest {
             return this;
         }
 
-        private SharePartitionBuilder withReplicaManager(ReplicaManager replicaManager) {
-            this.replicaManager = replicaManager;
+        private SharePartitionBuilder withMetadataProvider(PartitionMetadataProvider metadataProvider) {
+            this.metadataProvider = metadataProvider;
+            return this;
+        }
+
+        private SharePartitionBuilder withDelayedRequestNotifier(Consumer<DelayedShareFetchKey> delayedRequestNotifier) {
+            this.delayedRequestNotifier = delayedRequestNotifier;
             return this;
         }
 
@@ -13369,14 +13381,20 @@ public class SharePartitionTest {
             return this;
         }
 
+        private SharePartitionBuilder withShareGroupDlqManager(ShareGroupDLQManager shareGroupDLQManager) {
+            this.shareGroupDLQManager = shareGroupDLQManager;
+            return this;
+        }
+
         public static SharePartitionBuilder builder() {
             return new SharePartitionBuilder();
         }
 
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, defaultMaxInflightRecords, defaultMaxDeliveryCount,
-                    defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, configProvider,
-                    state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics, shareGroupDlqEnableSupplier);
+                defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, metadataProvider, delayedRequestNotifier, configProvider,
+                state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics, shareGroupDlqEnableSupplier,
+                shareGroupDLQManager);
         }
     }
 }
