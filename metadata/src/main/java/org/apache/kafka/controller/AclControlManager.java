@@ -138,7 +138,7 @@ public class AclControlManager {
         return uuid;
     }
 
-    void validateNewAcl(AclBinding binding, MetadataVersion metadataVersion) {
+    static void validateNewAcl(AclBinding binding, MetadataVersion metadataVersion) {
         switch (binding.pattern().resourceType()) {
             case UNKNOWN:
             case ANY:
