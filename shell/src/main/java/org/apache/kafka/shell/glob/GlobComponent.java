@@ -43,9 +43,50 @@ public final class GlobComponent {
      */
     private static boolean isGlobSpecialCharacter(char ch) {
         return switch (ch) {
-            case '*', '?', '\\', '{', '}' -> true;
+            case '*', '?', '\\', '{', '}', '[', ']' -> true;
             default -> false;
         };
+    }
+
+    private static void appendCharacterClassCharacter(StringBuilder output, char c) {
+        if (c == '\\' || c == '[') {
+            output.append('\\');
+        }
+        output.append(c);
+    }
+
+    private static int appendCharacterClass(String glob, int start, StringBuilder output) {
+        int i = start + 1;
+        if (i == glob.length()) {
+            throw new RuntimeException("Unterminated glob character class.");
+        }
+
+        output.append('[');
+        if (glob.charAt(i) == '!' || glob.charAt(i) == '^') {
+            output.append('^');
+            i++;
+        }
+        if (i == glob.length() || glob.charAt(i) == ']') {
+            throw new RuntimeException("Empty glob character class.");
+        }
+
+        for (; i < glob.length(); i++) {
+            char c = glob.charAt(i);
+            if (c == ']') {
+                output.append(']');
+                return i + 1;
+            } else if (c == '\\') {
+                if (i + 1 == glob.length()) {
+                    output.append("\\\\");
+                } else {
+                    appendCharacterClassCharacter(output, glob.charAt(++i));
+                }
+            } else {
+                appendCharacterClassCharacter(output, c);
+            }
+        }
+
+        throw new RuntimeException("Unterminated glob character class.");
     }
 
     /**
@@ -107,7 +148,10 @@ public final class GlobComponent {
                         output.append(c);
                     }
                     break;
-                // TODO: handle character ranges
+                case '[':
+                    literal = false;
+                    i = appendCharacterClass(glob, i - 1, output);
+                    break;
                 default:
                     if (isRegularExpressionSpecialCharacter(c)) {
                         output.append('\\');

@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Timeout;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 120)
@@ -50,6 +51,17 @@ public class GlobComponentTest {
         assertEquals("^\\$blah.*$", GlobComponent.toRegularExpression("$blah*"));
         assertEquals("^.*$", GlobComponent.toRegularExpression("*"));
         assertEquals("^foo(?:(?:bar)|(?:baz))$", GlobComponent.toRegularExpression("foo{bar,baz}"));
+        assertEquals("^topic-[0-9]$", GlobComponent.toRegularExpression("topic-[0-9]"));
+        assertEquals("^topic-[abc]$", GlobComponent.toRegularExpression("topic-[abc]"));
+        assertEquals("^topic-[^abc]$", GlobComponent.toRegularExpression("topic-[!abc]"));
+        assertEquals("^topic-[^abc]$", GlobComponent.toRegularExpression("topic-[^abc]"));
+    }
+
+    @Test
+    public void testMalformedCharacterClass() {
+        assertThrows(RuntimeException.class, () -> GlobComponent.toRegularExpression("topic-[abc"));
+        assertThrows(RuntimeException.class, () -> GlobComponent.toRegularExpression("topic-[]"));
+        assertThrows(RuntimeException.class, () -> GlobComponent.toRegularExpression("topic-[!]"));
     }
 
     @Test
@@ -71,5 +83,21 @@ public class GlobComponentTest {
         assertFalse(foobarOrFoobaz.matches("foobah"));
         assertFalse(foobarOrFoobaz.matches("foo"));
         assertFalse(foobarOrFoobaz.matches("baz"));
+        GlobComponent digit = new GlobComponent("topic-[0-9]");
+        assertFalse(digit.literal());
+        assertTrue(digit.matches("topic-0"));
+        assertTrue(digit.matches("topic-5"));
+        assertFalse(digit.matches("topic-a"));
+        assertFalse(digit.matches("topic-10"));
+        GlobComponent letters = new GlobComponent("topic-[abc]");
+        assertFalse(letters.literal());
+        assertTrue(letters.matches("topic-a"));
+        assertTrue(letters.matches("topic-b"));
+        assertFalse(letters.matches("topic-d"));
+        GlobComponent notLetters = new GlobComponent("topic-[!abc]");
+        assertFalse(notLetters.literal());
+        assertTrue(notLetters.matches("topic-d"));
+        assertTrue(notLetters.matches("topic-1"));
+        assertFalse(notLetters.matches("topic-a"));
     }
 }
