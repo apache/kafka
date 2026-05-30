@@ -16,36 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.header.Header;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.runtime.ConnectMetrics;
-import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.runtime.MockConnectMetrics;
-import org.apache.kafka.connect.runtime.SinkConnectorConfig;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
-import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.kafka.connect.transforms.Transformation;
-import org.apache.kafka.connect.util.ConnectorTaskId;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
-
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_CONNECTOR_NAME;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_EXCEPTION;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_EXCEPTION_MESSAGE;
@@ -59,14 +29,57 @@ import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ER
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.ListTopicsResult;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
+import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -98,6 +111,96 @@ public class ErrorReporterTest {
     public void tearDown() {
         if (metrics != null) {
             metrics.stop();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void createAndSetupTimesOutWhenBrokerUnreachable() throws Exception {
+        Admin admin = mock(Admin.class);
+        ListTopicsResult listTopicsResult = mock(ListTopicsResult.class);
+        KafkaFuture<Set<String>> namesFuture = mock(KafkaFuture.class);
+
+        when(admin.listTopics()).thenReturn(listTopicsResult);
+        when(listTopicsResult.names()).thenReturn(namesFuture);
+        when(namesFuture.get(anyLong(), any())).thenThrow(new TimeoutException("simulated unreachable broker"));
+
+        SinkConnectorConfig sinkConfig = config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
+
+        try (MockedStatic<Admin> adminStatic = mockStatic(Admin.class)) {
+            adminStatic.when(() -> Admin.create(anyMap())).thenReturn(admin);
+
+            ConnectException e = assertThrows(ConnectException.class, () ->
+                    DeadLetterQueueReporter.createAndSetup(Map.of(), TASK_ID, sinkConfig, Map.of(), errorHandlingMetrics));
+            assertTrue(e.getMessage().contains("Timed out waiting for DLQ topic"));
+        }
+
+        verify(admin).close();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void createAndSetupRestoresInterruptOnInterruptedException() throws Exception {
+        Admin admin = mock(Admin.class);
+        ListTopicsResult listTopicsResult = mock(ListTopicsResult.class);
+        KafkaFuture<Set<String>> namesFuture = mock(KafkaFuture.class);
+        when(admin.listTopics()).thenReturn(listTopicsResult);
+        when(listTopicsResult.names()).thenReturn(namesFuture);
+        when(namesFuture.get(anyLong(), any())).thenThrow(new InterruptedException("simulated interrupt"));
+
+        SinkConnectorConfig sinkConfig = config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
+
+        AtomicBoolean interruptRestored = new AtomicBoolean(false);
+        // Run on a dedicated thread so the restored interrupt flag does not leak into other tests.
+        Thread thread = new Thread(() -> {
+            try (MockedStatic<Admin> adminStatic = mockStatic(Admin.class)) {
+                adminStatic.when(() -> Admin.create(anyMap())).thenReturn(admin);
+                assertThrows(ConnectException.class, () ->
+                        DeadLetterQueueReporter.createAndSetup(Map.of(), TASK_ID, sinkConfig, Map.of(), errorHandlingMetrics));
+                interruptRestored.set(Thread.currentThread().isInterrupted());
+            }
+        });
+        thread.start();
+        thread.join();
+
+        assertTrue(interruptRestored.get(),
+                "interrupt flag should be restored before re-throwing as ConnectException");
+    }
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void firstTimeDlqTopicCreationLogsAtInfoNotError() throws Exception {
+        Admin admin = mock(Admin.class);
+        ListTopicsResult listTopicsResult = mock(ListTopicsResult.class);
+        KafkaFuture<Set<String>> namesFuture = mock(KafkaFuture.class);
+        CreateTopicsResult createTopicsResult = mock(CreateTopicsResult.class);
+        KafkaFuture<Void> createFuture = mock(KafkaFuture.class);
+
+        when(admin.listTopics()).thenReturn(listTopicsResult);
+        when(listTopicsResult.names()).thenReturn(namesFuture);
+
+        when(namesFuture.get(anyLong(), any())).thenReturn(Set.of());
+        when(admin.createTopics(any())).thenReturn(createTopicsResult);
+        when(createTopicsResult.all()).thenReturn(createFuture);
+        when(createFuture.get(anyLong(), any())).thenReturn(null);
+
+        SinkConnectorConfig sinkConfig = config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
+
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DeadLetterQueueReporter.class);
+             MockedStatic<Admin> adminStatic = mockStatic(Admin.class);
+             MockedConstruction<KafkaProducer> ignored = mockConstruction(KafkaProducer.class)) {
+
+            adminStatic.when(() -> Admin.create(anyMap())).thenReturn(admin);
+
+            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(
+                    Map.of(), TASK_ID, sinkConfig, Map.of(), errorHandlingMetrics);
+            assertNotNull(reporter);
+
+            assertTrue(logCaptureAppender.getMessages("ERROR").isEmpty(),
+                    "first-time DLQ topic creation should not log at ERROR");
+            assertTrue(logCaptureAppender.getMessages("INFO").stream()
+                            .anyMatch(msg -> msg.contains(DLQ_TOPIC) && msg.contains("does not exist")),
+                    "first-time DLQ topic creation should log at INFO");
         }
     }
 
