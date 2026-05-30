@@ -917,6 +917,7 @@ org.apache.kafka.metadata.storage.FormatterTest:
 - testOneDirectoryFormattedAndOthersNotFormattedWithIgnoreFormatted
 - testSkipsBootstrapSnapshotWhenDisabled
 - testStandaloneWithIgnoreFormatted
+- testWritesBootstrapSnapshotOnlyToMetadataDirectory
 org.apache.kafka.metadata.storage.ScramParserTest:
 - testConfiguredIterations
 - testConfiguredSalt
