@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.EnvelopeRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.network.Request;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 
@@ -125,13 +126,11 @@ public final class EnvelopeUtils {
         RequestContext envelopeContext,
         byte[] principalBytes
     ) {
-        if (envelopeContext.principalSerde.isEmpty()) {
-            throw new PrincipalDeserializationException("Could not deserialize principal since " +
-                "no `KafkaPrincipalSerde` has been defined");
-        }
+        KafkaPrincipalSerde principalSerde = envelopeContext.principalSerde.orElseThrow(() ->
+            new PrincipalDeserializationException("Could not deserialize principal since no `KafkaPrincipalSerde` has been defined"));
 
         try {
-            return envelopeContext.principalSerde.get().deserialize(principalBytes);
+            return principalSerde.deserialize(principalBytes);
         } catch (Exception e) {
             throw new PrincipalDeserializationException("Failed to deserialize client principal from envelope", e);
         }
