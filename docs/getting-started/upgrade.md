@@ -26,6 +26,15 @@ type: docs
 -->
 
 
+## Upgrading to 4.2.1
+
+### Notable changes in 4.2.1
+
+  * Includes a fix for a critical deadlock in the [KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw) Share Group path ([KAFKA-20505](https://issues.apache.org/jira/browse/KAFKA-20505)).
+  * Includes a fix for a rolling upgrade issue ([KAFKA-20322](https://issues.apache.org/jira/browse/KAFKA-20322)) that could cause `UnsupportedVersionException` for clusters using transactional producers.
+
+
+
 ## Upgrading to 4.2.0
 
 ### Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x
