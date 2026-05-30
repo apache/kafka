@@ -116,7 +116,7 @@ public class ErrorReporterTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void createAndSetupTimesOutWhenBrokerUnreachable() throws Exception {
+    void createAndSetupTimesOutWhenBrokerUnreachable() throws Exception {
         Admin admin = mock(Admin.class);
         ListTopicsResult listTopicsResult = mock(ListTopicsResult.class);
         KafkaFuture<Set<String>> namesFuture = mock(KafkaFuture.class);
@@ -126,12 +126,14 @@ public class ErrorReporterTest {
         when(namesFuture.get(anyLong(), any())).thenThrow(new TimeoutException("simulated unreachable broker"));
 
         SinkConnectorConfig sinkConfig = config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
+        Map<String, Object> adminProps = Map.of();
+        Map<String, Object> producerProps = Map.of();
 
         try (MockedStatic<Admin> adminStatic = mockStatic(Admin.class)) {
             adminStatic.when(() -> Admin.create(anyMap())).thenReturn(admin);
 
             ConnectException e = assertThrows(ConnectException.class, () ->
-                    DeadLetterQueueReporter.createAndSetup(Map.of(), TASK_ID, sinkConfig, Map.of(), errorHandlingMetrics));
+                    DeadLetterQueueReporter.createAndSetup(adminProps, TASK_ID, sinkConfig, producerProps, errorHandlingMetrics));
             assertTrue(e.getMessage().contains("Timed out waiting for DLQ topic"));
         }
 
@@ -140,10 +142,11 @@ public class ErrorReporterTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void createAndSetupRestoresInterruptOnInterruptedException() throws Exception {
+    void createAndSetupRestoresInterruptOnInterruptedException() throws Exception {
         Admin admin = mock(Admin.class);
         ListTopicsResult listTopicsResult = mock(ListTopicsResult.class);
         KafkaFuture<Set<String>> namesFuture = mock(KafkaFuture.class);
+
         when(admin.listTopics()).thenReturn(listTopicsResult);
         when(listTopicsResult.names()).thenReturn(namesFuture);
         when(namesFuture.get(anyLong(), any())).thenThrow(new InterruptedException("simulated interrupt"));
@@ -151,20 +154,28 @@ public class ErrorReporterTest {
         SinkConnectorConfig sinkConfig = config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
 
         AtomicBoolean interruptRestored = new AtomicBoolean(false);
-        // Run on a dedicated thread so the restored interrupt flag does not leak into other tests.
-        Thread thread = new Thread(() -> {
-            try (MockedStatic<Admin> adminStatic = mockStatic(Admin.class)) {
-                adminStatic.when(() -> Admin.create(anyMap())).thenReturn(admin);
-                assertThrows(ConnectException.class, () ->
-                        DeadLetterQueueReporter.createAndSetup(Map.of(), TASK_ID, sinkConfig, Map.of(), errorHandlingMetrics));
-                interruptRestored.set(Thread.currentThread().isInterrupted());
-            }
-        });
-        thread.start();
+
+        Thread thread = getThread(admin, sinkConfig, interruptRestored);
         thread.join();
 
         assertTrue(interruptRestored.get(),
                 "interrupt flag should be restored before re-throwing as ConnectException");
+    }
+
+    private Thread getThread(Admin admin, SinkConnectorConfig sinkConfig, AtomicBoolean interruptRestored) {
+        Map<String, Object> adminProps = Map.of();
+        Map<String, Object> producerProps = Map.of();
+        Thread thread = new Thread(() -> {
+            try (MockedStatic<Admin> adminStatic = mockStatic(Admin.class)) {
+                adminStatic.when(() -> Admin.create(anyMap())).thenReturn(admin);
+                assertThrows(ConnectException.class, () ->
+                        DeadLetterQueueReporter.createAndSetup(adminProps, TASK_ID, sinkConfig, producerProps, errorHandlingMetrics));
+                interruptRestored.set(Thread.currentThread().isInterrupted());
+            }
+        });
+
+        thread.start();
+        return thread;
     }
 
     @Test
