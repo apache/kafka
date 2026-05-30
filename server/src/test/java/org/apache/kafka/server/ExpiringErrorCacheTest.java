@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -52,8 +53,10 @@ public class ExpiringErrorCacheTest {
     void testPutAndGet() {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put("topic1", "error1", 1000L);
-        cache.put("topic2", "error2", 2000L);
+        cache.put(Map.of(
+            "topic1", "error1",
+            "topic2", "error2"
+        ), 1000L);
 
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2"), mockTime.milliseconds());
         assertEquals(2, errors.size());
@@ -65,7 +68,7 @@ public class ExpiringErrorCacheTest {
     void testGetNonExistentTopic() {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put("topic1", "error1", 1000L);
+        cache.put(Map.of("topic1", "error1"), 1000L);
 
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2"), mockTime.milliseconds());
         assertEquals(1, errors.size());
@@ -77,11 +80,11 @@ public class ExpiringErrorCacheTest {
     void testUpdateExistingEntry() {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put("topic1", "error1", 1000L);
+        cache.put(Map.of("topic1", "error1"), 1000L);
         assertEquals("error1", cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).get("topic1"));
 
         // Update with new error
-        cache.put("topic1", "error2", 2000L);
+        cache.put(Map.of("topic1", "error2"), 2000L);
         assertEquals("error2", cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).get("topic1"));
     }
 
@@ -89,9 +92,11 @@ public class ExpiringErrorCacheTest {
     void testGetMultipleTopics() {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put("topic1", "error1", 1000L);
-        cache.put("topic2", "error2", 1000L);
-        cache.put("topic3", "error3", 1000L);
+        cache.put(Map.of(
+            "topic1", "error1",
+            "topic2", "error2",
+            "topic3", "error3"
+        ), 1000L);
 
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic3", "topic4"), mockTime.milliseconds());
         assertEquals(2, errors.size());
@@ -107,7 +112,7 @@ public class ExpiringErrorCacheTest {
     void testExpiredEntryNotReturned() {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put("topic1", "error1", 1000L);
+        cache.put(Map.of("topic1", "error1"), 1000L);
 
         // Entry should be available before expiration
         assertEquals(1, cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).size());
@@ -124,14 +129,14 @@ public class ExpiringErrorCacheTest {
         cache = new ExpiringErrorCache(10, mockTime);
 
         // Add entries with different TTLs
-        cache.put("topic1", "error1", 1000L);
-        cache.put("topic2", "error2", 2000L);
+        cache.put(Map.of("topic1", "error1"), 1000L);
+        cache.put(Map.of("topic2", "error2"), 2000L);
 
         // Advance time to expire topic1 but not topic2
         mockTime.sleep(1500L);
 
         // Add a new entry - this should trigger cleanup
-        cache.put("topic3", "error3", 1000L);
+        cache.put(Map.of("topic3", "error3"), 1000L);
 
         // Verify only non-expired entries remain
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2", "topic3"), mockTime.milliseconds());
@@ -145,9 +150,9 @@ public class ExpiringErrorCacheTest {
     void testMixedExpiredAndValidEntries() {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put("topic1", "error1", 500L);
-        cache.put("topic2", "error2", 1000L);
-        cache.put("topic3", "error3", 1500L);
+        cache.put(Map.of("topic1", "error1"), 500L);
+        cache.put(Map.of("topic2", "error2"), 1000L);
+        cache.put(Map.of("topic3", "error3"), 1500L);
 
         // Advance time to expire only topic1
         mockTime.sleep(600L);
@@ -167,7 +172,7 @@ public class ExpiringErrorCacheTest {
 
         // Add 5 entries, exceeding capacity of 3
         IntStream.rangeClosed(1, 5).forEach(i -> {
-            cache.put("topic" + i, "error" + i, 1000L);
+            cache.put(Map.of("topic" + i, "error" + i), 1000L);
             // Small time advance between entries to ensure different insertion order
             mockTime.sleep(10L);
         });
@@ -191,13 +196,13 @@ public class ExpiringErrorCacheTest {
         cache = new ExpiringErrorCache(3, mockTime);
 
         // Add entries with different TTLs
-        cache.put("topic1", "error1", 3000L); // Expires at 3000
+        cache.put(Map.of("topic1", "error1"), 3000L); // Expires at 3000
         mockTime.sleep(100L);
-        cache.put("topic2", "error2", 1000L); // Expires at 1100
+        cache.put(Map.of("topic2", "error2"), 1000L); // Expires at 1100
         mockTime.sleep(100L);
-        cache.put("topic3", "error3", 2000L); // Expires at 2200
+        cache.put(Map.of("topic3", "error3"), 2000L); // Expires at 2200
         mockTime.sleep(100L);
-        cache.put("topic4", "error4", 500L);  // Expires at 800
+        cache.put(Map.of("topic4", "error4"), 500L);  // Expires at 800
 
         // With capacity 3, topic4 (earliest expiration) should be evicted
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2", "topic3", "topic4"), mockTime.milliseconds());
@@ -212,9 +217,9 @@ public class ExpiringErrorCacheTest {
     void testCapacityWithDifferentTTLs() {
         cache = new ExpiringErrorCache(2, mockTime);
 
-        cache.put("topic1", "error1", 5000L); // Long TTL
-        cache.put("topic2", "error2", 100L); // Short TTL
-        cache.put("topic3", "error3", 3000L); // Medium TTL
+        cache.put(Map.of("topic1", "error1"), 5000L); // Long TTL
+        cache.put(Map.of("topic2", "error2"), 100L); // Short TTL
+        cache.put(Map.of("topic3", "error3"), 3000L); // Medium TTL
 
         // topic2 has earliest expiration, so it should be evicted
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2", "topic3"), mockTime.milliseconds());
@@ -231,15 +236,17 @@ public class ExpiringErrorCacheTest {
         cache = new ExpiringErrorCache(3, mockTime);
 
         // Fill cache to capacity
-        cache.put("topic1", "error1", 1000L);
-        cache.put("topic2", "error2", 1000L);
-        cache.put("topic3", "error3", 1000L);
+        cache.put(Map.of(
+            "topic1", "error1",
+            "topic2", "error2",
+            "topic3", "error3"
+        ), 1000L);
 
         // Update topic2 with longer TTL
-        cache.put("topic2", "error2_updated", 5000L);
+        cache.put(Map.of("topic2", "error2_updated"), 5000L);
 
         // Add new entry to trigger eviction
-        cache.put("topic4", "error4", 1000L);
+        cache.put(Map.of("topic4", "error4"), 1000L);
 
         // Should evict topic1 or topic3 (earliest expiration), not the updated topic2
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2", "topic3", "topic4"), mockTime.milliseconds());
@@ -253,9 +260,9 @@ public class ExpiringErrorCacheTest {
         cache = new ExpiringErrorCache(10, mockTime);
 
         // Add and update same topic multiple times
-        cache.put("topic1", "error1", 1000L);
-        cache.put("topic1", "error2", 2000L);
-        cache.put("topic1", "error3", 3000L);
+        cache.put(Map.of("topic1", "error1"), 1000L);
+        cache.put(Map.of("topic1", "error2"), 2000L);
+        cache.put(Map.of("topic1", "error3"), 3000L);
 
         // Only latest value should be returned
         var errors = cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds());
@@ -266,7 +273,7 @@ public class ExpiringErrorCacheTest {
         mockTime.sleep(2500L);
 
         // Force cleanup by adding new entry
-        cache.put("topic2", "error_new", 1000L);
+        cache.put(Map.of("topic2", "error_new"), 1000L);
 
         // topic1 should still be available with latest value
         var errorsAfterCleanup = cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds());
@@ -288,8 +295,8 @@ public class ExpiringErrorCacheTest {
     void testSingleEntryCache() {
         cache = new ExpiringErrorCache(1, mockTime);
 
-        cache.put("topic1", "error1", 1000L);
-        cache.put("topic2", "error2", 1000L);
+        cache.put(Map.of("topic1", "error1"), 1000L);
+        cache.put(Map.of("topic2", "error2"), 1000L);
 
         // Only most recent should remain
         var errors = cache.getErrorsForTopics(Set.of("topic1", "topic2"), mockTime.milliseconds());
@@ -302,7 +309,7 @@ public class ExpiringErrorCacheTest {
     void testZeroTTL() {
         cache = new ExpiringErrorCache(10, mockTime);
 
-        cache.put("topic1", "error1", 0L);
+        cache.put(Map.of("topic1", "error1"), 0L);
 
         // Entry expires immediately
         assertTrue(cache.getErrorsForTopics(Set.of("topic1"), mockTime.milliseconds()).isEmpty());
@@ -320,10 +327,15 @@ public class ExpiringErrorCacheTest {
 
         IntStream.rangeClosed(1, numThreads).forEach(threadId -> {
             final var finalThreadId = threadId;
-            var future = CompletableFuture.runAsync(() ->
-                IntStream.rangeClosed(1, numTopicsPerThread).forEach(i ->
-                    cache.put("topic_" + finalThreadId + "_" + i, "error_" + finalThreadId + "_" + i, 1000L))
-            );
+            var future = CompletableFuture.runAsync(() -> {
+                var topicErrors = IntStream.rangeClosed(1, numTopicsPerThread)
+                    .boxed()
+                    .collect(Collectors.toMap(
+                        i -> "topic_" + finalThreadId + "_" + i,
+                        i -> "error_" + finalThreadId + "_" + i
+                    ));
+                cache.put(topicErrors, 1000L);
+            });
             futures.add(future);
         });
 
@@ -352,7 +364,7 @@ public class ExpiringErrorCacheTest {
                 if (random.nextBoolean()) {
                     // Put operation
                     var topic = topics[random.nextInt(topics.length)];
-                    cache.put(topic, "error_" + random.nextInt(), 1000L);
+                    cache.put(Map.of(topic, "error_" + random.nextInt()), 1000L);
                 } else {
                     // Get operation
                     var topicsToGet = Set.of(topics[random.nextInt(topics.length)]);
@@ -379,7 +391,7 @@ public class ExpiringErrorCacheTest {
                 var random = new Random();
                 IntStream.rangeClosed(1, numUpdatesPerThread).forEach(i -> {
                     var topic = sharedTopics[random.nextInt(sharedTopics.length)];
-                    cache.put(topic, "error_thread" + threadId + "_update" + i, 1000L);
+                    cache.put(Map.of(topic, "error_thread" + threadId + "_update" + i), 1000L);
                 });
             });
             futures.add(future);

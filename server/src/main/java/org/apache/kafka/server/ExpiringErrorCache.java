@@ -50,14 +50,17 @@ class ExpiringErrorCache {
         this.time = time;
     }
 
-    void put(String topicName, String errorMessage, long ttlMs) {
+    void put(Map<String, String> topicErrorMessages, long ttlMs) {
         lock.lock();
         try {
             var currentTimeMs = time.milliseconds();
             var expirationTimeMs = currentTimeMs + ttlMs;
-            var entry = new Entry(topicName, errorMessage, expirationTimeMs);
-            byTopic.put(topicName, entry);
-            expiryQueue.add(entry);
+            for (var topicErrorMessage : topicErrorMessages.entrySet()) {
+                var topicName = topicErrorMessage.getKey();
+                var entry = new Entry(topicName, topicErrorMessage.getValue(), expirationTimeMs);
+                byTopic.put(topicName, entry);
+                expiryQueue.add(entry);
+            }
 
             // Clean up expired entries and enforce capacity
             while (!expiryQueue.isEmpty() &&

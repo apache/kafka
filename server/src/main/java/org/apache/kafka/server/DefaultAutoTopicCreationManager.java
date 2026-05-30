@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
@@ -51,6 +52,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager {
@@ -321,21 +323,20 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     }
 
     private void cacheTopicCreationErrors(Set<String> topicNames, String errorMessage, long ttlMs) {
-        for (String topicName : topicNames) {
-            topicCreationErrorCache.put(topicName, errorMessage, ttlMs);
-        }
+        topicCreationErrorCache.put(topicNames.stream()
+            .collect(Collectors.toMap(topicName -> topicName, topicName -> errorMessage)), ttlMs);
     }
 
     private void cacheTopicCreationErrorsFromResponse(CreateTopicsResponse response, long ttlMs) {
-        response.data().topics().forEach(topicResult -> {
-            if (topicResult.errorCode() != Errors.NONE.code()) {
+        topicCreationErrorCache.put(response.data().topics().stream()
+            .filter(topicResult -> topicResult.errorCode() != Errors.NONE.code())
+            .collect(Collectors.toMap(CreateTopicsResponseData.CreatableTopicResult::name, topicResult -> {
                 var errorMessage = Optional.ofNullable(topicResult.errorMessage())
-                        .filter(s -> !s.isEmpty())
-                        .orElse(Errors.forCode(topicResult.errorCode()).message());
-                topicCreationErrorCache.put(topicResult.name(), errorMessage, ttlMs);
-                LOGGER.debug("Cached topic creation error for {}: {}", topicResult.name(), errorMessage);
-            }
-        });
+                    .filter(s -> !s.isEmpty())
+                    .orElse(Errors.forCode(topicResult.errorCode()).message());
+                LOGGER.debug("Create topic creation error for {}: {}", topicResult.name(), errorMessage);
+                return errorMessage;
+            })), ttlMs);
     }
 
     @Override
