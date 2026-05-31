@@ -66,6 +66,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -281,7 +282,7 @@ public class ReassignPartitionsCommand {
             PartitionReassignmentState state = states.get(topicPartition);
             if (state.done()) {
                 if (state.currentReplicas().equals(state.targetReplicas())) {
-                    bld.add(String.format("Reassignment of partition %s is completed.", topicPartition));
+                    bld.add(String.format(Locale.ROOT, "Reassignment of partition %s is completed.", topicPartition));
                 } else {
                     String currentReplicaStr = state.currentReplicas().stream().map(String::valueOf).collect(Collectors.joining(","));
                     String targetReplicaStr = state.targetReplicas().stream().map(String::valueOf).collect(Collectors.joining(","));
@@ -291,7 +292,7 @@ public class ReassignPartitionsCommand {
                         targetReplicaStr + ".");
                 }
             } else {
-                bld.add(String.format("Reassignment of partition %s is still in progress.", topicPartition));
+                bld.add(String.format(Locale.ROOT, "Reassignment of partition %s is still in progress.", topicPartition));
             }
         });
         return bld.stream().collect(Collectors.joining(System.lineSeparator()));
@@ -740,11 +741,11 @@ public class ReassignPartitionsCommand {
         List<Integer> brokerListToReassign = Stream.of(brokerList.split(",")).map(Integer::parseInt).collect(Collectors.toList());
         Set<Integer> duplicateReassignments = ToolsUtils.duplicates(brokerListToReassign);
         if (!duplicateReassignments.isEmpty())
-            throw new AdminCommandFailedException(String.format("Broker list contains duplicate entries: %s", duplicateReassignments));
+            throw new AdminCommandFailedException(String.format(Locale.ROOT, "Broker list contains duplicate entries: %s", duplicateReassignments));
         List<String> topicsToReassign = parseTopicsData(reassignmentJson);
         Set<String> duplicateTopicsToReassign = ToolsUtils.duplicates(topicsToReassign);
         if (!duplicateTopicsToReassign.isEmpty())
-            throw new AdminCommandFailedException(String.format("List of topics to reassign contains duplicate entries: %s",
+            throw new AdminCommandFailedException(String.format(Locale.ROOT, "List of topics to reassign contains duplicate entries: %s",
                 duplicateTopicsToReassign));
         return Map.entry(brokerListToReassign, topicsToReassign);
     }
@@ -810,7 +811,7 @@ public class ReassignPartitionsCommand {
         Map<TopicPartition, Throwable> errors = alterPartitionReassignments(adminClient, proposedParts, disallowReplicationFactorChange);
         if (!errors.isEmpty()) {
             throw new TerseException(
-                String.format("Error reassigning partition(s):%n%s",
+                String.format(Locale.ROOT, "Error reassigning partition(s):%n%s",
                     errors.keySet().stream()
                         .sorted(ReassignPartitionsCommand::compareTopicPartitions)
                         .map(part -> part + ": " + errors.get(part).getMessage())
@@ -856,7 +857,7 @@ public class ReassignPartitionsCommand {
             if (pendingReplicas.isEmpty()) {
                 done = true;
             } else if (time.milliseconds() >= startTimeMs + timeoutMs) {
-                throw new TerseException(String.format(
+                throw new TerseException(String.format(Locale.ROOT, 
                     "Timed out before log directory move%s could be started for: %s",
                         pendingReplicas.size() == 1 ? "" : "s",
                         pendingReplicas.keySet().stream()
@@ -896,13 +897,13 @@ public class ReassignPartitionsCommand {
             List<Integer> addingReplicas = reassignment.addingReplicas();
             List<Integer> removingReplicas = reassignment.removingReplicas();
 
-            return String.format("%s: replicas: %s.%s%s",
+            return String.format(Locale.ROOT, "%s: replicas: %s.%s%s",
                 part,
                 replicas.stream().map(Object::toString).collect(Collectors.joining(",")),
-                addingReplicas.isEmpty() ? "" : String.format(" adding: %s.", addingReplicas.stream()
+                addingReplicas.isEmpty() ? "" : String.format(Locale.ROOT, " adding: %s.", addingReplicas.stream()
                     .map(Object::toString)
                     .collect(Collectors.joining(","))),
-                removingReplicas.isEmpty() ? "" : String.format(" removing: %s.", removingReplicas.stream()
+                removingReplicas.isEmpty() ? "" : String.format(Locale.ROOT, " removing: %s.", removingReplicas.stream()
                     .map(Object::toString)
                     .collect(Collectors.joining(",")))
             );
@@ -910,7 +911,7 @@ public class ReassignPartitionsCommand {
 
         return text.isEmpty()
             ? "No partition reassignments found."
-            : String.format("Current partition reassignments:%n%s", text);
+            : String.format(Locale.ROOT, "Current partition reassignments:%n%s", text);
     }
 
     /**
@@ -956,7 +957,7 @@ public class ReassignPartitionsCommand {
 
         Map<TopicPartition, List<Integer>> currentParts = toReplicaIds(partitionsToBeReassigned);
 
-        return String.format("Current partition replica assignment%n%n%s%n%nSave this to use as the %s",
+        return String.format(Locale.ROOT, "Current partition replica assignment%n%n%s%n%nSave this to use as the %s",
             formatAsReassignmentJson(currentParts, currentReplicaLogDirs),
             "--reassignment-json-file option during rollback");
     }
@@ -1086,7 +1087,7 @@ public class ReassignPartitionsCommand {
         moveMap.forEach((topicName, partMoveMap) -> {
             Set<String> components = new TreeSet<>();
             partMoveMap.forEach((partId, move) ->
-                move.sources().forEach(source -> components.add(String.format("%d:%d", partId, source))));
+                move.sources().forEach(source -> components.add(String.format(Locale.ROOT, "%d:%d", partId, source))));
             results.put(topicName, String.join(",", components));
         });
         return results;
@@ -1105,7 +1106,7 @@ public class ReassignPartitionsCommand {
             partMoveMap.forEach((partId, move) ->
                 move.destinations().forEach(destination -> {
                     if (!move.sources().contains(destination)) {
-                        components.add(String.format("%d:%d", partId, destination));
+                        components.add(String.format(Locale.ROOT, "%d:%d", partId, destination));
                     }
                 })
             );
@@ -1251,7 +1252,7 @@ public class ReassignPartitionsCommand {
         Set<TopicPartition> duplicateReassignedPartitions = ToolsUtils.duplicates(partitionsToBeReassigned.stream().map(
             Entry::getKey).collect(Collectors.toList()));
         if (!duplicateReassignedPartitions.isEmpty()) {
-            throw new AdminCommandFailedException(String.format(
+            throw new AdminCommandFailedException(String.format(Locale.ROOT, 
                 "Partition reassignment contains duplicate topic partitions: %s",
                 duplicateReassignedPartitions.stream().map(Object::toString).collect(Collectors.joining(",")))
             );
@@ -1261,11 +1262,11 @@ public class ReassignPartitionsCommand {
             .filter(t -> !t.getValue().isEmpty()).toList();
         if (!duplicateEntries.isEmpty()) {
             String duplicatesMsg = duplicateEntries.stream().map(t ->
-                String.format("%s contains multiple entries for %s",
+                String.format(Locale.ROOT, "%s contains multiple entries for %s",
                     t.getKey(),
                     t.getValue().stream().map(Object::toString).collect(Collectors.joining(",")))
             ).collect(Collectors.joining(". "));
-            throw new AdminCommandFailedException(String.format("Partition replica lists may not contain duplicate entries: %s", duplicatesMsg));
+            throw new AdminCommandFailedException(String.format(Locale.ROOT, "Partition replica lists may not contain duplicate entries: %s", duplicatesMsg));
         }
         return Map.entry(partitionsToBeReassigned.stream().collect(Collectors.toMap(Entry::getKey, Entry::getValue)), replicaAssignment);
     }
@@ -1302,7 +1303,7 @@ public class ReassignPartitionsCommand {
         if (!curReassigningParts.isEmpty()) {
             Map<TopicPartition, Throwable> errors = cancelPartitionReassignments(adminClient, curReassigningParts);
             if (!errors.isEmpty()) {
-                throw new TerseException(String.format(
+                throw new TerseException(String.format(Locale.ROOT, 
                     "Error cancelling partition reassignment%s for:%n%s",
                     errors.size() == 1 ? "" : "s",
                     errors.keySet().stream()
@@ -1453,7 +1454,7 @@ public class ReassignPartitionsCommand {
             .filter(a -> opts.options.has(a)).toList();
 
         if (allActions.size() != 1) {
-            CommandLineUtils.printUsageAndExit(opts.parser, String.format("Command must include exactly one action: %s",
+            CommandLineUtils.printUsageAndExit(opts.parser, String.format(Locale.ROOT, "Command must include exactly one action: %s",
                 validActions.stream().map(a -> "--" + a.options().get(0)).collect(Collectors.joining(", "))));
         }
 
@@ -1515,7 +1516,7 @@ public class ReassignPartitionsCommand {
                 !requiredArgs.getOrDefault(action, List.of()).contains(opt) &&
                 !permittedArgs.getOrDefault(action, List.of()).contains(opt)) {
                 CommandLineUtils.printUsageAndExit(opts.parser,
-                    String.format("Option \"%s\" can't be used with action \"%s\"", opt, action));
+                    String.format(Locale.ROOT, "Option \"%s\" can't be used with action \"%s\"", opt, action));
             }
         });
         return opts;

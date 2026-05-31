@@ -63,6 +63,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
@@ -212,7 +213,7 @@ public class ClientCompatibilityTest {
     private static String toHexString(byte[] buf) {
         StringBuilder bld = new StringBuilder();
         for (byte b : buf) {
-            bld.append(String.format("%02x", b));
+            bld.append(String.format(Locale.ROOT, "%02x", b));
         }
         return bld.toString();
     }
@@ -367,7 +368,7 @@ public class ClientCompatibilityTest {
         for (TopicListing listing : listings) {
             if (listing.name().equals(topicName)) {
                 if (listing.isInternal())
-                    throw new KafkaException(String.format("Did not expect %s to be an internal topic.", topicName));
+                    throw new KafkaException(String.format(Locale.ROOT, "Did not expect %s to be an internal topic.", topicName));
                 foundTopic = true;
             }
         }

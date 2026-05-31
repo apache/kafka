@@ -56,6 +56,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
@@ -387,7 +388,7 @@ public class ShareGroupCommand {
             try {
                 ShareGroupDescription shareGroupDescription = describeShareGroups(List.of(groupId)).get(groupId);
                 if (!(GroupState.EMPTY.equals(shareGroupDescription.groupState()) || GroupState.DEAD.equals(shareGroupDescription.groupState()))) {
-                    CommandLineUtils.printErrorAndExit(String.format("Share group '%s' is not empty.", groupId));
+                    CommandLineUtils.printErrorAndExit(String.format(Locale.ROOT, "Share group '%s' is not empty.", groupId));
                 }
                 resetOffsetsForInactiveGroup(groupId);
             } catch (InterruptedException ie) {
@@ -458,7 +459,7 @@ public class ShareGroupCommand {
                 return groupOffsetsResetter.resetToDateTime(partitionsToReset);
             }
             CommandLineUtils
-                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+                .printUsageAndExit(opts.parser, String.format(Locale.ROOT, "Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 

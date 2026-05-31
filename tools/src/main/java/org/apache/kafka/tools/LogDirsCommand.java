@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -83,7 +84,7 @@ public class LogDirsCommand {
 
         if (!nonExistingBrokers.isEmpty()) {
             throw new TerseException(
-                    String.format(
+                    String.format(Locale.ROOT, 
                             "ERROR: The given brokers do not exist from --broker-list: %s. Current existent brokers: %s",
                             commaDelimitedStringFromIntegerSet(nonExistingBrokers),
                             commaDelimitedStringFromIntegerSet(clusterBrokers)));

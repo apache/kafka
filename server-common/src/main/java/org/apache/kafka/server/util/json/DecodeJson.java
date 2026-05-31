@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -36,7 +37,7 @@ public interface DecodeJson<T> {
     T decode(JsonNode node) throws JsonMappingException;
 
     static JsonMappingException throwJsonMappingException(String expectedType, JsonNode node) {
-        return new JsonMappingException(null, String.format("Expected `%s` value, received %s", expectedType, node));
+        return new JsonMappingException(null, String.format(Locale.ROOT, "Expected `%s` value, received %s", expectedType, node));
     }
 
     final class DecodeBoolean implements DecodeJson<Boolean> {

@@ -73,6 +73,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -986,7 +987,7 @@ public class StreamsGroupCommand {
             }
 
             CommandLineUtils
-                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+                .printUsageAndExit(opts.parser, String.format(Locale.ROOT, "Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
             return null;
         }
 

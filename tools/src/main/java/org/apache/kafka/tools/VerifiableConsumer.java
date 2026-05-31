@@ -60,6 +60,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -544,7 +545,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             .setDefault(ConsumerConfig.DEFAULT_GROUP_PROTOCOL)
             .dest("groupProtocol")
             .metavar("GROUP-PROTOCOL")
-            .help(String.format("Group protocol (must be one of %s)", Arrays.stream(GroupProtocol.values())
+            .help(String.format(Locale.ROOT, "Group protocol (must be one of %s)", Arrays.stream(GroupProtocol.values())
                     .map(Object::toString).collect(Collectors.joining(", "))));
 
         parser.addArgument("--group-remote-assignor")
@@ -554,7 +555,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             .setDefault(ConsumerConfig.DEFAULT_GROUP_REMOTE_ASSIGNOR)
             .dest("groupRemoteAssignor")
             .metavar("GROUP-REMOTE-ASSIGNOR")
-            .help(String.format("Group remote assignor; only used if the group protocol is %s", GroupProtocol.CONSUMER.name()));
+            .help(String.format(Locale.ROOT, "Group remote assignor; only used if the group protocol is %s", GroupProtocol.CONSUMER.name()));
 
         parser.addArgument("--group-id")
             .action(store())
@@ -618,7 +619,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             .type(String.class)
             .dest("assignmentStrategy")
             .metavar("ASSIGNMENT-STRATEGY")
-            .help(String.format("Set assignment strategy (e.g. %s); only used if the group protocol is %s", RoundRobinAssignor.class.getName(), GroupProtocol.CLASSIC.name()));
+            .help(String.format(Locale.ROOT, "Set assignment strategy (e.g. %s); only used if the group protocol is %s", RoundRobinAssignor.class.getName(), GroupProtocol.CLASSIC.name()));
 
         parser.addArgument("--consumer.config")
             .action(store())
