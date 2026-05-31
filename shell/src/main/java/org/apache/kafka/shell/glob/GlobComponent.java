@@ -48,6 +48,10 @@ public final class GlobComponent {
         };
     }
 
+    /**
+     * Appends one character inside a regular expression character class,
+     * escaping characters that would otherwise be interpreted specially.
+     */
     private static void appendCharacterClassCharacter(StringBuilder output, char c) {
         if (c == '\\' || c == '[') {
             output.append('\\');
@@ -55,6 +59,10 @@ public final class GlobComponent {
         output.append(c);
     }
 
+    /**
+     * Appends a glob character class as a regular expression character class.
+     * Returns the index immediately after the closing bracket.
+     */
     private static int appendCharacterClass(String glob, int start, StringBuilder output) {
         int i = start + 1;
         if (i == glob.length()) {
