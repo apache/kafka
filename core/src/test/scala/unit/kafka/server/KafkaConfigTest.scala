@@ -2016,6 +2016,18 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testWarnWhenDynamicOnlyBrokerQuotaConfigsInServerProperties(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "1000000")
+    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
+      appender.setClassLogger(KafkaConfig.getClass, Level.WARN)
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.asScala.exists(_.contains(
+        s"${QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG} is set in server.properties but is ignored at runtime")))
+    }
+  }
+
+  @Test
   def testLogBrokerHeartbeatIntervalMsShouldBeLowerThanHalfOfBrokerSessionTimeoutMs(): Unit = {
     val props = createDefaultConfig()
     Using.resource(LogCaptureAppender.createAndRegister) { appender =>

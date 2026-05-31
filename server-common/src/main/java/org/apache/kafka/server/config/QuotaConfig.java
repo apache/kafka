@@ -86,6 +86,11 @@ public class QuotaConfig {
             "This property can be only set dynamically and static configurations in server.properties are ignored. It is suggested that the limit be kept above 1MB/s for accurate behaviour.";
     public static final long QUOTA_BYTES_PER_SECOND_DEFAULT = Long.MAX_VALUE;
 
+    public static final Set<String> DYNAMIC_ONLY_BROKER_QUOTA_CONFIGS = Set.of(
+            LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
+            FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
+            REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG);
+
     public static final String PRODUCER_BYTE_RATE_OVERRIDE_CONFIG = "producer_byte_rate";
     public static final String CONSUMER_BYTE_RATE_OVERRIDE_CONFIG = "consumer_byte_rate";
     public static final String REQUEST_PERCENTAGE_OVERRIDE_CONFIG = "request_percentage";
