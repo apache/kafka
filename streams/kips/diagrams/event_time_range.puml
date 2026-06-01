@@ -1,0 +1,78 @@
+@startuml
+!theme plain
+scale 10 as 50 pixels
+
+title EventTimeRange (-20s before, +30s after)
+
+' Define axes
+concise "1. Event Time (s)" as ET
+concise "2. Processing Time (s)" as PT
+concise "3. State Store (Buffer)" as SS
+concise "4. Emitted Range" as Out
+
+' Initial State
+@0
+ET is Idle
+PT is Idle
+SS is "{ }"
+Out is Idle
+
+' --- Arrival 1: A (t=30) ---
+' Box from 25 to 35 centers exactly on 30
+@25
+PT is "A"
+ET is "A"
+SS is "{ A }"
+Out is "{ A }"
+@35
+PT is Idle
+ET is Idle
+Out is Idle
+
+@45
+ET is "B"
+
+@55
+ET is Idle
+
+' --- Arrival 2: C (t=70) ---
+' Box from 65 to 75 centers exactly on 70
+@65
+PT is "C"
+ET is "C"
+SS is "{ A, C }"
+Out is "{ C }"
+@75
+PT is Idle
+ET is Idle
+Out is Idle
+
+' --- Arrival 3: D (t=90) ---
+' Box from 105 to 115 centers exactly on 110
+@85
+PT is "D"
+ET is "D"
+SS is "{ A, C, D }"
+Out is "{C,D}"
+@95
+PT is Idle
+ET is Idle
+Out is Idle
+
+' --- Arrival 4: B (LATE DATA) (t=50) ---
+' Arrives at PT=150. Box from 145 to 155 centers on 150.
+@122
+PT is "B [LATE]"
+SS is "{ A, B, C, D}"
+Out is "{ A, B, C }"
+note bottom of Out
+    The after timerange
+    only applies on
+    late arriving data
+end note
+@138
+PT is Idle
+Out is Idle
+
+@145
+@enduml

@@ -1,0 +1,44 @@
+@startuml
+!theme plain
+
+title RangedKStream Processing Flow
+
+participant "Upstream\nKStream" as UP
+participant "RangedKStream" as RKS
+participant "WindowStore\n(Buffer)" as WS
+participant "Range" as R
+participant "RangeAggregator" as RA
+participant "Downstream\nKStream" as DOWN
+
+UP -> RKS : process(record)
+activate RKS
+
+alt record is past grace period
+    RKS -> UP : (drop record)
+else within grace period
+    RKS -> WS : put(key, value, timestamp)
+    activate WS
+    deactivate WS
+
+    RKS -> R : fetch(anchor, store)
+    activate R
+
+    R -> WS : fetch(key, fromTimestamp, toTimestamp)
+    activate WS
+    WS --> R : Iterator<Record<K, V>>
+    deactivate WS
+
+    R --> RKS : Iterable<Record<K, V>> rangeRecords
+    deactivate R
+
+    RKS -> RA : apply(anchor, rangeRecords)
+    activate RA
+    RA --> RKS : VR result
+    deactivate RA
+
+    RKS -> DOWN : forward(key, result, timestamp)
+end
+
+deactivate RKS
+
+@enduml
