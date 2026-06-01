@@ -98,4 +98,17 @@ public class ShareGroupConfigProvider {
             .flatMap(GroupConfig::shareAutoOffsetReset)
             .orElseGet(GroupConfig::defaultShareAutoOffsetReset);
     }
+
+    /**
+     * The method is used to get the name of the configured DLQ topic on the share group. If the group config
+     * is present, then the value from the group config is used. Otherwise, the default value is used.
+     *
+     * @param groupId The group id for which the DLQ topic name is to be fetched.
+     * @return DLQ topic name for the share group.
+     */
+    public String errorsDLQTopicName(String groupId) {
+        return manager.groupConfig(groupId)
+            .map(GroupConfig::errorsDLQTopicName)
+            .orElse(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT); // In case no group config
+    }
 }
