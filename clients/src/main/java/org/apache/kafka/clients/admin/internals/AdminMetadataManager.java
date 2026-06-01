@@ -195,6 +195,10 @@ public class AdminMetadataManager {
         return updater;
     }
 
+    public boolean isBootstrapped() {
+        return bootstrapCluster != null;
+    }
+
     public boolean isReady() {
         if (fatalException != null) {
             log.debug("Metadata is not usable: failed to get metadata.", fatalException);

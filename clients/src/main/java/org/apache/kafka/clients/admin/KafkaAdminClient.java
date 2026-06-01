@@ -771,6 +771,7 @@ public class KafkaAdminClient extends AdminClient {
             long now = time.milliseconds();
             LeastLoadedNode leastLoadedNode = client.leastLoadedNode(now);
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP
+                && metadataManager.isBootstrapped()
                 && !leastLoadedNode.hasNodeAvailableOrConnectionReady()) {
                 metadataManager.rebootstrap(now);
             }

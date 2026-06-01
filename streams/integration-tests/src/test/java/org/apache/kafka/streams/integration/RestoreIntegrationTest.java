@@ -130,15 +130,20 @@ public class RestoreIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private Admin admin;
+    private static Admin admin;
 
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
+
+        final Properties adminConfig = new Properties();
+        adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        admin = Admin.create(adminConfig);
     }
 
     @AfterAll
     public static void closeCluster() {
+        Utils.closeQuietly(admin, "admin");
         CLUSTER.stop();
     }
 
@@ -156,10 +161,6 @@ public class RestoreIntegrationTest {
         inputStream = appId + "-input-stream";
         CLUSTER.createTopic(inputStream, 2, 1);
         CLUSTER.setGroupStreamsInitialRebalanceDelay(appId, 0);
-
-        final Properties adminConfig = new Properties();
-        adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        admin = Admin.create(adminConfig);
     }
 
     private Properties props() {
@@ -188,7 +189,6 @@ public class RestoreIntegrationTest {
 
     @AfterEach
     public void shutdown() throws Exception {
-        Utils.closeQuietly(admin, "admin");
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));
         }
