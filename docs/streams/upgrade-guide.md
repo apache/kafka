@@ -95,6 +95,29 @@ Storing headers increases disk and serialization cost versus headerless stores; 
 
 `TopologyTestDriver` and Interactive Queries support the new store types. The existing `store()` facades continue to return values (or `ValueAndTimestamp`) without exposing record headers. See the [interactive queries guide](/{version}/streams/developer-guide/interactive-queries/#header-aware-stores-interactive-queries).
 
+### Headers-Aware State Stores for DSL Operators (KIP-1285)
+
+[KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G) opts the DSL into the headers-aware state store implementations introduced by [KIP-1271](#kip-1271-headers-aware-stores). A new global config [`dsl.store.format`](/{version}/streams/developer-guide/config-streams.html#dsl-store-format) (default `DEFAULT`, case-insensitive) selects the state store format used by every DSL operator that materializes a store. Setting it to `HEADERS` causes those operators to use headers-aware stores that can persist record headers alongside the value and timestamp. KIP-1285 does not define result-header computation for DSL operators; see [Current limitations](#current-limitations) below.
+
+```java
+// Enable headers-aware stores globally for all DSL operators
+Properties props = new Properties();
+props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HEADERS");
+```
+
+Per-operator customization is possible by providing a custom `DslStoreSuppliers` via `Materialized.withStoreType(...)`, or by supplying explicit headers-aware store suppliers. The pre-existing `boolean isTimestamped` constructors and `isTimestamped()` methods on `DslKeyValueParams` and `DslWindowParams`, and the 3-argument constructor on `DslSessionParams`, are deprecated in favor of `DslStoreFormat`-based constructors. Existing applications are not affected by default.
+
+#### Current limitations {#current-limitations}
+
+The `suppress()` operator and left/outer stream-stream joins use a non-headers-aware buffer store. When `dsl.store.format=HEADERS` is set, these buffers retain their non-headers-aware behavior, so headers from records held in those buffers are not preserved. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) for the per-operator matrix.
+
+Additionally, DSL operators do not compute new result headers. Aggregations (`count`, `reduce`, `aggregate`, including their windowed and session-windowed variants), KTable-KTable joins (inner / left / outer), materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write an empty header set into their materialized stores. KStream-KStream join window stores retain the source-record headers stored for the window, but join output records are not assigned computed join headers; the current forwarding path may carry headers from the record that triggers the output. A follow-up KIP will give users explicit control over how DSL result headers are computed.
+
+#### Changelog, migration, and performance
+
+KIP-1285 does not change the changelog wire format, the migration procedure, or the per-store overhead — those are properties of the underlying KIP-1271 stores. See the [KIP-1271 section](#kip-1271-headers-aware-stores) above for the full description of changelog compatibility, the lazy per-key RocksDB migration on `DEFAULT`→`HEADERS`, the restore behavior, and the per-record size impact. The DSL config `dsl.store.format` only controls which operators participate; once an operator is using a headers-aware store, the store runtime behavior is identical to the Processor API case.
+
+
 ### Deprecation of streams-scala module (KIP-1244)
 
 The `kafka-streams-scala` module (`org.apache.kafka.streams.scala` package) is deprecated in 4.3.0 and will be removed in 5.0.
@@ -551,4 +574,3 @@ The following table shows which versions of the Kafka Streams API are compatible
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
-
