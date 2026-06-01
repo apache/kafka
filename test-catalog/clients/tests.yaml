@@ -3810,6 +3810,9 @@ org.apache.kafka.common.metrics.KafkaMetricTest:
 - testIsMeasurableWithGaugeProvider
 - testKafkaMetricAcceptsNonMeasurableNonGaugeProvider
 - testMeasurableValueReturnsZeroWhenNotMeasurable
+- testToStringWithAnonymousClassProvider
+- testToStringWithLambdaProvider
+- testToStringWithStatProvider
 org.apache.kafka.common.metrics.KafkaMetricsContextTest:
 - testCreationWithNullNamespaceAndLabels
 - testCreationWithValidNamespaceAndLabels
