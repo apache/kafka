@@ -33,8 +33,24 @@ public interface PartitionWriter {
     /**
      * Listener allowing to listen to high watermark changes. This is meant
      * to be used in conjunction with {@link PartitionWriter#append(TopicPartition, VerificationGuard, MemoryRecords, short)}.
+     * <p>
+     * High watermark updates are delivered only while this broker is the leader of the
+     * partition. Once the partition is no longer led by this broker (it transitions to
+     * follower, is deleted or fails), no further updates are delivered. This guarantee
+     * allows the listener to treat every update as advancing over records that this
+     * broker wrote as leader. It is required because, after a leadership change, the
+     * local log can be truncated and re-replicated from the new leader, so a high
+     * watermark observed as a follower may advance over records that this broker never
+     * wrote.
      */
     interface Listener {
+        /**
+         * Called when the high watermark of the partition advances. Only invoked while
+         * this broker is the leader of the partition (see {@link Listener}).
+         *
+         * @param tp        The topic partition.
+         * @param offset    The new high watermark.
+         */
         void onHighWatermarkUpdated(
             TopicPartition tp,
             long offset
