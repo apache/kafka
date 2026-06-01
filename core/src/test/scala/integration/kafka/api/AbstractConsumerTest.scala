@@ -453,13 +453,13 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     private var topicsSubscription = topicsToSubscribe
 
     val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
-      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         partitionAssignment ++= partitions.toArray(new Array[TopicPartition](0))
         if (userRebalanceListener != null)
           userRebalanceListener.onPartitionsAssigned(partitions)
       }
 
-      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
         partitionAssignment --= partitions.toArray(new Array[TopicPartition](0))
         if (userRebalanceListener != null)
           userRebalanceListener.onPartitionsRevoked(partitions)
