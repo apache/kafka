@@ -655,6 +655,7 @@ public class StreamThreadStateStoreProviderTest {
             taskId,
             Task.TaskType.ACTIVE,
             StreamsConfigUtils.eosEnabled(streamsConfig),
+            false,
             logContext,
             stateDirectory,
             topology.storeToChangelogTopic(),

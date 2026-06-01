@@ -579,6 +579,28 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
       }
     }
 
+    def validateLogRemoteCopyLagMs(): Unit = {
+      val logRetentionMs: Long = newConfig.logRetentionTimeMillis
+      val logLocalRetentionMs = newConfig.remoteLogManagerConfig.logLocalRetentionMs
+      val effectiveLocalRetentionMs = if (logLocalRetentionMs == -2L) logRetentionMs else logLocalRetentionMs
+      val logRemoteCopyLagMs = newConfig.remoteLogManagerConfig.logRemoteCopyLagMs
+      if (logRemoteCopyLagMs > 0L && effectiveLocalRetentionMs >= 0L && logRemoteCopyLagMs > effectiveLocalRetentionMs) {
+        throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs,
+          s"Value must not exceed ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP} (effective value: $effectiveLocalRetentionMs)")
+      }
+    }
+
+    def validateLogRemoteCopyLagBytes(): Unit = {
+      val logRetentionBytes: Long = newConfig.logRetentionBytes
+      val logLocalRetentionBytes = newConfig.remoteLogManagerConfig.logLocalRetentionBytes
+      val effectiveLocalRetentionBytes = if (logLocalRetentionBytes == -2L) logRetentionBytes else logLocalRetentionBytes
+      val logRemoteCopyLagBytes = newConfig.remoteLogManagerConfig.logRemoteCopyLagBytes
+      if (logRemoteCopyLagBytes > 0L && effectiveLocalRetentionBytes >= 0L && logRemoteCopyLagBytes > effectiveLocalRetentionBytes) {
+        throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes,
+          s"Value must not exceed ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP} (effective value: $effectiveLocalRetentionBytes)")
+      }
+    }
+
     def validateCordonedLogDirs(): Unit = {
       val logDirs = newConfig.logDirs()
       val cordonedLogDirs = newConfig.cordonedLogDirs()
@@ -592,6 +614,8 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
 
     validateLogLocalRetentionMs()
     validateLogLocalRetentionBytes()
+    validateLogRemoteCopyLagMs()
+    validateLogRemoteCopyLagBytes()
     validateCordonedLogDirs()
   }
 

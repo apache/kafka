@@ -336,8 +336,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     }
                 }
 
+                Set<String> disabledFeatures = newFeatureLevels.entrySet().stream()
+                    .filter(featureEntry -> featureEntry.getValue() == 0)
+                    .filter(featureEntry -> !featureEntry.getKey().equals(MetadataVersion.FEATURE_NAME))
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+
                 TestKitNodes nodes = new TestKitNodes.Builder()
                         .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
+                        .setDisabledFeatures(disabledFeatures)
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())

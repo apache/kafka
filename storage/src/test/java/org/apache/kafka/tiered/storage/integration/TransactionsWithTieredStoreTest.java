@@ -23,11 +23,9 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
-import org.apache.kafka.common.test.api.TestKitDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.config.ServerLogConfigs;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.integration.TransactionsTestHelper.TransactionHooks;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
@@ -35,12 +33,11 @@ import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
-import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createTopicConfigForRemoteStorage;
 
 /**
@@ -56,10 +53,7 @@ public class TransactionsWithTieredStoreTest {
     private static final int BROKER_COUNT = 3;
     
     private static Map<String, String> baseServerProperties() {
-        String storageDirPath = TestUtils.tempDirectory(
-                "kafka-remote-tier-" + TEST_CLASS_NAME).getAbsolutePath();
-
-        Map<String, String> serverProps = new HashMap<>();
+        Map<String, String> serverProps = createServerPropsForRemoteStorage(TEST_CLASS_NAME, BROKER_COUNT, 3);
         serverProps.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false");
         serverProps.put("offsets.topic.num.partitions", "1");
         serverProps.put("transaction.state.log.num.partitions", "3");
@@ -70,14 +64,6 @@ public class TransactionsWithTieredStoreTest {
         serverProps.put("auto.leader.rebalance.enable", "false");
         serverProps.put("group.initial.rebalance.delay.ms", "0");
         serverProps.put("transaction.abort.timed.out.transaction.cleanup.interval.ms", "200");
-
-        Properties tieredProps = createPropsForRemoteStorage(
-                TEST_CLASS_NAME, storageDirPath, BROKER_COUNT, 3, new Properties());
-        tieredProps.forEach((k, v) -> serverProps.put(k.toString(), v.toString()));
-
-        serverProps.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
-                TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME);
-
         return serverProps;
     }
 

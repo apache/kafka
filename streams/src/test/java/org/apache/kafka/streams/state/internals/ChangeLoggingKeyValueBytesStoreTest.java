@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -61,6 +62,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.mockito.Mockito.mock;
@@ -262,6 +264,18 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), is(notNullValue()));
         assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), hasEntry(0, 100L));
 
+    }
+
+    @Test
+    public void shouldDelegateReadOnlyUncommittedToInner() {
+        assertThat(store.readOnly(IsolationLevel.READ_UNCOMMITTED),
+            sameInstance(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)));
+    }
+
+    @Test
+    public void shouldDelegateReadOnlyCommittedToInner() {
+        assertThat(store.readOnly(IsolationLevel.READ_COMMITTED),
+            sameInstance(inner.readOnly(IsolationLevel.READ_COMMITTED)));
     }
 
     private StreamsConfig streamsConfigMock() {

@@ -41,6 +41,9 @@ import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
@@ -203,7 +206,8 @@ public final class StoreQueryUtils {
         if (!(store instanceof KeyValueStore)) {
             return QueryResult.forUnknownQueryType(query, store);
         }
-        final KeyValueStore<Bytes, byte[]> kvStore = (KeyValueStore<Bytes, byte[]>) store;
+        final ReadOnlyKeyValueStore<Bytes, byte[]> kvStore =
+            ((KeyValueStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
         final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
         final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
         final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
@@ -238,8 +242,8 @@ public final class StoreQueryUtils {
 
         if (store instanceof KeyValueStore) {
             final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
-            final KeyValueStore<Bytes, byte[]> keyValueStore =
-                (KeyValueStore<Bytes, byte[]>) store;
+            final ReadOnlyKeyValueStore<Bytes, byte[]> keyValueStore =
+                ((KeyValueStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             try {
                 final byte[] bytes = keyValueStore.get(rawKeyQuery.getKey());
                 return (QueryResult<R>) QueryResult.forResult(bytes);
@@ -263,7 +267,8 @@ public final class StoreQueryUtils {
         if (store instanceof WindowStore) {
             final WindowKeyQuery<Bytes, byte[]> windowKeyQuery =
                 (WindowKeyQuery<Bytes, byte[]>) query;
-            final WindowStore<Bytes, byte[]> windowStore = (WindowStore<Bytes, byte[]>) store;
+            final ReadOnlyWindowStore<Bytes, byte[]> windowStore =
+                ((WindowStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             try {
                 if (windowKeyQuery.getTimeFrom().isPresent() && windowKeyQuery.getTimeTo().isPresent()) {
                     final WindowStoreIterator<byte[]> iterator = windowStore.fetch(
@@ -299,7 +304,8 @@ public final class StoreQueryUtils {
         if (store instanceof WindowStore) {
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
                 (WindowRangeQuery<Bytes, byte[]>) query;
-            final WindowStore<Bytes, byte[]> windowStore = (WindowStore<Bytes, byte[]>) store;
+            final ReadOnlyWindowStore<Bytes, byte[]> windowStore =
+                ((WindowStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             try {
                 // There's no store API for open time ranges
                 if (windowRangeQuery.getTimeFrom().isPresent() && windowRangeQuery.getTimeTo().isPresent()) {
@@ -329,7 +335,8 @@ public final class StoreQueryUtils {
         } else if (store instanceof SessionStore) {
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
                 (WindowRangeQuery<Bytes, byte[]>) query;
-            final SessionStore<Bytes, byte[]> sessionStore = (SessionStore<Bytes, byte[]>) store;
+            final ReadOnlySessionStore<Bytes, byte[]> sessionStore =
+                ((SessionStore<Bytes, byte[]>) store).readOnly(config.getIsolationLevel());
             try {
                 if (windowRangeQuery.getKey().isPresent()) {
                     final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = sessionStore.fetch(

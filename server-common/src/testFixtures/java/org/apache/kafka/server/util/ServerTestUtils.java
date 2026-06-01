@@ -17,9 +17,20 @@
 
 package org.apache.kafka.server.util;
 
+import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AccessControlEntryFilter;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.test.TestUtils;
 
 import com.yammer.metrics.core.Gauge;
+
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 public final class ServerTestUtils {
 
@@ -44,6 +55,30 @@ public final class ServerTestUtils {
             .orElseThrow()
             .getValue();
         return (Number) gauge.value();
+    }
+
+    /**
+     * Wait until the ACLs for the given resource match the expected set.
+     *
+     * @param expected                 the expected set of access control entries.
+     * @param authorizer               the authorizer to query.
+     * @param resource                 the resource pattern to filter ACLs on.
+     * @param accessControlEntryFilter additional filter for the access control entries.
+     */
+    public static void waitAndVerifyAcls(Set<AccessControlEntry> expected,
+                                         Authorizer authorizer,
+                                         ResourcePattern resource,
+                                         AccessControlEntryFilter accessControlEntryFilter) throws InterruptedException {
+        String newLine = System.lineSeparator();
+        String delimiter = newLine + "\t";
+        AclBindingFilter filter = new AclBindingFilter(resource.toFilter(), accessControlEntryFilter);
+        TestUtils.waitForCondition(() -> StreamSupport.stream(authorizer.acls(filter).spliterator(), false)
+                        .map(AclBinding::entry)
+                        .collect(Collectors.toSet()).equals(expected),
+                45000,
+                () -> "expected acls:" + expected.stream().map(Object::toString).collect(Collectors.joining(delimiter, delimiter, newLine))
+                        + "but got:" + StreamSupport.stream(authorizer.acls(filter).spliterator(), false)
+                        .map(b -> b.entry().toString()).collect(Collectors.joining(delimiter, delimiter, newLine)));
     }
 
 }

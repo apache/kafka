@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -29,9 +30,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -53,7 +56,8 @@ public class QueryableStoreProviderTest {
         globalStateStores = new HashMap<>();
         storeProvider =
             new QueryableStoreProvider(
-                new GlobalStateStoreProvider(globalStateStores)
+                new GlobalStateStoreProvider(globalStateStores),
+                () -> org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED
             );
         storeProvider.addStoreProviderForThread("thread1", theStoreProvider);
     }
@@ -101,6 +105,26 @@ public class QueryableStoreProviderTest {
     @Test
     public void shouldReturnKVStoreWithPartitionWhenItExists() {
         assertNotNull(storeProvider.store(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore()).withPartition(numStateStorePartitions - 1)));
+    }
+
+    @Test
+    public void shouldResolveDefaultIsolationLevelAtQueryTime() {
+        final NoOpReadOnlyStore<Object, Object> kvStore = new NoOpReadOnlyStore<>();
+        final StateStoreProviderStub threadProvider = new StateStoreProviderStub(false);
+        threadProvider.addStore(keyValueStore, kvStore);
+
+        final AtomicReference<IsolationLevel> levelRef = new AtomicReference<>(IsolationLevel.READ_UNCOMMITTED);
+        final QueryableStoreProvider provider = new QueryableStoreProvider(
+            new GlobalStateStoreProvider(new HashMap<>()),
+            levelRef::get
+        );
+        provider.addStoreProviderForThread("thread-iso", threadProvider);
+
+        levelRef.set(IsolationLevel.READ_COMMITTED);
+
+        provider.store(StoreQueryParameters.fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())).get("k");
+
+        assertEquals(IsolationLevel.READ_COMMITTED, kvStore.isolationLevel);
     }
 
     @Test

@@ -196,6 +196,7 @@ public class ProcessorStateManager implements StateManager {
 
     private final TaskId taskId;
     private final boolean eosEnabled;
+    private final boolean transactionalStateStoresEnabled;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -225,6 +226,7 @@ public class ProcessorStateManager implements StateManager {
     public ProcessorStateManager(final TaskId taskId,
                                  final TaskType taskType,
                                  final boolean eosEnabled,
+                                 final boolean transactionalStateStoresEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
@@ -236,6 +238,7 @@ public class ProcessorStateManager implements StateManager {
         this.taskId = taskId;
         this.taskType = taskType;
         this.eosEnabled = eosEnabled;
+        this.transactionalStateStoresEnabled = transactionalStateStoresEnabled;
         this.sourcePartitions = sourcePartitions;
         this.upgradeFrom = upgradeFrom;
 
@@ -253,11 +256,12 @@ public class ProcessorStateManager implements StateManager {
     public ProcessorStateManager(final TaskId taskId,
                                  final TaskType taskType,
                                  final boolean eosEnabled,
+                                 final boolean transactionalStateStoresEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
-        this(taskId, taskType, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
+        this(taskId, taskType, eosEnabled, transactionalStateStoresEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
     }
 
     /**
@@ -271,7 +275,7 @@ public class ProcessorStateManager implements StateManager {
                                                                final StateDirectory stateDirectory,
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
+        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, false, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
@@ -337,7 +341,7 @@ public class ProcessorStateManager implements StateManager {
                     // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
                     // and hence we are uncertain that the current local state only contains committed data;
                     // in that case we need to treat it as a task-corrupted exception
-                    if (eosEnabled && !storeDirIsEmpty) {
+                    if (eosEnabled && !storeDirIsEmpty && !transactionalStateStoresEnabled) {
                         log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
                                 "since under EOS it has the risk of getting uncommitted data in stores we have to " +
                                 "treat it as a task corruption error and wipe out the local state of task {} " +
@@ -417,6 +421,10 @@ public class ProcessorStateManager implements StateManager {
 
     Set<TopicPartition> changelogPartitions() {
         return Collections.unmodifiableSet(changelogOffsets().keySet());
+    }
+
+    boolean hasCorruptedStores() {
+        return stores.values().stream().anyMatch(m -> m.corrupted);
     }
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {

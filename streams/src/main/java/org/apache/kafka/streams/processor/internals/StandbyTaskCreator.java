@@ -82,6 +82,7 @@ class StandbyTaskCreator {
                     taskId,
                     Task.TaskType.STANDBY,
                     eosEnabled(applicationConfig),
+                    applicationConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                     getLogContext(taskId),
                     stateDirectory,
                     topology.storeToChangelogTopic(),
