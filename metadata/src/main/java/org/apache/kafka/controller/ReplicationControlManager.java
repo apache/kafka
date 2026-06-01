@@ -815,7 +815,7 @@ public class ReplicationControlManager {
                 numPartitions, e.throttleTimeMs());
             return ApiError.fromThrowable(e);
         }
-        Uuid topicId = Uuid.randomUuid();
+        Uuid topicId = Uuid.randomUuidNoDashes();
         CreatableTopicResult result = new CreatableTopicResult().
             setName(topic.name()).
             setTopicId(topicId).
