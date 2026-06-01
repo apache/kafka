@@ -328,10 +328,10 @@ class PlaintextConsumerAssignorsTest extends AbstractConsumerTest {
     var generationId1 = -1
     var memberId1 = ""
     val customRebalanceListener = new ConsumerRebalanceListener {
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
       }
 
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         if (!lock.tryLock(3000, TimeUnit.MILLISECONDS)) {
           fail(s"Time out while awaiting for lock.")
         }

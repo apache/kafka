@@ -166,12 +166,12 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     var callsToAssigned = 0
     var callsToRevoked = 0
 
-    override def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
+    def onPartitionsAssigned(partitions: java.util.Collection[TopicPartition]): Unit = {
       info("onPartitionsAssigned called.")
       callsToAssigned += 1
     }
 
-    override def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
+    def onPartitionsRevoked(partitions: java.util.Collection[TopicPartition]): Unit = {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
     }
@@ -453,13 +453,13 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     private var topicsSubscription = topicsToSubscribe
 
     val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         partitionAssignment ++= partitions.toArray(new Array[TopicPartition](0))
         if (userRebalanceListener != null)
           userRebalanceListener.onPartitionsAssigned(partitions)
       }
 
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
         partitionAssignment --= partitions.toArray(new Array[TopicPartition](0))
         if (userRebalanceListener != null)
           userRebalanceListener.onPartitionsRevoked(partitions)

@@ -1492,10 +1492,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
     val consumer = createConsumer()
     consumer.subscribe(Pattern.compile(topicPattern), new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         assignSemaphore.release()
       }
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
       }})
     TestUtils.waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(500))
@@ -1550,10 +1550,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)),  new ResourcePattern(TOPIC,
       GROUP_METADATA_TOPIC_NAME, LITERAL))
     consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME), new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         assignSemaphore.release()
       }
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
       }})
     TestUtils.waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(500))
