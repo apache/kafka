@@ -100,14 +100,7 @@ public class DefaultAutoTopicCreationManagerTest {
         props.setProperty(ServerLogConfigs.NUM_PARTITIONS_CONFIG, "1");
         props.setProperty(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "1");
 
-        config = new AbstractKafkaConfig(AbstractKafkaConfig.CONFIG_DEF, props, Map.of(), false) {
-            @Override
-            public void addReconfigurable(org.apache.kafka.common.Reconfigurable reconfigurable) {
-            }
-            @Override
-            public void removeReconfigurable(org.apache.kafka.common.Reconfigurable reconfigurable) {
-            }
-        };
+        config = new AbstractKafkaConfig(AbstractKafkaConfig.CONFIG_DEF, props, Map.of(), false) { };
         topicCreator.reset();
     }
 

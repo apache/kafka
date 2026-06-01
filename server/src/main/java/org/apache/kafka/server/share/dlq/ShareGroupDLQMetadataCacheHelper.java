@@ -18,6 +18,7 @@
 package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,11 +29,20 @@ import java.util.Optional;
  * and keeping implementations manageable.
  */
 public interface ShareGroupDLQMetadataCacheHelper {
+
+    public record TopicPartitionData(
+        String topicName,
+        Optional<Integer> numPartitions,
+        Optional<Uuid> topicId,
+        List<Node> partitionLeaderNodes
+    ) {
+    }
+
     /**
      * Return optional of string representing of DLQ topic.
      *
      * @param groupId Id of the share group
-     * @return  Optional of string representing of DLQ topic if set, empty otherwise
+     * @return Optional of string representing of DLQ topic if set, empty otherwise
      */
     Optional<String> shareGroupDlqTopic(String groupId);
 
@@ -40,7 +50,7 @@ public interface ShareGroupDLQMetadataCacheHelper {
      * Check if DLQ dynamic config is set on the topic to mark it available for DLQ writes.
      *
      * @param topic The name of the topic
-     * @return  Boolean which is true when DLQ is set on the topic, false otherwise
+     * @return Boolean which is true when DLQ is set on the topic, false otherwise
      */
     boolean isDlqEnabledOnTopic(String topic);
 
@@ -54,7 +64,7 @@ public interface ShareGroupDLQMetadataCacheHelper {
     /**
      * Return optional of string representing the configured DLQ prefix.
      *
-     * @return  Optional of string representing DLQ prefix if configured, empty otherwise
+     * @return Optional of string representing DLQ prefix if configured, empty otherwise
      */
     Optional<String> shareGroupDlqTopicPrefix();
 
@@ -62,7 +72,7 @@ public interface ShareGroupDLQMetadataCacheHelper {
      * Check is copy record data into DLQ topic is enabled.
      *
      * @param groupId The id of the share group
-     * @return  Boolean which is true if config is set, false otherwise
+     * @return Boolean which is true if config is set, false otherwise
      */
     boolean isShareGroupDlqCopyRecordEnabled(String groupId);
 
@@ -70,14 +80,30 @@ public interface ShareGroupDLQMetadataCacheHelper {
      * Check if a topic is present in the metadata cache.
      *
      * @param topic The name of the topic
-     * @return  Boolean which is true is topic exists, false otherwise
+     * @return Boolean which is true is topic exists, false otherwise
      */
     boolean containsTopic(String topic);
 
     /**
      * Get all nodes in the kafka cluster encapsulated in the {@link Node} object.
      *
-     * @return  List of nodes representing the cluster nodes
+     * @return List of nodes representing the cluster nodes
      */
     List<Node> getClusterNodes();
+
+    /**
+     * Fetch topic name, based on the topic id.
+     *
+     * @param topicId The uuid of the topic
+     * @return Optional specifying the name, or empty in case of error/not found.
+     */
+    Optional<String> topicName(Uuid topicId);
+
+    /**
+     * Fetch topic partition data, based on the topic name.
+     *
+     * @param topicName The name of the topic
+     * @return TopicPartitionData java record specifying the information.
+     */
+    TopicPartitionData topicPartitionData(String topicName);
 }
