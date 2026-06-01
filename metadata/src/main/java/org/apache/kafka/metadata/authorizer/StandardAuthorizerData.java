@@ -26,12 +26,14 @@ import org.apache.kafka.common.errors.AuthorizerNotReadyException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
+import org.apache.kafka.server.immutable.ImmutableNavigableSet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -312,54 +314,64 @@ public class StandardAuthorizerData {
         String host,
         Action action
     ) {
-        // This code relies on the ordering of StandardAcl within the NavigableMap.
-        // Entries are sorted by resource type first, then REVERSE resource name.
-        // Therefore, we can find all the applicable ACLs by starting at
-        // (resource_type, resource_name) and stepping forwards until we reach
-        // an ACL with a resource name which is not a prefix of the current one.
-        // At that point, we need to search for if there are any more ACLs at
-        // the first divergence point.
-        //
-        // For example, when trying to authorize a TOPIC resource named foobar, we would
-        // start at element 2, and continue on to 3 and 4 following map:
-        //
-        // 1. rs=TOPIC rn=gar pt=PREFIX
-        // 2. rs=TOPIC rn=foobar pt=PREFIX
-        // 3. rs=TOPIC rn=foob pt=LITERAL
-        // 4. rs=TOPIC rn=foo pt=PREFIX
-        // 5. rs=TOPIC rn=fb pt=PREFIX
-        // 6. rs=TOPIC rn=fa pt=PREFIX
-        // 7. rs=TOPIC rn=f  pt=PREFIX
-        // 8. rs=TOPIC rn=eeee pt=LITERAL
-        //
-        // Once we reached element 5, we would jump to element 7.
         MatchingRuleBuilder matchingRuleBuilder = new MatchingRuleBuilder(noAclRule);
-        StandardAcl exemplar = new StandardAcl(
-            action.resourcePattern().resourceType(),
-            action.resourcePattern().name(),
-            PatternType.UNKNOWN, // Note that the UNKNOWN value sorts before all others.
-            "",
-            "",
-            AclOperation.UNKNOWN,
-            AclPermissionType.UNKNOWN);
         AclCache aclCacheSnapshot = aclCache;
-        checkSection(aclCacheSnapshot, action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
-        if (matchingRuleBuilder.foundDeny()) {
-            return matchingRuleBuilder.build();
+        ResourceType resourceType = action.resourcePattern().resourceType();
+        String resourceName = action.resourcePattern().name();
+
+        // When the default result is ALLOWED, we must scan the full ACL set first
+        // to determine hasResourceAcls. If ANY ACL exists for this resource (even
+        // for a different principal), the result must be DENIED if no ALLOW matches,
+        // rather than falling through to the default ALLOWED rule.
+        if (noAclRule.result == ALLOWED) {
+            StandardAcl fullExemplar = new StandardAcl(
+                resourceType, resourceName, PatternType.UNKNOWN,
+                "", "", AclOperation.UNKNOWN, AclPermissionType.UNKNOWN);
+            checkSection(aclCacheSnapshot.aclsByResource(), action, fullExemplar, false,
+                matchingPrincipals, host, matchingRuleBuilder);
+            if (matchingRuleBuilder.foundDeny()) {
+                return matchingRuleBuilder.build();
+            }
         }
 
-        // In addition to ACLs for this specific resource name, there can also be wildcard
-        // ACLs that match any resource name. These are stored as type = LITERAL,
-        // name = "*". We search these next.
-        exemplar = new StandardAcl(
-            action.resourcePattern().resourceType(),
-            WILDCARD,
-            LITERAL,
-            "",
-            "",
-            AclOperation.UNKNOWN,
-            AclPermissionType.UNKNOWN);
-        checkSection(aclCacheSnapshot, action, exemplar, matchingPrincipals, host, matchingRuleBuilder);
+        for (KafkaPrincipal principal : matchingPrincipals) {
+            ImmutableNavigableSet<StandardAcl> principalAcls =
+                aclCacheSnapshot.aclsForPrincipal(principal.toString());
+            if (principalAcls.isEmpty()) continue;
+
+            StandardAcl exemplar = new StandardAcl(
+                resourceType,
+                resourceName,
+                PatternType.UNKNOWN,
+                principal.getPrincipalType() + ":" + principal.getName(),
+                "",
+                AclOperation.UNKNOWN,
+                AclPermissionType.UNKNOWN);
+            checkSection(principalAcls, action, exemplar, true, matchingPrincipals, host, matchingRuleBuilder);
+            if (matchingRuleBuilder.foundDeny()) {
+                return matchingRuleBuilder.build();
+            }
+        }
+
+        for (KafkaPrincipal principal : matchingPrincipals) {
+            ImmutableNavigableSet<StandardAcl> principalAcls =
+                aclCacheSnapshot.aclsForPrincipal(principal.toString());
+            if (principalAcls.isEmpty()) continue;
+
+            StandardAcl wildcardExemplar = new StandardAcl(
+                resourceType,
+                WILDCARD,
+                LITERAL,
+                principal.getPrincipalType() + ":" + principal.getName(),
+                "",
+                AclOperation.UNKNOWN,
+                AclPermissionType.UNKNOWN);
+            checkSection(principalAcls, action, wildcardExemplar, true, matchingPrincipals, host, matchingRuleBuilder);
+            if (matchingRuleBuilder.foundDeny()) {
+                return matchingRuleBuilder.build();
+            }
+        }
+
         return matchingRuleBuilder.build();
     }
 
@@ -378,49 +390,49 @@ public class StandardAuthorizerData {
     }
 
     private void checkSection(
-            AclCache aclCacheSnapshot, Action action,
-            StandardAcl exemplar,
+            NavigableSet<StandardAcl> acls, Action action,
+            StandardAcl exemplar, boolean skipPrincipalCheck,
             Set<KafkaPrincipal> matchingPrincipals,
             String host,
             MatchingRuleBuilder matchingRuleBuilder
     ) {
         String resourceName = action.resourcePattern().name();
-        NavigableSet<StandardAcl> tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);
+        NavigableSet<StandardAcl> tailSet = acls.tailSet(exemplar, true);
         Iterator<StandardAcl> iterator = tailSet.iterator();
         while (iterator.hasNext()) {
             StandardAcl acl = iterator.next();
             if (!acl.resourceType().equals(action.resourcePattern().resourceType())) {
-                // We've stepped outside the section for the resource type we care about and
-                // should stop scanning.
                 break;
             }
             int matchesUpTo = matchesUpTo(resourceName, acl.resourceName());
             if (matchesUpTo == acl.resourceName().length()) {
                 if (acl.patternType() == LITERAL && matchesUpTo != resourceName.length()) {
-                    // This is a literal ACL whose name is a prefix of the resource name, but
-                    // which doesn't match it exactly. We should skip over this ACL, but keep
-                    // scanning in case there are any relevant PREFIX ACLs.
                     continue;
                 }
 
             } else if (!(acl.resourceName().equals(WILDCARD) && acl.patternType() == LITERAL)) {
-                // If the ACL resource name is NOT a prefix of the current resource name,
-                // and we're not dealing with the special case of a wildcard ACL, we've
-                // stepped outside of the section we care about. Scan for any other potential
-                // prefix matches.
-                exemplar = new StandardAcl(exemplar.resourceType(),
-                    exemplar.resourceName().substring(0, matchesUpTo),
-                    exemplar.patternType(),
-                    exemplar.principal(),
-                    exemplar.host(),
-                    exemplar.operation(),
-                    exemplar.permissionType());
-                tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);
-                iterator = tailSet.iterator();
+                if (matchesUpTo == 0) {
+                    continue;
+                }
+                String newPrefix = exemplar.resourceName().substring(0, matchesUpTo);
+                if (newPrefix.equals(exemplar.resourceName())) {
+                    tailSet = acls.tailSet(acl, false);
+                    iterator = tailSet.iterator();
+                } else {
+                    exemplar = new StandardAcl(exemplar.resourceType(),
+                        newPrefix,
+                        exemplar.patternType(),
+                        exemplar.principal(),
+                        exemplar.host(),
+                        exemplar.operation(),
+                        exemplar.permissionType());
+                    tailSet = acls.tailSet(exemplar, true);
+                    iterator = tailSet.iterator();
+                }
                 continue;
             }
             matchingRuleBuilder.hasResourceAcls = true;
-            AuthorizationResult result = findResult(action, matchingPrincipals, host, acl);
+            AuthorizationResult result = findResult(action, matchingPrincipals, host, acl, skipPrincipalCheck);
             if (ALLOWED == result) {
                 matchingRuleBuilder.allowAcl = acl;
             } else if (DENIED == result) {
@@ -484,8 +496,18 @@ public class StandardAuthorizerData {
                                           Set<KafkaPrincipal> matchingPrincipals,
                                           String host,
                                           StandardAcl acl) {
+        return findResult(action, matchingPrincipals, host, acl, false);
+    }
+
+    static AuthorizationResult findResult(Action action,
+                                          Set<KafkaPrincipal> matchingPrincipals,
+                                          String host,
+                                          StandardAcl acl,
+                                          boolean skipPrincipalCheck) {
         // Check if the principal matches. If it doesn't, return no result (null).
-        if (!matchingPrincipals.contains(acl.kafkaPrincipal())) {
+        // When skipPrincipalCheck is true, the caller guarantees the ACL's principal
+        // is already in matchingPrincipals (e.g. via principal-indexed scan).
+        if (!skipPrincipalCheck && !matchingPrincipals.contains(acl.kafkaPrincipal())) {
             return null;
         }
         // Check if the host matches. If it doesn't, return no result (null).
