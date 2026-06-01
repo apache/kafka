@@ -3,42 +3,51 @@
 
 title RangedKStream Processing Flow
 
-participant "Upstream\nKStream" as UP
-participant "RangedKStream" as RKS
-participant "WindowStore\n(Buffer)" as WS
+participant "Upstream\nProcessor" as UP
+participant "Buffer\nProcessor" as BP
+participant "WindowStore\n(Shared Buffer)" as WS
+participant "Aggregate\nProcessor" as AP
 participant "Range" as R
 participant "RangeAggregator" as RA
-participant "Downstream\nKStream" as DOWN
+participant "Downstream\nProcessor" as DOWN
 
-UP -> RKS : process(record)
-activate RKS
+UP -> BP : process(record)
+activate BP
 
-alt record is past grace period
-    RKS -> UP : (drop record)
-else within grace period
-    RKS -> WS : put(key, value, timestamp)
+alt null key or null value
+    note right of BP : record dropped\n(droppedRecordsSensor)
+else record.timestamp() < observedStreamTime - gracePeriodMs
+    note right of BP : record dropped\n(past grace period)
+else record valid
+    BP -> BP : update observedStreamTime
+
+    BP -> WS : put(key, value, timestamp)
     activate WS
     deactivate WS
 
-    RKS -> R : fetch(anchor, store)
+    BP -> AP : forward(record)
+    activate AP
+
+    AP -> R : fetch(record, store)
     activate R
 
     R -> WS : fetch(key, fromTimestamp, toTimestamp)
     activate WS
-    WS --> R : Iterator<Record<K, V>>
+    WS --> R : WindowStoreIterator<V>
     deactivate WS
 
-    R --> RKS : Iterable<Record<K, V>> rangeRecords
+    R --> AP : Iterable<Record<K, V>>
     deactivate R
 
-    RKS -> RA : apply(anchor, rangeRecords)
+    AP -> RA : apply(anchor, rangeRecords)
     activate RA
-    RA --> RKS : VR result
+    RA --> AP : VR result
     deactivate RA
 
-    RKS -> DOWN : forward(key, result, timestamp)
+    AP -> DOWN : forward(anchor.withValue(result))
+    deactivate AP
 end
 
-deactivate RKS
+deactivate BP
 
 @enduml
