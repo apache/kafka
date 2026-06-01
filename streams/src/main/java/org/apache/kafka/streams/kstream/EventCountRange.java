@@ -24,9 +24,9 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Iterator;
-import java.util.List;
 import java.util.NoSuchElementException;
 
 /**
@@ -118,7 +118,7 @@ public final class EventCountRange<K, V> extends Range<K, V> {
         final long forwardTo = maxTimeAfterMs != null ? anchor.timestamp() + maxTimeAfterMs : Long.MAX_VALUE;
 
         // Backward fetch: collect `before+1` records (anchor + up to `before` before it), oldest first
-        final List<Record<K, V>> backwardRecords = new ArrayList<>(before + 1);
+        final Deque<Record<K, V>> backwardRecords = new ArrayDeque<>(before + 1);
         try (final WindowStoreIterator<V> backIt = store.backwardFetch(
                 anchor.key(),
                 Instant.ofEpochMilli(from),
@@ -126,7 +126,7 @@ public final class EventCountRange<K, V> extends Range<K, V> {
             int count = 0;
             while (backIt.hasNext() && count <= before) {
                 final KeyValue<Long, V> kv = backIt.next();
-                backwardRecords.add(0, new Record<>(anchor.key(), kv.value, kv.key));
+                backwardRecords.addFirst(new Record<>(anchor.key(), kv.value, kv.key));
                 count++;
             }
         }
