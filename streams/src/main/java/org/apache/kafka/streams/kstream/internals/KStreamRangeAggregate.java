@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Set;
 
 /**
@@ -85,9 +86,28 @@ public class KStreamRangeAggregate<K, V, VR> implements ProcessorSupplier<K, V, 
         @Override
         public void process(final Record<K, V> record) {
             try (final CloseableIterator<Record<K, V>> it = range.fetch(record, store)) {
-                final VR result = aggregator.apply(record, () -> it);
+                final VR result = aggregator.apply(record, new SingleUseIterable<>(it));
                 context().forward(record.withValue(result));
             }
+        }
+    }
+
+    private static final class SingleUseIterable<T> implements Iterable<T> {
+        private final Iterator<T> iterator;
+        private boolean consumed = false;
+
+        SingleUseIterable(final Iterator<T> iterator) {
+            this.iterator = iterator;
+        }
+
+        @Override
+        public Iterator<T> iterator() {
+            if (consumed) {
+                throw new IllegalStateException(
+                    "rangeRecords is single-use: iterator() may only be called once per aggregation");
+            }
+            consumed = true;
+            return iterator;
         }
     }
 }

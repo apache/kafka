@@ -33,9 +33,11 @@ public interface RangeAggregator<K, V, VR> {
      * Apply the aggregation logic to the records in the defined range for a given key.
      *
      * @param anchor       the record that triggered the aggregation
-     * @param rangeRecords an iterable of records that fall within the defined range of the anchor
-     *                     record, including the anchor record itself. Records are ordered by
-     *                     timestamp in ascending order.
+     * @param rangeRecords a <strong>single-use</strong> iterable of records that fall within the
+     *                     defined range of the anchor record, including the anchor record itself.
+     *                     Records are ordered by timestamp in ascending order.
+     *                     Calling {@code iterator()} more than once will throw
+     *                     {@link IllegalStateException}.
      *                     Note: headers are not preserved in {@code rangeRecords} as they are not
      *                     stored in the underlying {@link WindowStore}. Headers are only available
      *                     on the {@code anchor} record.
