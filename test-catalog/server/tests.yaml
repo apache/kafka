@@ -193,6 +193,12 @@ org.apache.kafka.server.EligibleLeaderReplicasIntegrationTest:
 - testElrMemberShouldBeKickOutWhenUncleanShutdown
 - testHighWatermarkShouldNotAdvanceIfUnderMinIsr
 - testLastKnownLeaderShouldBeElectedIfEmptyElr
+org.apache.kafka.server.EnvelopeUtilsTest:
+- testHandleEnvelopeRequestBuildsForwardedRequest
+- testInvalidForwardedClientAddressIsRejected
+- testMissingPrincipalSerdeIsRejected
+- testNonForwardableApiIsRejected
+- testPrincipalDeserializationFailureIsRejected
 org.apache.kafka.server.ExpiringErrorCacheTest:
 - testCapacityEnforcement
 - testCapacityWithDifferentTTLs
@@ -341,6 +347,8 @@ org.apache.kafka.server.ReconfigurableQuorumIntegrationTest:
 - testRemoveAndAddVoterWithInconsistentClusterId
 - testRemoveAndAddVoterWithValidClusterId
 - testRemoveController
+org.apache.kafka.server.SimpleApiVersionManagerTest:
+- testUnknownFeaturesHasNoMetadataVersion
 org.apache.kafka.server.UncleanLeaderElectionTest:
 - testTopicUncleanLeaderElectionEnableWithAlterTopicConfigsClassic
 - testTopicUncleanLeaderElectionEnableWithAlterTopicConfigsConsumer

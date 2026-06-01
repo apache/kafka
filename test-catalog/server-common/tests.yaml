@@ -109,8 +109,17 @@ org.apache.kafka.server.common.FeatureTest:
 - testValidateWithMVDependencyNotProductionReady
 - testValidateWithNonExistentLatestProduction
 org.apache.kafka.server.common.FinalizedFeaturesTest:
+- testFromKRaftVersion
+- testFromKRaftVersionNullThrows
 - testKRaftModeFeatures
+- testOfNullFeaturesMapThrows
+- testOfNullMetadataVersionThrows
 - testSetFinalizedLevel
+- testSetFinalizedLevelAdd
+- testSetFinalizedLevelOnUnknownThrows
+- testUnknownFeatures
+- testUnknownFeaturesIsSingleton
+- testUnknownFeaturesMetadataVersionThrows
 org.apache.kafka.server.common.KRaftVersionTest:
 - tesVotersRecordVersion
 - testBootstrapMetadataVersion
