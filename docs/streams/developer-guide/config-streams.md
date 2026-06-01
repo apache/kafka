@@ -1390,7 +1390,7 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >
 > See [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G) for migration procedures, changelog compatibility, restore behavior, and per-record overhead.
 >
-> **Current limitations**: The `suppress()` operator and left/outer stream-stream joins use non-headers-aware buffer stores, so headers from records held in those buffers are not preserved. KIP-1285 does not define result-header computation for DSL operators; see [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) and the [Streams upgrade guide](/{version}/streams/upgrade-guide.html#current-limitations) for details.
+> **Current limitations**: `dsl.store.format=HEADERS` changes the state store format. It does not define how DSL operators create headers for output records. Some operators write empty headers to their materialized stores, and the buffer stores used by `suppress()` and left/outer stream-stream joins are not headers-aware. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) and the [Streams upgrade guide](/{version}/streams/upgrade-guide.html#current-limitations) for details.
 
 ### ensure.explicit.internal.resource.naming
 

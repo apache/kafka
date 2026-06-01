@@ -925,7 +925,15 @@ Stateful transformations depend on state for processing inputs and producing out
 
 
 
-**Headers-aware state stores ([KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G)):** Setting the global config [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format) makes supported DSL materializations use headers-aware stores that can persist record headers alongside the value and timestamp. The `suppress()` operator and left/outer [KStream-KStream joins](#kstream-kstream-join) use non-headers-aware buffer stores, so headers from records held in those buffers are not preserved. KIP-1285 does not define result-header computation for DSL operators: aggregations, KTable-KTable joins, materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers into their materialized stores. KStream-KStream join window stores retain source-record headers, but join output records are not assigned computed join headers; the current forwarding path may carry headers from the record that triggers the output. A follow-up KIP will give users control over DSL result-header computation.
+**Headers-aware state stores ([KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G)):** Set [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format) to make supported DSL operators use headers-aware state stores. These stores can keep record headers together with the value and timestamp.
+
+This config only changes the state store format. It does not define how DSL operators create headers for output records. Current behavior is:
+
+  * aggregations, KTable-KTable joins, materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores
+  * KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers; they may carry the headers from the record that triggered the result
+  * `suppress()` and left/outer [KStream-KStream joins](#kstream-kstream-join) use non-headers-aware buffer stores, so records passing through those buffers lose their headers
+
+A follow-up KIP will define how DSL result headers are computed.
 
 Note, that state stores are fault-tolerant. In case of failure, Kafka Streams guarantees to fully restore all state stores prior to resuming the processing. See [Fault Tolerance](../architecture.html#streams_architecture_recovery) for further information.
 
@@ -2119,7 +2127,9 @@ There are two exceptions where co-partitioning is not required. For KStream-Glob
 
 KStream-KStream joins are always windowed joins, because otherwise the size of the internal state store used to perform the join - e.g., a sliding window or "buffer" - would grow indefinitely.
 
-**Note on headers-aware state stores:** Inner stream-stream joins honor the global [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format) setting introduced in [KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G) for their join window stores. Left and outer stream-stream joins use a separate non-headers-aware buffer store for the not-yet-matched side, so headers from records held in that buffer are not preserved. Join output records are not assigned computed or merged headers; the current forwarding path may carry headers from the record that triggers the output. For stream-stream joins it's important to highlight that a new input record on one side will produce a join output _for each_ matching record on the other side, and there can be _multiple_ such matching records in a given join window (cf. the row with timestamp 15 in the join semantics table below, for example).
+**Note on headers-aware state stores:** With [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format), inner stream-stream joins use headers-aware join window stores. Left and outer stream-stream joins also use a separate buffer store for not-yet-matched records, and that buffer is not headers-aware. Records that pass through this buffer lose their headers.
+
+Join output records do not get computed or merged headers. The current forwarding path may carry the headers from the record that triggered the output. For stream-stream joins it's important to highlight that a new input record on one side will produce a join output _for each_ matching record on the other side, and there can be _multiple_ such matching records in a given join window (cf. the row with timestamp 15 in the join semantics table below, for example).
 
 Join output records are effectively created as follows, leveraging the user-supplied `ValueJoiner`:
     
@@ -5940,4 +5950,3 @@ A complete example of user-defined Serdes can be found in a test class within th
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
   * [Developer Guide](/documentation/streams/developer-guide/)
-

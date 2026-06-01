@@ -97,7 +97,9 @@ Storing headers increases disk and serialization cost versus headerless stores; 
 
 ### Headers-Aware State Stores for DSL Operators (KIP-1285)
 
-[KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G) opts the DSL into the headers-aware state store implementations introduced by [KIP-1271](#kip-1271-headers-aware-stores). A new global config [`dsl.store.format`](/{version}/streams/developer-guide/config-streams.html#dsl-store-format) (default `DEFAULT`, case-insensitive) selects the state store format used by every DSL operator that materializes a store. Setting it to `HEADERS` causes those operators to use headers-aware stores that can persist record headers alongside the value and timestamp. KIP-1285 does not define result-header computation for DSL operators; see [Current limitations](#current-limitations) below.
+[KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G) lets DSL operators use the headers-aware state stores introduced by [KIP-1271](#kip-1271-headers-aware-stores). Set [`dsl.store.format=HEADERS`](/{version}/streams/developer-guide/config-streams.html#dsl-store-format) to use headers-aware stores for supported DSL operators. These stores can keep record headers together with the value and timestamp.
+
+The config only chooses the state store format. It does not define how DSL operators create headers for output records; see [Current limitations](#current-limitations) below.
 
 ```java
 // Enable headers-aware stores globally for all DSL operators
@@ -109,9 +111,13 @@ Per-operator customization is possible by providing a custom `DslStoreSuppliers`
 
 #### Current limitations {#current-limitations}
 
-The `suppress()` operator and left/outer stream-stream joins use a non-headers-aware buffer store. When `dsl.store.format=HEADERS` is set, these buffers retain their non-headers-aware behavior, so headers from records held in those buffers are not preserved. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) for the per-operator matrix.
+Today, DSL result headers behave as follows:
 
-Additionally, DSL operators do not compute new result headers. Aggregations (`count`, `reduce`, `aggregate`, including their windowed and session-windowed variants), KTable-KTable joins (inner / left / outer), materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write an empty header set into their materialized stores. KStream-KStream join window stores retain the source-record headers stored for the window, but join output records are not assigned computed join headers; the current forwarding path may carry headers from the record that triggers the output. A follow-up KIP will give users explicit control over how DSL result headers are computed.
+* Aggregations (`count`, `reduce`, `aggregate`, including their windowed and session-windowed variants), KTable-KTable joins (inner / left / outer), materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores.
+* KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers. They may carry the headers from the record that triggered the result.
+* `suppress()` and left/outer stream-stream joins use non-headers-aware buffer stores. Records that pass through those buffers lose their headers.
+
+A follow-up KIP will give users explicit control over how DSL result headers are computed. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) for more details.
 
 #### Changelog, migration, and performance
 
