@@ -225,7 +225,7 @@ public class LogLoaderTest {
         LogManager logManager = interceptedLogManager(logConfig, logDirs, logDirFailureChannel, time,
                 cleanShutdownInterceptedValue, simulateError);
         logManager.getOrCreateLog(topicPartition, true, false, Optional.empty());
-        assertFalse(logDirFailureChannel.hasOfflineLogDir(logDir.getAbsolutePath()), "log dir should not be offline before load logs");
+        assertFalse(logDirFailureChannel.hasOfflineLogDir(logDirs.get(0).getAbsolutePath()), "log dir should not be offline before load logs");
         return logManager;
     }
 
