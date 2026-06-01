@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.CloseableIterator;
 import org.apache.kafka.streams.kstream.Range;
 import org.apache.kafka.streams.kstream.RangeAggregator;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
@@ -83,9 +84,10 @@ public class KStreamRangeAggregate<K, V, VR> implements ProcessorSupplier<K, V, 
 
         @Override
         public void process(final Record<K, V> record) {
-            final Iterable<Record<K, V>> rangeRecords = range.fetch(record, store);
-            final VR result = aggregator.apply(record, rangeRecords);
-            context().forward(record.withValue(result));
+            try (final CloseableIterator<Record<K, V>> it = range.fetch(record, store)) {
+                final VR result = aggregator.apply(record, () -> it);
+                context().forward(record.withValue(result));
+            }
         }
     }
 }

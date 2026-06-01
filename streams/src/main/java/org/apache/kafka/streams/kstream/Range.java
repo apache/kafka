@@ -41,17 +41,20 @@ public abstract class Range<K, V> {
 
     /**
      * Fetch the records that fall within this range for the given anchor record.
-     * The anchor record itself should be included in the returned iterable.
+     * The anchor record itself should be included in the returned iterator.
      * Records should be ordered by their timestamps in ascending order.
+     *
+     * <p>The framework guarantees that the returned iterator will be closed after aggregation
+     * completes, even if the aggregator exits early or throws an exception.
      *
      * <p>Note: headers are not preserved in the returned records, as they are not stored in the
      * underlying {@link WindowStore}. Headers are only available on the {@code anchor} record.
      *
      * @param anchor the record that triggered the range evaluation
      * @param store  the buffer store holding records for the anchor's group key
-     * @return an iterable of records that fall within the defined range
+     * @return a closeable iterator of records that fall within the defined range
      */
-    public abstract Iterable<Record<K, V>> fetch(Record<K, V> anchor, ReadOnlyWindowStore<K, V> store);
+    public abstract CloseableIterator<Record<K, V>> fetch(Record<K, V> anchor, ReadOnlyWindowStore<K, V> store);
 
     /**
      * @return the grace period in milliseconds. Records arriving after stream time has advanced

@@ -24,7 +24,6 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
@@ -104,11 +103,10 @@ public final class EventTimeRange<K, V> extends Range<K, V> {
     }
 
     @Override
-    public Iterable<Record<K, V>> fetch(final Record<K, V> anchor, final ReadOnlyWindowStore<K, V> store) {
+    public CloseableIterator<Record<K, V>> fetch(final Record<K, V> anchor, final ReadOnlyWindowStore<K, V> store) {
         final Instant from = Instant.ofEpochMilli(anchor.timestamp() - beforeMs);
         final Instant to = Instant.ofEpochMilli(anchor.timestamp() + afterMs);
-        final int limit = maxRecords;
-        return () -> new LimitingWindowStoreIterator<>(store.fetch(anchor.key(), from, to), anchor.key(), limit);
+        return new LimitingWindowStoreIterator<>(store.fetch(anchor.key(), from, to), anchor.key(), maxRecords);
     }
 
     @Override
@@ -124,7 +122,7 @@ public final class EventTimeRange<K, V> extends Range<K, V> {
         return ms;
     }
 
-    private static final class LimitingWindowStoreIterator<K, V> implements Iterator<Record<K, V>> {
+    private static final class LimitingWindowStoreIterator<K, V> implements CloseableIterator<Record<K, V>> {
 
         private final WindowStoreIterator<V> inner;
         private final K key;
@@ -142,8 +140,7 @@ public final class EventTimeRange<K, V> extends Range<K, V> {
         public boolean hasNext() {
             if (done) return false;
             if (count >= limit || !inner.hasNext()) {
-                inner.close();
-                done = true;
+                close();
                 return false;
             }
             return true;
@@ -155,6 +152,14 @@ public final class EventTimeRange<K, V> extends Range<K, V> {
             final KeyValue<Long, V> kv = inner.next();
             count++;
             return new Record<>(key, kv.value, kv.key);
+        }
+
+        @Override
+        public void close() {
+            if (!done) {
+                inner.close();
+                done = true;
+            }
         }
     }
 }

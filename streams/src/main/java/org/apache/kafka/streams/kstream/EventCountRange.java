@@ -113,7 +113,7 @@ public final class EventCountRange<K, V> extends Range<K, V> {
     }
 
     @Override
-    public Iterable<Record<K, V>> fetch(final Record<K, V> anchor, final ReadOnlyWindowStore<K, V> store) {
+    public CloseableIterator<Record<K, V>> fetch(final Record<K, V> anchor, final ReadOnlyWindowStore<K, V> store) {
         final long from = anchor.timestamp() - maxTimeBeforeMs;
         final long forwardTo = maxTimeAfterMs != null ? anchor.timestamp() + maxTimeAfterMs : Long.MAX_VALUE;
 
@@ -138,7 +138,7 @@ public final class EventCountRange<K, V> extends Range<K, V> {
             Instant.ofEpochMilli(forwardTo)
         );
 
-        return () -> new ConcatenatingIterator<>(backwardRecords.iterator(), forwardIt, anchor.key(), after);
+        return new ConcatenatingIterator<>(backwardRecords.iterator(), forwardIt, anchor.key(), after);
     }
 
     @Override
@@ -160,7 +160,7 @@ public final class EventCountRange<K, V> extends Range<K, V> {
         return ms;
     }
 
-    private static final class ConcatenatingIterator<K, V> implements Iterator<Record<K, V>> {
+    private static final class ConcatenatingIterator<K, V> implements CloseableIterator<Record<K, V>> {
 
         private final Iterator<Record<K, V>> backwardPart;
         private final WindowStoreIterator<V> forwardIt;
@@ -186,11 +186,18 @@ public final class EventCountRange<K, V> extends Range<K, V> {
             if (backwardPart.hasNext()) return true;
             if (forwardDone) return false;
             if (forwardCount >= afterLimit || !forwardIt.hasNext()) {
-                forwardIt.close();
-                forwardDone = true;
+                close();
                 return false;
             }
             return true;
+        }
+
+        @Override
+        public void close() {
+            if (!forwardDone) {
+                forwardIt.close();
+                forwardDone = true;
+            }
         }
 
         @Override
