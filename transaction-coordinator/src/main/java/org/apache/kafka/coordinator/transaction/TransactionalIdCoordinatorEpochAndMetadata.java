@@ -14,16 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tiered.storage.integration;
+package org.apache.kafka.coordinator.transaction;
 
-import org.apache.kafka.common.config.TopicConfig;
-
-import java.util.Map;
-
-public final class DeleteSegmentsByRetentionSizeTest extends BaseDeleteSegmentsTest {
-
-    @Override
-    protected Map<String, String> configsToBeAdded() {
-        return Map.of(TopicConfig.RETENTION_BYTES_CONFIG, "1");
-    }
+public record TransactionalIdCoordinatorEpochAndMetadata(
+        String transactionalId,
+        int coordinatorEpoch,
+        TxnTransitMetadata transitMetadata) {
 }

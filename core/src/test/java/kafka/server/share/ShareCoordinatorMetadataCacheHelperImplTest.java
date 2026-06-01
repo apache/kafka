@@ -29,10 +29,12 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -667,27 +669,10 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
     }
 
     @Test
-    public void testIsDlqEnabledOnTopicReturnsFalseWhenConfigValueNotBoolean() {
-        MetadataCache mockMetadataCache = mock(MetadataCache.class);
-        Properties props = new Properties();
-        props.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true");
-        when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
-
-        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
-            mockMetadataCache,
-            sharePartitionKey -> 0,
-            mock(ListenerName.class),
-            mock(GroupConfigManager.class)
-        );
-
-        assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
-    }
-
-    @Test
     public void testIsDlqEnabledOnTopicReturnsTrue() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         Properties props = new Properties();
-        props.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, true);
+        props.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, "true");
         when(mockMetadataCache.topicConfig("test-topic")).thenReturn(props);
 
         ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
@@ -701,7 +686,7 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
     }
 
     @Test
-    public void testIsDlqEnabledOnTopicReturnsFalseValue() {
+    public void testIsDlqEnabledOnTopicReturnsFalse() {
         MetadataCache mockMetadataCache = mock(MetadataCache.class);
         Properties props = new Properties();
         props.put(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, false);
@@ -715,5 +700,178 @@ public class ShareCoordinatorMetadataCacheHelperImplTest {
         );
 
         assertFalse(cache.isDlqEnabledOnTopic("test-topic"));
+    }
+
+    // Tests for topicName
+
+    @Test
+    public void testTopicNameReturnsNameWhenPresent() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        Uuid topicId = Uuid.randomUuid();
+        when(mockMetadataCache.getTopicName(topicId)).thenReturn(Optional.of("some-topic"));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
+        );
+
+        assertEquals(Optional.of("some-topic"), cache.topicName(topicId));
+        verify(mockMetadataCache, times(1)).getTopicName(topicId);
+    }
+
+    @Test
+    public void testTopicNameReturnsEmptyWhenNotPresent() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        Uuid topicId = Uuid.randomUuid();
+        when(mockMetadataCache.getTopicName(topicId)).thenReturn(Optional.empty());
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
+        );
+
+        assertEquals(Optional.empty(), cache.topicName(topicId));
+        verify(mockMetadataCache, times(1)).getTopicName(topicId);
+    }
+
+    @Test
+    public void testTopicNameReturnsEmptyOnException() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        Uuid topicId = Uuid.randomUuid();
+        when(mockMetadataCache.getTopicName(topicId)).thenThrow(new RuntimeException("boom"));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mock(ListenerName.class),
+            mock(GroupConfigManager.class)
+        );
+
+        assertEquals(Optional.empty(), cache.topicName(topicId));
+        verify(mockMetadataCache, times(1)).getTopicName(topicId);
+    }
+
+    // Tests for topicPartitionData
+
+    @Test
+    public void testTopicPartitionDataReturnsFullData() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        ListenerName mockListenerName = mock(ListenerName.class);
+        Uuid topicId = Uuid.randomUuid();
+        Node leader0 = new Node(0, "host0", 9092);
+        Node leader1 = new Node(1, "host1", 9092);
+
+        when(mockMetadataCache.getTopicId("test-topic")).thenReturn(topicId);
+        when(mockMetadataCache.numPartitions("test-topic")).thenReturn(Optional.of(2));
+        when(mockMetadataCache.getPartitionLeaderEndpoint("test-topic", 0, mockListenerName))
+            .thenReturn(Optional.of(leader0));
+        when(mockMetadataCache.getPartitionLeaderEndpoint("test-topic", 1, mockListenerName))
+            .thenReturn(Optional.of(leader1));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mockListenerName,
+            mock(GroupConfigManager.class)
+        );
+
+        ShareGroupDLQMetadataCacheHelper.TopicPartitionData data = cache.topicPartitionData("test-topic");
+
+        assertEquals("test-topic", data.topicName());
+        assertEquals(Optional.of(2), data.numPartitions());
+        assertEquals(Optional.of(topicId), data.topicId());
+        assertEquals(List.of(leader0, leader1), data.partitionLeaderNodes());
+
+        verify(mockMetadataCache, times(1)).getTopicId("test-topic");
+        verify(mockMetadataCache, times(1)).numPartitions("test-topic");
+        verify(mockMetadataCache, times(1)).getPartitionLeaderEndpoint("test-topic", 0, mockListenerName);
+        verify(mockMetadataCache, times(1)).getPartitionLeaderEndpoint("test-topic", 1, mockListenerName);
+    }
+
+    @Test
+    public void testTopicPartitionDataReturnsEmptyTopicIdWhenZeroUuid() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        ListenerName mockListenerName = mock(ListenerName.class);
+        Node leader0 = new Node(0, "host0", 9092);
+
+        when(mockMetadataCache.getTopicId("test-topic")).thenReturn(Uuid.ZERO_UUID);
+        when(mockMetadataCache.numPartitions("test-topic")).thenReturn(Optional.of(1));
+        when(mockMetadataCache.getPartitionLeaderEndpoint("test-topic", 0, mockListenerName))
+            .thenReturn(Optional.of(leader0));
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mockListenerName,
+            mock(GroupConfigManager.class)
+        );
+
+        ShareGroupDLQMetadataCacheHelper.TopicPartitionData data = cache.topicPartitionData("test-topic");
+
+        assertEquals("test-topic", data.topicName());
+        assertEquals(Optional.of(1), data.numPartitions());
+        assertEquals(Optional.empty(), data.topicId());
+        assertEquals(List.of(leader0), data.partitionLeaderNodes());
+    }
+
+    @Test
+    public void testTopicPartitionDataWithoutNumPartitions() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        ListenerName mockListenerName = mock(ListenerName.class);
+        Uuid topicId = Uuid.randomUuid();
+
+        when(mockMetadataCache.getTopicId("test-topic")).thenReturn(topicId);
+        when(mockMetadataCache.numPartitions("test-topic")).thenReturn(Optional.empty());
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mockListenerName,
+            mock(GroupConfigManager.class)
+        );
+
+        ShareGroupDLQMetadataCacheHelper.TopicPartitionData data = cache.topicPartitionData("test-topic");
+
+        assertEquals("test-topic", data.topicName());
+        assertEquals(Optional.empty(), data.numPartitions());
+        assertEquals(Optional.of(topicId), data.topicId());
+        assertEquals(List.of(), data.partitionLeaderNodes());
+
+        verify(mockMetadataCache, times(1)).getTopicId("test-topic");
+        verify(mockMetadataCache, times(1)).numPartitions("test-topic");
+        verify(mockMetadataCache, times(0)).getPartitionLeaderEndpoint(any(), any(Integer.class), any());
+    }
+
+    @Test
+    public void testTopicPartitionDataWithMissingPartitionLeader() {
+        MetadataCache mockMetadataCache = mock(MetadataCache.class);
+        ListenerName mockListenerName = mock(ListenerName.class);
+        Uuid topicId = Uuid.randomUuid();
+        Node leader0 = new Node(0, "host0", 9092);
+
+        when(mockMetadataCache.getTopicId("test-topic")).thenReturn(topicId);
+        when(mockMetadataCache.numPartitions("test-topic")).thenReturn(Optional.of(2));
+        when(mockMetadataCache.getPartitionLeaderEndpoint("test-topic", 0, mockListenerName))
+            .thenReturn(Optional.of(leader0));
+        when(mockMetadataCache.getPartitionLeaderEndpoint("test-topic", 1, mockListenerName))
+            .thenReturn(Optional.empty());
+
+        ShareCoordinatorMetadataCacheHelperImpl cache = new ShareCoordinatorMetadataCacheHelperImpl(
+            mockMetadataCache,
+            sharePartitionKey -> 0,
+            mockListenerName,
+            mock(GroupConfigManager.class)
+        );
+
+        ShareGroupDLQMetadataCacheHelper.TopicPartitionData data = cache.topicPartitionData("test-topic");
+
+        assertEquals("test-topic", data.topicName());
+        assertEquals(Optional.of(2), data.numPartitions());
+        assertEquals(Optional.of(topicId), data.topicId());
+        assertEquals(Arrays.asList(leader0, null), data.partitionLeaderNodes());
     }
 }

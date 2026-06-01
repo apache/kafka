@@ -14,18 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tiered.storage.integration;
+package org.apache.kafka.coordinator.transaction;
 
-import java.util.List;
-
-public final class ReassignReplicaMoveTest extends BaseReassignReplicaTest {
-
-    /**
-     * Move the replica of the topic from broker0 to broker1
-     * @return the replica-ids of the topic
-     */
-    @Override
-    protected List<Integer> replicaIds() {
-        return List.of(broker1);
-    }
+public record TransactionPartitionAndLeaderEpoch(int txnPartitionId, int coordinatorEpoch) {
 }

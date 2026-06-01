@@ -16,25 +16,53 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
-public final class PartitionsExpandTest extends TieredStorageTestHarness {
+public final class PartitionsExpandTest {
+    private static final int BROKER_COUNT = 3;
+    private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 2;
 
-    @Override
-    public int brokerCount() {
-        return 2;
+    @SuppressWarnings("unused")
+    private static List<ClusterConfig> clusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        PartitionsExpandTest.class.getSimpleName().toLowerCase(Locale.ROOT),
+                        BROKER_COUNT,
+                        NUM_REMOTE_LOG_METADATA_PARTITIONS))
+                .build());
     }
 
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
+    @ClusterTemplate("clusterConfig")
+    public void testPartitionsExpandWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executePartitionsExpandTest(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testPartitionsExpandWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executePartitionsExpandTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void executePartitionsExpandTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
         final int broker0 = 0;
         final int broker1 = 1;
         final String topicA = "topicA";
@@ -49,7 +77,7 @@ public final class PartitionsExpandTest extends TieredStorageTestHarness {
         final List<Integer> p1Assignment = List.of(broker0, broker1);
         final List<Integer> p2Assignment = List.of(broker1, broker0);
 
-        builder
+        final TieredStorageTestBuilder builder = new TieredStorageTestBuilder()
                 .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment,
                         Map.of(p0, p0Assignment), enableRemoteLogStorage)
                 // produce events to partition 0
@@ -102,5 +130,18 @@ public final class PartitionsExpandTest extends TieredStorageTestHarness {
                 // consume from the middle of the topic for partition 2
                 .expectFetchFromTieredStorage(broker1, topicA, p2, 1)
                 .consume(topicA, p2, 1L, 2, 1);
+
+        final Map<String, Object> extraConsumerProps = Map.of(
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
+        );
+        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
+            try {
+                for (TieredStorageTestAction action : builder.complete()) {
+                    action.execute(context);
+                }
+            } finally {
+                context.printReport(System.out);
+            }
+        }
     }
 }

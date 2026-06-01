@@ -18,27 +18,55 @@ package org.apache.kafka.tiered.storage.integration;
 
 import kafka.server.ReplicaManager;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 import org.apache.kafka.storage.internals.log.LogManager;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
-public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTestHarness {
+public final class FetchFromLeaderWithCorruptedCheckpointTest {
+    private static final int BROKER_COUNT = 3;
+    private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 2;
 
-    @Override
-    public int brokerCount() {
-        return 2;
+    @SuppressWarnings("unused")
+    private static List<ClusterConfig> clusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        FetchFromLeaderWithCorruptedCheckpointTest.class.getSimpleName().toLowerCase(Locale.ROOT),
+                        BROKER_COUNT,
+                        NUM_REMOTE_LOG_METADATA_PARTITIONS))
+                .build());
     }
 
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
+    @ClusterTemplate("clusterConfig")
+    public void testFetchFromLeaderWithCorruptedCheckpointWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeFetchFromLeaderWithCorruptedCheckpointTest(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testFetchFromLeaderWithCorruptedCheckpointWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeFetchFromLeaderWithCorruptedCheckpointTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void executeFetchFromLeaderWithCorruptedCheckpointTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
         final int broker0 = 0;
         final int broker1 = 1;
         final String topicA = "topicA";
@@ -53,7 +81,8 @@ public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTes
                 LogManager.RECOVERY_POINT_CHECKPOINT_FILE,
                 CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME);
 
-        builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,
+        final TieredStorageTestBuilder builder = new TieredStorageTestBuilder()
+                .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,
                         enableRemoteLogStorage)
                 // send records to partition 0
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
@@ -80,5 +109,17 @@ public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTes
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 4)
                 .consume(topicA, p0, 0L, 5, 4);
 
+        final Map<String, Object> extraConsumerProps = Map.of(
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
+        );
+        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
+            try {
+                for (TieredStorageTestAction action : builder.complete()) {
+                    action.execute(context);
+                }
+            } finally {
+                context.printReport(System.out);
+            }
+        }
     }
 }

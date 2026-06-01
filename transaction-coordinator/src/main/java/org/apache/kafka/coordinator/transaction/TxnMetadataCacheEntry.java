@@ -14,18 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tiered.storage.integration;
+package org.apache.kafka.coordinator.transaction;
 
-import java.util.List;
+import java.util.concurrent.ConcurrentMap;
 
-public final class ReassignReplicaExpandTest extends BaseReassignReplicaTest {
+public record TxnMetadataCacheEntry(int coordinatorEpoch,
+                                    ConcurrentMap<String, TransactionMetadata> metadataPerTransactionalId) {
 
-    /**
-     * Expand the replication factor of the topic by changing the replica list from 0 to 0, 1
-     * @return the replica-ids of the topic
-     */
     @Override
-    protected List<Integer> replicaIds() {
-        return List.of(broker0, broker1);
+    public String toString() {
+        return "TxnMetadataCacheEntry(coordinatorEpoch=" + coordinatorEpoch +
+                ", numTransactionalEntries=" + metadataPerTransactionalId.size() + ")";
     }
 }

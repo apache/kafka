@@ -50,6 +50,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.clients.consumer.internals.RequestState.RETRY_BACKOFF_JITTER;
 
@@ -384,6 +385,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             heartbeatState.reset();
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
         }
+        if (membershipManager.state() == MemberState.LEAVING && shouldSkipLeaveHeartbeat()) {
+            logger.info("Dynamic member {} skipping leave heartbeat (operation=REMAIN_IN_GROUP). " +
+                "The broker will remove the member from the group via session timeout.",
+                membershipManager.memberId());
+            membershipManager.onHeartbeatRequestSkipped();
+            return EMPTY;
+        }
         if (shouldHeartbeatBeforeIntervalExpires() || heartbeatRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequestAndHandleResponse(currentTimeMs);
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
@@ -411,7 +419,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
-        if (membershipManager.isLeavingGroup()) {
+        if (membershipManager.isLeavingGroup() && !shouldSkipLeaveHeartbeat()) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequestAndLogResponse(currentTimeMs);
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), List.of(request));
         }
@@ -458,7 +466,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     /**
      * A heartbeat should be sent without waiting for the heartbeat interval to expire if:
-     * - the member is leaving the group
+     * - the member should send a leave heartbeat (see {@link #shouldSendLeaveHeartbeat()})
      * or
      * - the member is joining the group or acknowledging the assignment and for both cases there is no heartbeat request
      *   in flight.
@@ -466,10 +474,39 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
      * @return true if a heartbeat should be sent before the interval expires, false otherwise
      */
     private boolean shouldHeartbeatBeforeIntervalExpires() {
-        return membershipManager.state() == MemberState.LEAVING
-            ||
-            (membershipManager.state() == MemberState.JOINING || membershipManager.state() == MemberState.ACKNOWLEDGING)
+        return shouldSendLeaveHeartbeat()
+            || (membershipManager.state() == MemberState.JOINING || membershipManager.state() == MemberState.ACKNOWLEDGING)
                 && !heartbeatRequestState.requestInFlight();
+    }
+
+    /**
+     * Returns whether a leave group heartbeat should be sent. The leave heartbeat is skipped only
+     * when the member is dynamic (no group instance ID) and the operation is
+     * {@link org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation#REMAIN_IN_GROUP}.
+     * Static members always send the leave heartbeat (with epoch -2) so the broker holds the
+     * assignment until the session timeout.
+     *
+     * @return true if a leave heartbeat should be sent, false otherwise
+     */
+    private boolean shouldSendLeaveHeartbeat() {
+        if (shouldSkipLeaveHeartbeat()) {
+            logger.debug("Member {} skipping leave heartbeat (operation={}, static={}).",
+                membershipManager.memberId(),
+                membershipManager.leaveGroupOperation(),
+                membershipManager.groupInstanceId().isPresent());
+            return false;
+        }
+        return membershipManager.state() == MemberState.LEAVING;
+    }
+
+    /**
+     * Returns true if the leave heartbeat should be skipped: only when the member is dynamic
+     * (no group instance ID) and the operation is REMAIN_IN_GROUP. Static members always send
+     * a leave heartbeat (with epoch -2) so the broker can hold the assignment.
+     */
+    private boolean shouldSkipLeaveHeartbeat() {
+        return REMAIN_IN_GROUP == membershipManager.leaveGroupOperation()
+            && membershipManager.groupInstanceId().isEmpty();
     }
 
     private void maybePropagateCoordinatorFatalErrorEvent() {
