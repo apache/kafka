@@ -106,8 +106,7 @@ class DefaultStatePersisterTest {
         }
 
         public DefaultStatePersister build() {
-            PersisterStateManager persisterStateManager = new PersisterStateManager(client, cacheHelper, time, timer);
-            return new DefaultStatePersister(persisterStateManager);
+            return DefaultStatePersister.instance(client, cacheHelper, time, timer);
         }
     }
 
@@ -200,7 +199,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(groupId)
                 .setTopicsData(List.of(new TopicData<>(topicId,
                     List.of(PartitionFactory.newPartitionStateBatchData(
-                        incorrectPartition, 1, 0, 0,  0, null))))).build()).build());
+                        incorrectPartition, 1, 0, 0, 0, null))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(IllegalArgumentException.class, result);

@@ -80,6 +80,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     // there's still an optimization that requires this info to be
     // leaked into this class, which is to checkpoint after committing if EOS is not enabled.
     private final boolean eosEnabled;
+    private final boolean transactionalStateStoresEnabled;
 
     private final int maxBufferedSize;
     private final AbstractPartitionGroup partitionGroup;
@@ -155,6 +156,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         this.time = time;
         this.recordCollector = recordCollector;
         this.eosEnabled = config.eosEnabled;
+        this.transactionalStateStoresEnabled = config.transactionalStateStoresEnabled;
 
         final String threadId = Thread.currentThread().getName();
         this.streamsMetrics = streamsMetrics;
@@ -526,7 +528,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case RUNNING:
-                if (enforceCheckpoint || !eosEnabled) {
+                if (enforceCheckpoint || !eosEnabled || transactionalStateStoresEnabled) {
                     maybeCheckpoint();
                 }
                 log.debug("Finalized commit for {} task with eos {} enforce checkpoint {}", state(), eosEnabled, enforceCheckpoint);
@@ -670,6 +672,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                         logPrefix,
                         clean,
                         eosEnabled,
+                        transactionalStateStoresEnabled,
                         stateMgr,
                         stateDirectory,
                         TaskType.ACTIVE
