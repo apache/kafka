@@ -171,4 +171,46 @@ class GroupedStreamAggregateBuilder<K, V> {
                                                      isRepartitionTopicNameProvidedByUser);
 
     }
+
+    /**
+     * Prepares the topology for a ranged buffer by handling repartitioning if needed.
+     * Returns the effective parent node (after repartitioning) and the effective source nodes.
+     */
+    RangedBufferBuildResult prepareRangedBuffer(final String storeName) {
+        String sourceName = this.name;
+        GraphNode parentNode = graphNode;
+
+        if (repartitionRequired) {
+            final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
+            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null
+                ? userProvidedRepartitionTopicName
+                : storeName;
+            sourceName = createRepartitionSource(
+                repartitionTopicPrefix,
+                repartitionNodeBuilder,
+                userProvidedRepartitionTopicName != null
+            );
+            if (repartitionNode == null || userProvidedRepartitionTopicName == null) {
+                repartitionNode = repartitionNodeBuilder.build();
+            }
+            builder.addGraphNode(parentNode, repartitionNode);
+            parentNode = repartitionNode;
+        }
+
+        final Set<String> effectiveSourceNodes = sourceName.equals(this.name)
+            ? subTopologySourceNodes
+            : Collections.singleton(sourceName);
+
+        return new RangedBufferBuildResult(parentNode, effectiveSourceNodes);
+    }
+
+    static final class RangedBufferBuildResult {
+        final GraphNode parentNode;
+        final Set<String> sourceNodes;
+
+        RangedBufferBuildResult(final GraphNode parentNode, final Set<String> sourceNodes) {
+            this.parentNode = parentNode;
+            this.sourceNodes = sourceNodes;
+        }
+    }
 }
