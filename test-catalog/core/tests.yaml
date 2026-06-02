@@ -2605,6 +2605,7 @@ kafka.server.share.SharePartitionTest:
 - testAcknowledgePerOffsetRejectWithDlqEnabled
 - testAcknowledgeRejectWithDlqDisabled
 - testAcknowledgeRejectWithDlqEnabled
+- testAcknowledgeRejectWithDlqSupplierEnabledButNoDlqTopicConfigured
 - testAcknowledgeRollbackWithFullBatchError
 - testAcknowledgeRollbackWithSubsetError
 - testAcknowledgeSingleRecordBatch
@@ -2831,6 +2832,7 @@ kafka.server.share.SharePartitionTest:
 - testReleaseAcquiredRecordsBatchesPostStartOffsetMovementToStartOfBatch
 - testReleaseAcquiredRecordsDoNotDecreaseDeliveryCount
 - testReleaseAcquiredRecordsForEmptyCachedData
+- testReleaseAcquiredRecordsMaxDeliveryWithDlqSupplierEnabledButNoDlqTopicConfigured
 - testReleaseAcquiredRecordsPerOffsetWithDifferentMemberId
 - testReleaseAcquiredRecordsSubsetWithAnotherMember
 - testReleaseAcquiredRecordsWithAnotherMember

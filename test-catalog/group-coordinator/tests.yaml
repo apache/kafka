@@ -1117,6 +1117,8 @@ org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProviderTest:
 - testPartitionMaxRecordLocksOrDefaultWithoutGroupConfig
 - testRecordLockDurationMsOrDefaultWithGroupConfig
 - testRecordLockDurationMsOrDefaultWithoutGroupConfig
+- testShareGroupDLQTopicWithGroupConfig
+- testShareGroupDLQTopicWithoutGroupConfig
 org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigTest:
 - testConfigs
 - testInvalidConfigs
