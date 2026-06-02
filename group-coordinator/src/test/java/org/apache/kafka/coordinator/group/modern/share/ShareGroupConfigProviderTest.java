@@ -143,7 +143,7 @@ public class ShareGroupConfigProviderTest {
         when(groupConfigManager.groupConfig(shareGroupId)).thenReturn(Optional.of(groupConfig));
         provider = new ShareGroupConfigProvider(groupConfigManager);
 
-        assertEquals(shareGroupDLQTopicName, provider.errorsDLQTopicName(shareGroupId));
+        assertEquals(Optional.of(shareGroupDLQTopicName), provider.errorsDLQTopicName(shareGroupId));
     }
 
     @Test
@@ -153,6 +153,6 @@ public class ShareGroupConfigProviderTest {
         when(groupConfigManager.groupConfig(shareGroupId)).thenReturn(Optional.empty());
         provider = new ShareGroupConfigProvider(groupConfigManager);
 
-        assertEquals(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT, provider.errorsDLQTopicName(shareGroupId));
+        assertEquals(Optional.empty(), provider.errorsDLQTopicName(shareGroupId));
     }
 }

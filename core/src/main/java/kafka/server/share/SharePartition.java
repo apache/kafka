@@ -3335,7 +3335,7 @@ public class SharePartition {
     }
 
     private boolean isDLQEnabledForGroup() {
-        return shareGroupDlqEnableSupplier.get() && !configProvider.errorsDLQTopicName(groupId).isEmpty();
+        return shareGroupDlqEnableSupplier.get() && configProvider.errorsDLQTopicName(groupId).isPresent();
     }
 
     // Visible for testing.

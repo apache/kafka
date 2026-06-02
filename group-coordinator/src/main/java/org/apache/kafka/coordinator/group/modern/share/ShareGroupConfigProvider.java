@@ -20,6 +20,8 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 
+import java.util.Optional;
+
 /**
  * A provider that retrieves share group dynamic configuration values,
  * falling back to default values when group-specific configurations are not present.
@@ -101,14 +103,14 @@ public class ShareGroupConfigProvider {
 
     /**
      * The method is used to get the name of the configured DLQ topic on the share group. If the group config
-     * is present, then the value from the group config is used. Otherwise, the default value is used.
+     * is present, then the value from the group config is used. Otherwise, empty optional is returned.
      *
      * @param groupId The group id for which the DLQ topic name is to be fetched.
      * @return DLQ topic name for the share group.
      */
-    public String errorsDLQTopicName(String groupId) {
+    public Optional<String> errorsDLQTopicName(String groupId) {
         return manager.groupConfig(groupId)
             .map(GroupConfig::errorsDLQTopicName)
-            .orElse(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT); // In case no group config
+            .filter(val -> !val.isEmpty());
     }
 }
