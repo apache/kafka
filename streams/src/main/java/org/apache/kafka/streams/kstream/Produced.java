@@ -114,7 +114,7 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
 
     /**
      * Create a Produced instance with provided valueSerde.
-     * @param valueSerde    Serde to use for serializing the key
+     * @param valueSerde    Serde to use for serializing the value
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with valueSerde
