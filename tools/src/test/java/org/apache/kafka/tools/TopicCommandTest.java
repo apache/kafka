@@ -126,6 +126,53 @@ public class TopicCommandTest {
         assertFalse(partitionDescription.isUnderReplicated());
     }
 
+    // KAFKA-20532: regression tests — minIsrCount() must tolerate whitespace-padded
+    // min.insync.replicas values stored raw in the metadata store.
+    @Test
+    public void testMinIsrCount_LeadingWhitespace() {
+        Config config = new Config(List.of(
+            new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, " 2")
+        ));
+        TopicCommand.PartitionDescription pd = new TopicCommand.PartitionDescription(
+            "test-topic",
+            new TopicPartitionInfo(0, new Node(0, "localhost", 9090),
+                List.of(new Node(0, "localhost", 9090)), List.of(new Node(0, "localhost", 9090))),
+            config,
+            null
+        );
+        assertEquals(2, pd.minIsrCount());
+    }
+
+    @Test
+    public void testMinIsrCount_TrailingWhitespace() {
+        Config config = new Config(List.of(
+            new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2 ")
+        ));
+        TopicCommand.PartitionDescription pd = new TopicCommand.PartitionDescription(
+            "test-topic",
+            new TopicPartitionInfo(0, new Node(0, "localhost", 9090),
+                List.of(new Node(0, "localhost", 9090)), List.of(new Node(0, "localhost", 9090))),
+            config,
+            null
+        );
+        assertEquals(2, pd.minIsrCount());
+    }
+
+    @Test
+    public void testMinIsrCount_BothSidesWhitespace() {
+        Config config = new Config(List.of(
+            new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, " 2 ")
+        ));
+        TopicCommand.PartitionDescription pd = new TopicCommand.PartitionDescription(
+            "test-topic",
+            new TopicPartitionInfo(0, new Node(0, "localhost", 9090),
+                List.of(new Node(0, "localhost", 9090)), List.of(new Node(0, "localhost", 9090))),
+            config,
+            null
+        );
+        assertEquals(2, pd.minIsrCount());
+    }
+
     @Test
     public void testAlterWithUnspecifiedPartitionCount() {
         String[] options = new String[] {" --bootstrap-server", bootstrapServer, "--alter", "--topic", topicName};
