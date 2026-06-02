@@ -946,7 +946,7 @@ public class SharePartition {
                     continue;
                 }
 
-                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE, maxDeliveryCount(), memberId, shareGroupDlqEnableSupplier.get());
+                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE, maxDeliveryCount(), memberId, isDLQEnabledForGroup());
                 if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
                     log.info("Unable to acquire records for the batch: {} in share partition: {}-{}",
                         inFlightBatch, groupId, topicIdPartition);
@@ -1138,7 +1138,7 @@ public class SharePartition {
                         DeliveryCountOps.NO_OP,
                         this.maxDeliveryCount(),
                         EMPTY_MEMBER_ID,
-                        shareGroupDlqEnableSupplier.get()
+                        isDLQEnabledForGroup()
                 );
                 if (updateResult == null) {
                     log.debug("Unable to release records from acquired state for the offset: {} in batch: {}"
@@ -1182,7 +1182,7 @@ public class SharePartition {
                     DeliveryCountOps.NO_OP,
                     this.maxDeliveryCount(),
                     EMPTY_MEMBER_ID,
-                    shareGroupDlqEnableSupplier.get()
+                    isDLQEnabledForGroup()
             );
             if (updateResult == null) {
                 log.debug("Unable to release records from acquired state for the batch: {}"
@@ -2004,7 +2004,7 @@ public class SharePartition {
                 }
 
                 InFlightState updateResult = offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
-                    maxDeliveryCount, memberId, shareGroupDlqEnableSupplier.get());
+                    maxDeliveryCount, memberId, isDLQEnabledForGroup());
                 if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
                     log.trace("Unable to acquire records for the offset: {} in batch: {}"
                             + " for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
@@ -2358,7 +2358,7 @@ public class SharePartition {
                         DeliveryCountOps.NO_OP,
                         this.maxDeliveryCount(),
                         EMPTY_MEMBER_ID,
-                        shareGroupDlqEnableSupplier.get()
+                        isDLQEnabledForGroup()
                     );
 
                     if (updateResult == null) {
@@ -2446,7 +2446,7 @@ public class SharePartition {
                 DeliveryCountOps.NO_OP,
                 this.maxDeliveryCount(),
                 EMPTY_MEMBER_ID,
-                shareGroupDlqEnableSupplier.get()
+                isDLQEnabledForGroup()
             );
             if (updateResult == null) {
                 log.debug("Unable to acknowledge records for the batch: {} with state: {}"
@@ -3023,7 +3023,7 @@ public class SharePartition {
                     DeliveryCountOps.NO_OP,
                     maxDeliveryCount(),
                     EMPTY_MEMBER_ID,
-                    shareGroupDlqEnableSupplier.get());
+                    isDLQEnabledForGroup());
             if (updateResult == null) {
                 log.error("Unable to release acquisition lock on timeout for the batch: {}"
                         + " for the share partition: {}-{} memberId: {}", inFlightBatch, groupId, topicIdPartition, memberId);
@@ -3089,7 +3089,7 @@ public class SharePartition {
                     DeliveryCountOps.NO_OP,
                     maxDeliveryCount(),
                     EMPTY_MEMBER_ID,
-                    shareGroupDlqEnableSupplier.get());
+                    isDLQEnabledForGroup());
             if (updateResult == null) {
                 log.error("Unable to release acquisition lock on timeout for the offset: {} in batch: {}"
                                 + " for the share partition: {}-{} memberId: {}", offsetState.getKey(), inFlightBatch,
@@ -3328,10 +3328,14 @@ public class SharePartition {
     }
 
     private RecordState recordStateWithDlq(byte ackType) {
-        if (shareGroupDlqEnableSupplier.get() && AcknowledgeType.REJECT.id == ackType) {
+        if (isDLQEnabledForGroup() && AcknowledgeType.REJECT.id == ackType) {
             return RecordState.ARCHIVING;
         }
         return ACK_TYPE_TO_RECORD_STATE.get(ackType);
+    }
+
+    private boolean isDLQEnabledForGroup() {
+        return shareGroupDlqEnableSupplier.get() && configProvider.errorsDLQTopicName(groupId).isPresent();
     }
 
     // Visible for testing.
