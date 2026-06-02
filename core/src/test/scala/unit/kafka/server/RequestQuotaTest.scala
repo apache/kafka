@@ -223,7 +223,7 @@ class RequestQuotaTest extends BaseRequestTest {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
     val apiKeys = ApiKeys.brokerApis
-    for (apiKey <- apiKeys.asScala.toSet -- RequestQuotaTest.Envelope -- RequestQuotaTest.UnimplementedApis) {
+    for (apiKey <- apiKeys.asScala.toSet -- RequestQuotaTest.Envelope) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
     }
 
@@ -231,7 +231,7 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def clientActions: Set[ApiKeys] = {
-    ApiKeys.brokerApis.asScala.toSet -- clusterActions -- RequestQuotaTest.SaslActions -- RequestQuotaTest.Envelope -- RequestQuotaTest.UnimplementedApis
+    ApiKeys.brokerApis.asScala.toSet -- clusterActions -- RequestQuotaTest.SaslActions -- RequestQuotaTest.Envelope
   }
 
   private def clusterActions: Set[ApiKeys] = {
@@ -758,6 +758,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.STREAMS_GROUP_DESCRIBE =>
           new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData())
 
+        case ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE =>
+          new StreamsGroupTopologyDescriptionUpdateRequest.Builder(new StreamsGroupTopologyDescriptionUpdateRequestData())
+
         case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS =>
           new DescribeShareGroupOffsetsRequest.Builder(new DescribeShareGroupOffsetsRequestData())
 
@@ -905,8 +908,6 @@ object RequestQuotaTest {
   val Envelope = Set(ApiKeys.ENVELOPE)
   val ShareGroupState = Set(ApiKeys.INITIALIZE_SHARE_GROUP_STATE, ApiKeys.READ_SHARE_GROUP_STATE, ApiKeys.WRITE_SHARE_GROUP_STATE,
     ApiKeys.DELETE_SHARE_GROUP_STATE, ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY)
-  // APIs whose broker handler has not been wired yet; exclude from quota tests until they land.
-  val UnimplementedApis: Set[ApiKeys] = Set(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE)
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

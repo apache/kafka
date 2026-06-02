@@ -36,7 +36,9 @@ public class StreamsGroupTopologyDescriptionUpdateRequest extends AbstractReques
         private final StreamsGroupTopologyDescriptionUpdateRequestData data;
 
         public Builder(StreamsGroupTopologyDescriptionUpdateRequestData data) {
-            super(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE);
+            // The schema is marked latestVersionUnstable until the broker handler lands; opt in
+            // here so the Builder can still construct the only existing version.
+            super(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE, true);
             this.data = data;
         }
 

@@ -3904,7 +3904,7 @@ public class RequestResponseTest {
             group.setTopologyDescription(new StreamsGroupDescribeResponseData.TopologyDescription()
                 .setSubtopologies(new ArrayList<>(0))
                 .setGlobalStores(new ArrayList<>(0)));
-            group.setTopologyDescriptionStatus((byte) 3);
+            group.setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
         }
         List<StreamsGroupDescribeResponseData.DescribedGroup> groups = new ArrayList<>();
         groups.add(group);
@@ -3920,7 +3920,7 @@ public class RequestResponseTest {
                     .setMembers(new ArrayList<>(0))
                     .setTopology(null)
                     .setTopologyDescription(null)
-                    .setTopologyDescriptionStatus((byte) 1);
+                    .setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
             groups.add(notStoredGroup);
         }
         StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
@@ -4144,7 +4144,7 @@ public class RequestResponseTest {
             .setGroups(List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("g1")
                 .setTopologyDescription(new StreamsGroupDescribeResponseData.TopologyDescription())
-                .setTopologyDescriptionStatus((byte) 3)));
+                .setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE)));
         StreamsGroupDescribeResponse response = new StreamsGroupDescribeResponse(data);
         assertThrows(UnsupportedVersionException.class, () -> response.serialize((short) 0));
     }
