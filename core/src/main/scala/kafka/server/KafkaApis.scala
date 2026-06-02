@@ -1835,7 +1835,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (controlRecords.nonEmpty) {
           replicaManager.appendRecords(
             timeout = config.requestTimeoutMs.toLong,
-            requiredAcks = -1,
+            requiredAcks = TransactionCoordinator.EnforcedRequiredAcks,
             internalTopicsAllowed = true,
             origin = AppendOrigin.COORDINATOR,
             entriesPerPartition = controlRecords,

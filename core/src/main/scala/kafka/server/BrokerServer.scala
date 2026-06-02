@@ -413,7 +413,7 @@ class BrokerServer(
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config,
         () => groupCoordinator.groupMetadataTopicConfigs,
-        () => transactionCoordinator.transactionTopicConfigs,
+        () => transactionCoordinator.transactionStateTopicConfigs,
         () => shareCoordinator.shareGroupStateTopicConfigs,
         new KRaftTopicCreator(clientToControllerChannelManager),
         time,
