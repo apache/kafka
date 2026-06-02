@@ -26,6 +26,7 @@
   // - COORDINATOR_NOT_AVAILABLE (version 0+)
   // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
   // - INVALID_REQUEST (version 0+)
+  // - GROUP_ID_NOT_FOUND (version 0+)
   // - UNKNOWN_MEMBER_ID (version 0+)
   // - FENCED_MEMBER_EPOCH (version 0+)
   // - UNRELEASED_INSTANCE_ID (version 0+)
