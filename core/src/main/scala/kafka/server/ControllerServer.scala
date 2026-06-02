@@ -145,6 +145,11 @@ class ControllerServer(
       if (linuxIoMetricsCollector.usable()) {
         metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
         metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+        metricsGroup.newGauge("linux-disk-rchar", () => linuxIoMetricsCollector.rchar())
+        metricsGroup.newGauge("linux-disk-wchar", () => linuxIoMetricsCollector.wchar())
+        metricsGroup.newGauge("linux-disk-syscr", () => linuxIoMetricsCollector.syscr())
+        metricsGroup.newGauge("linux-disk-syscw", () => linuxIoMetricsCollector.syscw())
+        metricsGroup.newGauge("linux-disk-cancelled-write-bytes", () => linuxIoMetricsCollector.cancelledWriteBytes())
       }
 
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.ControllerRole.toString)
