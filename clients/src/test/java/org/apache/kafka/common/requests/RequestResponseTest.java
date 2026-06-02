@@ -4128,4 +4128,24 @@ public class RequestResponseTest {
                 assertThrows(UnsupportedVersionException.class, () -> new ListConfigResourcesRequest.Builder(data).build((short) 0));
             });
     }
+
+    @Test
+    public void testStreamsGroupDescribeRequestV0RejectsIncludeTopologyDescription() {
+        StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
+            .setGroupIds(List.of("g1"))
+            .setIncludeTopologyDescription(true);
+        StreamsGroupDescribeRequest request = new StreamsGroupDescribeRequest.Builder(data).build((short) 0);
+        assertThrows(UnsupportedVersionException.class, () -> request.serialize());
+    }
+
+    @Test
+    public void testStreamsGroupDescribeResponseV0RejectsTopologyDescriptionFields() {
+        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
+            .setGroups(List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId("g1")
+                .setTopologyDescription(new StreamsGroupDescribeResponseData.TopologyDescription())
+                .setTopologyDescriptionStatus((byte) 3)));
+        StreamsGroupDescribeResponse response = new StreamsGroupDescribeResponse(data);
+        assertThrows(UnsupportedVersionException.class, () -> response.serialize((short) 0));
+    }
 }

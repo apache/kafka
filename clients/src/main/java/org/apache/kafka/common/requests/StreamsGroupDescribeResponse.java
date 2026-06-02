@@ -35,15 +35,6 @@ import java.util.Map;
  * - {@link Errors#INVALID_GROUP_ID}
  * - {@link Errors#GROUP_ID_NOT_FOUND}
  * - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
- *
- * <p>TopologyDescription invariant (v1+): the {@code TopologyDescription} field is non-null
- * if and only if {@code TopologyDescriptionStatus} is {@code AVAILABLE} (3). The broker MUST
- * set the status to {@code AVAILABLE} whenever it attaches a {@code TopologyDescription},
- * and leave {@code TopologyDescription} null for any other status value.
- *
- * <p>Note: {@code TopologyDescriptionStatus == ERROR} (2) is a data-level signal, not a
- * protocol error, and is intentionally not reflected in {@link #errorCounts()}. Operators
- * tracking topology-description failures should monitor the status field directly.
  */
 public class StreamsGroupDescribeResponse extends AbstractResponse {
 
