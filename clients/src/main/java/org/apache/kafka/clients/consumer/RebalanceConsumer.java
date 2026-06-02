@@ -77,13 +77,9 @@ import java.util.Set;
  *   <li>{@code enforceRebalance()} - would trigger re-entrant rebalance</li>
  * </ul>
  *
- * <p>Note: The {@link #close()} method inherited from {@link AutoCloseable} on this interface
- * does <em>not</em> close the underlying consumer. It is used internally to invalidate this
- * view after the callback completes. Users should not call it directly.
- *
  * @see ConsumerRebalanceListener
  */
-public interface RebalanceConsumer extends AutoCloseable {
+public interface RebalanceConsumer {
 
     // --- Offset management ---
 
@@ -167,12 +163,4 @@ public interface RebalanceConsumer extends AutoCloseable {
     OptionalLong currentLag(TopicPartition topicPartition);
     /** @see KafkaConsumer#groupMetadata() */
     ConsumerGroupMetadata groupMetadata();
-
-    /**
-     * Invalidates this view so that subsequent method calls throw {@link IllegalStateException}.
-     * This is called internally by the consumer after the rebalance callback completes and should
-     * not be called directly by users. This does <em>not</em> close the underlying {@link Consumer}.
-     */
-    @Override
-    void close();
 }

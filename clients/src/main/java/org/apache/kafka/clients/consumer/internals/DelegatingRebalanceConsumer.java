@@ -38,7 +38,7 @@ import java.util.Set;
  * lifecycle constraints. Instances are created by {@link ConsumerAwareRebalanceListener} for
  * each callback invocation and closed automatically when the callback returns.
  */
-class DelegatingRebalanceConsumer implements RebalanceConsumer {
+class DelegatingRebalanceConsumer implements RebalanceConsumer, AutoCloseable {
     private final Consumer<?, ?> delegate;
     private boolean isClosed = false;
 
