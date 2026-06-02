@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -96,6 +97,11 @@ public class TargetAssignmentBuilder {
      */
     private ConfiguredTopology topology;
 
+    /**
+     * The topic ids per sub-topology.
+     */
+    private Map<String, List<Uuid>> topicIdsPerSubTopology;
+    
     /**
      * The static members in the group.
      */
@@ -187,6 +193,13 @@ public class TargetAssignmentBuilder {
         return this;
     }
 
+    public TargetAssignmentBuilder withResolvedTopicIdsPerSubTopology(
+            Map<String, List<Uuid>> resolvedTopicIdsPerSubTopology
+    ) {
+        this.topicIdsPerSubTopology = resolvedTopicIdsPerSubTopology;
+        return this;
+    }
+    
     /**
      * Adds the existing target assignment.
      *
@@ -281,6 +294,7 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment;
+        Map<String, List<Uuid>> newTopicIdsPerSubTopology;
         if (topology.isReady()) {
             if (topology.subtopologies().isEmpty()) {
                 throw new IllegalStateException("Subtopologies must be present if topology is ready.");
@@ -292,9 +306,11 @@ public class TargetAssignmentBuilder {
                 ),
                 new TopologyMetadata(metadataImage, topology.subtopologies().get())
             );
+            newTopicIdsPerSubTopology = topicIdsPerSubTopology;
         } else {
             newGroupAssignment = new GroupAssignment(
                 memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignment.empty())));
+            newTopicIdsPerSubTopology = Map.of();
         }
 
         // Compute delta from previous to new target assignment and create the
@@ -335,7 +351,18 @@ public class TargetAssignmentBuilder {
             time.milliseconds()
         ));
 
-        return new TargetAssignmentResult(records, newTargetAssignment);
+        // TODO: Should cover all test cases. 
+        // Temporarily insert this for POC.
+        if (newTopicIdsPerSubTopology != null) {
+            // Bump the target resolved topic ids.
+            records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(
+                    groupId,
+                    groupEpoch,
+                    newTopicIdsPerSubTopology
+            ));
+        }
+
+        return new TargetAssignmentResult(records, newTargetAssignment, newTopicIdsPerSubTopology);
     }
 
     private TasksTuple newMemberAssignment(
@@ -362,11 +389,13 @@ public class TargetAssignmentBuilder {
      */
     public record TargetAssignmentResult(
         List<CoordinatorRecord> records,
-        Map<String, TasksTuple> targetAssignment
+        Map<String, TasksTuple> targetAssignment,
+        Map<String, List<Uuid>> resolvedTopicIdsPerSubTopology
     ) {
         public TargetAssignmentResult {
             Objects.requireNonNull(records);
             Objects.requireNonNull(targetAssignment);
+            Objects.requireNonNull(resolvedTopicIdsPerSubTopology);
         }
     }
 }

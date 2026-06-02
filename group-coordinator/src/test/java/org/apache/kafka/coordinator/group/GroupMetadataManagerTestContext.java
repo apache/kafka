@@ -100,6 +100,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
@@ -1762,6 +1764,13 @@ public class GroupMetadataManagerTestContext {
                 );
                 break;
 
+            case STREAMS_GROUP_TARGET_ASSIGNMENT_RESOLVED_TOPIC_IDS:
+                groupMetadataManager.replay(
+                        (StreamsGroupTargetAssignmentResolvedTopicIdsKey) key,
+                        (StreamsGroupTargetAssignmentResolvedTopicIdsValue) Utils.messageOrNull(value)
+                );
+                break;
+            
             case STREAMS_GROUP_TOPOLOGY:
                 groupMetadataManager.replay(
                     (StreamsGroupTopologyKey) key,

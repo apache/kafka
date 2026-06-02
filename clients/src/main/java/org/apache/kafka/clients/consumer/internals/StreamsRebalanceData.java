@@ -32,6 +32,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
  * This class holds the data that is needed to participate in the Streams rebalance protocol.
@@ -157,27 +158,41 @@ public class StreamsRebalanceData {
 
         private final Set<TaskId> warmupTasks;
 
+        private final Map<TaskId, Set<TopicPartition>> activeTaskInputPartitions;
+        
         private final boolean isGroupReady;
 
         private Assignment() {
             this.activeTasks = Set.of();
             this.standbyTasks = Set.of();
             this.warmupTasks = Set.of();
+            this.activeTaskInputPartitions = Map.of();
             this.isGroupReady = false;
         }
 
         public Assignment(final Set<TaskId> activeTasks,
                           final Set<TaskId> standbyTasks,
                           final Set<TaskId> warmupTasks,
+                          final Map<TaskId, Set<TopicPartition>> activeTaskInputPartitions,
                           final boolean isGroupReady) {
             this.activeTasks = Set.copyOf(Objects.requireNonNull(activeTasks, "Active tasks cannot be null"));
             this.standbyTasks = Set.copyOf(Objects.requireNonNull(standbyTasks, "Standby tasks cannot be null"));
             this.warmupTasks = Set.copyOf(Objects.requireNonNull(warmupTasks, "Warmup tasks cannot be null"));
             this.isGroupReady = isGroupReady;
+            this.activeTaskInputPartitions = activeTaskInputPartitions.entrySet().stream().collect(
+                    Collectors.toUnmodifiableMap(
+                            Map.Entry::getKey,
+                            entry -> Set.copyOf(entry.getValue())
+                    )
+            );
         }
 
         public Set<TaskId> activeTasks() {
             return activeTasks;
+        }
+
+        public Map<TaskId, Set<TopicPartition>> activeTaskInputPartitions() {
+            return activeTaskInputPartitions;
         }
 
         public Set<TaskId> standbyTasks() {
@@ -204,16 +219,17 @@ public class StreamsRebalanceData {
             return Objects.equals(activeTasks, that.activeTasks)
                 && Objects.equals(standbyTasks, that.standbyTasks)
                 && Objects.equals(warmupTasks, that.warmupTasks)
+                && Objects.equals(activeTaskInputPartitions, that.activeTaskInputPartitions)
                 && isGroupReady == that.isGroupReady;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(activeTasks, standbyTasks, warmupTasks, isGroupReady);
+            return Objects.hash(activeTasks, standbyTasks, warmupTasks, activeTaskInputPartitions, isGroupReady);
         }
 
         public Assignment copy() {
-            return new Assignment(activeTasks, standbyTasks, warmupTasks, isGroupReady);
+            return new Assignment(activeTasks, standbyTasks, warmupTasks, activeTaskInputPartitions, isGroupReady);
         }
 
         @Override
@@ -222,6 +238,7 @@ public class StreamsRebalanceData {
                 "activeTasks=" + activeTasks +
                 ", standbyTasks=" + standbyTasks +
                 ", warmupTasks=" + warmupTasks +
+                ", activeTaskInputPartitions=" + activeTaskInputPartitions +
                 ", isGroupReady=" + isGroupReady +
                 '}';
         }

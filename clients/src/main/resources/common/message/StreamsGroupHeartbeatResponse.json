@@ -17,7 +17,7 @@
   "apiKey": 88,
   "type": "response",
   "name": "StreamsGroupHeartbeatResponse",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -57,7 +57,7 @@
       "about": "Indicate zero or more status for the group." },
 
     // The streams app knows which partitions to fetch from given this information
-    { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "ActiveTasks", "type": "[]TaskIdsWithResolvedTopicIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Assigned active tasks for this client. Null if unchanged since last heartbeat." },
     { "name": "StandbyTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Assigned standby tasks for this client. Null if unchanged since last heartbeat." },
@@ -111,6 +111,15 @@
         "about": "The subtopology identifier." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions of the input topics processed by this member." }
+    ]},
+    { "name": "TaskIdsWithResolvedTopicIds", "versions": "0+", "fields": [
+      { "name": "SubtopologyId", "type": "string", "versions": "0+",
+        "about": "The subtopology identifier." },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "The partitions of the input topics processed by this member." },
+      { "name": "TopicIds", "type": "[]uuid", "versions": "1+",
+        "about": "The resolved topic ids."
+      }
     ]},
     { "name": "Endpoint", "versions": "0+", "fields": [
       { "name": "Host", "type": "string", "versions": "0+",

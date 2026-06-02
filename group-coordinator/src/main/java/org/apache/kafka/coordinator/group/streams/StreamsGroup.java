@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -173,6 +174,11 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, TasksTuple> targetAssignment;
 
     /**
+     * The target resolved topic ids per subtopology.
+     */
+    private final TimelineObject<TargetResolvedTopicIds> targetResolvedTopics;
+    
+    /**
      * These maps map each active/standby/warmup task to the process ID(s) of their current owner.
      * The mapping is of the form <code>subtopology -> partition -> memberId</code>.
      * When a member revokes a partition, it removes its process ID from this map.
@@ -246,6 +252,7 @@ public class StreamsGroup implements Group {
         this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.targetResolvedTopics = new TimelineObject<>(snapshotRegistry, TargetResolvedTopicIds.INITIAL);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
@@ -362,6 +369,51 @@ public class StreamsGroup implements Group {
         this.targetAssignmentMetadata.set(new TargetAssignmentMetadata(targetAssignmentEpoch, targetAssignmentTimestamp));
         maybeUpdateGroupState();
     }
+
+    /**
+     * Sets the assignment resolved topic ids.
+     *
+     * @param assignmentEpoch The assignment Epoch.
+     * @param resolvedTopicIdPerSubTopology The resolved topic ids per sub topology.
+     */
+    public void setTargetAssignmentResolvedTopicIds(int assignmentEpoch,
+                                                    Map<String, List<Uuid>> resolvedTopicIdPerSubTopology) {
+        this.targetResolvedTopics.set(new TargetResolvedTopicIds(assignmentEpoch, resolvedTopicIdPerSubTopology));
+        maybeUpdateGroupState();
+    }
+
+    /**
+     * TBD
+     * @return
+     */
+    public int targetAssignmentResolvedTopicIdsAssignmentEpoch() {
+        return targetResolvedTopics.get().assignmentEpoch();
+    }
+
+    /**
+     * TBD
+     * @return
+     */
+    public Map<String, List<Uuid>> targetAssignmentResolvedTopicIdPerSubTopology() {
+        return targetResolvedTopics.get().topicIdsPerSubTopology();
+    }
+
+    /**
+     * TBD
+     * @return
+     */
+    public boolean hasCurrentTargetAssignmentResolvedTopicIds() {
+        return !targetAssignment().isEmpty() && // Not a bootstrap step
+                targetAssignmentResolvedTopicIdsAssignmentEpoch() == assignmentEpoch();        
+    }
+
+    public boolean needsResolvedTopicIdsBackfill() {
+        return !targetAssignment().isEmpty() // Not a bootstrap step.
+                && targetAssignmentResolvedTopicIdsAssignmentEpoch() != assignmentEpoch()
+                && groupEpoch() == assignmentEpoch();
+    }
+
+
 
     /**
      * Get member ID of a static member that matches the given group instance ID.
@@ -840,6 +892,7 @@ public class StreamsGroup implements Group {
         );
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(groupId()));
 
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsTombstoneRecord(groupId()));
         members().forEach((memberId, member) ->
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
         );
