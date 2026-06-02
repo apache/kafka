@@ -240,8 +240,8 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldReturnInitializedStoreNames() {
         initializeConsumer(0, 0, t1, t2, t3, t4, t5);
-        final Set<String> storeNames = stateManager.initialize();
-        assertEquals(Set.of(storeName1, storeName2, storeName3, storeName4, storeName5), storeNames);
+        final Optional<Set<String>> storeNames = stateManager.initialize();
+        assertEquals(Optional.of(Set.of(storeName1, storeName2, storeName3, storeName4, storeName5)), storeNames);
     }
 
     @Test
@@ -1363,7 +1363,7 @@ public class GlobalStateManagerImplTest {
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
 
-        stateManager.initialize();
+        assertEquals(Optional.empty(), stateManager.initialize());
 
         assertEquals(1, pollCount.get());
         assertTrue(inErrorState.get());
@@ -1427,7 +1427,7 @@ public class GlobalStateManagerImplTest {
         processorContext.setStateManger(stateManager);
         stateManager.setGlobalProcessorContext(processorContext);
 
-        stateManager.initialize();
+        assertEquals(Optional.empty(), stateManager.initialize());
 
         assertEquals(1, pollCount.get());
         assertTrue(inErrorState.get());

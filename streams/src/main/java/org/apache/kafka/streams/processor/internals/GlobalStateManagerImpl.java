@@ -125,7 +125,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private DeserializationExceptionHandler deserializationExceptionHandler;
     private ProcessingExceptionHandler processingExceptionHandler;
     private Sensor droppedRecordsSensor;
-    private BooleanSupplier inErrorStateSupplier;
+    private BooleanSupplier shouldStopBootstrappingSupplier;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -134,7 +134,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config,
-                                  final BooleanSupplier inErrorStateSupplier) {
+                                  final BooleanSupplier shouldStopBootstrappingSupplier) {
         this.time = time;
         this.topology = topology;
         this.stateDirectory = stateDirectory;
@@ -151,7 +151,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         logPrefix = logContext.logPrefix();
         this.globalConsumer = globalConsumer;
         this.stateRestoreListener = stateRestoreListener;
-        this.inErrorStateSupplier = inErrorStateSupplier;
+        this.shouldStopBootstrappingSupplier = shouldStopBootstrappingSupplier;
 
         final Map<String, Object> consumerProps = config.getGlobalConsumerConfigs("dummy");
         // need to add mandatory configs; otherwise `QuietConsumerConfig` throws
@@ -178,70 +178,78 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public Set<String> initialize() {
+    public Optional<Set<String>> initialize() {
         droppedRecordsSensor = droppedRecordsSensor(
             Thread.currentThread().getName(),
             globalProcessorContext.taskId().toString(),
             globalProcessorContext.metrics()
         );
 
-        final Map<TopicPartition, StateStore> wrappedStores = new HashMap<>();
-        for (final StateStore stateStore : topology.globalStateStores()) {
-            final List<TopicPartition> storePartitions = topicPartitionsForStore(stateStore);
-            final StateStore maybeWrappedStore = LegacyCheckpointingStateStore.maybeWrapStore(
-                    stateStore, eosEnabled, new HashSet<>(storePartitions), stateDirectory, null, logPrefix);
-            try {
-                maybeWrappedStore.init(globalProcessorContext, maybeWrappedStore);
-            } catch (final ProcessorStateException e) {
-                if (eosEnabled) {
-                    log.warn("{}Detected unclean shutdown for global store {}. " +
-                            "Wiping global state directory.", logPrefix, stateStore.name(), e);
-                    try {
-                        Utils.delete(stateDirectory.globalStateDir().getAbsoluteFile());
-                    } catch (final IOException ioe) {
-                        e.addSuppressed(ioe);
+        try {
+            final Map<TopicPartition, StateStore> wrappedStores = new HashMap<>();
+            for (final StateStore stateStore : topology.globalStateStores()) {
+                final List<TopicPartition> storePartitions = topicPartitionsForStore(stateStore);
+                final StateStore maybeWrappedStore = LegacyCheckpointingStateStore.maybeWrapStore(
+                        stateStore, eosEnabled, new HashSet<>(storePartitions), stateDirectory, null, logPrefix);
+                try {
+                    maybeWrappedStore.init(globalProcessorContext, maybeWrappedStore);
+                } catch (final ProcessorStateException e) {
+                    if (eosEnabled) {
+                        log.warn("{}Detected unclean shutdown for global store {}. " +
+                                "Wiping global state directory.", logPrefix, stateStore.name(), e);
+                        try {
+                            Utils.delete(stateDirectory.globalStateDir().getAbsoluteFile());
+                        } catch (final IOException ioe) {
+                            e.addSuppressed(ioe);
+                        }
+                    }
+                    throw e;
+                }
+
+                for (final TopicPartition storePartition : storePartitions) {
+                    wrappedStores.put(storePartition, maybeWrappedStore);
+                }
+            }
+
+            // migrate offsets from legacy checkpoint file into the stores
+            LegacyCheckpointingStateStore.migrateLegacyOffsets(logPrefix, stateDirectory, null, wrappedStores);
+
+            for (final StateStoreMetadata metadata : storeMetadata.values()) {
+                if (shouldStopBootstrappingSupplier.getAsBoolean()) {
+                    log.info("Global store bootstrap interrupted by shutdown before starting {}", metadata.stateStore.name());
+                    return Optional.empty();
+                }
+                // load the committed offsets from the store
+                final StateStore store = metadata.stateStore;
+                if (store.persistent()) {
+                    for (final TopicPartition partition : metadata.changelogPartitions) {
+                        final Long offset = store.committedOffset(partition);
+                        if (offset != null) {
+                            currentOffsets.put(partition, offset);
+                        }
                     }
                 }
+
+                // restore or reprocess each registered store using the now-populated currentOffsets
+                try {
+                    if (metadata.reprocessFactory.isPresent()) {
+                        reprocessState(metadata);
+                    } else {
+                        restoreState(metadata);
+                    }
+                } finally {
+                    globalConsumer.unsubscribe();
+                }
+            }
+
+            return Optional.of(Collections.unmodifiableSet(globalStoreNames));
+        } catch (final WakeupException e) {
+            if (!shouldStopBootstrappingSupplier.getAsBoolean()) {
                 throw e;
             }
-
-            for (final TopicPartition storePartition : storePartitions) {
-                wrappedStores.put(storePartition, maybeWrappedStore);
-            }
+            log.info("Global store bootstrap interrupted by shutdown");
+            return Optional.empty();
         }
-
-        // migrate offsets from legacy checkpoint file into the stores
-        LegacyCheckpointingStateStore.migrateLegacyOffsets(logPrefix, stateDirectory, null, wrappedStores);
-
-        for (final StateStoreMetadata metadata : storeMetadata.values()) {
-            if (inErrorStateSupplier.getAsBoolean()) {
-                log.info("Global store bootstrap interrupted by shutdown before starting {}", metadata.stateStore.name());
-                break;
-            }
-            // load the committed offsets from the store
-            final StateStore store = metadata.stateStore;
-            if (store.persistent()) {
-                for (final TopicPartition partition : metadata.changelogPartitions) {
-                    final Long offset = store.committedOffset(partition);
-                    if (offset != null) {
-                        currentOffsets.put(partition, offset);
-                    }
-                }
-            }
-
-            // restore or reprocess each registered store using the now-populated currentOffsets
-            try {
-                if (metadata.reprocessFactory.isPresent()) {
-                    reprocessState(metadata);
-                } else {
-                    restoreState(metadata);
-                }
-            } finally {
-                globalConsumer.unsubscribe();
-            }
-        }
-
-        return Collections.unmodifiableSet(globalStoreNames);
     }
 
     public StateStore globalStore(final String name) {
@@ -357,21 +365,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
                 //      `poll(pollMS)` without adding the request timeout and do a more precise
                 //      timeout handling
-                if (inErrorStateSupplier.getAsBoolean()) {
+                if (shouldStopBootstrappingSupplier.getAsBoolean()) {
                     logBootstrapInterrupted(storeMetadata);
                     return;
                 }
 
-                final ConsumerRecords<byte[], byte[]> records;
-                try {
-                    records = globalConsumer.poll(pollMsPlusRequestTimeout);
-                } catch (final WakeupException e) {
-                    if (inErrorStateSupplier.getAsBoolean()) {
-                        logBootstrapInterrupted(storeMetadata);
-                        return;
-                    }
-                    throw e;
-                }
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
                 if (records.isEmpty()) {
                     currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
                 } else {
@@ -516,20 +515,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
                 //      `poll(pollMS)` without adding the request timeout and do a more precise
                 //      timeout handling
-                if (inErrorStateSupplier.getAsBoolean()) {
+                if (shouldStopBootstrappingSupplier.getAsBoolean()) {
                     logBootstrapInterrupted(storeMetadata);
                     return;
                 }
-                final ConsumerRecords<byte[], byte[]> records;
-                try {
-                    records = globalConsumer.poll(pollMsPlusRequestTimeout);
-                } catch (final WakeupException e) {
-                    if (inErrorStateSupplier.getAsBoolean()) {
-                        logBootstrapInterrupted(storeMetadata);
-                        return;
-                    }
-                    throw e;
-                }
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
                 if (records.isEmpty()) {
                     currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
                 } else {

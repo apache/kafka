@@ -26,7 +26,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -300,13 +299,7 @@ public class GlobalStreamThread extends Thread {
                 if (size != -1L) {
                     cache.resize(size);
                 }
-                try {
-                    stateConsumer.pollAndUpdate();
-                } catch (final WakeupException e) {
-                    if (!inErrorState()) {
-                        throw e;
-                    }
-                }
+                stateConsumer.pollAndUpdate();
 
                 if (fetchDeadlineClientInstanceId != -1) {
                     if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
@@ -444,14 +437,6 @@ public class GlobalStreamThread extends Thread {
 
             setState(RUNNING);
             return stateConsumer;
-        } catch (final WakeupException e) {
-            closeStateConsumer(stateConsumer, false);
-            if (inErrorState()) {
-                log.info("Global thread initialization interrupted by shutdown");
-            } else {
-                startupException = new StreamsException(
-                    "Unexpected wakeup during initialization of GlobalStreamThread", e);
-            }
         } catch (final StreamsException fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = fatalException;
@@ -496,9 +481,15 @@ public class GlobalStreamThread extends Thread {
     public void shutdown() {
         // one could call shutdown() multiple times, so ignore subsequent calls
         // if already shutting down or dead
-        setState(PENDING_SHUTDOWN);
+        final boolean wakeupBootstrap;
+        synchronized (stateLock) {
+            wakeupBootstrap = (state == State.CREATED);
+            setState(PENDING_SHUTDOWN);
+        }
         initializationLatch.countDown();
-        globalConsumer.wakeup();
+        if (wakeupBootstrap) {
+            globalConsumer.wakeup();
+        }
     }
 
     public Map<MetricName, Metric> consumerMetrics() {
