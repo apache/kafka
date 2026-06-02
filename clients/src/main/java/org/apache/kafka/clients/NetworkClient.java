@@ -777,7 +777,7 @@ public class NetworkClient implements KafkaClient {
         if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
             cancelBootstrapResolution();
             if (bootstrapExecutor != null) {
-                bootstrapExecutor.shutdown();
+                bootstrapExecutor.shutdownNow();
             }
             this.selector.close();
             this.metadataUpdater.close();

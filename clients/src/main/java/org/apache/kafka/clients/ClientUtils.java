@@ -101,13 +101,17 @@ public final class ClientUtils {
         if (urls == null) {
             return addresses;
         }
-        urls.forEach(url -> {
+        for (String url : urls) {
+            if (Thread.currentThread().isInterrupted()) {
+                break;
+            }
+
             final String host = getHost(url);
             final Integer port = getPort(url);
 
             if (host == null || port == null) {
                 log.warn("Skipping invalid bootstrap URL: {}", url);
-                return;
+                continue;
             }
 
             try {
@@ -115,7 +119,7 @@ public final class ClientUtils {
             } catch (UnknownHostException e) {
                 // Silently ignore - this matches the original behavior
             }
-        });
+        }
         return addresses;
     }
 
