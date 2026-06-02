@@ -46,6 +46,7 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
+import org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils;
 
 import java.io.FilenameFilter;
 import java.io.IOException;
@@ -104,8 +105,8 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     private void initContext() {
-        remoteStorageManagers = TieredStorageTestHarness.remoteStorageManagers(cluster.aliveBrokers().values());
-        localStorages = TieredStorageTestHarness.localStorages(cluster.aliveBrokers().values());
+        remoteStorageManagers = TieredStorageTestUtils.remoteStorageManagers(cluster.aliveBrokers().values());
+        localStorages = TieredStorageTestUtils.localStorages(cluster.aliveBrokers().values());
     }
 
     public void createTopic(TopicSpec spec) throws ExecutionException, InterruptedException {
@@ -260,7 +261,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
                                    boolean isStopped) throws IOException {
         BrokerLocalStorage brokerLocalStorage;
         if (isStopped) {
-            brokerLocalStorage = TieredStorageTestHarness.localStorages(cluster.brokers().values())
+            brokerLocalStorage = TieredStorageTestUtils.localStorages(cluster.brokers().values())
                     .stream()
                     .filter(bls -> bls.getBrokerId() == brokerId)
                     .findFirst()
