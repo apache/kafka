@@ -36,28 +36,36 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.share.LogReader;
+import org.apache.kafka.server.storage.log.FetchIsolation;
+import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-
+import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +88,8 @@ public class ShareGroupDLQStateManager {
     private final Time time;
     private final Timer timer;
     private final ShareGroupDLQMetadataCacheHelper cacheHelper;
+    private final LogReader logReader;
+    private final int maxFetchBytes;
     public static final long REQUEST_BACKOFF_MS = 1_000L;
     public static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
     private static final int MAX_REQUEST_ATTEMPTS = 5;
@@ -91,7 +101,7 @@ public class ShareGroupDLQStateManager {
     private final Map<Node, List<ProduceRequestHandler>> nodeRPCMap = new HashMap<>();
     private final Object nodeMapLock = new Object();
 
-    public ShareGroupDLQStateManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
+    public ShareGroupDLQStateManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer, int maxFetchBytes, LogReader logReader) {
         if (client == null) {
             throw new IllegalArgumentException("Kafkaclient must not be null.");
         }
@@ -108,9 +118,15 @@ public class ShareGroupDLQStateManager {
             throw new IllegalArgumentException("Timer must not be null.");
         }
 
+        if (logReader == null) {
+            throw new IllegalArgumentException("LogReader must not be null.");
+        }
+
         this.time = time;
         this.timer = timer;
         this.cacheHelper = cacheHelper;
+        this.logReader = logReader;
+        this.maxFetchBytes = maxFetchBytes;
         this.sender = new SendThread(
             "ShareGroupDLQSendThread",
             client,
@@ -191,6 +207,7 @@ public class ShareGroupDLQStateManager {
         private Node dlqPartitionLeaderNode;
         private int dlqDestinationPartition;
         private ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
+        private List<Record> originalRecordData;
 
         public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
         public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
@@ -322,10 +339,19 @@ public class ShareGroupDLQStateManager {
         }
 
         public ProduceRequestData.TopicProduceData topicProduceData() {
+            originalRecordData = fetchRecordData();
             List<SimpleRecord> simpleRecords = new ArrayList<>();
             for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
                 long timestamp = time.hiResClockMs();
-                simpleRecords.add(new SimpleRecord(timestamp, (byte[]) null, null, headers(i)));
+                int recordIndex = (int) (i - param.firstOffset());
+                ByteBuffer key = null;
+                ByteBuffer value = null;
+                if (originalRecordData.size() > recordIndex) {
+                    Record record = originalRecordData.get(recordIndex);
+                    key = record.hasKey() ? record.key() : null;
+                    value = record.hasValue() ? record.value() : null;
+                }
+                simpleRecords.add(new SimpleRecord(timestamp, key, value, headers(i)));
             }
 
             MemoryRecords records = MemoryRecords.withRecords(
@@ -620,6 +646,61 @@ public class ShareGroupDLQStateManager {
                         param, dlqPartitionLeaderNode(), clientResponseErrorMessage);
                     requestErrorResponse(clientResponseError.exception());
             }
+        }
+
+        private List<Record> fetchRecordData() {
+            if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
+                if (originalRecordData != null && !originalRecordData.isEmpty()) {
+                    return originalRecordData;
+                }
+
+                TopicIdPartition tp = param.topicIdPartition();
+
+                FetchParams fetchParams = new FetchParams(
+                    FetchRequest.CONSUMER_REPLICA_ID,           // -1, reading as a consumer
+                    -1,                                         // replicaEpoch
+                    0L,                                         // maxWaitMs - don't block
+                    1,                                          // minBytes
+                    maxFetchBytes,                              // maxBytes
+                    FetchIsolation.HIGH_WATERMARK,              // or LOG_END if you want uncommitted
+                    Optional.empty()                            // clientMetadata
+                );
+
+                long nextOffset = param.firstOffset();
+                long endOffset = param.lastOffset();
+
+                List<Record> records = new ArrayList<>();
+                LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
+                LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
+                maxBytesMap.put(tp, maxFetchBytes);
+
+                while (nextOffset <= endOffset) {
+                    offsets.put(tp, nextOffset);
+
+                    LinkedHashMap<TopicIdPartition, LogReadResult> result =
+                        logReader.read(fetchParams, Set.of(tp), offsets, maxBytesMap);
+
+                    LogReadResult res = result.get(param.topicIdPartition());
+                    if (res == null || res.error().code() != Errors.NONE.code()) {
+                        log.warn("Unable to fetch actual record at offset {} for handler {}.", nextOffset, this);
+                        return List.of();
+                    }
+
+                    boolean progressed = false;
+                    for (RecordBatch batch : res.info().records.batches()) {
+                        for (Record record : batch) {
+                            if (record.offset() < param.firstOffset()) continue;
+                            if (record.offset() > param.lastOffset()) return records;   //done
+                            records.add(record);
+                            nextOffset = record.offset() + 1;
+                            progressed = true;
+                        }
+                    }
+                    if (!progressed) break; // no more records available (reached HWM/LEO)
+                }
+                return records;
+            }
+            return List.of();
         }
     }
 
