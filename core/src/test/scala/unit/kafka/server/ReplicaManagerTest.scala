@@ -47,8 +47,8 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.server.share.LogReader;
-import org.apache.kafka.server.share.PartitionMetadataProvider;
+import org.apache.kafka.server.share.LogReader
+import org.apache.kafka.server.share.PartitionMetadataProvider
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
