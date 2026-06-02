@@ -125,7 +125,6 @@ public class ShareGroupDLQStateManager {
         if (isStarted.compareAndSet(false, true)) {
             log.info("Starting ShareGroupDLQStateManager");
             this.sender.start();
-            isStarted.set(true);
         }
     }
 

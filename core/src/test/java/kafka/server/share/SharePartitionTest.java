@@ -2793,6 +2793,7 @@ public class SharePartitionTest {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
+            .withDelayedRequestNotifier(replicaManager::completeDelayedShareFetchRequest)
             .withState(SharePartitionState.ACTIVE)
             .build();
 
