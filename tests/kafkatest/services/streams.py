@@ -452,7 +452,7 @@ class StreamsBrokerDownResilienceService(StreamsTestBaseService):
         self.EXTRA_CONFIGS = extra_configs or {}
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.GROUP_PROTOCOL: self.GROUP_PROTOCOL,
                       # Required configs for broker down resilience
