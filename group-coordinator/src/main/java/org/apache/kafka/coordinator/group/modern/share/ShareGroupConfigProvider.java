@@ -106,7 +106,7 @@ public class ShareGroupConfigProvider {
      * is present, then the value from the group config is used. Otherwise, empty optional is returned.
      *
      * @param groupId The group id for which the DLQ topic name is to be fetched.
-     * @return DLQ topic name for the share group.
+     * @return Optional representing DLQ topic name for the share group, empty if not found.
      */
     public Optional<String> errorsDLQTopicName(String groupId) {
         return manager.groupConfig(groupId)
