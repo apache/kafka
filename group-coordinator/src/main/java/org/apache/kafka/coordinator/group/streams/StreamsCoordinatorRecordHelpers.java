@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
@@ -30,6 +31,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -256,6 +259,54 @@ public class StreamsCoordinatorRecordHelpers {
         return CoordinatorRecord.tombstone(
             new StreamsGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId)
+        );
+    }
+
+    public static CoordinatorRecord newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(
+            String groupId,
+            int assignmentEpoch,
+            Map<String, List<Uuid>> subTopologyIdAndTopicIds
+    ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(subTopologyIdAndTopicIds, "subTopologyIdAndTopicIds should not be null here");
+
+        StreamsGroupTargetAssignmentResolvedTopicIdsKey key = new StreamsGroupTargetAssignmentResolvedTopicIdsKey()
+                .setGroupId(groupId);
+
+        List<StreamsGroupTargetAssignmentResolvedTopicIdsValue.ResolvedTopicIds> resolvedTopicIds = subTopologyIdAndTopicIds.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> {
+                    StreamsGroupTargetAssignmentResolvedTopicIdsValue.ResolvedTopicIds ids = 
+                            new StreamsGroupTargetAssignmentResolvedTopicIdsValue.ResolvedTopicIds();
+                    ids.setSubtopologyId(entry.getKey());
+                    ids.setTopicIds(entry.getValue());
+                    return ids;
+                })
+                .toList();
+
+        StreamsGroupTargetAssignmentResolvedTopicIdsValue value = new StreamsGroupTargetAssignmentResolvedTopicIdsValue()
+                .setAssignmentEpoch(assignmentEpoch)
+                .setResolvedTopicIdsBySubtopology(resolvedTopicIds);
+        return CoordinatorRecord.record(key, new ApiMessageAndVersion(value, (short) 0)
+        );
+    }
+
+    /**
+     * Creates a StreamsGroupTargetAssignmentResolvedTopicIds tombstone.
+     *
+     * @param groupId The streams group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newStreamsGroupTargetAssignmentResolvedTopicIdsTombstoneRecord(
+            String groupId
+            
+    ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+
+        return CoordinatorRecord.tombstone(
+                new StreamsGroupTargetAssignmentResolvedTopicIdsKey()
+                        .setGroupId(groupId)
         );
     }
 

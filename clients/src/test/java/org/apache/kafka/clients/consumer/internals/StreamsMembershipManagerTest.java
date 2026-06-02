@@ -73,12 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class StreamsMembershipManagerTest {
@@ -130,7 +125,8 @@ public class StreamsMembershipManagerTest {
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"),
             time,
-            metrics
+            metrics,
+            mock(ConsumerMetadata.class)
         );
         membershipManager.registerStateListener(memberStateListener);
         verifyInStateUnsubscribed(membershipManager);

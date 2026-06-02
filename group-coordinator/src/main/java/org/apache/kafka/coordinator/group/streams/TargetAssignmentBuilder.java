@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -95,6 +96,11 @@ public class TargetAssignmentBuilder {
      * The topology.
      */
     private ConfiguredTopology topology;
+
+    /**
+     * The topic ids per sub-topology.
+     */
+    private Map<String, List<Uuid>> topicIdsPerSubTopology;
 
     /**
      * The static members in the group.
@@ -184,6 +190,13 @@ public class TargetAssignmentBuilder {
         CoordinatorMetadataImage metadataImage
     ) {
         this.metadataImage = metadataImage;
+        return this;
+    }
+
+    public TargetAssignmentBuilder withResolvedTopicIdsPerSubTopology(
+            Map<String, List<Uuid>> resolvedTopicIdsPerSubTopology
+    ) {
+        this.topicIdsPerSubTopology = resolvedTopicIdsPerSubTopology;
         return this;
     }
 
@@ -334,6 +347,17 @@ public class TargetAssignmentBuilder {
             groupEpoch,
             time.milliseconds()
         ));
+        
+        // TODO: Should cover all test cases. 
+        // Temporarily insert this for POC.
+        if (topicIdsPerSubTopology != null) {
+            // Bump the target resolved topic ids.
+            records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(
+                    groupId,
+                    groupEpoch,
+                    topicIdsPerSubTopology
+            ));    
+        }
 
         return new TargetAssignmentResult(records, newTargetAssignment);
     }

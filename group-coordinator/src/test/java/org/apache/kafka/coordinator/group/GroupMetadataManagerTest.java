@@ -1182,6 +1182,7 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)
             )));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 100, 12345L));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(groupId, 100, Map.of(subtopology1, List.of(fooTopicId))));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
 
         // Member rejoins with epoch=0 - should succeed per KIP-848.
@@ -1206,6 +1207,11 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.TaskIds()
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1, 2))))
+                .setResolvedTopicIdsBySubtopology(List.of(
+                    new StreamsGroupHeartbeatResponseData.ResolvedTopicIds()
+                        .setSubtopologyId(subtopology1)
+                        .setTopicIds(List.of(fooTopicId))
+                ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
@@ -11491,6 +11497,7 @@ public class GroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(groupId),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsTombstoneRecord(groupId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId)
@@ -19088,6 +19095,10 @@ public class GroupMetadataManagerTest {
                     new StreamsGroupHeartbeatResponseData.TaskIds()
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
+                .setResolvedTopicIdsBySubtopology(List.of(
+                    new StreamsGroupHeartbeatResponseData.ResolvedTopicIds()
+                        .setSubtopologyId(subtopology1)
+                        .setTopicIds(List.of(fooTopicId))))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
@@ -19265,6 +19276,59 @@ public class GroupMetadataManagerTest {
                 .setTaskOffsetIntervalMs(60_000),
             result.response().data()
         );
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatAssignmentDelayedWhenTopicIdMissing() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                    .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(
+                TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1)
+            ))
+        );
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+        );
+
+        StreamsGroupHeartbeatResponseData response = result.response().data();
+        assertEquals(memberId, response.memberId());
+        assertEquals(List.of(), response.activeTasks());
+        assertEquals(List.of(), response.standbyTasks());
+        assertEquals(List.of(), response.warmupTasks());
+        assertEquals(List.of(), response.resolvedTopicIdsBySubtopology());
+        assertEquals(2, response.status().size());
+        assertEquals(Status.MISSING_SOURCE_TOPICS.code(), response.status().get(0).statusCode());
+        assertEquals("One or more source topic's id are missing.", response.status().get(0).statusDetail());
+        assertEquals(Status.MISSING_SOURCE_TOPICS.code(), response.status().get(1).statusCode());
+        assertEquals("Source topics foo are missing.", response.status().get(1).statusDetail());
+        assertFalse(result.records().stream().anyMatch(
+            record -> record.key() instanceof org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsKey
+        ));
     }
 
     @Test
@@ -21143,6 +21207,7 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(streamsGroupId),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsTombstoneRecord(streamsGroupId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(streamsGroupId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(streamsGroupId)
         );
@@ -22336,6 +22401,55 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord("foo", 10, 12345L));
         assertEquals(10, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
         assertEquals(12345L, context.groupMetadataManager.streamsGroup("foo").assignmentTimestamp());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentResolvedTopicIds() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(
+            "foo",
+            10,
+            Map.of("subtopology-1", List.of(topicId))
+        ));
+
+        assertEquals(10, context.groupMetadataManager.streamsGroup("foo").targetAssignmentResolvedTopicIdsAssignmentEpoch());
+        assertEquals(
+            Map.of("subtopology-1", List.of(topicId)),
+            context.groupMetadataManager.streamsGroup("foo").targetAssignmentResolvedTopicIdPerSubTopology()
+        );
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentResolvedTopicIdsTombstoneExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Uuid topicId = Uuid.randomUuid();
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(
+            "foo",
+            10,
+            Map.of("subtopology-1", List.of(topicId))
+        ));
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsTombstoneRecord("foo"));
+
+        assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").targetAssignmentResolvedTopicIdsAssignmentEpoch());
+        assertEquals(Map.of(), context.groupMetadataManager.streamsGroup("foo").targetAssignmentResolvedTopicIdPerSubTopology());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentResolvedTopicIdsTombstoneNonExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsTombstoneRecord("foo"));
+
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
     }
 
     @Test
@@ -27758,6 +27872,11 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology)
                         .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                 ))
+                .setResolvedTopicIdsBySubtopology(List.of(
+                    new StreamsGroupHeartbeatResponseData.ResolvedTopicIds()
+                        .setSubtopologyId(subtopology)
+                        .setTopicIds(List.of(fooTopicId))
+                ))
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStatus(List.of())
@@ -27785,6 +27904,11 @@ public class GroupMetadataManagerTest {
                         TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2, 3, 4, 5)
                     )),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
+                StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(
+                    groupId,
+                    2,
+                    Map.of(subtopology, List.of(fooTopicId))
+                ),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember1)
             ),
             result1.records()
@@ -27823,6 +27947,11 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setEndpointInformationEpoch(0)
+                .setResolvedTopicIdsBySubtopology(List.of(
+                        new StreamsGroupHeartbeatResponseData.ResolvedTopicIds()
+                                .setSubtopologyId(subtopology)
+                                .setTopicIds(List.of(fooTopicId))
+                ))
                 .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")))
@@ -27863,6 +27992,10 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
                 .setEndpointInformationEpoch(0)
+                .setResolvedTopicIdsBySubtopology(List.of(
+                        new StreamsGroupHeartbeatResponseData.ResolvedTopicIds()
+                                .setSubtopologyId(subtopology)
+                                .setTopicIds(List.of(fooTopicId))))
                 .setStatus(List.of())
                 .setTaskOffsetIntervalMs(60_000),
             result3.response().data()
@@ -27887,6 +28020,7 @@ public class GroupMetadataManagerTest {
                         ))
                 ),
                 List.of(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 3, context.time.milliseconds())),
+                List.of(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentResolvedTopicIdsRecord(groupId, 3, Map.of(subtopology, List.of(fooTopicId)))),
                 List.of(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember3))
             ),
             result3.records()

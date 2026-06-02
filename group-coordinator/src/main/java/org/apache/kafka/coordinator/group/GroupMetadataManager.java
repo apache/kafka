@@ -134,6 +134,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentResolvedTopicIdsValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -156,6 +158,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
+import org.apache.kafka.coordinator.group.streams.TasksTupleAndResolvedTopicIds;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
@@ -304,19 +307,23 @@ public class GroupMetadataManager {
             );
         }
 
-        private static UpdateTargetAssignmentResult<TasksTuple> fromLastTargetAssignment(
+        private static UpdateTargetAssignmentResult<TasksTupleAndResolvedTopicIds> fromLastTargetAssignment(
             StreamsGroup group,
             Optional<StreamsGroupMember> member
         ) {
             if (member.isPresent()) {
                 return new UpdateTargetAssignmentResult<>(
                     group.assignmentEpoch(),
-                    group.targetAssignment(member.get().memberId())
+                    new TasksTupleAndResolvedTopicIds(
+                        group.targetAssignment(member.get().memberId()),
+                        group.targetAssignmentResolvedTopicIdPerSubTopology()    
+                    )
+                    
                 );
             } else {
                 return new UpdateTargetAssignmentResult<>(
                     group.assignmentEpoch(),
-                    TasksTuple.EMPTY
+                    TasksTupleAndResolvedTopicIds.EMPTY
                 );
             }
         }
@@ -2107,7 +2114,7 @@ public class GroupMetadataManager {
         // 4. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
         // replaces an existing static member.
         // The delta between the existing and the new target assignment is persisted to the partition.
-        UpdateTargetAssignmentResult<TasksTuple> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
+        UpdateTargetAssignmentResult<TasksTupleAndResolvedTopicIds> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
             group,
             groupEpoch,
             Optional.of(updatedMember),
@@ -2127,7 +2134,7 @@ public class GroupMetadataManager {
             group::currentStandbyTaskProcessIds,
             group::currentWarmupTaskProcessIds,
             updateTargetAssignmentResult.targetAssignmentEpoch(),
-            updateTargetAssignmentResult.targetAssignment(),
+            updateTargetAssignmentResult.targetAssignment().tasksTuple(),
             ownedActiveTasks,
             ownedStandbyTasks,
             ownedWarmupTasks,
@@ -2148,7 +2155,7 @@ public class GroupMetadataManager {
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
-        if (memberEpoch == 0 || hasAssignedTasksChanged(member, updatedMember)) {
+        if (memberEpoch == 0 || hasAssignedTasksChanged(member, updatedMember) || memberEpoch != updatedMember.memberEpoch()) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
@@ -2158,6 +2165,17 @@ public class GroupMetadataManager {
                 // Otherwise, bump the endpoint information epoch
                 group.setEndpointInformationEpoch(group.endpointInformationEpoch() + 1);
             }
+            List<StreamsGroupHeartbeatResponseData.ResolvedTopicIds> responseResolvedTopicIds = updateTargetAssignmentResult
+                    .targetAssignment()
+                    .resolvedTopicIds()
+                    .entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(entry -> new StreamsGroupHeartbeatResponseData.ResolvedTopicIds()
+                            .setSubtopologyId(entry.getKey())
+                            .setTopicIds(entry.getValue())
+                    ).toList();
+
+            response.setResolvedTopicIdsBySubtopology(responseResolvedTopicIds);
         }
 
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
@@ -4031,7 +4049,7 @@ public class GroupMetadataManager {
      * @param returnedStatus       A mutable collection of status to be returned in the response.
      * @return The new target assignment for the updated member, or EMPTY if no member specified.
      */
-    private UpdateTargetAssignmentResult<TasksTuple> maybeUpdateStreamsTargetAssignment(
+    private UpdateTargetAssignmentResult<TasksTupleAndResolvedTopicIds> maybeUpdateStreamsTargetAssignment(
         StreamsGroup group,
         int groupEpoch,
         Optional<StreamsGroupMember> updatedMember,
@@ -4051,7 +4069,7 @@ public class GroupMetadataManager {
 
             return new UpdateTargetAssignmentResult<>(
                 group.assignmentEpoch(),
-                TasksTuple.EMPTY
+                TasksTupleAndResolvedTopicIds.EMPTY
             );
         }
 
@@ -4060,6 +4078,23 @@ public class GroupMetadataManager {
             return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
         }
 
+        Map<String, List<Uuid>> resolvedTopicIdsPerSubTopology;
+        if (!configuredTopology.isReady()) {
+            resolvedTopicIdsPerSubTopology = Map.of();
+        } else {
+            Optional<Map<String, List<Uuid>>> maybeResolvedTopicIds = 
+                    resolveTopicIdsBySubtopology(configuredTopology, metadataImage);
+
+            if (maybeResolvedTopicIds.isEmpty()) {
+                returnedStatus.ifPresent(statusList -> statusList.add(
+                        new Status()
+                                .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                                .setStatusDetail("Assignment delayed because some of topic name missed their topic id.")
+                ));
+                return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
+            }
+            resolvedTopicIdsPerSubTopology = maybeResolvedTopicIds.get();
+        }
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
             group.assignmentTimestamp(),
             streamsGroupAssignmentIntervalMs(group.groupId()),
@@ -4089,6 +4124,7 @@ public class GroupMetadataManager {
                 .withTopology(configuredTopology)
                 .withStaticMembers(group.staticMembers())
                 .withMetadataImage(metadataImage)
+                .withResolvedTopicIdsPerSubTopology(resolvedTopicIdsPerSubTopology)
                 .withTargetAssignment(group.targetAssignment());
 
             updatedMember.ifPresent(member ->
@@ -4109,11 +4145,13 @@ public class GroupMetadataManager {
             }
 
             records.addAll(assignmentResult.records());
-
-            return new UpdateTargetAssignmentResult<>(
-                groupEpoch,
-                updatedMember.map(member -> assignmentResult.targetAssignment().get(member.memberId()))
-                    .orElse(TasksTuple.EMPTY)
+            return new UpdateTargetAssignmentResult<>(groupEpoch,
+                    new TasksTupleAndResolvedTopicIds(
+                            updatedMember
+                                    .map(member -> assignmentResult.targetAssignment().get(member.memberId()))
+                                    .orElse(TasksTuple.EMPTY), 
+                            resolvedTopicIdsPerSubTopology
+                    )
             );
         } catch (TaskAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
@@ -4123,6 +4161,33 @@ public class GroupMetadataManager {
         }
     }
 
+    private Optional<Map<String, List<Uuid>>> resolveTopicIdsBySubtopology(
+            ConfiguredTopology updatedConfiguredTopology,
+            CoordinatorMetadataImage metadataImage) {
+
+        Map<String, List<Uuid>> resolvedTopicIdsPerSubTopology = new HashMap<>();
+        if (updatedConfiguredTopology.subtopologies().isPresent()) {
+            SortedMap<String, ConfiguredSubtopology> stringConfiguredSubtopologySortedMap = updatedConfiguredTopology
+                    .subtopologies()
+                    .get();
+            for (Map.Entry<String, ConfiguredSubtopology> entry : stringConfiguredSubtopologySortedMap.entrySet()) {
+                String subTopologyId = entry.getKey();
+                Set<Uuid> topicIds = new HashSet<>();
+                // TODO. Do we consider all kind of topics as well? (internal topic, sink topic and so on.)
+                for (String topicName : entry.getValue().sourceTopics()) {
+                    Optional<CoordinatorMetadataImage.TopicMetadata> topicMetadata = metadataImage.topicMetadata(topicName);
+                    if (topicMetadata.isEmpty()) {
+                        log.warn("The topic id is missed for topic name '{}'", topicName);
+                        return Optional.empty();
+                    }
+                    topicIds.add(topicMetadata.get().id());
+                }
+                resolvedTopicIdsPerSubTopology.put(subTopologyId, topicIds.stream().sorted().toList());
+            }
+        }
+        return Optional.of(resolvedTopicIdsPerSubTopology);
+    }
+    
     /**
      * Fires the initial rebalance for a streams group when the delay timer expires.
      * Computes and persists target assignment for all members if conditions are met.
@@ -5841,6 +5906,37 @@ public class GroupMetadataManager {
                     + " but the assignment still has " + streamsGroup.targetAssignment().size() + " members.");
             }
             streamsGroup.setTargetAssignmentMetadata(-1, 0L);
+        }
+    }
+
+    /**
+     * TBD. should be updated.
+     *
+     * @param key   A StreamsGroupTargetAssignmentResolvedTopicIdsKey key.
+     * @param value A StreamsGroupTargetAssignmentResolvedTopicIdsValue record.
+     */
+    public void replay(
+            StreamsGroupTargetAssignmentResolvedTopicIdsKey key,
+            StreamsGroupTargetAssignmentResolvedTopicIdsValue value
+    ) {
+        String groupId = key.groupId();
+
+        if (value != null) {
+            StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
+            Map<String, List<Uuid>> resolvedTopicIdsPerSubTopology = new HashMap<>();
+            for (StreamsGroupTargetAssignmentResolvedTopicIdsValue.ResolvedTopicIds resolvedTopicIds : value.resolvedTopicIdsBySubtopology()) {
+                resolvedTopicIdsPerSubTopology.put(resolvedTopicIds.subtopologyId(), resolvedTopicIds.topicIds());
+            }
+            streamsGroup.setTargetAssignmentResolvedTopicIds(value.assignmentEpoch(), resolvedTopicIdsPerSubTopology);
+        } else {
+            StreamsGroup streamsGroup;
+            try {
+                streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, false);
+            } catch (GroupIdNotFoundException ex) {
+                // If the group does not exist, we can ignore the tombstone.
+                return;
+            }
+            streamsGroup.setTargetAssignmentResolvedTopicIds(-1, new HashMap<>());
         }
     }
 

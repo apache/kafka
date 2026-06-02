@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -82,6 +83,7 @@ public class StreamsMembershipManager implements RequestManager {
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.emptyMap(),
             false
         );
 
@@ -89,17 +91,20 @@ public class StreamsMembershipManager implements RequestManager {
         public final Map<String, SortedSet<Integer>> activeTasks;
         public final Map<String, SortedSet<Integer>> standbyTasks;
         public final Map<String, SortedSet<Integer>> warmupTasks;
+        public final Map<String, SortedSet<Uuid>> resolvedTopicIds;
         public final boolean isGroupReady;
 
         public LocalAssignment(final long localEpoch,
                                final Map<String, SortedSet<Integer>> activeTasks,
                                final Map<String, SortedSet<Integer>> standbyTasks,
                                final Map<String, SortedSet<Integer>> warmupTasks,
+                               final Map<String, SortedSet<Uuid>> resolvedTopicIds,
                                final boolean isGroupReady) {
             this.localEpoch = localEpoch;
             this.activeTasks = activeTasks;
             this.standbyTasks = standbyTasks;
             this.warmupTasks = warmupTasks;
+            this.resolvedTopicIds = resolvedTopicIds;
             this.isGroupReady = isGroupReady;
             if (localEpoch == NONE_EPOCH &&
                     (!activeTasks.isEmpty() || !standbyTasks.isEmpty() || !warmupTasks.isEmpty())) {
@@ -110,18 +115,20 @@ public class StreamsMembershipManager implements RequestManager {
         Optional<LocalAssignment> updateWith(final Map<String, SortedSet<Integer>> activeTasks,
                                              final Map<String, SortedSet<Integer>> standbyTasks,
                                              final Map<String, SortedSet<Integer>> warmupTasks,
+                                             Map<String, SortedSet<Uuid>> resolvedTopicIds,
                                              final boolean isGroupReady) {
             if (localEpoch != NONE_EPOCH &&
                     activeTasks.equals(this.activeTasks) &&
                     standbyTasks.equals(this.standbyTasks) &&
                     warmupTasks.equals(this.warmupTasks) &&
+                    resolvedTopicIds.equals(this.resolvedTopicIds) &&
                     isGroupReady == this.isGroupReady
             ) {
                 return Optional.empty();
             }
 
             long nextLocalEpoch = localEpoch + 1;
-            return Optional.of(new LocalAssignment(nextLocalEpoch, activeTasks, standbyTasks, warmupTasks, isGroupReady));
+            return Optional.of(new LocalAssignment(nextLocalEpoch, activeTasks, standbyTasks, warmupTasks, resolvedTopicIds, isGroupReady));
         }
 
         @Override
@@ -131,6 +138,7 @@ public class StreamsMembershipManager implements RequestManager {
                 ", activeTasks=" + activeTasks +
                 ", standbyTasks=" + standbyTasks +
                 ", warmupTasks=" + warmupTasks +
+                ", resolvedTopicIds=" + resolvedTopicIds +
                 ", isGroupReady=" + isGroupReady +
                 '}';
         }
@@ -144,12 +152,13 @@ public class StreamsMembershipManager implements RequestManager {
                 Objects.equals(activeTasks, that.activeTasks) &&
                 Objects.equals(standbyTasks, that.standbyTasks) &&
                 Objects.equals(warmupTasks, that.warmupTasks) &&
+                Objects.equals(resolvedTopicIds, that.resolvedTopicIds) &&
                 isGroupReady == that.isGroupReady;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(localEpoch, activeTasks, standbyTasks, warmupTasks, isGroupReady);
+            return Objects.hash(localEpoch, activeTasks, standbyTasks, warmupTasks, resolvedTopicIds, isGroupReady);
         }
     }
 
@@ -290,6 +299,10 @@ public class StreamsMembershipManager implements RequestManager {
      */
     private boolean isPollTimerExpired;
 
+    private final ConsumerMetadata metadata;
+
+    private final Map<Uuid, String> assignedTopicNamesCache;
+
     /**
      * Constructs the Streams membership manager.
      *
@@ -308,7 +321,9 @@ public class StreamsMembershipManager implements RequestManager {
                                     final BackgroundEventHandler backgroundEventHandler,
                                     final LogContext logContext,
                                     final Time time,
-                                    final Metrics metrics) {
+                                    final Metrics metrics, 
+                                    final ConsumerMetadata metadata
+                                    ) {
         log = logContext.logger(StreamsMembershipManager.class);
         this.state = MemberState.UNSUBSCRIBED;
         this.groupId = groupId;
@@ -316,6 +331,8 @@ public class StreamsMembershipManager implements RequestManager {
         this.backgroundEventHandler = backgroundEventHandler;
         this.streamsRebalanceData = streamsRebalanceData;
         this.subscriptionState = subscriptionState;
+        this.metadata = metadata;
+        this.assignedTopicNamesCache = new HashMap<>();
         metricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
         this.time = time;
     }
@@ -765,6 +782,7 @@ public class StreamsMembershipManager implements RequestManager {
         final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks = responseData.activeTasks();
         final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks = responseData.standbyTasks();
         final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks = responseData.warmupTasks();
+        final List<StreamsGroupHeartbeatResponseData.ResolvedTopicIds> resolvedTopicIds = responseData.resolvedTopicIdsBySubtopology();
         final boolean isGroupReady = isGroupReady(responseData.status());
 
         if (activeTasks != null && standbyTasks != null && warmupTasks != null) {
@@ -779,9 +797,11 @@ public class StreamsMembershipManager implements RequestManager {
                 toTasksAssignment(activeTasks),
                 toTasksAssignment(standbyTasks),
                 toTasksAssignment(warmupTasks),
+                toSortedTopicIds(resolvedTopicIds),
                 isGroupReady
             );
-        } else if (responseData.activeTasks() != null || responseData.standbyTasks() != null || responseData.warmupTasks() != null) {
+        } else if (responseData.activeTasks() != null || responseData.standbyTasks() != null || responseData.warmupTasks() != null || 
+                responseData.resolvedTopicIdsBySubtopology() != null) {
             throw new IllegalStateException("Invalid response data, task collections must be all null or all non-null: "
                 + responseData);
         } else if (isGroupReady != targetAssignment.isGroupReady) {
@@ -791,6 +811,7 @@ public class StreamsMembershipManager implements RequestManager {
                 targetAssignment.activeTasks,
                 targetAssignment.standbyTasks,
                 targetAssignment.warmupTasks,
+                targetAssignment.resolvedTopicIds,
                 isGroupReady
             );
         }
@@ -947,6 +968,14 @@ public class StreamsMembershipManager implements RequestManager {
             .collect(Collectors.toMap(StreamsGroupHeartbeatResponseData.TaskIds::subtopologyId, taskId -> new TreeSet<>(taskId.partitions())));
     }
 
+    private static Map<String, SortedSet<Uuid>> toSortedTopicIds(final List<StreamsGroupHeartbeatResponseData.ResolvedTopicIds> resolvedTopicIds) {
+        final Map<String, SortedSet<Uuid>> result = new HashMap<>();
+        for (StreamsGroupHeartbeatResponseData.ResolvedTopicIds resolvedTopicId : resolvedTopicIds) {
+            result.put(resolvedTopicId.subtopologyId(), new TreeSet<>(resolvedTopicId.topicIds()));
+        }
+        return result;
+    }
+
     /**
      * Closes the member's participation in the group, honoring the requested {@link CloseOptions.GroupMembershipOperation}.
      * Stores the operation and follows the normal leaving path; {@link StreamsGroupHeartbeatRequestManager}
@@ -1014,7 +1043,7 @@ public class StreamsMembershipManager implements RequestManager {
 
     private CompletableFuture<Void> releaseActiveTasks() {
         if (memberEpoch > 0) {
-            return revokeActiveTasks(toTaskIdSet(currentAssignment.activeTasks));
+            return revokeActiveTasks(toTaskIdSet(currentAssignment.activeTasks), subscriptionState.assignedPartitions());
         } else {
             return releaseLostActiveTasks();
         }
@@ -1053,8 +1082,9 @@ public class StreamsMembershipManager implements RequestManager {
     private void processAssignmentReceived(Map<String, SortedSet<Integer>> activeTasks,
                                            Map<String, SortedSet<Integer>> standbyTasks,
                                            Map<String, SortedSet<Integer>> warmupTasks,
+                                           Map<String, SortedSet<Uuid>> resolvedTopicIds,
                                            boolean isGroupReady) {
-        replaceTargetAssignmentWithNewAssignment(activeTasks, standbyTasks, warmupTasks, isGroupReady);
+        replaceTargetAssignmentWithNewAssignment(activeTasks, standbyTasks, warmupTasks, resolvedTopicIds, isGroupReady);
         if (!targetAssignmentReconciled()) {
             transitionTo(MemberState.RECONCILING);
         } else {
@@ -1074,8 +1104,9 @@ public class StreamsMembershipManager implements RequestManager {
     private void replaceTargetAssignmentWithNewAssignment(Map<String, SortedSet<Integer>> activeTasks,
                                                           Map<String, SortedSet<Integer>> standbyTasks,
                                                           Map<String, SortedSet<Integer>> warmupTasks,
+                                                          Map<String, SortedSet<Uuid>> resolvedTopicIds,
                                                           boolean isGroupReady) {
-        targetAssignment.updateWith(activeTasks, standbyTasks, warmupTasks, isGroupReady)
+        targetAssignment.updateWith(activeTasks, standbyTasks, warmupTasks, resolvedTopicIds, isGroupReady)
             .ifPresent(updatedAssignment -> {
                 log.debug("Target assignment updated from {} to {}. Member will reconcile it on the next poll.",
                     targetAssignment, updatedAssignment);
@@ -1103,9 +1134,14 @@ public class StreamsMembershipManager implements RequestManager {
      *  - Another reconciliation is already in progress.
      */
     private void maybeReconcile() {
-        if (targetAssignmentReconciled()) {
+        MaterializationPlan targetMaterializationPlan = buildMaterializationPlan(targetAssignment);
+        final SortedSet<TopicPartition> targetFetchablePartitions = targetMaterializationPlan.fetchablePartitions();
+        final SortedSet<TopicPartition> currentFetchablePartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        currentFetchablePartitions.addAll(subscriptionState.assignedPartitions());
+
+        if (targetAssignmentReconciled() && currentFetchablePartitions.equals(targetFetchablePartitions)) {
             log.trace("Ignoring reconciliation attempt. Target assignment is equal to the " +
-                "current assignment.");
+                "current assignment and the materialized partitions are already applied.");
             return;
         }
         if (reconciliationInProgress) {
@@ -1126,46 +1162,60 @@ public class StreamsMembershipManager implements RequestManager {
         SortedSet<StreamsRebalanceData.TaskId> ownedWarmupTasks = toTaskIdSet(currentAssignment.warmupTasks);
         boolean isGroupReady = targetAssignment.isGroupReady;
 
-        log.info("Assigned tasks with local epoch {} and group {}\n" +
-                "\tMember:                        {}\n" +
-                "\tAssigned active tasks:         {}\n" +
-                "\tOwned active tasks:            {}\n" +
-                "\tActive tasks to revoke:        {}\n" +
-                "\tAssigned standby tasks:        {}\n" +
-                "\tOwned standby tasks:           {}\n" +
-                "\tAssigned warm-up tasks:        {}\n" +
-                "\tOwned warm-up tasks:           {}\n",
-            targetAssignment.localEpoch,
-            isGroupReady ? "is ready" : "is not ready",
-            memberId,
-            assignedActiveTasks,
-            ownedActiveTasks,
-            activeTasksToRevoke,
-            assignedStandbyTasks,
-            ownedStandbyTasks,
-            assignedWarmupTasks,
-            ownedWarmupTasks
-        );
-
-        SortedSet<TopicPartition> ownedTopicPartitionsFromSubscriptionState = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        ownedTopicPartitionsFromSubscriptionState.addAll(subscriptionState.assignedPartitions());
-        SortedSet<TopicPartition> ownedTopicPartitionsFromAssignedTasks =
-            topicPartitionsForActiveTasks(currentAssignment.activeTasks);
-        if (!ownedTopicPartitionsFromAssignedTasks.equals(ownedTopicPartitionsFromSubscriptionState)) {
-            throw new IllegalStateException("Owned partitions from subscription state and owned partitions from " +
-                "assigned active tasks are not equal. " +
-                "Owned partitions from subscription state: " + ownedTopicPartitionsFromSubscriptionState + ", " +
-                "Owned partitions from assigned active tasks: " + ownedTopicPartitionsFromAssignedTasks);
+        if (!targetAssignmentReconciled()) {
+            log.info("Assigned tasks with local epoch {} and group {}\n" +
+                            "\tMember:                        {}\n" +
+                            "\tAssigned active tasks:         {}\n" +
+                            "\tOwned active tasks:            {}\n" +
+                            "\tActive tasks to revoke:        {}\n" +
+                            "\tAssigned standby tasks:        {}\n" +
+                            "\tOwned standby tasks:           {}\n" +
+                            "\tAssigned warm-up tasks:        {}\n" +
+                            "\tOwned warm-up tasks:           {}\n",
+                    targetAssignment.localEpoch,
+                    isGroupReady ? "is ready" : "is not ready",
+                    memberId,
+                    assignedActiveTasks,
+                    ownedActiveTasks,
+                    activeTasksToRevoke,
+                    assignedStandbyTasks,
+                    ownedStandbyTasks,
+                    assignedWarmupTasks,
+                    ownedWarmupTasks
+            );    
         }
-        SortedSet<TopicPartition> assignedTopicPartitions = topicPartitionsForActiveTasks(targetAssignment.activeTasks);
-        SortedSet<TopicPartition> partitionsToRevoke = new TreeSet<>(ownedTopicPartitionsFromSubscriptionState);
-        partitionsToRevoke.removeAll(assignedTopicPartitions);
 
-        final CompletableFuture<Void> tasksRevoked = revokeActiveTasks(activeTasksToRevoke);
+        // SortedSet<TopicPartition> ownedTopicPartitionsFromSubscriptionState = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        // ownedTopicPartitionsFromSubscriptionState.addAll(subscriptionState.assignedPartitions());
+        // SortedSet<TopicPartition> ownedTopicPartitionsFromAssignedTasks =
+        //    topicPartitionsForActiveTasks(currentAssignment.activeTasks);
+        // TODO: Maybe, this require KIP as well.
+        // if (!ownedTopicPartitionsFromAssignedTasks.equals(ownedTopicPartitionsFromSubscriptionState)) {
+        //     throw new IllegalStateException("Owned partitions from subscription state and owned partitions from " +
+        //         "assigned active tasks are not equal. " +
+        //         "Owned partitions from subscription state: " + ownedTopicPartitionsFromSubscriptionState + ", " +
+        //         "Owned partitions from assigned active tasks: " + ownedTopicPartitionsFromAssignedTasks);
+        // }
+        // SortedSet<TopicPartition> assignedTopicPartitions = topicPartitionsForActiveTasks(targetAssignment.activeTasks);
+        // SortedSet<TopicPartition> partitionsToRevoke = new TreeSet<>(ownedTopicPartitionsFromSubscriptionState);
+        // partitionsToRevoke.removeAll(assignedTopicPartitions);
 
+        final SortedSet<TopicPartition> partitionsToRevoke = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        partitionsToRevoke.addAll(currentFetchablePartitions);
+        partitionsToRevoke.removeAll(targetFetchablePartitions);
+        final CompletableFuture<Void> tasksRevoked = revokeActiveTasks(activeTasksToRevoke, partitionsToRevoke);
+        
         final CompletableFuture<Void> tasksRevokedAndAssigned = tasksRevoked.thenCompose(__ -> {
             if (!maybeAbortReconciliation()) {
-                return assignTasks(assignedActiveTasks, ownedActiveTasks, assignedStandbyTasks, assignedWarmupTasks, isGroupReady);
+                return assignTasks(
+                        assignedActiveTasks, 
+                        ownedActiveTasks, 
+                        assignedStandbyTasks, 
+                        assignedWarmupTasks,
+                        targetMaterializationPlan.activeTaskInputPartitions,
+                        targetFetchablePartitions, 
+                        currentFetchablePartitions, 
+                        isGroupReady);
             }
             return CompletableFuture.completedFuture(null);
         });
@@ -1188,8 +1238,13 @@ public class StreamsMembershipManager implements RequestManager {
         });
     }
 
-    private CompletableFuture<Void> revokeActiveTasks(final SortedSet<StreamsRebalanceData.TaskId> activeTasksToRevoke) {
+    private CompletableFuture<Void> revokeActiveTasks(final SortedSet<StreamsRebalanceData.TaskId> activeTasksToRevoke,
+                                                      final Set<TopicPartition> partitionsToRevoke) {
         if (activeTasksToRevoke.isEmpty()) {
+            if (!partitionsToRevoke.isEmpty()) {
+                log.debug("Marking effective partitions pending for revocation: {}", partitionsToRevoke);
+                subscriptionState.markPendingRevocation(partitionsToRevoke);    
+            }
             return CompletableFuture.completedFuture(null);
         }
 
@@ -1197,8 +1252,7 @@ public class StreamsMembershipManager implements RequestManager {
             .map(StreamsRebalanceData.TaskId::toString)
             .collect(Collectors.joining(", ")));
 
-        final SortedSet<TopicPartition> partitionsToRevoke = topicPartitionsForActiveTasks(activeTasksToRevoke);
-        log.debug("Marking partitions pending for revocation: {}", partitionsToRevoke);
+        log.debug("Marking effective partitions pending for revocation: {}", partitionsToRevoke);
         subscriptionState.markPendingRevocation(partitionsToRevoke);
 
         CompletableFuture<Void> tasksRevoked = new CompletableFuture<>();
@@ -1219,6 +1273,9 @@ public class StreamsMembershipManager implements RequestManager {
                                                 final SortedSet<StreamsRebalanceData.TaskId> ownedActiveTasks,
                                                 final SortedSet<StreamsRebalanceData.TaskId> standbyTasksToAssign,
                                                 final SortedSet<StreamsRebalanceData.TaskId> warmupTasksToAssign,
+                                                final Map<StreamsRebalanceData.TaskId, Set<TopicPartition>> activeTaskInputPartitions,
+                                                final SortedSet<TopicPartition> targetFetchablePartitions,
+                                                final SortedSet<TopicPartition> currentFetchablePartitions,
                                                 final boolean isGroupReady) {
         log.info("Assigning active tasks {{}}, standby tasks {{}}, and warm-up tasks {{}} to the member.",
             activeTasksToAssign.stream()
@@ -1232,9 +1289,15 @@ public class StreamsMembershipManager implements RequestManager {
                 .collect(Collectors.joining(", "))
         );
 
-        final SortedSet<TopicPartition> partitionsToAssign = topicPartitionsForActiveTasks(activeTasksToAssign);
-        final SortedSet<TopicPartition> partitionsToAssignNotPreviouslyOwned =
-            partitionsToAssignNotPreviouslyOwned(partitionsToAssign, topicPartitionsForActiveTasks(ownedActiveTasks));
+
+        final SortedSet<TopicPartition> partitionsToAssign = targetFetchablePartitions;
+        final SortedSet<TopicPartition> partitionsToAssignNotPreviouslyOwned = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        partitionsToAssignNotPreviouslyOwned.addAll(targetFetchablePartitions);
+        partitionsToAssignNotPreviouslyOwned.removeAll(currentFetchablePartitions);
+
+        // final SortedSet<TopicPartition> partitionsToAssign = topicPartitionsForActiveTasks(activeTasksToAssign);
+        // final SortedSet<TopicPartition> partitionsToAssignNotPreviouslyOwned =
+        //    partitionsToAssignNotPreviouslyOwned(partitionsToAssign, topicPartitionsForActiveTasks(ownedActiveTasks));
 
         // Enqueue event to app thread to apply assignment within poll() and invoke callback.
         // The app thread will trigger ApplyAssignmentEvent to update subscription state on background thread.
@@ -1246,6 +1309,7 @@ public class StreamsMembershipManager implements RequestManager {
                     activeTasksToAssign,
                     standbyTasksToAssign,
                     warmupTasksToAssign,
+                    activeTaskInputPartitions,
                     isGroupReady
                 )
             );
@@ -1270,7 +1334,8 @@ public class StreamsMembershipManager implements RequestManager {
             .map(StreamsRebalanceData.TaskId::toString)
             .collect(Collectors.joining(", ")));
 
-        final SortedSet<TopicPartition> partitionsToRelease = topicPartitionsForActiveTasks(activeTasksToRelease);
+        final SortedSet<TopicPartition> partitionsToRelease = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        partitionsToRelease.addAll(subscriptionState.assignedPartitions());
         log.debug("Marking lost partitions pending for revocation: {}", partitionsToRelease);
         subscriptionState.markPendingRevocation(partitionsToRelease);
 
@@ -1345,6 +1410,94 @@ public class StreamsMembershipManager implements RequestManager {
         final StreamsOnTasksRevokedCallbackNeededEvent onTasksRevokedCallbackNeededEvent = new StreamsOnTasksRevokedCallbackNeededEvent(activeTasksToRevoke);
         backgroundEventHandler.add(onTasksRevokedCallbackNeededEvent);
         return onTasksRevokedCallbackNeededEvent.future();
+    }
+
+    static final class MaterializationPlan {
+        // Assigned tasks and resolved topic.
+        final Map<StreamsRebalanceData.TaskId, Set<TopicPartition>> activeTaskInputPartitions;
+        
+        // Assigned tasks but topic is unresolved.
+        final Set<StreamsRebalanceData.TaskId> unresolvedActiveTasks;
+
+        MaterializationPlan(final Map<StreamsRebalanceData.TaskId, Set<TopicPartition>> activeTaskInputPartitions,
+                            final Set<StreamsRebalanceData.TaskId> unresolvedActiveTasks) {
+            this.activeTaskInputPartitions = Map.copyOf(activeTaskInputPartitions);
+            this.unresolvedActiveTasks = Set.copyOf(unresolvedActiveTasks);
+        }
+
+        SortedSet<TopicPartition> fetchablePartitions() {
+            final SortedSet<TopicPartition> partitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+            activeTaskInputPartitions.values().forEach(partitions::addAll);
+            return partitions;
+        }
+    }
+
+    private MaterializationPlan buildMaterializationPlan(final LocalAssignment assignment) {
+        final Map<StreamsRebalanceData.TaskId, Set<TopicPartition>> activeTaskInputPartitions = new HashMap<>();
+        final Set<StreamsRebalanceData.TaskId> unresolvedActiveTasks = new TreeSet<>();
+        boolean needsMetadataUpdate = false;
+
+        for (final Map.Entry<String, SortedSet<Integer>> taskEntry : assignment.activeTasks.entrySet()) {
+            final String subtopologyId = taskEntry.getKey();
+            final SortedSet<Integer> taskPartitions = taskEntry.getValue();
+            final SortedSet<Uuid> topicIdsForSubtopology =
+                assignment.resolvedTopicIds.getOrDefault(subtopologyId, new TreeSet<>());
+
+            final List<String> resolvedSourceTopicNames = new ArrayList<>();
+            boolean subtopologyResolved = true;
+
+            for (final Uuid topicId : topicIdsForSubtopology) {
+                final Optional<String> maybeTopicName = findTopicNameInGlobalOrLocalCache(topicId);
+                if (maybeTopicName.isEmpty()) {
+                    subtopologyResolved = false;
+                    needsMetadataUpdate = true;
+                    break;
+                }
+                resolvedSourceTopicNames.add(maybeTopicName.get());
+            }
+
+            if (!subtopologyResolved) {
+                for (final int partitionId : taskPartitions) {
+                    unresolvedActiveTasks.add(new StreamsRebalanceData.TaskId(subtopologyId, partitionId));
+                }
+                continue;
+            }
+
+            final StreamsRebalanceData.Subtopology subtopology = streamsRebalanceData.subtopologies().get(subtopologyId);
+            final List<String> inputTopics = new ArrayList<>(resolvedSourceTopicNames);
+            inputTopics.addAll(subtopology.repartitionSourceTopics().keySet());
+
+            for (final int partitionId : taskPartitions) {
+                final StreamsRebalanceData.TaskId taskId = new StreamsRebalanceData.TaskId(subtopologyId, partitionId);
+                final Set<TopicPartition> taskInputPartitions = inputTopics.stream()
+                    .map(topic -> new TopicPartition(topic, partitionId))
+                    .collect(Collectors.toSet());
+                activeTaskInputPartitions.put(taskId, taskInputPartitions);
+            }
+        }
+
+        if (needsMetadataUpdate) {
+            metadata.requestUpdate(true);
+        }
+
+        return new MaterializationPlan(activeTaskInputPartitions, unresolvedActiveTasks);
+    }
+
+    private Optional<String> findTopicNameInGlobalOrLocalCache(Uuid topicId) {
+        String nameFromMetadataCache = metadata.topicNames().getOrDefault(topicId, null);
+        if (nameFromMetadataCache != null) {
+            // Add topic name to local cache, so it can be reused if included in a next target
+            // assignment if metadata cache not available.
+            assignedTopicNamesCache.put(topicId, nameFromMetadataCache);
+            return Optional.of(nameFromMetadataCache);
+        } else {
+            // Topic ID was not found in metadata. Check if the topic name is in the local
+            // cache of topics currently assigned. This will avoid a metadata request in the
+            // case where the metadata cache may have been flushed right before the
+            // revocation of a previously assigned topic.
+            String nameFromSubscriptionCache = assignedTopicNamesCache.getOrDefault(topicId, null);
+            return Optional.ofNullable(nameFromSubscriptionCache);
+        }
     }
 
     /**

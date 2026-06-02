@@ -17,7 +17,7 @@
   "apiKey": 88,
   "type": "response",
   "name": "StreamsGroupHeartbeatResponse",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -63,6 +63,9 @@
       "about": "Assigned standby tasks for this client. Null if unchanged since last heartbeat." },
     { "name": "WarmupTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Assigned warm-up tasks for this client. Null if unchanged since last heartbeat." },
+    
+    { "name": "ResolvedTopicIdsBySubtopology", "type": "[]ResolvedTopicIds", "versions": "1+", "nullableVersions": "1+", "default": "null",
+      "about": "TBD." },
 
     // IQ-related information
     { "name": "EndpointInformationEpoch", "type": "int32", "versions": "0+",
@@ -111,6 +114,12 @@
         "about": "The subtopology identifier." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions of the input topics processed by this member." }
+    ]},
+    { "name": "ResolvedTopicIds", "versions": "1+", "fields": [
+      { "name": "SubtopologyId", "type": "string", "versions": "1+",
+        "about": "The subtopology identifier." },
+      { "name": "TopicIds", "type": "[]uuid", "versions": "1+",
+        "about": "The topic ids." }
     ]},
     { "name": "Endpoint", "versions": "0+", "fields": [
       { "name": "Host", "type": "string", "versions": "0+",

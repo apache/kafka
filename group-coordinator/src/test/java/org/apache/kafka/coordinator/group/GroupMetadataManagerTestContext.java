@@ -61,47 +61,7 @@ import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.*;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
@@ -1759,6 +1719,13 @@ public class GroupMetadataManagerTestContext {
                 groupMetadataManager.replay(
                     (StreamsGroupTargetAssignmentMetadataKey) key,
                     (StreamsGroupTargetAssignmentMetadataValue) messageOrNull(value)
+                );
+                break;
+
+            case STREAMS_GROUP_TARGET_ASSIGNMENT_RESOLVED_TOPIC_IDS:
+                groupMetadataManager.replay(
+                        (StreamsGroupTargetAssignmentResolvedTopicIdsKey) key,
+                        (StreamsGroupTargetAssignmentResolvedTopicIdsValue) Utils.messageOrNull(value)
                 );
                 break;
 
