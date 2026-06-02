@@ -58,19 +58,13 @@ public class StreamsGroupDescribeRequest extends AbstractRequest {
     public StreamsGroupDescribeResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
             .setThrottleTimeMs(throttleTimeMs);
-        short errorCode = Errors.forException(e).code();
-        boolean topologyRequested = this.data.includeTopologyDescription();
+        // Set error for each group
         this.data.groupIds().forEach(
-            groupId -> {
-                StreamsGroupDescribeResponseData.DescribedGroup group =
-                    new StreamsGroupDescribeResponseData.DescribedGroup()
-                        .setGroupId(groupId)
-                        .setErrorCode(errorCode);
-                if (topologyRequested) {
-                    group.setTopologyDescriptionStatus((byte) 2); // ERROR
-                }
-                data.groups().add(group);
-            }
+            groupId -> data.groups().add(
+                new StreamsGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.forException(e).code())
+            )
         );
         return new StreamsGroupDescribeResponse(data);
     }
