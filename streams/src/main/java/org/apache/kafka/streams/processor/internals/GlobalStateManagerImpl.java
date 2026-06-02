@@ -365,11 +365,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
                 //      `poll(pollMS)` without adding the request timeout and do a more precise
                 //      timeout handling
-                if (shouldStopBootstrappingSupplier.getAsBoolean()) {
-                    logBootstrapInterrupted(storeMetadata);
-                    return;
-                }
-
                 final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
                 if (records.isEmpty()) {
                     currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
@@ -515,10 +510,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
                 //      `poll(pollMS)` without adding the request timeout and do a more precise
                 //      timeout handling
-                if (shouldStopBootstrappingSupplier.getAsBoolean()) {
-                    logBootstrapInterrupted(storeMetadata);
-                    return;
-                }
                 final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
                 if (records.isEmpty()) {
                     currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
@@ -542,10 +533,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             stateRestoreListener.onRestoreEnd(topicPartition, storeMetadata.stateStore.name(), restoreCount);
             currentOffsets.put(topicPartition, offset);
         }
-    }
-
-    private void logBootstrapInterrupted(final StateStoreMetadata storeMetadata) {
-        log.info("Bootstrap interrupted by shutdown for {}", storeMetadata.stateStore.name());
     }
 
     private long getGlobalConsumerOffset(final TopicPartition topicPartition) {

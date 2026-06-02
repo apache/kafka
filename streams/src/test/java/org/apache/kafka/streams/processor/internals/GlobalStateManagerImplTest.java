@@ -1297,45 +1297,6 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldAbortRestoreWhenSupplierFlipsMidRestore() {
-        final AtomicBoolean inErrorState = new AtomicBoolean(false);
-        final AtomicInteger restoredCount = new AtomicInteger(0);
-        final MockStateRestoreListener flippingRestoreListener = new MockStateRestoreListener() {
-            @Override
-            public void onBatchRestored(final TopicPartition tp,
-                                        final String storeName,
-                                        final long batchEndOffset,
-                                        final long numRestored) {
-                super.onBatchRestored(tp, storeName, batchEndOffset, numRestored);
-                restoredCount.addAndGet((int) numRestored);
-                if (numRestored > 0) {
-                    inErrorState.set(true);
-                }
-            }
-        };
-        stateManager = new GlobalStateManagerImpl(
-            new LogContext("test"),
-            time,
-            topology,
-            consumer,
-            stateDirectory,
-            flippingRestoreListener,
-            streamsConfig,
-            inErrorState::get
-        );
-        processorContext.setStateManger(stateManager);
-        stateManager.setGlobalProcessorContext(processorContext);
-
-        initializeConsumer(6, 1, t1);
-        initializeConsumer(0, 0, t2, t3, t4, t5);
-        consumer.setMaxPollRecords(2L);
-
-        stateManager.initialize();
-
-        assertEquals(2, restoredCount.get());
-    }
-
-    @Test
     public void shouldExitCleanlyOnWakeupDuringBootstrapWhenShuttingDown() {
         final AtomicBoolean inErrorState = new AtomicBoolean(false);
         final AtomicInteger pollCount = new AtomicInteger(0);
