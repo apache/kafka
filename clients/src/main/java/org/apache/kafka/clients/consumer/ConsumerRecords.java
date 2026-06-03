@@ -52,7 +52,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerRecords(Map, Map)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "4.1", forRemoval = true)
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
         this(records, Map.of(), true);
     }
