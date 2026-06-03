@@ -1396,15 +1396,23 @@ public class GroupMetadataManager {
 
     /**
      * Validates whether a new classic member is allowed to join the consumer group.
+     * If the migration policy is disabled, the join request will be rejected, unless
+     * the classic member is static and it replaces an existing consumer member in
+     * the consumer group.
      *
-     * @param consumerGroup       The consumer group the classic member wants to join.
-     * @param isNewMemberJoining  Whether the joining classic member is not yet a member of the group.
+     * @param consumerGroup The consumer group the classic member wants to join.
+     * @param memberId      The joining member id (used to identify a dynamic member).
+     * @param instanceId    The joining member instance id, or null for a dynamic member.
      * @throws GroupIdNotFoundException if a new classic member cannot join the consumer group.
      */
     private void throwIfClassicMemberCannotJoinConsumerGroup(
         ConsumerGroup consumerGroup,
-        boolean isNewMemberJoining
+        String memberId,
+        String instanceId
     ) {
+        boolean isNewMemberJoining = instanceId == null
+            ? !consumerGroup.hasMember(memberId)
+            : consumerGroup.staticMember(instanceId) == null;
         if (isNewMemberJoining && config.consumerGroupMigrationPolicy() == ConsumerGroupMigrationPolicy.DISABLED) {
             log.info("Cannot join the consumer group {} with the classic protocol because the group migration is disabled.",
                 consumerGroup.groupId());
@@ -2518,12 +2526,7 @@ public class GroupMetadataManager {
         throwIfConsumerGroupIsFull(group, memberId);
         throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
 
-        // Under the disabled migration policy, a new classic member is not allowed.
-        // Members that are already in the group may still rejoin.
-        boolean isNewMemberJoining = instanceId == null
-            ? !group.hasMember(memberId)
-            : group.staticMember(instanceId) == null;
-        throwIfClassicMemberCannotJoinConsumerGroup(group, isNewMemberJoining);
+        throwIfClassicMemberCannotJoinConsumerGroup(group, memberId, instanceId);
 
         if (JoinGroupRequest.requiresKnownMemberId(request, context.requestVersion())) {
             // A dynamic member requiring a member id joins the group. Send back a response to call for another

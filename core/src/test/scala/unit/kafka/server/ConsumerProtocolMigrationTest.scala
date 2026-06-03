@@ -395,7 +395,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "disabled")
     )
   )
-  def testDowngradeWithDisabledMigrationPolicy(): Unit = {
+  def testClassicMemberJoinToConsumerGroupWithDisabledMigrationPolicy(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -409,22 +409,17 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val groupId = "grp"
 
     // Consumer member 1 joins the group.
-    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
+    joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
 
-    // Classic member 2 joins the group.
-    val joinGroupResponseData = sendJoinRequest(
-      groupId = groupId
-    )
-    sendJoinRequest(
-      groupId = groupId,
-      memberId = joinGroupResponseData.memberId,
-      metadata = metadata(List.empty)
-    )
-
-    // Try to downgrade the group by leaving member 1.
-    leaveGroupWithNewProtocol(
-      groupId = groupId,
-      memberId = memberId1
+    // A classic member tries to join the consumer group and is rejected.
+    assertEquals(
+      new JoinGroupResponseData()
+        .setProtocolName(null)
+        .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code),
+      sendJoinRequest(
+        groupId = groupId,
+        metadata = metadata(List.empty)
+      )
     )
 
     // The group is still a consumer group.
@@ -433,7 +428,68 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
         new ListGroupsResponseData.ListedGroup()
           .setGroupId(groupId)
           .setProtocolType("consumer")
-          .setGroupState(ConsumerGroupState.ASSIGNING.toString)
+          .setGroupState(ConsumerGroupState.STABLE.toString)
+          .setGroupType(Group.GroupType.CONSUMER.toString)
+      ),
+      listGroups(
+        statesFilter = List.empty,
+        typesFilter = List(Group.GroupType.CONSUMER.toString)
+      )
+    )
+  }
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "disabled")
+    )
+  )
+  def testStaticMemberReplacementWithClassicMemberWithDisabledMigrationPolicy(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    // Create the topic.
+    createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    val groupId = "grp"
+    val instanceId = "instance-id"
+
+    // A static member using the consumer protocol joins the group.
+    consumerGroupHeartbeat(
+      groupId = groupId,
+      memberId = Uuid.randomUuid.toString,
+      instanceId = instanceId,
+      rebalanceTimeoutMs = 5 * 60 * 1000,
+      subscribedTopicNames = List("foo"),
+      topicPartitions = List.empty,
+      expectedError = Errors.NONE
+    )
+
+    // A classic member replaces the static member using the same instance id.
+    val joinGroupResponseData = sendJoinRequest(
+      groupId = groupId,
+      groupInstanceId = instanceId,
+      metadata = metadata(List.empty)
+    )
+    assertEquals(
+      new JoinGroupResponseData()
+        .setGenerationId(2)
+        .setProtocolType("consumer")
+        .setProtocolName("consumer-range")
+        .setMemberId(joinGroupResponseData.memberId),
+      joinGroupResponseData
+    )
+
+    // The group is still a consumer group.
+    assertEquals(
+      List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId(groupId)
+          .setProtocolType("consumer")
+          .setGroupState(ConsumerGroupState.STABLE.toString)
           .setGroupType(Group.GroupType.CONSUMER.toString)
       ),
       listGroups(
