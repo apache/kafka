@@ -4578,6 +4578,7 @@ org.apache.kafka.common.requests.RequestResponseTest:
 - testCreateTopicRequestV0FailsIfValidateOnly
 - testCreateTopicRequestV3FailsIfNoPartitionsOrReplicas
 - testDeletableTopicResultErrorMessageIsNullByDefault
+- testDeleteGroupsResponseV3PreservesErrorMessage
 - testErrorCountsIncludesNone
 - testFetchRequestIsolationLevel
 - testFetchRequestWithMetadata
@@ -4600,6 +4601,8 @@ org.apache.kafka.common.requests.RequestResponseTest:
 - testSerializeWithInconsistentHeaderApiKey
 - testSerializeWithInconsistentHeaderVersion
 - testShareFetchResponseShouldNotHaveNullRecords
+- testStreamsGroupDescribeRequestV0RejectsIncludeTopologyDescription
+- testStreamsGroupDescribeResponseV0RejectsTopologyDescriptionFields
 - testUnregisterBrokerResponseWithUnknownServerError
 - testValidApiVersionsRequest
 - testValidTaggedFieldsWithSaslAuthenticateRequest
