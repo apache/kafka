@@ -506,7 +506,9 @@ public class LogLoader {
         if (hadCleanShutdown && logEndOffsetOptional.isPresent()) {
             return new RecoveryOffsets(logEndOffsetOptional.get(), logEndOffsetOptional.get());
         } else {
-            long logEndOffset = logEndOffsetOptional.orElse(segments.lastSegment().get().readNextOffset());
+            long logEndOffset = logEndOffsetOptional.isPresent()
+                ? logEndOffsetOptional.get()
+                : segments.lastSegment().get().readNextOffset();
             return new RecoveryOffsets(Math.min(recoveryPointCheckpoint, logEndOffset), logEndOffset);
         }
     }
