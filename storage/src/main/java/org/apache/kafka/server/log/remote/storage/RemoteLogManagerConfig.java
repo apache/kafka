@@ -188,6 +188,8 @@ public final class RemoteLogManagerConfig {
             "If that effective local retention size is unlimited (-1), this size-based check is not applied. " +
             "A positive value should not exceed effective local retention size unless local retention is unlimited (-1).";
     public static final Long MAX_LOG_REMOTE_COPY_LAG_BYTES = -1L; // It indicates the value depends on log.local.retention.bytes
+    // The default value of logRemoteCopyLagBytes is -1, so remote-copy uploads are controlled by the time-based criterion only.
+    // This value is chosen to maintain parity with the defaults of log.retention.time (7 days) and log.retention.bytes (-1, meaning unlimited).
     public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_BYTES = MAX_LOG_REMOTE_COPY_LAG_BYTES;
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
