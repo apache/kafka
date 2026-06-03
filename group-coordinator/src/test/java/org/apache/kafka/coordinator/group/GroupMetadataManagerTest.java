@@ -137,6 +137,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelper
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
@@ -10701,7 +10702,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(streamsGroupId, epoch + 2, 0, 0, Map.of()));
 
-        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(List.of(streamsGroupId), context.lastCommittedOffset);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(List.of(streamsGroupId), context.lastCommittedOffset).describedGroups();
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(streamsGroupId)
             .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
@@ -10712,7 +10713,7 @@ public class GroupMetadataManagerTest {
         // Commit the offset and test again
         context.commit();
 
-        actual = context.groupMetadataManager.streamsGroupDescribe(List.of(streamsGroupId), context.lastCommittedOffset);
+        actual = context.groupMetadataManager.streamsGroupDescribe(List.of(streamsGroupId), context.lastCommittedOffset).describedGroups();
         describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(streamsGroupId)
             .setMembers(Arrays.asList(
@@ -10735,6 +10736,74 @@ public class GroupMetadataManagerTest {
             .setAssignmentEpoch(epoch + 1);
         assertEquals(1, actual.size());
         assertEquals(describedGroup, actual.get(0));
+    }
+
+    @Test
+    public void testStreamsGroupMetadataReplayRoundTripsTopologyDescriptionEpochs() {
+        // KIP-1331: replay must read storedTopologyEpoch and lastFailedTopologyEpoch from the record
+        // and apply them to the in-memory streams group.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        // Initial replay sets both epochs.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), 7, 5));
+
+        StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(groupId);
+        assertEquals(7, group.storedTopologyEpoch());
+        assertEquals(5, group.lastFailedTopologyEpoch());
+
+        // A subsequent replay carrying defaults (-1, -1) overwrites — the latest record wins.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 2, 0L, -1, Map.of(), -1, -1));
+        assertEquals(-1, group.storedTopologyEpoch());
+        assertEquals(-1, group.lastFailedTopologyEpoch());
+    }
+
+    @Test
+    public void testStreamsGroupDescribeSurfacesStoredTopologyEpoch() {
+        // KIP-1331: describe bundles per-group storedTopologyEpoch so the service layer can decide
+        // whether to consult the topology description plugin.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        StreamsGroupTopologyValue topology = new StreamsGroupTopologyValue().setEpoch(0);
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), 9, -1));
+        // Describe reads at lastCommittedOffset, so commit to make the replay visible.
+        context.commit();
+
+        StreamsGroupDescribeResult result = context.groupMetadataManager.streamsGroupDescribe(
+            List.of(groupId, "missing-group"), context.lastCommittedOffset);
+
+        // Two described groups: one found, one not.
+        assertEquals(2, result.describedGroups().size());
+        // Only the found group contributes to the epoch map.
+        assertEquals(Map.of(groupId, 9), result.storedTopologyEpochs());
+    }
+
+    @Test
+    public void testValidateStreamsGroupMemberThrowsWhenGroupAbsent() {
+        // KIP-1331: validateStreamsGroupMember surfaces GROUP_ID_NOT_FOUND for the upcoming
+        // StreamsGroupTopologyDescriptionUpdate handler.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        assertThrows(GroupIdNotFoundException.class,
+            () -> context.groupMetadataManager.validateStreamsGroupMember("nonexistent", "m1"));
+    }
+
+    @Test
+    public void testValidateStreamsGroupMemberThrowsWhenMemberAbsent() {
+        // KIP-1331: validateStreamsGroupMember surfaces UNKNOWN_MEMBER_ID for the upcoming
+        // StreamsGroupTopologyDescriptionUpdate handler.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        // Replaying a metadata record materializes a streams group with no members.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of()));
+
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.groupMetadataManager.validateStreamsGroupMember(groupId, "stranger"));
     }
 
     @Test
@@ -18017,7 +18086,7 @@ public class GroupMetadataManagerTest {
         // Commit the offset, so that the latest state will be described below
         context.commit();
 
-        List<StreamsGroupDescribeResponseData.DescribedGroup> actualDescribedGroups = context.groupMetadataManager.streamsGroupDescribe(List.of(groupId), context.lastCommittedOffset);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actualDescribedGroups = context.groupMetadataManager.streamsGroupDescribe(List.of(groupId), context.lastCommittedOffset).describedGroups();
         StreamsGroupDescribeResponseData.DescribedGroup expectedDescribedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setAssignmentEpoch(2)

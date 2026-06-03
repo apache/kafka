@@ -99,6 +99,7 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -1223,17 +1224,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-                runtime.scheduleReadOperation(
-                    "streams-group-describe",
-                    topicPartition,
-                    (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset)
-                ).exceptionally(exception -> handleOperationException(
-                    "streams-group-describe",
-                    groupList,
-                    exception,
-                    (error, __) -> StreamsGroupDescribeRequest.getErrorDescribedGroupList(groupList, error),
-                    log
-                ));
+                runtime.scheduleReadOperation("streams-group-describe",
+                        topicPartition,
+                        (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset))
+                    .thenApply(StreamsGroupDescribeResult::describedGroups)
+                    .exceptionally(exception -> handleOperationException("streams-group-describe",
+                        groupList,
+                        exception,
+                        (error, __) -> StreamsGroupDescribeRequest.getErrorDescribedGroupList(groupList, error),
+                        log));
 
             futures.add(future);
         });

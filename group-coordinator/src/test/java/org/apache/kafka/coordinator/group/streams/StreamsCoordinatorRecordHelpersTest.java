@@ -284,6 +284,39 @@ class StreamsCoordinatorRecordHelpersTest {
     }
 
     @Test
+    public void testNewStreamsGroupMetadataRecordWithTopologyDescriptionEpochs() {
+        // KIP-1331: the 7-arg overload persists storedTopologyEpoch and lastFailedTopologyEpoch.
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new StreamsGroupMetadataKey()
+                .setGroupId(GROUP_ID),
+            new ApiMessageAndVersion(
+                new StreamsGroupMetadataValue()
+                    .setEpoch(42)
+                    .setMetadataHash(43)
+                    .setValidatedTopologyEpoch(44)
+                    .setLastAssignmentConfigs(List.of())
+                    .setStoredTopologyEpoch(7)
+                    .setLastFailedTopologyEpoch(5),
+                (short) 0
+            )
+        );
+
+        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            GROUP_ID, 42, 43, 44, Map.of(), 7, 5));
+    }
+
+    @Test
+    public void testNewStreamsGroupMetadataRecordFiveArgOverloadDefaultsToMinusOne() {
+        // The 5-arg back-compat overload must persist -1 for both new fields so a routine call site
+        // that hasn't been retrofitted does not accidentally clear a previously-stored epoch.
+        StreamsGroupMetadataValue value = (StreamsGroupMetadataValue)
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 1, 2, 3, Map.of())
+                .value().message();
+        assertEquals(-1, value.storedTopologyEpoch());
+        assertEquals(-1, value.lastFailedTopologyEpoch());
+    }
+
+    @Test
     public void testNewStreamsGroupEpochTombstoneRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
             new StreamsGroupMetadataKey()

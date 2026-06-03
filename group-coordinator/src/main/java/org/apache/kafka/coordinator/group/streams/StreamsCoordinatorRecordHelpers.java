@@ -103,6 +103,26 @@ public class StreamsCoordinatorRecordHelpers {
         int validatedTopologyEpoch,
         Map<String, String> assignmentConfigs
     ) {
+        return newStreamsGroupMetadataRecord(
+            groupId,
+            newGroupEpoch,
+            metadataHash,
+            validatedTopologyEpoch,
+            assignmentConfigs,
+            -1,
+            -1
+        );
+    }
+
+    public static CoordinatorRecord newStreamsGroupMetadataRecord(
+        String groupId,
+        int newGroupEpoch,
+        long metadataHash,
+        int validatedTopologyEpoch,
+        Map<String, String> assignmentConfigs,
+        int storedTopologyEpoch,
+        int lastFailedTopologyEpoch
+    ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
         Objects.requireNonNull(assignmentConfigs, "assignmentConfigs should not be null here");
 
@@ -120,7 +140,9 @@ public class StreamsCoordinatorRecordHelpers {
                     .setEpoch(newGroupEpoch)
                     .setMetadataHash(metadataHash)
                     .setValidatedTopologyEpoch(validatedTopologyEpoch)
-                    .setLastAssignmentConfigs(assignmentConfigList),
+                    .setLastAssignmentConfigs(assignmentConfigList)
+                    .setStoredTopologyEpoch(storedTopologyEpoch)
+                    .setLastFailedTopologyEpoch(lastFailedTopologyEpoch),
                 (short) 0
             )
         );

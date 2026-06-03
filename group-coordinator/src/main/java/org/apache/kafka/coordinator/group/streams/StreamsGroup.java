@@ -158,6 +158,18 @@ public class StreamsGroup implements Group {
     private final TimelineInteger validatedTopologyEpoch;
 
     /**
+     * The topology epoch most recently accepted by the topology description plugin (KIP-1331). -1 if none stored.
+     * Drives the heartbeat-side decision to set TopologyDescriptionRequired=true.
+     */
+    private final TimelineInteger storedTopologyEpoch;
+
+    /**
+     * The topology epoch for which the topology description plugin most recently returned a permanent failure
+     * (KIP-1331). -1 if none. Used to suppress re-soliciting a push at the same epoch.
+     */
+    private final TimelineInteger lastFailedTopologyEpoch;
+
+    /**
      * The metadata hash which is computed based on the all subscribed topics.
      */
     protected final TimelineLong metadataHash;
@@ -242,6 +254,10 @@ public class StreamsGroup implements Group {
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        this.storedTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        this.storedTopologyEpoch.set(-1);
+        this.lastFailedTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        this.lastFailedTopologyEpoch.set(-1);
         this.metadataHash = new TimelineLong(snapshotRegistry);
         this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -644,6 +660,47 @@ public class StreamsGroup implements Group {
     public void setValidatedTopologyEpoch(int validatedTopologyEpoch) {
         this.validatedTopologyEpoch.set(validatedTopologyEpoch);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * @return The topology epoch most recently accepted by the topology description plugin, or -1 if none.
+     */
+    public int storedTopologyEpoch() {
+        return storedTopologyEpoch.get();
+    }
+
+    /**
+     * Updates the stored topology epoch.
+     *
+     * @param storedTopologyEpoch The epoch most recently accepted by the topology description plugin.
+     */
+    public void setStoredTopologyEpoch(int storedTopologyEpoch) {
+        this.storedTopologyEpoch.set(storedTopologyEpoch);
+    }
+
+    /**
+     * @return The topology epoch most recently rejected by the topology description plugin with a permanent
+     *         failure, or -1 if none.
+     */
+    public int lastFailedTopologyEpoch() {
+        return lastFailedTopologyEpoch.get();
+    }
+
+    /**
+     * Updates the last-failed topology epoch.
+     *
+     * @param lastFailedTopologyEpoch The epoch the plugin most recently rejected with a permanent failure.
+     */
+    public void setLastFailedTopologyEpoch(int lastFailedTopologyEpoch) {
+        this.lastFailedTopologyEpoch.set(lastFailedTopologyEpoch);
+    }
+
+    /**
+     * @return The current topology epoch as reported by the latest pushed topology, or -1 if no topology
+     *         has been received from any member yet.
+     */
+    public int currentTopologyEpoch() {
+        return topology.get().map(StreamsTopology::topologyEpoch).orElse(-1);
     }
 
     /**
