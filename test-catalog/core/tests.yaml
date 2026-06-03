@@ -690,6 +690,10 @@ kafka.coordinator.group.CoordinatorPartitionWriterTest:
 - testConfig
 - testDeleteRecordsResponseContainsError
 - testDeleteRecordsSuccess
+- testListenerAdapterPropagatesHighWatermarkUpdates
+- testListenerAdapterStopsPropagatingAfterBecomingFollower
+- testListenerAdapterStopsPropagatingAfterDeleted
+- testListenerAdapterStopsPropagatingAfterFailed
 - testMaybeStartTransactionVerification
 - testRegisterDeregisterListener
 - testWriteRecords
@@ -2211,6 +2215,7 @@ kafka.server.ReplicaManagerTest:
 - testOldFollowerLosesMetricsWhenReassignPartitions
 - testOldLeaderLosesMetricsWhenReassignPartitions
 - testPartitionListener
+- testPartitionListenerWhenPartitionBecomesFollower
 - testPartitionMarkedOfflineIfLogCantBeCreated
 - testPartitionMetadataFile
 - testPartitionMetadataFileCreated
