@@ -344,8 +344,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
             partition = partition(record, this.cluster);
         else {
             //just to throw ClassCastException if serializers are not the proper ones to serialize key/value
-            keySerializer.serialize(record.topic(), new RecordHeaders(), record.key());
-            valueSerializer.serialize(record.topic(), new RecordHeaders(), record.value());
+            if (keySerializer != null)
+                keySerializer.serialize(record.topic(), new RecordHeaders(), record.key());
+            if (valueSerializer != null)
+                valueSerializer.serialize(record.topic(), new RecordHeaders(), record.value());
         }
 
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
