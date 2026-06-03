@@ -148,8 +148,11 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         return SerializationStrategy.VALUES[serializationStrategyFlag];
     }
 
-    private List<Integer> deserializeNullIndexList(final DataInputStream dis) throws IOException {
+    private List<Integer> deserializeNullIndexList(final DataInputStream dis, final int length) throws IOException {
         int nullIndexListSize = dis.readInt();
+        if (nullIndexListSize > length) {
+            throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be larger than overall number of bytes.");
+        }
         List<Integer> nullIndexList = new ArrayList<>(nullIndexListSize);
         while (nullIndexListSize != 0) {
             nullIndexList.add(dis.readInt());
@@ -173,12 +176,19 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
             List<Integer> nullIndexList = null;
             if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
                 // In CONSTANT_SIZE strategy, indexes of null entries are decoded from a null index list
-                nullIndexList = deserializeNullIndexList(dis);
+                nullIndexList = deserializeNullIndexList(dis, data.length);
             }
             final int size = dis.readInt();
+            if (size > data.length) {
+                throw new SerializationException("Corrupted byte[]. The number of list entries cannot be larger than overall number of bytes.");
+            }
             List<Inner> deserializedList = createListInstance(size);
             for (int i = 0; i < size; i++) {
                 int entrySize = serStrategy == SerializationStrategy.CONSTANT_SIZE ? primitiveSize : dis.readInt();
+                if (entrySize > data.length) {
+                    throw new SerializationException("Corrupted byte[]. A single list entry cannot be larger than the overall number of bytes.");
+                }
+
                 if (entrySize == ListSerde.NULL_ENTRY_VALUE || (nullIndexList != null && nullIndexList.contains(i))) {
                     deserializedList.add(null);
                     continue;
