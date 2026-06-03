@@ -20,6 +20,7 @@ package org.apache.kafka.server.common;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -176,7 +177,7 @@ public enum MetadataVersion {
         if (subVersion.isEmpty()) {
             this.ibpVersion = release;
         } else {
-            this.ibpVersion = String.format("%s-%s", release, subVersion);
+            this.ibpVersion = String.format(Locale.ROOT, "%s-%s", release, subVersion);
         }
         this.didMetadataChange = didMetadataChange;
     }

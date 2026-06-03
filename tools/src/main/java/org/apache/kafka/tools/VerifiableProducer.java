@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Locale;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -303,9 +304,9 @@ public class VerifiableProducer implements AutoCloseable {
     /** Returns a string to publish: ether 'valuePrefix'.'val' or 'val' */
     public String getValue(long val) {
         if (this.valuePrefix != null) {
-            return String.format("%d.%d", this.valuePrefix, val);
+            return String.format(Locale.ROOT, "%d.%d", this.valuePrefix, val);
         }
-        return String.format("%d", val);
+        return String.format(Locale.ROOT, "%d", val);
     }
 
     public String getKey() {
