@@ -65,6 +65,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -204,7 +205,7 @@ public abstract class TopicCommand {
         // If no topic name was mentioned, do not need to throw exception.
         if (requestedTopic.isPresent() && !requestedTopic.get().isEmpty() && requireTopicExists && foundTopics.isEmpty()) {
             // If given topic doesn't exist then throw exception
-            throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic.get()));
+            throw new IllegalArgumentException(String.format(Locale.ROOT, "Topic '%s' does not exist as expected", requestedTopic.get()));
         }
     }
 
@@ -234,7 +235,7 @@ public abstract class TopicCommand {
         // If no topic id was mentioned, do not need to throw exception.
         if (requestedTopicId != null && requireTopicIdExists && foundTopicIds.isEmpty()) {
             // If given topicId doesn't exist then throw exception
-            throw new IllegalArgumentException(String.format("TopicId '%s' does not exist as expected", requestedTopicId));
+            throw new IllegalArgumentException(String.format(Locale.ROOT, "TopicId '%s' does not exist as expected", requestedTopicId));
         }
     }
 

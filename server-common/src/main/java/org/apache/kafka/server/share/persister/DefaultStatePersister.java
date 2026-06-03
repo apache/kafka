@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -661,7 +662,7 @@ public class DefaultStatePersister implements Persister {
             for (PartitionIdData partitionData : topicData.partitions()) {
                 if (partitionData.partition() < 0) {
                     throw new IllegalArgumentException(
-                        String.format("%s has invalid partitionId - %s %s %d", prefix, groupId, topicData.topicId(), partitionData.partition()));
+                        String.format(Locale.ROOT, "%s has invalid partitionId - %s %s %d", prefix, groupId, topicData.topicId(), partitionData.partition()));
                 }
             }
         }
