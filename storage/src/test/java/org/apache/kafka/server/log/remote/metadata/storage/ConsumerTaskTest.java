@@ -475,5 +475,10 @@ public class ConsumerTaskTest {
         public void maybeLoadPartition(TopicIdPartition partition) {
             isPartitionLoaded.put(partition, true);
         }
+
+        @Override
+        public void handleTombstoneEvent(Uuid topicId, String topicName, int partition, long endOffset, int brokerLeaderEpoch) {
+            // No-op for test
+        }
     }
 }

@@ -651,7 +651,8 @@ class RemoteTopicCrudTest {
                     SEGMENT_SIZE,
                     Optional.empty(),
                     RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                    segmentLeaderEpochs
+                    segmentLeaderEpochs,
+                    0
                 );
                 segmentMetadataList.add(metadata);
             }

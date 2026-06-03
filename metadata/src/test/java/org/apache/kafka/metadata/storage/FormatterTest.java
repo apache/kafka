@@ -34,6 +34,7 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.RemoteLogMetadataVersion;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.common.StreamsVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
@@ -394,6 +395,9 @@ public class FormatterTest {
                 setName(GroupVersion.FEATURE_NAME).
                 setFeatureLevel(GroupVersion.GV_1.featureLevel()), (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(RemoteLogMetadataVersion.FEATURE_NAME).
+                setFeatureLevel(RemoteLogMetadataVersion.RLS_V1.featureLevel()), (short) 0));
+            expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(ShareVersion.FEATURE_NAME).
                 setFeatureLevel(ShareVersion.SV_1.featureLevel()), (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -419,7 +423,7 @@ public class FormatterTest {
             formatter1.formatter.setFeatureLevel("nonexistent.feature", (short) 1);
             assertEquals("Unsupported feature: nonexistent.feature. Supported features " +
                     "are: eligible.leader.replicas.version, group.version, kraft.version, " +
-                    "share.version, streams.version, test.feature.version, transaction.version",
+                    "remote.log.metadata.version, share.version, streams.version, test.feature.version, transaction.version",
                 assertThrows(FormatterException.class,
                     formatter1.formatter::run).
                         getMessage());
