@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +35,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -178,6 +180,57 @@ public class ConsumerRecordsTest {
         assertThrows(UnsupportedOperationException.class, () -> emptyRecords.iterator().remove());
         assertThrows(UnsupportedOperationException.class, () -> emptyRecords.records(topic).iterator().remove());
         assertEquals(0, emptyRecords.count());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testNextOffsetsLogsErrorOnceWhenConstructedWithDeprecatedConstructor() {
+        ConsumerRecords.TAINTED_NEXT_OFFSETS_LOGGED.set(false);
+
+        TopicPartition tp = new TopicPartition("topic", 0);
+        Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records =
+            Map.of(tp, List.of(new ConsumerRecord<>("topic", 0, 0L, 0, "value")));
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ConsumerRecords.class)) {
+            ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records);
+
+            // deprecated constructor does not supply next offsets, so the map is empty
+            assertTrue(consumerRecords.nextOffsets().isEmpty());
+
+            List<String> errors = appender.getMessages("ERROR");
+            assertEquals(1, errors.size());
+            assertTrue(errors.get(0).contains("deprecated ConsumerRecords(Map) constructor"),
+                "Unexpected error message: " + errors.get(0));
+
+            // check that error log for deprecated constructor is only logged once
+            assertTrue(consumerRecords.nextOffsets().isEmpty());
+            assertTrue(new ConsumerRecords<>(records).nextOffsets().isEmpty());
+            assertEquals(1, appender.getMessages("ERROR").size());
+        }
+    }
+
+    @Test
+    public void testNextOffsetsDoesNotLogErrorWhenConstructedWithNextOffsets() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records =
+            Map.of(tp, List.of(new ConsumerRecord<>("topic", 0, 0L, 0, "value")));
+        Map<TopicPartition, OffsetAndMetadata> nextOffsets = Map.of(tp, new OffsetAndMetadata(1L));
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ConsumerRecords.class)) {
+            ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records, nextOffsets);
+
+            assertFalse(consumerRecords.nextOffsets().isEmpty());
+            assertEquals(nextOffsets, consumerRecords.nextOffsets());
+            assertTrue(appender.getMessages("ERROR").isEmpty());
+        }
+    }
+
+    @Test
+    public void testNextOffsetsDoesNotLogErrorForEmptyRecords() {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ConsumerRecords.class)) {
+            assertTrue(ConsumerRecords.empty().nextOffsets().isEmpty());
+            assertTrue(appender.getMessages("ERROR").isEmpty());
+        }
     }
 
     private ConsumerRecords<Integer, String> buildTopicTestRecords(int recordSize,

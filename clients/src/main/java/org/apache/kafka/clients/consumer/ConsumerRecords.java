@@ -19,12 +19,16 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.internals.AbstractIterator;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -32,17 +36,25 @@ import java.util.Set;
  * partition returned by a {@link Consumer#poll(java.time.Duration)} operation.
  */
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
+    private static final Logger log = LoggerFactory.getLogger(ConsumerRecords.class);
+
+    // Ensures the tainted-records error (see nextOffsets()) is logged at most once per JVM since nextOffsets() is called on every poll
+    static final AtomicBoolean TAINTED_NEXT_OFFSETS_LOGGED = new AtomicBoolean(false);
+
     public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Map.of(), Map.of());
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private final Map<TopicPartition, OffsetAndMetadata> nextOffsets;
+
+    // Flag to detect if legacy ConsumerRecords(Map) constructor is used. See KAFKA-20660 for more details.
+    private final boolean tainted;
 
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerRecords(Map, Map)} instead.
      */
     @Deprecated
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
-        this(records, Map.of());
+        this(records, Map.of(), true);
     }
 
     /**
@@ -54,8 +66,13 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
      *                    start reading from on the next poll.
      */
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
+        this(records, nextOffsets, false);
+    }
+
+    private ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets, boolean tainted) {
         this.records = records;
         this.nextOffsets = Map.copyOf(nextOffsets);
+        this.tainted = tainted;
     }
 
     /**
@@ -76,6 +93,14 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
      * @return The next offsets that the consumer will consume
      */
     public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
+        if (this.tainted && TAINTED_NEXT_OFFSETS_LOGGED.compareAndSet(false, true)) {
+            log.error("ConsumerRecords#nextOffsets() returned empty because this instance was built with the " +
+                    "deprecated ConsumerRecords(Map) constructor (see KIP-1094), which does not supply next offsets. " +
+                    "Downstream logic that relies on these offsets to advance the consumer's committed position " +
+                    "(for example, Kafka Streams under exactly-once semantics) will be unable to commit, leading to " +
+                    "reprocessing. Update the interceptor or wrapper that constructed it to use the " +
+                    "ConsumerRecords(Map, Map) constructor that supplies next offsets.");
+        }
         return nextOffsets;
     }
 
