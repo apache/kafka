@@ -57,6 +57,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
@@ -250,22 +253,26 @@ public class GlobalStreamThreadTest {
         initializeConsumer();
         mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 1_000_000L));
 
-        final Thread shutdownThread = new Thread(() -> {
-            try {
-                TestUtils.waitForCondition(
-                    () -> stateRestoreListener.storeNameCalledStates.containsKey(MockStateRestoreListener.RESTORE_START),
-                    10 * 1000L,
-                    "Bootstrap restore never started.");
-            } catch (final Exception e) {
-                throw new RuntimeException(e);
-            }
-            globalStreamThread.shutdown();
-        });
-        shutdownThread.start();
+        final ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            final Future<?> shutdownFuture = executor.submit(() -> {
+                try {
+                    TestUtils.waitForCondition(
+                        () -> stateRestoreListener.storeNameCalledStates.containsKey(MockStateRestoreListener.RESTORE_START),
+                        10 * 1000L,
+                        "Bootstrap restore never started.");
+                } catch (final Exception e) {
+                    throw new RuntimeException(e);
+                }
+                globalStreamThread.shutdown();
+            });
 
-        startAndSwallowError();
-        shutdownThread.join();
-        globalStreamThread.join(5_000);
+            startAndSwallowError();
+            shutdownFuture.get();
+            globalStreamThread.join();
+        } finally {
+            executor.shutdown();
+        }
 
         assertEquals(DEAD, globalStreamThread.state());
     }
