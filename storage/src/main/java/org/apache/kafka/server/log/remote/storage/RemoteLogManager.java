@@ -196,6 +196,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final Timer remoteReadTimer;
 
     private boolean closed = false;
+    private final ConcurrentMap<TopicIdPartition, Integer> topicIdPartitionToLeaderEpochMap = new ConcurrentHashMap<>();
 
     private volatile DelayedOperationPurgatory<DelayedRemoteListOffsets> delayedRemoteListOffsetsPurgatory;
 
@@ -471,6 +472,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
         Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
+                .peek(p -> {
+                    TopicIdPartition tip = new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition());
+                    topicIdPartitionToLeaderEpochMap.put(tip, p.getLeaderEpoch());
+                })
                 .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
                         p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
@@ -546,6 +551,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
                     removeRemoteTopicPartitionMetrics(tpId);
 
+                    // Clean up leader epoch mapping after all tasks are cancelled
+                    // This is safe because no background tasks will access this entry anymore
+                    topicIdPartitionToLeaderEpochMap.remove(tpId);
+                    LOGGER.debug("Removed leader epoch mapping for partition: {}", tpId);
+
                     if (stopPartition.deleteRemoteLog) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
                         deleteRemoteLogPartition(tpId);
@@ -577,10 +587,16 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         List<RemoteLogSegmentMetadata> metadataList = new ArrayList<>();
         remoteLogMetadataManagerPlugin.get().listRemoteLogSegments(partition).forEachRemaining(metadataList::add);
 
+        // Get the broker leader epoch once for all segments in this partition
+        // This requires the partition to have been properly initialized via onLeadershipChange
+        int brokerLeaderEpoch = getBrokerLeaderEpochForPublish(partition,
+                "deleteRemoteLogPartition for partition " + partition);
+
         List<RemoteLogSegmentMetadataUpdate> deleteSegmentStartedEvents = metadataList.stream()
                 .map(metadata ->
                         new RemoteLogSegmentMetadataUpdate(metadata.remoteLogSegmentId(), time.milliseconds(),
-                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId))
+                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId,
+                                brokerLeaderEpoch, metadata.endOffset()))
                 .collect(Collectors.toList());
         publishEvents(deleteSegmentStartedEvents).get();
 
@@ -595,7 +611,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         List<RemoteLogSegmentMetadataUpdate> deleteSegmentFinishedEvents = metadataList.stream()
                 .map(metadata ->
                         new RemoteLogSegmentMetadataUpdate(metadata.remoteLogSegmentId(), time.milliseconds(),
-                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId))
+                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId,
+                                brokerLeaderEpoch, metadata.endOffset()))
                 .collect(Collectors.toList());
         publishEvents(deleteSegmentFinishedEvents).get();
     }
@@ -1036,9 +1053,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             epochEntries.forEach(entry -> segmentLeaderEpochs.put(entry.epoch(), entry.startOffset()));
 
             boolean isTxnIdxEmpty = segment.txnIndex().isEmpty();
+            // For copy operations, the partition must be properly initialized as leader via onLeadershipChange
+            int brokerLeaderEpoch = getBrokerLeaderEpochForPublish(topicIdPartition,
+                    "copyLogSegment COPY_SEGMENT_STARTED for segment " + segmentId);
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(segmentId, segment.baseOffset(), endOffset,
                     segment.largestTimestamp(), brokerId, time.milliseconds(), segment.log().sizeInBytes(),
-                    segmentLeaderEpochs, isTxnIdxEmpty);
+                    segmentLeaderEpochs, isTxnIdxEmpty, brokerLeaderEpoch);
 
             remoteLogMetadataManagerPlugin.get().addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
 
@@ -1066,8 +1086,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 throw e;
             }
 
+            // Reuse the same broker leader epoch for the COPY_SEGMENT_FINISHED event
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                    customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+                    customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId,
+                    brokerLeaderEpoch, endOffset);
 
             if (customMetadata.isPresent()) {
                 long customMetadataSize = customMetadata.get().value().length;
@@ -1618,18 +1640,57 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
     }
 
+    /**
+     * Get the current broker's leader epoch for the given partition. This method requires that the partition
+     * has been registered in the map via onLeadershipChange. If the partition is not found, it indicates
+     * a programming error where the partition was not properly initialized.
+     *
+     * @param topicIdPartition the partition to look up
+     * @param context additional context for error logging (e.g., segment ID, operation)
+     * @return the broker leader epoch to use for publishing metadata events
+     * @throws IllegalStateException if the partition is not found in the map
+     */
+    private int getBrokerLeaderEpochForPublish(TopicIdPartition topicIdPartition, String context) {
+        Integer currentBrokerLeaderEpoch = topicIdPartitionToLeaderEpochMap.get(topicIdPartition);
+        if (currentBrokerLeaderEpoch == null) {
+            throw new IllegalStateException("Partition " + topicIdPartition + " not found in topicIdPartitionToLeaderEpochMap. " +
+                    "This indicates the partition was not properly initialized via onLeadershipChange. Context: " + context);
+        }
+        return currentBrokerLeaderEpoch;
+    }
+
+    /**
+     * Get the current broker's leader epoch for the given partition based on segment metadata.
+     *
+     * @param topicIdPartition the partition to look up
+     * @param segmentMetadata the segment metadata for error context
+     * @return the broker leader epoch to use for publishing metadata events
+     * @throws IllegalStateException if the partition is not found in the map
+     */
+    private int getBrokerLeaderEpochForPublish(TopicIdPartition topicIdPartition, RemoteLogSegmentMetadata segmentMetadata) {
+        return getBrokerLeaderEpochForPublish(topicIdPartition, "Segment: " + segmentMetadata.remoteLogSegmentId());
+    }
+
+    // Visible for testing
+    void setLeaderEpochForPartition(TopicIdPartition topicIdPartition, int leaderEpoch) {
+        topicIdPartitionToLeaderEpochMap.put(topicIdPartition, leaderEpoch);
+    }
+
     private boolean deleteRemoteLogSegment(
         RemoteLogSegmentMetadata segmentMetadata,
         Predicate<RemoteLogSegmentMetadata> predicate
     ) throws RemoteStorageException, ExecutionException, InterruptedException {
         if (predicate.test(segmentMetadata)) {
             LOGGER.debug("Deleting remote log segment {}", segmentMetadata.remoteLogSegmentId());
-            String topic = segmentMetadata.topicIdPartition().topic();
+            TopicIdPartition topicIdPartition = segmentMetadata.topicIdPartition();
+            String topic = topicIdPartition.topic();
+            int brokerLeaderEpoch = getBrokerLeaderEpochForPublish(topicIdPartition, segmentMetadata);
 
             // Publish delete segment started event.
             remoteLogMetadataManagerPlugin.get().updateRemoteLogSegmentMetadata(
                 new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
-                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId)).get();
+                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId,
+                        brokerLeaderEpoch, segmentMetadata.endOffset())).get();
 
             brokerTopicStats.topicStats(topic).remoteDeleteRequestRate().mark();
             brokerTopicStats.allTopicsStats().remoteDeleteRequestRate().mark();
@@ -1648,7 +1709,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             // Publish delete segment finished event.
             remoteLogMetadataManagerPlugin.get().updateRemoteLogSegmentMetadata(
                 new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
-                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId)).get();
+                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId,
+                        brokerLeaderEpoch, segmentMetadata.endOffset())).get();
             LOGGER.debug("Deleted remote log segment {}", segmentMetadata.remoteLogSegmentId());
             return true;
         }

@@ -64,6 +64,7 @@ import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
+import static org.apache.kafka.server.common.RemoteLogMetadataVersion.REMOTE_LOG_METADATA_TOPIC_NAME;
 import static org.apache.kafka.server.config.ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG;
 
 
@@ -756,17 +757,36 @@ public class ConfigurationControlManager {
         int currentClaimEpoch
     ) {
         ControllerResult<ApiError> result = featureControl.updateFeatures(updates, upgradeTypes, validateOnly, currentClaimEpoch);
-        if (result.response().isSuccess() &&
-            !validateOnly &&
-            updates.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) > 0
-        ) {
-            List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
-            String logMessage = maybeGenerateElrSafetyRecords(records);
-            if (!logMessage.isEmpty()) {
-                log.info("{}", logMessage);
+        if (result.response().isSuccess() && !validateOnly) {
+            List<ApiMessageAndVersion> additionalRecords = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+
+            // Handle ELR safety records for EligibleLeaderReplicasVersion
+            if (updates.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) > 0) {
+                String logMessage = maybeGenerateElrSafetyRecords(additionalRecords);
+                if (!logMessage.isEmpty()) {
+                    log.info("{}", logMessage);
+                }
+                additionalRecords.addAll(result.records());
+                return ControllerResult.atomicOf(additionalRecords, ApiError.NONE);
             }
-            records.addAll(result.records());
-            return ControllerResult.atomicOf(records, ApiError.NONE);
+
+            // Handle remote log metadata topic compaction for RemoteLogMetadataVersion
+            short remoteLogMetadataVersion = updates.getOrDefault(org.apache.kafka.server.common.RemoteLogMetadataVersion.FEATURE_NAME, (short) 0);
+
+            if (remoteLogMetadataVersion >= 2) {
+                // Upgrading to version 2: change to compact-only and remove overrides
+                // Note: Users should run RemoteLogMetadataMigrationTool --check before upgrading
+                logValidationReminder();
+                additionalRecords.addAll(maybeGenerateRemoteLogMetadataTopicV2ConfigRecords());
+            } else if (remoteLogMetadataVersion >= 1) {
+                // Upgrading to version 1: enable compaction
+                additionalRecords.addAll(maybeGenerateRemoteLogMetadataTopicV1ConfigRecords());
+            }
+
+            if (!additionalRecords.isEmpty()) {
+                additionalRecords.addAll(result.records());
+                return ControllerResult.atomicOf(additionalRecords, ApiError.NONE);
+            }
         }
         return result;
     }
@@ -808,5 +828,156 @@ public class ConfigurationControlManager {
     // Visible to test
     TimelineHashSet<Integer> brokersWithConfigs() {
         return brokersWithConfigs;
+    }
+
+    /**
+     * Generates ConfigRecords to update the __remote_log_metadata topic to use compaction and deletion
+     * cleanup policy.
+     * This is called when the remote.log.metadata.version feature is being upgraded to level 1 or higher.
+     *
+     * Note: retention.ms and min.compaction.lag.ms are configured by the migration script,
+     * not by this method. This method only updates the cleanup.policy to enable compaction.
+     *
+     * @return List of ConfigRecords if updates are needed, empty list otherwise
+     */
+    List<ApiMessageAndVersion> maybeGenerateRemoteLogMetadataTopicV1ConfigRecords() {
+        String topicName = REMOTE_LOG_METADATA_TOPIC_NAME;
+        ConfigResource topicResource = new ConfigResource(Type.TOPIC, topicName);
+
+        // Check if topic configuration exists
+        TimelineHashMap<String, String> configs = configData.get(topicResource);
+        if (configs == null) {
+            log.info("Topic {} does not exist yet. It will be created with appropriate config when needed.", topicName);
+            return List.of();
+        }
+
+        // Check current configuration
+        String currentPolicy = configs.get(TopicConfig.CLEANUP_POLICY_CONFIG);
+
+        // Target configuration for version 1: compact,delete policy
+        // Note: retention.ms, min.compaction.lag.ms, and segment.ms should be set via migration script
+        String targetCleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE;
+
+        boolean needsCleanupPolicyUpdate = currentPolicy == null ||
+            !(currentPolicy.contains(TopicConfig.CLEANUP_POLICY_COMPACT) &&
+              currentPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE));
+
+        if (!needsCleanupPolicyUpdate) {
+            log.info("Topic {} already has correct cleanup.policy configuration: {}",
+                topicName, currentPolicy);
+            return List.of();
+        }
+
+        log.info("Updating topic {} cleanup.policy configuration. Current: '{}', Target: '{}'",
+                 topicName, currentPolicy, targetCleanupPolicy);
+
+        // Create ConfigRecord for cleanup.policy update
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ConfigRecord cleanupPolicyRecord = new ConfigRecord()
+            .setResourceType(Type.TOPIC.id())
+            .setResourceName(topicName)
+            .setName(TopicConfig.CLEANUP_POLICY_CONFIG)
+            .setValue(targetCleanupPolicy);
+        records.add(new ApiMessageAndVersion(cleanupPolicyRecord, (short) 0));
+
+        return records;
+    }
+
+    /**
+     * Generates ConfigRecords to update the __remote_log_metadata topic configuration for version 2.
+     * This is called when the remote.log.metadata.version feature is being upgraded from level 1 to level 2.
+     *
+     * Version 2 changes:
+     * 1. Changes cleanup.policy to "compact" (removes "delete") - topic becomes compact-only
+     * 2. Sets retention.ms to -1 (infinite retention) - compact-only topics should not delete based on time
+     * 3. Removes min.compaction.lag.ms override - uses broker default for immediate compaction eligibility
+     *
+     * In version 1, the topic used "compact,delete" policy with retention.ms and min.compaction.lag.ms
+     * (configured by migration script) to safely handle the migration from old-format (null-key) messages.
+     * Version 2 transitions to compact-only policy since all messages now have proper keys.
+     *
+     * This should only be called after validating that no null-key messages remain in the topic,
+     * as those messages cannot be compacted and would cause issues in a compact-only topic.
+     *
+     * @return List of ConfigRecords if updates are needed, empty list otherwise
+     */
+    List<ApiMessageAndVersion> maybeGenerateRemoteLogMetadataTopicV2ConfigRecords() {
+        String topicName = REMOTE_LOG_METADATA_TOPIC_NAME;
+        ConfigResource topicResource = new ConfigResource(Type.TOPIC, topicName);
+
+        // Check if topic configuration exists
+        TimelineHashMap<String, String> configs = configData.get(topicResource);
+        if (configs == null) {
+            log.info("Topic {} does not exist yet. It will be created with appropriate config when needed.", topicName);
+            return List.of();
+        }
+
+        // Check current configuration
+        String currentCleanupPolicy = configs.get(TopicConfig.CLEANUP_POLICY_CONFIG);
+        String currentMinCompactionLagMs = configs.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
+        String currentRetentionMs = configs.get(TopicConfig.RETENTION_MS_CONFIG);
+
+        // Target configuration for version 2: compact-only with infinite retention
+        String targetCleanupPolicy = TopicConfig.CLEANUP_POLICY_COMPACT;
+        String targetRetentionMs = String.valueOf(-1L); // -1 means infinite retention
+
+        boolean needsCleanupPolicyUpdate = !targetCleanupPolicy.equals(currentCleanupPolicy);
+        boolean needsRetentionMsUpdate = !targetRetentionMs.equals(currentRetentionMs);
+        boolean needsMinCompactionLagRemoval = currentMinCompactionLagMs != null;
+
+        if (!needsCleanupPolicyUpdate && !needsRetentionMsUpdate && !needsMinCompactionLagRemoval) {
+            log.info("Topic {} already has correct version 2 configuration (cleanup.policy=compact, retention.ms=-1, min.compaction.lag.ms unset).", topicName);
+            return List.of();
+        }
+
+        log.info("Updating topic {} configuration for version 2. Current: cleanup.policy='{}', retention.ms='{}', min.compaction.lag.ms='{}'. " +
+                 "Target: cleanup.policy='{}', retention.ms='{}', min.compaction.lag.ms unset",
+                 topicName, currentCleanupPolicy, currentRetentionMs, currentMinCompactionLagMs,
+                 targetCleanupPolicy, targetRetentionMs);
+
+        // Create ConfigRecords for the updates needed
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+
+        if (needsCleanupPolicyUpdate) {
+            ConfigRecord cleanupPolicyRecord = new ConfigRecord()
+                .setResourceType(Type.TOPIC.id())
+                .setResourceName(topicName)
+                .setName(TopicConfig.CLEANUP_POLICY_CONFIG)
+                .setValue(targetCleanupPolicy);
+            records.add(new ApiMessageAndVersion(cleanupPolicyRecord, (short) 0));
+        }
+
+        if (needsRetentionMsUpdate) {
+            ConfigRecord retentionMsRecord = new ConfigRecord()
+                .setResourceType(Type.TOPIC.id())
+                .setResourceName(topicName)
+                .setName(TopicConfig.RETENTION_MS_CONFIG)
+                .setValue(targetRetentionMs);
+            records.add(new ApiMessageAndVersion(retentionMsRecord, (short) 0));
+        }
+
+        if (needsMinCompactionLagRemoval) {
+            // Setting value to null removes the config override, uses broker default
+            ConfigRecord minCompactionLagRecord = new ConfigRecord()
+                .setResourceType(Type.TOPIC.id())
+                .setResourceName(topicName)
+                .setName(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG)
+                .setValue(null);
+            records.add(new ApiMessageAndVersion(minCompactionLagRecord, (short) 0));
+        }
+
+        return records;
+    }
+
+    /**
+     * Logs a reminder to validate the __remote_log_metadata topic before upgrading to version 2.
+     *
+     * Note: Actual validation is enforced by requiring users to pass the --validated flag
+     * when running kafka-features.sh upgrade command. This method just logs informational message.
+     */
+    void logValidationReminder() {
+        log.info("Upgrading to remote.log.metadata.version=2. " +
+                 "Ensure you have run 'kafka-remote-log-metadata-migration.sh --check' " +
+                 "to verify no null-key messages exist in __remote_log_metadata topic.");
     }
 }

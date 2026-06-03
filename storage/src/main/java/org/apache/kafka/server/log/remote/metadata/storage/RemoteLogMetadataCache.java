@@ -25,14 +25,18 @@ import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundExceptio
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -107,6 +111,10 @@ public class RemoteLogMetadataCache {
     // https://issues.apache.org/jira/browse/KAFKA-12641
     protected final ConcurrentMap<Integer, RemoteLogLeaderEpochState> leaderEpochEntries = new ConcurrentHashMap<>();
 
+    // a map from the endoffset to the RemoteLogSegmentKey
+    private final ConcurrentSkipListMap<Long, ConcurrentMap<Integer, Set<String>>> endOffsetToSegments
+            = new ConcurrentSkipListMap<>();
+
     private final CountDownLatch initializedLatch = new CountDownLatch(1);
 
     void markInitialized() {
@@ -154,6 +162,56 @@ public class RemoteLogMetadataCache {
             }
         }
         return txnIdxEmpty ? Optional.empty() : metadataOpt;
+    }
+
+    /**
+     * Returns all segments with the given end offset and broker leader epoch less than or equal to the specified epoch.
+     * This is used to find all metadata records that need to be tombstoned when deleting a segment.
+     *
+     * <p>When using a compacted metadata topic with keys like "topicId:partition:endOffset:brokerLeaderEpoch",
+     * we need to tombstone all historical entries for the same endOffset that have a lower or equal broker leader epoch.
+     * This ensures that after compaction, only the tombstone markers remain for deleted segments.</p>
+     *
+     * @param endOffset the end offset to match
+     * @param maxBrokerLeaderEpoch the maximum broker leader epoch to include (inclusive)
+     * @return iterator of all segments matching the criteria, sorted by broker leader epoch (ascending)
+     */
+    public List<String> listRemoteLogSegmentKeysByEndOffset(long endOffset, int maxBrokerLeaderEpoch) {
+        List<String> matchingSegments = new ArrayList<>();
+
+
+        // iterate over lower entries
+        endOffsetToSegments.headMap(endOffset, true).forEach((offset, epochMap) -> {
+            epochMap.forEach((brokerLeaderEpoch, segmentKeys) -> {
+                // only include entries where brokerLeaderEpoch <= maxBrokerLeaderEpoch
+                if (brokerLeaderEpoch <= maxBrokerLeaderEpoch) {
+                    matchingSegments.addAll(segmentKeys);
+                }
+            });
+        });
+        return matchingSegments;
+    }
+
+    /**
+     * Removes a metadata key from the endOffsetToSegments index.
+     * If the brokerLeaderEpoch set becomes empty after removal, it is also removed.
+     * If the endOffset map becomes empty after removal, it is also removed.
+     *
+     * @param endOffset the end offset
+     * @param brokerLeaderEpoch the broker leader epoch
+     * @param metadataKey the metadata key to remove from the index
+     */
+    public void removeFromEndOffsetIndex(long endOffset, int brokerLeaderEpoch, String metadataKey) {
+        ConcurrentMap<Integer, Set<String>> epochMap = endOffsetToSegments.get(endOffset);
+        if (epochMap != null) {
+            Set<String> keySet = epochMap.get(brokerLeaderEpoch);
+            if (keySet != null) {
+                keySet.remove(metadataKey);
+                // Clean up empty collections
+                epochMap.computeIfPresent(brokerLeaderEpoch, (k, v) -> v.isEmpty() ? null : v);
+                endOffsetToSegments.computeIfPresent(endOffset, (k, v) -> v.isEmpty() ? null : v);
+            }
+        }
     }
 
     private RemoteLogSegmentMetadata getSegmentMetadata(int leaderEpoch, long offset) {
@@ -338,6 +396,20 @@ public class RemoteLogMetadataCache {
             leaderEpochEntries.computeIfAbsent(epoch, leaderEpoch -> new RemoteLogLeaderEpochState())
                     .handleSegmentWithCopySegmentStartedState(remoteLogSegmentId);
         }
+
+        long endOffset = remoteLogSegmentMetadata.endOffset();
+        int brokerLeaderEpoch = remoteLogSegmentMetadata.brokerLeaderEpoch();
+
+        // Only add to endOffsetToSegments index if brokerLeaderEpoch is valid (not -1)
+        // Old version messages have brokerLeaderEpoch=-1 and null keys, which should not be indexed
+        if (brokerLeaderEpoch != -1) {
+            ConcurrentMap<Integer, Set<String>> epochMap =
+                    endOffsetToSegments.computeIfAbsent(endOffset, k -> new ConcurrentHashMap<>());
+
+            epochMap.computeIfAbsent(brokerLeaderEpoch, k -> ConcurrentHashMap.newKeySet())
+                    .add(remoteLogSegmentMetadata.metadataKey());
+        }
+
         idToSegmentMetadata.put(remoteLogSegmentId, remoteLogSegmentMetadata);
     }
 

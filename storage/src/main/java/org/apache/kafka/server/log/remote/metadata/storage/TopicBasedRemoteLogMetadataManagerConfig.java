@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,6 +60,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final long DEFAULT_REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS = 2 * 60 * 1000L;
     public static final long DEFAULT_REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS = 100L;
 
+    public static final String REMOTE_LOG_METADATA_UPDATE_KEY_SUFFIX = ":UPDATE";
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor of remote log metadata topic.";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC = "The number of partitions for remote log metadata topic.";
     public static final String REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_DOC = "Retention of remote log metadata topic in milliseconds. " +
@@ -85,6 +87,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String LOG_DIR = "log.dir";
 
     private static final String REMOTE_LOG_METADATA_CLIENT_PREFIX = "__remote_log_metadata_client";
+
 
     private static final ConfigDef CONFIG = new ConfigDef();
     static {
@@ -240,8 +243,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientIdPrefix + "_producer");
         props.put(ProducerConfig.ACKS_CONFIG, "all");
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return Collections.unmodifiableMap(props);
     }
 

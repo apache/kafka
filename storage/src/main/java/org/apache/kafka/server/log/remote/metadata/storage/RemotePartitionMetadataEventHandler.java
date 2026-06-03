@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
@@ -49,4 +50,16 @@ public abstract class RemotePartitionMetadataEventHandler {
     public abstract boolean isInitialized(TopicIdPartition partition);
 
     public abstract void maybeLoadPartition(TopicIdPartition partition);
+
+    /**
+     * Handle a tombstone event for a remote log segment.
+     * This is called when a tombstone message is consumed from the metadata topic.
+     *
+     * @param topicId the topic UUID
+     * @param topicName the topic name
+     * @param partition the partition number
+     * @param endOffset the end offset of the segment
+     * @param brokerLeaderEpoch the broker leader epoch
+     */
+    public abstract void handleTombstoneEvent(Uuid topicId, String topicName, int partition, long endOffset, int brokerLeaderEpoch);
 }

@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,8 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_UPDATE_KEY_SUFFIX;
 
 /**
  * This class is responsible for publishing messages into the remote log metadata topic partitions.
@@ -41,9 +44,10 @@ public class ProducerManager implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ProducerManager.class);
 
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
-    private final KafkaProducer<byte[], byte[]> producer;
+    private final KafkaProducer<String, byte[]> producer;
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
+
 
     public ProducerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
                            RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner) {
@@ -63,12 +67,12 @@ public class ProducerManager implements Closeable {
         CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
 
         TopicIdPartition topicIdPartition = remoteLogMetadata.topicIdPartition();
-        int metadataPartitionNum = topicPartitioner.metadataPartition(topicIdPartition);
+        int metadataPartitionNumber = topicPartitioner.metadataPartition(topicIdPartition);
         log.debug("Publishing metadata message of partition:[{}] into metadata topic partition:[{}] with payload: [{}]",
-                  topicIdPartition, metadataPartitionNum, remoteLogMetadata);
-        if (metadataPartitionNum >= rlmmConfig.metadataTopicPartitionsCount()) {
+                  topicIdPartition, metadataPartitionNumber, remoteLogMetadata);
+        if (metadataPartitionNumber >= rlmmConfig.metadataTopicPartitionsCount()) {
             // This should never occur as long as metadata partitions always remain the same.
-            throw new KafkaException("Chosen partition no " + metadataPartitionNum +
+            throw new KafkaException("Chosen partition no " + metadataPartitionNumber +
                                              " must be less than the partition count: " + rlmmConfig.metadataTopicPartitionsCount());
         }
 
@@ -80,11 +84,56 @@ public class ProducerManager implements Closeable {
                     future.complete(metadata);
                 }
             };
-            producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
-                                               serde.serialize(remoteLogMetadata)), callback);
+            if (remoteLogMetadata instanceof RemoteLogSegmentMetadata) {
+                producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNumber,
+                        remoteLogMetadata.metadataKey(), serde.serialize(remoteLogMetadata)), callback);
+            } else {
+                producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNumber,
+                        remoteLogMetadata.metadataKey() + REMOTE_LOG_METADATA_UPDATE_KEY_SUFFIX,
+                        serde.serialize(remoteLogMetadata)), callback);
+            }
+
         } catch (Exception ex) {
             future.completeExceptionally(ex);
         }
+
+        return future;
+    }
+
+    /**
+     * Publishes a tombstone (null value) for the given metadata key.
+     * This is used to delete records from the compacted metadata topic.
+     *
+     * @param topicIdPartition the topic partition
+     * @param metadataKey the key to tombstone
+     * @return a CompletableFuture containing the record metadata
+     */
+    public CompletableFuture<RecordMetadata> publishTombstone(
+            TopicIdPartition topicIdPartition,
+            String metadataKey) {
+
+        log.debug("Publishing tombstone for key: {} to topic: {} partition: {}",
+                metadataKey, topicIdPartition.topic(), topicIdPartition.partition());
+
+        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+        int metadataPartitionNumber = topicPartitioner.metadataPartition(topicIdPartition);
+
+        // Send tombstone (null value) to the topic
+        producer.send(
+                new ProducerRecord<>(
+                        rlmmConfig.remoteLogMetadataTopicName(),
+                        metadataPartitionNumber,
+                        metadataKey,
+                        null
+                ),
+                (metadata, exception) -> {
+                    if (exception != null) {
+                        future.completeExceptionally(exception);
+                    } else {
+                        future.complete(metadata);
+                    }
+                }
+        );
 
         return future;
     }
