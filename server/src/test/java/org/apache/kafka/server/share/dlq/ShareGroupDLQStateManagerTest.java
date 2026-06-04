@@ -1451,24 +1451,6 @@ class ShareGroupDLQStateManagerTest {
         assertEquals(DLQ_TOPIC_ID, request.data().topicData().iterator().next().topicId());
     }
 
-    private static ShareGroupDLQStateManager.ProduceRequestHandler newHandlerForCoalesceTest(
-        ShareGroupDLQStateManager manager,
-        String groupId,
-        int sourcePartition
-    ) {
-        ShareGroupDLQRecordParameter param = new ShareGroupDLQRecordParameter(
-            groupId,
-            new TopicIdPartition(SOURCE_TOPIC_ID, sourcePartition, "source-topic"),
-            0L, 0L,
-            Optional.empty(), Optional.empty(), false);
-        return manager.new ProduceRequestHandler(
-            param,
-            new CompletableFuture<>(),
-            ShareGroupDLQStateManager.REQUEST_BACKOFF_MS,
-            ShareGroupDLQStateManager.REQUEST_BACKOFF_MAX_MS,
-            3);
-    }
-
     // --- DLQ record with copy record enabled ---
 
     @Test
@@ -1577,6 +1559,24 @@ class ShareGroupDLQStateManagerTest {
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    private static ShareGroupDLQStateManager.ProduceRequestHandler newHandlerForCoalesceTest(
+        ShareGroupDLQStateManager manager,
+        String groupId,
+        int sourcePartition
+    ) {
+        ShareGroupDLQRecordParameter param = new ShareGroupDLQRecordParameter(
+            groupId,
+            new TopicIdPartition(SOURCE_TOPIC_ID, sourcePartition, "source-topic"),
+            0L, 0L,
+            Optional.empty(), Optional.empty(), false);
+        return manager.new ProduceRequestHandler(
+            param,
+            new CompletableFuture<>(),
+            ShareGroupDLQStateManager.REQUEST_BACKOFF_MS,
+            ShareGroupDLQStateManager.REQUEST_BACKOFF_MAX_MS,
+            3);
     }
 
     // ---- Response builder helpers ----
