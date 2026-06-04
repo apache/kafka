@@ -59,6 +59,7 @@ import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_D
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC;
+import static org.apache.kafka.streams.StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
@@ -70,6 +71,7 @@ import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getBufferedRecordsPerPartition;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSize;
 
 /**
@@ -214,12 +216,7 @@ public final class TopologyConfig extends AbstractConfig {
         this.topologyOverrides = topologyOverrides;
         this.processingExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
 
-        if (isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides)) {
-            maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, BUFFERED_RECORDS_PER_PARTITION_CONFIG, maxBufferedSize);
-        } else {
-            maxBufferedSize = globalAppConfigs.getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        }
+        maxBufferedSize = configureMaxBufferedSize();
 
         final boolean stateStoreCacheMaxBytesOverridden = isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides);
         final boolean cacheMaxBytesBufferingOverridden = isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides);
@@ -312,6 +309,38 @@ public final class TopologyConfig extends AbstractConfig {
         this.transactionalStateStoresEnabled = Boolean.parseBoolean(
             String.valueOf(globalAppConfigs.originals()
                 .getOrDefault(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "false")));
+    }
+
+    private int configureMaxBufferedSize() {
+        final boolean bufferedRecordsPerPartitionOverridden = isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides);
+        final boolean inputBufferMaxBytesOverridden = isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides);
+
+        if (!bufferedRecordsPerPartitionOverridden && !inputBufferMaxBytesOverridden) {
+            return getBufferedRecordsPerPartition(globalAppConfigs);
+        }
+        return setMaxBufferedRecordsPerPartition(bufferedRecordsPerPartitionOverridden, inputBufferMaxBytesOverridden);
+    }
+
+    @SuppressWarnings("deprecation")
+    private int setMaxBufferedRecordsPerPartition(final boolean bufferedRecordsPerPartitionOverridden,
+                                                  final boolean inputBufferMaxBytesOverridden) {
+        int resolvedMaxBufferedSize = -1;
+        if (bufferedRecordsPerPartitionOverridden && inputBufferMaxBytesOverridden) {
+            log.info("Topology {} is using both deprecated config {} and new config {}, hence {} is ignored and the new config {} is used to keep memory usage under control.",
+                topologyName,
+                BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                INPUT_BUFFER_MAX_BYTES_CONFIG,
+                BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                INPUT_BUFFER_MAX_BYTES_CONFIG);
+        } else if (bufferedRecordsPerPartitionOverridden) {
+            log.warn("Topology {} is using deprecated config {}, and will be used to set max buffered size; we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
+                topologyName,
+                BUFFERED_RECORDS_PER_PARTITION_CONFIG,
+                INPUT_BUFFER_MAX_BYTES_CONFIG,
+                BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+            resolvedMaxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        }
+        return resolvedMaxBufferedSize;
     }
 
     @Deprecated

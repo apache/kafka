@@ -373,8 +373,15 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Optional<StreamsRebalanceData> streamsRebalanceData;
     private final StreamsMetadataState streamsMetadataState;
 
+    // -1L means the bytes guard is off; the legacy per-partition pause in StreamTask owns it instead.
+    static final long UNDEFINED_INPUT_BUFFER_MAX_BYTES = -1L;
+
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
+    private final AtomicLong maxBufferSizeInBytes = new AtomicLong(UNDEFINED_INPUT_BUFFER_MAX_BYTES);
+
+    // Tracked separately so we don't resume partitions paused by rebalance settle / offset reset.
+    private final Set<TopicPartition> partitionsPausedForBufferOverflow = new HashSet<>();
     private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
         new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
     // Makes the shutdown-state transition and the operation write atomic, so that the
@@ -413,6 +420,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
                                       final long maxUncommittedBytesPerThread,
+                                      final long maxBufferSizeInBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final StandbyUpdateListener userStandbyUpdateListener,
@@ -556,6 +564,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
             cache::resize,
+            maxBufferSizeInBytes,
             mainConsumerSetup.streamsRebalanceData,
             streamsMetadataState,
             metricsReporter,
@@ -825,6 +834,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer,
+                        final long maxBufferSizeInBytes,
                         final Optional<StreamsRebalanceData> streamsRebalanceData,
                         final StreamsMetadataState streamsMetadataState,
                         final StreamsThreadMetricsDelegatingReporter metricsReporter,
@@ -852,6 +862,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
+        this.maxBufferSizeInBytes.set(maxBufferSizeInBytes);
         this.metricsConfig = streamsMetrics.metricsRegistry().config();
         this.metricsReporter = metricsReporter;
 
@@ -1215,8 +1226,26 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
-    public void resizeCache(final long size) {
-        cacheResizeSize.set(size);
+    public void resizeCacheAndBufferMemory(final long cacheSize, final long maxBufferSize) {
+        cacheResizeSize.set(cacheSize);
+        maxBufferSizeInBytes.set(maxBufferSize);
+    }
+
+    private void maybeResumePartitionsPausedForBufferOverflow() {
+        if (maxBufferSizeInBytes.get() == UNDEFINED_INPUT_BUFFER_MAX_BYTES) {
+            return;
+        }
+        if (partitionsPausedForBufferOverflow.isEmpty()) {
+            return;
+        }
+        if (taskManager.getInputBufferSizeInBytes() <= maxBufferSizeInBytes.get()) {
+            // defensive copy — we clear the tracking set right after.
+            final Set<TopicPartition> toResume = new HashSet<>(partitionsPausedForBufferOverflow);
+            log.info("Buffered records size is at or below {}. Resuming partitions paused by buffer overflow {}",
+                maxBufferSizeInBytes.get(), toResume);
+            mainConsumer.resume(toResume);
+            partitionsPausedForBufferOverflow.clear();
+        }
     }
 
     /**
@@ -1299,6 +1328,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                 final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
+                maybeResumePartitionsPausedForBufferOverflow();
                 if (processed > 0) {
                     // It makes no difference to the outcome of these metrics when we record "0",
                     // so we can just avoid the method call when we didn't process anything.
@@ -1403,6 +1433,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final long pollLatency;
         taskManager.resumePollingForPartitionsWithAvailableSpace();
+        // processor threads drain async, so the bytes-guard resume check runs here each iteration.
+        maybeResumePartitionsPausedForBufferOverflow();
         pollLatency = pollPhase();
 
         if (streamsRebalanceData.isPresent()) {
@@ -1538,6 +1570,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         if (!records.nextOffsets().isEmpty()) {
             taskManager.updateNextOffsets(records.nextOffsets());
+        }
+
+        // soft cap — read isn't atomic across tasks, so small overshoots are fine.
+        final long bufferSize = taskManager.getInputBufferSizeInBytes();
+        if (maxBufferSizeInBytes.get() != UNDEFINED_INPUT_BUFFER_MAX_BYTES && bufferSize > maxBufferSizeInBytes.get()) {
+            // pause only non-empty partitions; pausing empty ones risks ordering deadlock (KAFKA-13152).
+            final Set<TopicPartition> nonEmptyPartitions = taskManager.nonEmptyPartitions();
+            log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
+                bufferSize, maxBufferSizeInBytes.get(), nonEmptyPartitions);
+            mainConsumer.pause(nonEmptyPartitions);
+            partitionsPausedForBufferOverflow.addAll(nonEmptyPartitions);
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {
