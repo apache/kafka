@@ -705,8 +705,9 @@ public class ShareGroupDLQStateManager {
 
                 long nextOffset = param.firstOffset();
                 long endOffset = param.lastOffset();
+                int recordCount = (int) (param.lastOffset() - param.firstOffset() + 1);
 
-                List<Record> records = new ArrayList<>();
+                List<Record> records = new ArrayList<>(recordCount);
                 LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
                 LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
                 maxBytesMap.put(tp, maxFetchBytes);
@@ -729,7 +730,7 @@ public class ShareGroupDLQStateManager {
                             if (record.offset() < param.firstOffset()) continue;
                             if (record.offset() > param.lastOffset()) {
                                 log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
-                                    param.lastOffset() - param.firstOffset(), param.firstOffset(), this);
+                                    recordCount, param.firstOffset(), this);
                                 originalRecordData = records;
                                 return;
                             }
@@ -741,7 +742,7 @@ public class ShareGroupDLQStateManager {
                     if (!done) break; // no more records available (reached HWM/LEO)
                 }
                 log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
-                    param.lastOffset() - param.firstOffset(), param.firstOffset(), this);
+                    recordCount, param.firstOffset(), this);
                 originalRecordData = records;
             }
         }
