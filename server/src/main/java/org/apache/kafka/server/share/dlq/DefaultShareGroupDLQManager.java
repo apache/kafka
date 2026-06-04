@@ -20,6 +20,7 @@ package org.apache.kafka.server.share.dlq;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.share.LogReader;
+import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.timer.Timer;
 
 import org.slf4j.Logger;
@@ -40,14 +41,30 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultShareGroupDLQManager.class);
 
-    public static ShareGroupDLQManager instance(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer, int maxFetchBytes, LogReader logReader) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, maxFetchBytes, logReader);
+    public static ShareGroupDLQManager instance(
+        KafkaClient client,
+        ShareGroupDLQMetadataCacheHelper cacheHelper,
+        Time time,
+        Timer timer,
+        ShareGroupMetrics metrics,
+        int maxFetchBytes,
+        LogReader logReader
+    ) {
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, metrics, maxFetchBytes, logReader);
         instance.start();
         return instance;
     }
 
-    private DefaultShareGroupDLQManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer, int maxFetchBytes, LogReader logReader) {
-        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, maxFetchBytes, logReader);
+    private DefaultShareGroupDLQManager(
+        KafkaClient client,
+        ShareGroupDLQMetadataCacheHelper cacheHelper,
+        Time time,
+        Timer timer,
+        ShareGroupMetrics shareGroupMetrics,
+        int maxFetchBytes,
+        LogReader logReader
+    ) {
+        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, maxFetchBytes, logReader);
     }
 
     private void start() {

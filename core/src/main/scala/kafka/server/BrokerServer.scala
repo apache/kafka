@@ -64,6 +64,7 @@ import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogManager 
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.server.partition.{AlterPartitionManager, DefaultAlterPartitionManager}
 import org.apache.kafka.server.share.dlq.{DefaultShareGroupDLQManager, NoOpShareGroupDLQManager, ShareGroupDLQManager}
+import org.apache.kafka.server.share.metrics.ShareGroupMetrics
 
 import java.time.Duration
 import java.util
@@ -165,6 +166,8 @@ class BrokerServer(
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
 
   var clientMetricsManager: ClientMetricsManager = _
+
+  var shareGroupMetrics: ShareGroupMetrics = _
 
   var sharePartitionManager: SharePartitionManager = _
 
@@ -390,6 +393,9 @@ class BrokerServer(
       /* create persister */
       persister = createShareStatePersister()
 
+      /* create metrics object to be shared with share DLQ manager share partition manager*/
+      shareGroupMetrics = new ShareGroupMetrics(time)
+
       /* create share group DLQ manager */
       shareGroupDLQManager = createShareGroupDLQManager()
 
@@ -472,6 +478,7 @@ class BrokerServer(
         config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong,
         persister,
         new ShareGroupConfigProvider(groupConfigManager),
+        shareGroupMetrics,
         brokerTopicStats,
         () => ShareVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)).supportsShareGroupDLQ(),
         shareGroupDLQManager
@@ -770,6 +777,7 @@ class BrokerServer(
           new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
           Time.SYSTEM,
           shareGroupTimer,
+          shareGroupMetrics,
           config.getInt(ServerConfigs.FETCH_MAX_BYTES_CONFIG),
           new ReplicaManagerLogReader(replicaManager)
         )
@@ -922,6 +930,9 @@ class BrokerServer(
 
       if (shareGroupDLQManager != null)
         Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
+
+      if (shareGroupMetrics != null)
+        Utils.swallow(this.logger.underlying, () => shareGroupMetrics.close())
 
       Utils.closeQuietly(shareGroupTimer, "share group timer")
 

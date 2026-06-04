@@ -17,7 +17,8 @@
   "apiKey": 88,
   "type": "response",
   "name": "StreamsGroupHeartbeatResponse",
-  "validVersions": "0",
+  // Version 1 adds TopologyDescriptionRequired (KIP-1331).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -26,6 +27,7 @@
   // - COORDINATOR_NOT_AVAILABLE (version 0+)
   // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
   // - INVALID_REQUEST (version 0+)
+  // - GROUP_ID_NOT_FOUND (version 0+)
   // - UNKNOWN_MEMBER_ID (version 0+)
   // - FENCED_MEMBER_EPOCH (version 0+)
   // - UNRELEASED_INSTANCE_ID (version 0+)
@@ -63,6 +65,9 @@
       "about": "Assigned standby tasks for this client. Null if unchanged since last heartbeat." },
     { "name": "WarmupTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Assigned warm-up tasks for this client. Null if unchanged since last heartbeat." },
+
+    { "name": "TopologyDescriptionRequired", "type": "bool", "versions": "1+", "default": "false",
+      "about": "True if the broker does not have an up-to-date topology description for this group. The client should send the topology description via StreamsGroupTopologyDescriptionUpdate." },
 
     // IQ-related information
     { "name": "EndpointInformationEpoch", "type": "int32", "versions": "0+",

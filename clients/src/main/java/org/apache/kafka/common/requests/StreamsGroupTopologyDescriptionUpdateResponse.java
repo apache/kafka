@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.EnumMap;
 import java.util.Map;
 
 /**
@@ -32,37 +31,28 @@ import java.util.Map;
  * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
  * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
  * - {@link Errors#INVALID_REQUEST}
- * - {@link Errors#INVALID_GROUP_ID}
+ * - {@link Errors#UNSUPPORTED_VERSION}
+ * - {@link Errors#UNKNOWN_MEMBER_ID}
  * - {@link Errors#GROUP_ID_NOT_FOUND}
- * - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
+ * - {@link Errors#STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED}
  */
-public class StreamsGroupDescribeResponse extends AbstractResponse {
+public class StreamsGroupTopologyDescriptionUpdateResponse extends AbstractResponse {
 
-    // TopologyDescriptionStatus int8 values (v1+). These values must not change.
-    public static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_REQUESTED = 0;
-    public static final byte TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED = 1;
-    public static final byte TOPOLOGY_DESCRIPTION_STATUS_ERROR = 2;
-    public static final byte TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE = 3;
+    private final StreamsGroupTopologyDescriptionUpdateResponseData data;
 
-    private final StreamsGroupDescribeResponseData data;
-
-    public StreamsGroupDescribeResponse(StreamsGroupDescribeResponseData data) {
-        super(ApiKeys.STREAMS_GROUP_DESCRIBE);
+    public StreamsGroupTopologyDescriptionUpdateResponse(StreamsGroupTopologyDescriptionUpdateResponseData data) {
+        super(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE);
         this.data = data;
     }
 
     @Override
-    public StreamsGroupDescribeResponseData data() {
+    public StreamsGroupTopologyDescriptionUpdateResponseData data() {
         return data;
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
-        data.groups().forEach(
-            group -> updateErrorCounts(counts, Errors.forCode(group.errorCode()))
-        );
-        return counts;
+        return errorCounts(Errors.forCode(data.errorCode()));
     }
 
     @Override
@@ -75,9 +65,8 @@ public class StreamsGroupDescribeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static StreamsGroupDescribeResponse parse(Readable readable, short version) {
-        return new StreamsGroupDescribeResponse(
-            new StreamsGroupDescribeResponseData(readable, version)
-        );
+    public static StreamsGroupTopologyDescriptionUpdateResponse parse(Readable readable, short version) {
+        return new StreamsGroupTopologyDescriptionUpdateResponse(
+            new StreamsGroupTopologyDescriptionUpdateResponseData(readable, version));
     }
 }
