@@ -57,6 +57,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -92,11 +93,6 @@ public class ShareGroupDLQStateManager {
     private final Set<Node> inFlight = new HashSet<>();
     private final Map<Node, List<ProduceRequestHandler>> nodeRPCMap = new HashMap<>();
     private final Object nodeMapLock = new Object();
-
-    // Called when the generateRequests method is executed by InterBrokerSendThread, returning requests.
-    // Mainly for testing and introspection purpose to inspect the state of the nodeRPC map
-    // when generateRequests is called.
-    private Runnable generateCallback;
 
     public ShareGroupDLQStateManager(
         KafkaClient client,
@@ -173,13 +169,8 @@ public class ShareGroupDLQStateManager {
     }
 
     // Visibility for tests
-    void setGenerateCallback(Runnable generateCallback) {
-        this.generateCallback = generateCallback;
-    }
-
-    // Visibility for tests
     Map<Node, List<ShareGroupDLQStateManager.ProduceRequestHandler>> nodeRPCMap() {
-        return nodeRPCMap;
+        return Collections.unmodifiableMap(nodeRPCMap);
     }
 
     private void enqueue(ProduceRequestHandler requestHandler) {
@@ -671,11 +662,6 @@ public class ShareGroupDLQStateManager {
 
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
-            // Introspection for testing - will be null in prod
-            if (generateCallback != null) {
-                generateCallback.run();
-            }
-
             List<RequestAndCompletionHandler> requests = new ArrayList<>();
 
             if (!queue.isEmpty()) {

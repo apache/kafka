@@ -59,9 +59,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_DELIVERY_COUNT;
@@ -1177,17 +1179,21 @@ class ShareGroupDLQStateManagerTest {
     @Test
     public void testGenerateCallbackObservesAccumulatedHandlersInNodeRPCMap() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
+        ExecutorService executor = Executors.newFixedThreadPool(1);
 
         client.prepareResponseFrom(body -> true, null, DEFAULT_LEADER);
 
         stateManager = builder().withClient(client).withCacheHelper(happyCacheHelper(DEFAULT_LEADER)).build();
 
-        AtomicBoolean callbackSuccess = new AtomicBoolean(false);
-        stateManager.setGenerateCallback(() -> {
-            List<ShareGroupDLQStateManager.ProduceRequestHandler> handlers = stateManager.nodeRPCMap().get(DEFAULT_LEADER);
-            if (handlers != null && handlers.size() > 2) {
-                callbackSuccess.set(true);
+        Future<Boolean> done = executor.submit(() -> {
+            long start = System.currentTimeMillis();
+            while (System.currentTimeMillis() - start <= TestUtils.DEFAULT_MAX_WAIT_MS) {    // keep checking for a few secs
+                List<ShareGroupDLQStateManager.ProduceRequestHandler> handlers = stateManager.nodeRPCMap().get(DEFAULT_LEADER);
+                if (handlers != null && handlers.size() > 2) {
+                    return true;
+                }
             }
+            return false;
         });
 
         stateManager.start();
@@ -1204,7 +1210,11 @@ class ShareGroupDLQStateManagerTest {
         }
 
         // Wait until the callback observes nodeRPCMap with more than 2 handlers piled up.
-        TestUtils.waitForCondition(callbackSuccess::get, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "unable to verify batching");
+        TestUtils.waitForCondition(done::get, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> {
+            executor.shutdown();
+            return "unable to verify batching";
+        });
+        executor.shutdown();
     }
 
     // ---- Direct unit tests for coalesceProduceRequests ----
