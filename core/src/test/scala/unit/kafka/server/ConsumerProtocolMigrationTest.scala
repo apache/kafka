@@ -407,54 +407,6 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
 
     val groupId = "grp"
-
-    // Consumer member 1 joins the group.
-    joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
-
-    // A classic member tries to join the consumer group and is rejected.
-    assertEquals(
-      new JoinGroupResponseData()
-        .setProtocolName(null)
-        .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code),
-      sendJoinRequest(
-        groupId = groupId,
-        metadata = metadata(List.empty)
-      )
-    )
-
-    // The group is still a consumer group.
-    assertEquals(
-      List(
-        new ListGroupsResponseData.ListedGroup()
-          .setGroupId(groupId)
-          .setProtocolType("consumer")
-          .setGroupState(ConsumerGroupState.STABLE.toString)
-          .setGroupType(Group.GroupType.CONSUMER.toString)
-      ),
-      listGroups(
-        statesFilter = List.empty,
-        typesFilter = List(Group.GroupType.CONSUMER.toString)
-      )
-    )
-  }
-
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, value = "disabled")
-    )
-  )
-  def testStaticMemberReplacementWithClassicMemberWithDisabledMigrationPolicy(): Unit = {
-    // Creates the __consumer_offsets topics because it won't be created automatically
-    // in this test because it does not use FindCoordinator API.
-    createOffsetsTopic()
-
-    // Create the topic.
-    createTopic(
-      topic = "foo",
-      numPartitions = 3
-    )
-
-    val groupId = "grp"
     val instanceId = "instance-id"
 
     // A static member using the consumer protocol joins the group.
@@ -468,19 +420,37 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       expectedError = Errors.NONE
     )
 
-    // A classic member replaces the static member using the same instance id.
-    val joinGroupResponseData = sendJoinRequest(
-      groupId = groupId,
-      groupInstanceId = instanceId,
-      metadata = metadata(List.empty)
-    )
+    val rejectedResponse = new JoinGroupResponseData()
+      .setProtocolName(null)
+      .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code)
+
+    // A new dynamic member is rejected.
     assertEquals(
-      new JoinGroupResponseData()
-        .setGenerationId(2)
-        .setProtocolType("consumer")
-        .setProtocolName("consumer-range")
-        .setMemberId(joinGroupResponseData.memberId),
-      joinGroupResponseData
+      rejectedResponse,
+      sendJoinRequest(
+        groupId = groupId,
+        metadata = metadata(List.empty)
+      )
+    )
+
+    // A new static member with a different instance id is rejected.
+    assertEquals(
+      rejectedResponse,
+      sendJoinRequest(
+        groupId = groupId,
+        groupInstanceId = "another-instance-id",
+        metadata = metadata(List.empty)
+      )
+    )
+
+    // A static member reusing the existing instance id is also rejected.
+    assertEquals(
+      rejectedResponse,
+      sendJoinRequest(
+        groupId = groupId,
+        groupInstanceId = instanceId,
+        metadata = metadata(List.empty)
+      )
     )
 
     // The group is still a consumer group.

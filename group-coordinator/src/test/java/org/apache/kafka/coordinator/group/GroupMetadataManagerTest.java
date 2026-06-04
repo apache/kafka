@@ -14192,6 +14192,7 @@ public class GroupMetadataManagerTest {
     public void testJoiningConsumerGroupWithClassicProtocolFailsIfMigrationDisabled(boolean isStatic) {
         String groupId = "group-id";
         String memberId = Uuid.randomUuid().toString();
+        String instanceId = "instance-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.toString())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
@@ -14199,6 +14200,7 @@ public class GroupMetadataManagerTest {
                     .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(10)
+                    .setInstanceId(isStatic ? instanceId : null)
                     .build()))
             .build();
 
@@ -14214,10 +14216,27 @@ public class GroupMetadataManagerTest {
             String.format("Cannot join the consumer group %s with the classic protocol because the group migration is disabled.", groupId),
             ex.getMessage()
         );
+
+        if (isStatic) {
+            // A classic member reusing the existing instance id is also rejected.
+            JoinGroupRequestData replaceRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withGroupInstanceId(instanceId)
+                .withDefaultProtocolTypeAndProtocols()
+                .build();
+
+            Exception replaceEx = assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupJoin(replaceRequest, true));
+            assertEquals(
+                String.format("Cannot join the consumer group %s with the classic protocol because the group migration is disabled.", groupId),
+                replaceEx.getMessage()
+            );
+        }
     }
 
-    @Test
-    public void testRejoiningClassicMemberIsAllowedWhenMigrationDisabled() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testRejoiningClassicMemberIsAllowedWhenMigrationDisabled(boolean isStatic) {
         String groupId = "group-id";
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
@@ -14228,6 +14247,7 @@ public class GroupMetadataManagerTest {
             .buildCoordinatorMetadataImage();
 
         String memberId = Uuid.randomUuid().toString();
+        String instanceId = "instance-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.toString())
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new NoOpPartitionAssignor()))
@@ -14241,6 +14261,7 @@ public class GroupMetadataManagerTest {
                     .setSubscribedTopicNames(List.of(fooTopicName))
                     .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)), 10))
+                    .setInstanceId(isStatic ? instanceId : null)
                     .setClassicMemberMetadata(
                         new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                             .setSessionTimeoutMs(500)
@@ -14256,12 +14277,13 @@ public class GroupMetadataManagerTest {
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
-            .withMemberId(memberId)
+            .withMemberId(isStatic ? UNKNOWN_MEMBER_ID : memberId)
+            .withGroupInstanceId(isStatic ? instanceId : null)
             .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
             .build();
 
-        // The existing classic member is allowed to rejoin even though migration is disabled
-        assertDoesNotThrow(() -> context.sendClassicGroupJoin(request));
+        // The existing classic member is allowed to rejoin even though migration is disabled.
+        assertDoesNotThrow(() -> context.sendClassicGroupJoin(request, isStatic));
     }
 
     @Test
@@ -14572,7 +14594,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new NoOpPartitionAssignor()))
             .withMetadataImage(metadataImage)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
