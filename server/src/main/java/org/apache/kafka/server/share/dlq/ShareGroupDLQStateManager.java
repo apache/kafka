@@ -170,6 +170,11 @@ public class ShareGroupDLQStateManager {
 
     // Visibility for tests
     Map<Node, List<ShareGroupDLQStateManager.ProduceRequestHandler>> nodeRPCMap() {
+        // Using Collections.unmodifiableMap and not Map.copyOf as we are looking for a quick
+        // immutable view of the map in the tests. The tests will invoke the
+        // method repeatedly to check the state of the map. Map.copyOf will create
+        // a deep copy of the map on every call and changes will might get missed resulting
+        // in flakiness.
         return Collections.unmodifiableMap(nodeRPCMap);
     }
 
