@@ -1177,7 +1177,7 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
-    public void testGenerateCallbackObservesAccumulatedHandlersInNodeRPCMap() throws Exception {
+    public void testMultipleAccumulatedHandlersInNodeRPCMap() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
         ExecutorService executor = Executors.newFixedThreadPool(1);
 
