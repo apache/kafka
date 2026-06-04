@@ -4262,8 +4262,13 @@ public class GroupMetadataManager {
         // We will write a member epoch of -2 for this departing static member.
         // Assignment epochs are reset to 0 so when the static member rejoins, partitions
         // are considered assigned from epoch 0 to the new member ID.
+        MemberState nextState = member.state() == MemberState.UNREVOKED_PARTITIONS ?
+            MemberState.STABLE :
+            member.state();
+
         ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setState(nextState)
             .setPartitionsPendingRevocation(Map.of())
             .resetAssignedPartitionsEpochsToZero()
             .build();

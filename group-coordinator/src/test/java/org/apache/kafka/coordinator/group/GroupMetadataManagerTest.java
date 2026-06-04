@@ -2807,6 +2807,59 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStaticMemberInUnrevokedPartitionsTemporarilyLeavesAsStable() {
+        String groupId = "fooup";
+        String instnaceId = "instance-id";
+        String memberId = Uuid.randomUuid().toString();
+        Uuid topicId = Uuid.randomUuid();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
+            .setInstanceId(instnaceId)
+            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 0)), 10))
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 1)), 10))
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member)
+                .withAssignment(memberId, mkAssignment(mkTopicAssignment(topicId, 0)))
+                .withAssignmentEpoch(10))
+            .build();
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result =
+            context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setInstanceId("instance-id")
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH));
+
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(member)
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setState(MemberState.STABLE)
+            .setPartitionsPendingRevocation(Map.of())
+            .resetAssignedPartitionsEpochsToZero()
+            .build();
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH),
+            result.response()
+        );
+        assertEquals(1, result.records().size());
+        assertRecordEquals(
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember),
+            result.records().get(0)
+        );
+    }
+
+
+    @Test
     public void testLeavingStaticMemberBumpsGroupEpoch() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
