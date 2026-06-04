@@ -8974,11 +8974,8 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
-        final Long acceptableRecoveryLag = groupConfig.flatMap(GroupConfig::streamsAcceptableRecoveryLag)
-            .orElse(config.streamsGroupAcceptableRecoveryLag());
         return new TreeMap<>(Map.of(
-            "num.standby.replicas", numStandbyReplicas.toString(),
-            "acceptable.recovery.lag", acceptableRecoveryLag.toString()
+            "num.standby.replicas", numStandbyReplicas.toString()
         ));
     }
 
