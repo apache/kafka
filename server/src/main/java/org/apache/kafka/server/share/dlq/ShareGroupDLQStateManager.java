@@ -653,6 +653,7 @@ public class ShareGroupDLQStateManager {
                     return originalRecordData;
                 }
 
+                long startTime = time.hiResClockMs();
                 TopicIdPartition tp = param.topicIdPartition();
 
                 FetchParams fetchParams = new FetchParams(
@@ -661,7 +662,7 @@ public class ShareGroupDLQStateManager {
                     0L,                                         // maxWaitMs - don't block
                     1,                                          // minBytes
                     maxFetchBytes,                              // maxBytes
-                    FetchIsolation.HIGH_WATERMARK,              // or LOG_END if you want uncommitted
+                    FetchIsolation.HIGH_WATERMARK,              // committed only
                     Optional.empty()                            // clientMetadata
                 );
 
@@ -685,18 +686,24 @@ public class ShareGroupDLQStateManager {
                         return List.of();
                     }
 
-                    boolean progressed = false;
+                    boolean done = false;
                     for (RecordBatch batch : res.info().records.batches()) {
                         for (Record record : batch) {
                             if (record.offset() < param.firstOffset()) continue;
-                            if (record.offset() > param.lastOffset()) return records;   //done
+                            if (record.offset() > param.lastOffset()) {
+                                log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
+                                    param.lastOffset() - param.firstOffset(), param.firstOffset(), this);
+                                return records;   // done
+                            }
                             records.add(record);
                             nextOffset = record.offset() + 1;
-                            progressed = true;
+                            done = true;
                         }
                     }
-                    if (!progressed) break; // no more records available (reached HWM/LEO)
+                    if (!done) break; // no more records available (reached HWM/LEO)
                 }
+                log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
+                    param.lastOffset() - param.firstOffset(), param.firstOffset(), this);
                 return records;
             }
             return List.of();
