@@ -1419,6 +1419,7 @@ org.apache.kafka.clients.consumer.internals.ConsumerMembershipManagerTest:
 - testOnPartitionsLostNoError
 - testOnSubscriptionUpdatedDoesNotTransitionToJoiningIfInGroup
 - testOnSubscriptionUpdatedTransitionsToJoiningOnPollIfNotInGroup
+- testPartialAckNotRepeatedOnBackgroundReconcileWhenMetadataMissing
 - testPollMustCallsMaybeReconcileWithFalse
 - testRebalanceMetricsForMultipleReconciliations
 - testRebalanceMetricsOnFailedRebalance
