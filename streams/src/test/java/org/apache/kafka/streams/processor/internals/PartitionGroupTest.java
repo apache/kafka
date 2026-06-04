@@ -53,6 +53,7 @@ import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -83,6 +84,7 @@ public class PartitionGroupTest {
     private final Metrics metrics = new Metrics();
     private final Sensor enforcedProcessingSensor = metrics.sensor(UUID.randomUUID().toString());
     private final MetricName lastLatenessValue = new MetricName("record-lateness-last-value", "", "", mkMap());
+    private final MetricName totalBytesValue = new MetricName("input-buffer-bytes-total", "", "", mkMap());
 
 
     private static Sensor getValueSensor(final Metrics metrics, final MetricName metricName) {
@@ -479,6 +481,7 @@ public class PartitionGroupTest {
                 tp -> OptionalLong.of(0L),
                 getValueSensor(metrics, lastLatenessValue),
                 enforcedProcessingSensor,
+                getValueSensor(metrics, totalBytesValue),
                 10
             );
 
@@ -542,6 +545,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             maxTaskIdleMs
         );
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -575,6 +579,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             maxTaskIdleMs
         );
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -607,6 +612,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             maxTaskIdleMs
         );
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
@@ -692,6 +698,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             StreamsConfig.MAX_TASK_IDLE_MS_DISABLED
         );
 
@@ -725,6 +732,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             0L
         );
 
@@ -762,6 +770,7 @@ public class PartitionGroupTest {
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             0L
         );
 
@@ -792,6 +801,7 @@ public class PartitionGroupTest {
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             0L
         );
 
@@ -822,6 +832,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             1L
         );
         group.updateLags();
@@ -903,6 +914,7 @@ public class PartitionGroupTest {
             tp -> lags.getOrDefault(tp, OptionalLong.empty()),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             10L
         );
 
@@ -930,6 +942,40 @@ public class PartitionGroupTest {
         hasNoFetchedLag(group, partition1);
     }
 
+    @Test
+    public void shouldUpdateTotalBytesBufferedOnRecordsAdditionAndConsumption() {
+        final PartitionGroup group = getBasicGroup();
+        final ConsumerRecord<byte[], byte[]> r1 = new ConsumerRecord<>("topic", 1, 1, 1L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty());
+        final ConsumerRecord<byte[], byte[]> r2 = new ConsumerRecord<>("topic", 2, 1, 2L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty());
+
+        assertEquals(0L, group.totalBytesBuffered());
+
+        group.addRawRecords(partition1, List.of(r1));
+        group.addRawRecords(partition2, List.of(r2));
+        assertEquals(consumerRecordSizeInBytes(r1) + consumerRecordSizeInBytes(r2), group.totalBytesBuffered());
+
+        final RecordInfo info = new RecordInfo();
+        group.nextRecord(info, 0L);
+        // one record drained — total should drop by that record's size
+        assertEquals(consumerRecordSizeInBytes(r2), group.totalBytesBuffered());
+    }
+
+    @Test
+    public void shouldReportNonEmptyTopicPartitions() {
+        final PartitionGroup group = getBasicGroup();
+        assertEquals(0, group.getNonEmptyTopicPartitions().size());
+
+        final ConsumerRecord<byte[], byte[]> r1 = new ConsumerRecord<>("topic", 1, 1, 1L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty());
+        group.addRawRecords(partition1, List.of(r1));
+
+        assertEquals(1, group.getNonEmptyTopicPartitions().size());
+        assertTrue(group.getNonEmptyTopicPartitions().contains(partition1));
+
+        final ConsumerRecord<byte[], byte[]> r2 = new ConsumerRecord<>("topic", 2, 1, 2L, TimestampType.CREATE_TIME, 0, 0, recordKey, recordValue, new RecordHeaders(), Optional.empty());
+        group.addRawRecords(partition2, List.of(r2));
+        assertEquals(2, group.getNonEmptyTopicPartitions().size());
+    }
+
     private PartitionGroup getBasicGroup() {
         return new PartitionGroup(
             logContext,
@@ -940,6 +986,7 @@ public class PartitionGroupTest {
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
             enforcedProcessingSensor,
+            getValueSensor(metrics, totalBytesValue),
             maxTaskIdleMs
         );
     }
