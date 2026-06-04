@@ -17,21 +17,19 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKeys;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-
-import java.util.Optional;
 
 class KStreamGlobalKTableJoin<K1, V1, K2, V2, VOut> implements ProcessorSupplier<K1, V1, K1, VOut> {
 
     private final KTableValueGetterSupplier<K2, V2> valueGetterSupplier;
-    private final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner;
+    private final ValueJoinerWithKeys<? super K2, ? super K1, ? super V1, ? super V2, ? extends VOut> joiner;
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> mapper;
     private final boolean leftJoin;
 
     KStreamGlobalKTableJoin(final KTableValueGetterSupplier<K2, V2> valueGetterSupplier,
-                            final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
+                            final ValueJoinerWithKeys<? super K2, ? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
                             final KeyValueMapper<? super K1, ? super V1, ? extends K2> mapper,
                             final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
@@ -42,6 +40,6 @@ class KStreamGlobalKTableJoin<K1, V1, K2, V2, VOut> implements ProcessorSupplier
 
     @Override
     public Processor<K1, V1, K1, VOut> get() {
-        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), mapper, joiner, leftJoin, Optional.empty(), Optional.empty());
+        return new KStreamGlobalKTableJoinProcessor<>(valueGetterSupplier.get(), mapper, joiner, leftJoin);
     }
 }

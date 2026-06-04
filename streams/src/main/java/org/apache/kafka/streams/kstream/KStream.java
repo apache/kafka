@@ -1352,6 +1352,10 @@ public interface KStream<K, V> {
                                                          final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                          final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
 
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                         final ValueJoinerWithKeys<? super GlobalKey, ? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
+
     /**
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      *
@@ -1370,6 +1374,11 @@ public interface KStream<K, V> {
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                          final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                          final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+                                                         final Named named);
+
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                         final ValueJoinerWithKeys<? super GlobalKey, ? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
                                                          final Named named);
 
     /**
@@ -1465,6 +1474,10 @@ public interface KStream<K, V> {
                                                              final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                              final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
 
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                             final ValueJoinerWithKeys<? super GlobalKey, ? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
+
     /**
      * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      *
@@ -1473,6 +1486,11 @@ public interface KStream<K, V> {
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                              final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                              final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner,
+                                                             final Named named);
+
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                             final ValueJoinerWithKeys<? super GlobalKey, ? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
                                                              final Named named);
 
     /**
