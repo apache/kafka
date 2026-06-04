@@ -18,9 +18,7 @@
 package org.apache.kafka.trogdor.workload;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
@@ -166,11 +164,6 @@ public class ConnectionStressWorker implements TaskWorker {
                 try (Metrics metrics = new Metrics()) {
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                         metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
-                        NetworkClient.BootstrapConfiguration bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
-                            conf.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-                            ClientDnsLookup.forConfig(conf.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                            conf.getLong(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
-                            conf.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
                         try (NetworkClient client = new NetworkClient(selector,
                             updater,
                             "ConnectionStressWorker",
@@ -187,7 +180,7 @@ public class ConnectionStressWorker implements TaskWorker {
                             new ApiVersions(),
                             logContext,
                             MetadataRecoveryStrategy.NONE,
-                            bootstrapConfiguration)) {
+                            NetworkClient.BootstrapConfiguration.DISABLED)) {
                             NetworkClientUtils.awaitReady(client, targetNode, Time.SYSTEM, 500);
                         }
                     }

@@ -30,6 +30,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
@@ -342,7 +343,11 @@ public class Sender implements Runnable {
 
         long currentTimeMs = time.milliseconds();
         long pollTimeout = sendProducerData(currentTimeMs);
-        client.poll(pollTimeout, currentTimeMs);
+        try {
+            client.poll(pollTimeout, currentTimeMs);
+        } catch (BootstrapResolutionException e) {
+            metadata.fatalError(e);
+        }
     }
 
     // We handle {@code TransactionalIdAuthorizationException} and {@code ClusterAuthorizationException} by first

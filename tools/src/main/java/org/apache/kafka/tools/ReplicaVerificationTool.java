@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
@@ -673,11 +672,6 @@ public class ReplicaVerificationTool {
                 channelBuilder,
                 logContext
             );
-            NetworkClient.BootstrapConfiguration bootstrapConfiguration = NetworkClient.BootstrapConfiguration.enabled(
-                consumerConfig.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-                ClientDnsLookup.forConfig(consumerConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-                consumerConfig.getLong(ConsumerConfig.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG),
-                consumerConfig.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG));
             this.networkClient = new NetworkClient(
                 selector,
                 new ManualMetadataUpdater(),
@@ -695,7 +689,7 @@ public class ReplicaVerificationTool {
                 new ApiVersions(),
                 logContext,
                 MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
-                bootstrapConfiguration
+                NetworkClient.BootstrapConfiguration.DISABLED
             );
         }
 

@@ -50,6 +50,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.DuplicateVoterException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
@@ -316,6 +317,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -11762,6 +11764,31 @@ public class KafkaAdminClientTest {
             ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(10000));
 
             TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
+        }
+    }
+
+    @Test
+    public void testAdminBootstrapResolutionExceptionPropagated() throws Exception {
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost);
+        configs.put(CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000");
+
+        try (Admin admin = Admin.create(configs)) {
+            assertThrows(BootstrapResolutionException.class, () -> {
+                long startTime = System.currentTimeMillis();
+                long maxWaitTime = 15000;
+                while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                    try {
+                        admin.listTopics().names().get();
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof BootstrapResolutionException) {
+                            throw (BootstrapResolutionException) e.getCause();
+                        }
+                    }
+                }
+                fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+            });
         }
     }
 }

@@ -46,6 +46,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -3260,6 +3261,28 @@ public class KafkaProducerTest {
 
         public static void resetCounters() {
             CLOSE_COUNT.set(0);
+        }
+    }
+
+    @Test
+    public void testProducerBootstrapResolutionExceptionPropagated() {
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000"
+        );
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs)) {
+            assertThrows(BootstrapResolutionException.class, () -> {
+                long startTime = System.currentTimeMillis();
+                long maxWaitTime = 15000;
+                while (System.currentTimeMillis() - startTime < maxWaitTime) {
+                    producer.partitionsFor("test-topic");
+                }
+                fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
+            });
         }
     }
 }
