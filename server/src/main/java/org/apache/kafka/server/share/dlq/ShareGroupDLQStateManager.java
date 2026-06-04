@@ -250,6 +250,7 @@ public class ShareGroupDLQStateManager {
         ) {
             this.param = param;
             this.result = result;
+            this.originalRecordData = new ArrayList<>();
             this.createTopicsBackoff = new ExponentialBackoffManager(
                 maxRPCRetryAttempts,
                 backoffMs,
@@ -364,7 +365,8 @@ public class ShareGroupDLQStateManager {
         }
 
         public ProduceRequestData.TopicProduceData topicProduceData() {
-            originalRecordData = fetchRecordData();
+            maybeFetchRecordData();
+
             List<SimpleRecord> simpleRecords = new ArrayList<>();
             for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
                 long timestamp = time.hiResClockMs();
@@ -682,10 +684,10 @@ public class ShareGroupDLQStateManager {
             }
         }
 
-        private List<Record> fetchRecordData() {
+        private void maybeFetchRecordData() {
             if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-                if (originalRecordData != null && !originalRecordData.isEmpty()) {
-                    return originalRecordData;
+                if (!originalRecordData.isEmpty()) {
+                    return;
                 }
 
                 long startTime = time.hiResClockMs();
@@ -718,7 +720,7 @@ public class ShareGroupDLQStateManager {
                     LogReadResult res = result.get(param.topicIdPartition());
                     if (res == null || res.error().code() != Errors.NONE.code()) {
                         log.warn("Unable to fetch actual record at offset {} for handler {}.", nextOffset, this);
-                        return List.of();
+                        return;
                     }
 
                     boolean done = false;
@@ -728,7 +730,8 @@ public class ShareGroupDLQStateManager {
                             if (record.offset() > param.lastOffset()) {
                                 log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
                                     param.lastOffset() - param.firstOffset(), param.firstOffset(), this);
-                                return records;   // done
+                                originalRecordData = records;
+                                return;
                             }
                             records.add(record);
                             nextOffset = record.offset() + 1;
@@ -739,9 +742,8 @@ public class ShareGroupDLQStateManager {
                 }
                 log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
                     param.lastOffset() - param.firstOffset(), param.firstOffset(), this);
-                return records;
+                originalRecordData = records;
             }
-            return List.of();
         }
     }
 
