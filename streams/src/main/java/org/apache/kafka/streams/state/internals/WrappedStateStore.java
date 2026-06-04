@@ -72,6 +72,20 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         this.wrapped = wrapped;
     }
 
+    /**
+     * Walks the wrapped-store chain rooted at this store's {@code wrapped()} until it
+     * finds an instance of {@code innerType}, or returns {@code null} if none is present.
+     */
+    public <T extends StateStore> T findInner(final Class<T> innerType) {
+        if (innerType.isInstance(wrapped)) {
+            return innerType.cast(wrapped);
+        } else if (wrapped instanceof WrappedStateStore) {
+            return ((WrappedStateStore<?, ?, ?>) wrapped).findInner(innerType);
+        } else {
+            return null;
+        }
+    }
+
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         wrapped.init(stateStoreContext, root);

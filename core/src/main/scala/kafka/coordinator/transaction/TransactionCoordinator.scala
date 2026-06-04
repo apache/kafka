@@ -28,7 +28,7 @@ import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.utils.internals.LogContext
-import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionConfig, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.util.Scheduler
@@ -50,7 +50,7 @@ object TransactionCoordinator {
 
     val transactionLogConfig = new TransactionLogConfig(config)
     val transactionStateManagerConfig = new TransactionStateManagerConfig(config)
-    val txnConfig = TransactionConfig(transactionStateManagerConfig.transactionalIdExpirationMs,
+    val txnConfig = new TransactionConfig(transactionStateManagerConfig.transactionalIdExpirationMs,
       transactionStateManagerConfig.transactionMaxTimeoutMs,
       transactionLogConfig.transactionTopicPartitions,
       transactionLogConfig.transactionTopicReplicationFactor,

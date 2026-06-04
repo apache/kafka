@@ -10959,52 +10959,6 @@ public class KafkaAdminClientTest {
         assertEquals(elements.length, collection.size(), "There are unexpected extra elements in the collection.");
     }
 
-    public static KafkaAdminClient createInternal(AdminClientConfig config, KafkaAdminClient.TimeoutProcessorFactory timeoutProcessorFactory) {
-        return KafkaAdminClient.createInternal(config, timeoutProcessorFactory);
-    }
-
-    public static class FailureInjectingTimeoutProcessorFactory extends KafkaAdminClient.TimeoutProcessorFactory {
-
-        private int numTries = 0;
-
-        private int failuresInjected = 0;
-
-        @Override
-        public KafkaAdminClient.TimeoutProcessor create(long now) {
-            return new FailureInjectingTimeoutProcessor(now);
-        }
-
-        synchronized boolean shouldInjectFailure() {
-            numTries++;
-            if (numTries == 1) {
-                failuresInjected++;
-                return true;
-            }
-            return false;
-        }
-
-        public synchronized int failuresInjected() {
-            return failuresInjected;
-        }
-
-        public final class FailureInjectingTimeoutProcessor extends KafkaAdminClient.TimeoutProcessor {
-            public FailureInjectingTimeoutProcessor(long now) {
-                super(now);
-            }
-
-            boolean callHasExpired(KafkaAdminClient.Call call) {
-                if ((!call.isInternal()) && shouldInjectFailure()) {
-                    log.debug("Injecting timeout for {}.", call);
-                    return true;
-                } else {
-                    boolean ret = super.callHasExpired(call);
-                    log.debug("callHasExpired({}) = {}", call, ret);
-                    return ret;
-                }
-            }
-        }
-    }
-
     @ParameterizedTest
     @CsvSource({ "false, false", "false, true", "true, false", "true, true" })
     public void testAddRaftVoterRequest(boolean fail, boolean sendClusterId) throws Exception {

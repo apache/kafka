@@ -195,6 +195,7 @@ public final class TopologyConfig extends AbstractConfig {
     public final Supplier<ProcessingExceptionHandler> processingExceptionHandlerSupplier;
 
     public final boolean ensureExplicitInternalResourceNaming;
+    public final boolean transactionalStateStoresEnabled;
 
     public TopologyConfig(final StreamsConfig configs) {
         this(null, configs, mkObjectProperties(configs.originals()));
@@ -306,6 +307,9 @@ public final class TopologyConfig extends AbstractConfig {
         }
 
         ensureExplicitInternalResourceNaming = globalAppConfigs.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG);
+        this.transactionalStateStoresEnabled = Boolean.parseBoolean(
+            String.valueOf(globalAppConfigs.originals()
+                .getOrDefault(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "false")));
     }
 
     @Deprecated
@@ -349,7 +353,8 @@ public final class TopologyConfig extends AbstractConfig {
             timestampExtractorSupplier.get(),
             deserializationExceptionHandlerSupplier.get(),
             processingExceptionHandlerSupplier.get(),
-            eosEnabled
+            eosEnabled,
+            transactionalStateStoresEnabled
         );
     }
 
@@ -361,6 +366,7 @@ public final class TopologyConfig extends AbstractConfig {
         public final DeserializationExceptionHandler deserializationExceptionHandler;
         public final ProcessingExceptionHandler processingExceptionHandler;
         public final boolean eosEnabled;
+        public final boolean transactionalStateStoresEnabled;
 
         private TaskConfig(final long maxTaskIdleMs,
                            final long taskTimeoutMs,
@@ -368,7 +374,8 @@ public final class TopologyConfig extends AbstractConfig {
                            final TimestampExtractor timestampExtractor,
                            final DeserializationExceptionHandler deserializationExceptionHandler,
                            final ProcessingExceptionHandler processingExceptionHandler,
-                           final boolean eosEnabled) {
+                           final boolean eosEnabled,
+                           final boolean transactionalStateStoresEnabled) {
             this.maxTaskIdleMs = maxTaskIdleMs;
             this.taskTimeoutMs = taskTimeoutMs;
             this.maxBufferedSize = maxBufferedSize;
@@ -376,6 +383,7 @@ public final class TopologyConfig extends AbstractConfig {
             this.deserializationExceptionHandler = deserializationExceptionHandler;
             this.processingExceptionHandler = processingExceptionHandler;
             this.eosEnabled = eosEnabled;
+            this.transactionalStateStoresEnabled = transactionalStateStoresEnabled;
         }
     }
 }

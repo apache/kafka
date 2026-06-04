@@ -118,6 +118,7 @@
         <allow pkg="org.apache.kafka.tiered.storage" />
 
         <allow pkg="kafka.api" />
+        <allow pkg="kafka.integration" />
         <allow pkg="kafka.log" />
         <allow pkg="kafka.server" />
         <allow pkg="kafka.utils" />

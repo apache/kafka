@@ -26,7 +26,6 @@ import org.apache.kafka.streams.state.internals.RocksDBStore.DBAccessor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDBException;
-import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatchInterface;
 
 import java.util.Comparator;
@@ -177,15 +176,13 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
                                                         final Bytes from,
                                                         final Bytes to,
                                                         final boolean forward) {
-        return new RocksDBDualCFRangeIterator(
-            store.name(),
-            accessor.newIterator(newColumnFamily),
-            accessor.newIterator(oldColumnFamily),
-            from,
-            to,
-            forward,
-            true,
-            valueConverter);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterNew =
+                accessor.range(newColumnFamily, store.name(), from, to, forward, true);
+        iterNew.onClose(() -> { });
+        final ManagedKeyValueIterator<Bytes, byte[]> iterOld =
+                accessor.range(oldColumnFamily, store.name(), from, to, forward, true);
+        iterOld.onClose(() -> { });
+        return new RocksDBDualCFIterator(store.name(), iterNew, iterOld, forward, valueConverter);
     }
 
     @Override
@@ -205,32 +202,26 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     @Override
     public ManagedKeyValueIterator<Bytes, byte[]> all(final DBAccessor accessor,
                                                       final boolean forward) {
-        final RocksIterator innerIterNew = accessor.newIterator(newColumnFamily);
-        final RocksIterator innerIterOld = accessor.newIterator(oldColumnFamily);
-        if (forward) {
-            innerIterNew.seekToFirst();
-            innerIterOld.seekToFirst();
-        } else {
-            innerIterNew.seekToLast();
-            innerIterOld.seekToLast();
-        }
-        return new RocksDBDualCFIterator(store.name(), innerIterNew, innerIterOld, forward, valueConverter);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterNew =
+                accessor.all(newColumnFamily, store.name(), forward);
+        iterNew.onClose(() -> { });
+        final ManagedKeyValueIterator<Bytes, byte[]> iterOld =
+                accessor.all(oldColumnFamily, store.name(), forward);
+        iterOld.onClose(() -> { });
+        return new RocksDBDualCFIterator(store.name(), iterNew, iterOld, forward, valueConverter);
     }
 
     @Override
     public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final DBAccessor accessor,
                                                              final Bytes prefix) {
         final Bytes to = incrementWithoutOverflow(prefix);
-        return new RocksDBDualCFRangeIterator(
-            store.name(),
-            accessor.newIterator(newColumnFamily),
-            accessor.newIterator(oldColumnFamily),
-            prefix,
-            to,
-            true,
-            false,
-            valueConverter
-        );
+        final ManagedKeyValueIterator<Bytes, byte[]> iterNew =
+                accessor.prefixScan(newColumnFamily, store.name(), prefix, to);
+        iterNew.onClose(() -> { });
+        final ManagedKeyValueIterator<Bytes, byte[]> iterOld =
+                accessor.prefixScan(oldColumnFamily, store.name(), prefix, to);
+        iterOld.onClose(() -> { });
+        return new RocksDBDualCFIterator(store.name(), iterNew, iterOld, true, valueConverter);
     }
 
     @Override
@@ -270,21 +261,19 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
         private final Comparator<byte[]> comparator = ByteUtils.BYTES_LEXICO_COMPARATOR;
 
         private final String storeName;
-        private final RocksIterator iterNewFormat;
-        private final RocksIterator iterOldFormat;
+        private final ManagedKeyValueIterator<Bytes, byte[]> iterNewFormat;
+        private final ManagedKeyValueIterator<Bytes, byte[]> iterOldFormat;
         private final boolean forward;
         private final Function<byte[], byte[]> valueConverter;
 
         private volatile boolean open = true;
 
-        private byte[] nextNewFormat;
-        private byte[] nextOldFormat;
         private KeyValue<Bytes, byte[]> next;
         private Runnable closeCallback = null;
 
         RocksDBDualCFIterator(final String storeName,
-                              final RocksIterator iterNewFormat,
-                              final RocksIterator iterOldFormat,
+                              final ManagedKeyValueIterator<Bytes, byte[]> iterNewFormat,
+                              final ManagedKeyValueIterator<Bytes, byte[]> iterOldFormat,
                               final boolean forward,
                               final Function<byte[], byte[]> valueConverter) {
             this.iterNewFormat = iterNewFormat;
@@ -310,58 +299,35 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
         @Override
         protected KeyValue<Bytes, byte[]> makeNext() {
-            if (nextOldFormat == null && iterOldFormat.isValid()) {
-                nextOldFormat = iterOldFormat.key();
+            final boolean oldHas = iterOldFormat.hasNext();
+            final boolean newHas = iterNewFormat.hasNext();
+
+            if (!oldHas && !newHas) {
+                return allDone();
+            }
+            if (!oldHas) {
+                next = iterNewFormat.next();
+                return next;
+            }
+            if (!newHas) {
+                final KeyValue<Bytes, byte[]> kv = iterOldFormat.next();
+                next = KeyValue.pair(kv.key, valueConverter.apply(kv.value));
+                return next;
             }
 
-            if (nextNewFormat == null && iterNewFormat.isValid()) {
-                nextNewFormat = iterNewFormat.key();
-            }
-
-            if (nextOldFormat == null && !iterOldFormat.isValid()) {
-                if (nextNewFormat == null && !iterNewFormat.isValid()) {
-                    return allDone();
-                } else {
-                    next = KeyValue.pair(new Bytes(nextNewFormat), iterNewFormat.value());
-                    nextNewFormat = null;
-                    if (forward) {
-                        iterNewFormat.next();
-                    } else {
-                        iterNewFormat.prev();
-                    }
-                }
+            final int cmp = comparator.compare(
+                    iterOldFormat.peekNextKey().get(),
+                    iterNewFormat.peekNextKey().get());
+            // New-format wins on equality: the new CF value supersedes the old CF value for
+            // the same key. Advance both sides to avoid re-emitting the shadowed old entry.
+            if (cmp == 0) {
+                iterOldFormat.next();
+                next = iterNewFormat.next();
+            } else if (forward ? (cmp < 0) : (cmp > 0)) {
+                final KeyValue<Bytes, byte[]> kv = iterOldFormat.next();
+                next = KeyValue.pair(kv.key, valueConverter.apply(kv.value));
             } else {
-                if (nextNewFormat == null) {
-                    next = KeyValue.pair(new Bytes(nextOldFormat), valueConverter.apply(iterOldFormat.value()));
-                    nextOldFormat = null;
-                    if (forward) {
-                        iterOldFormat.next();
-                    } else {
-                        iterOldFormat.prev();
-                    }
-                } else {
-                    if (forward) {
-                        if (comparator.compare(nextOldFormat, nextNewFormat) <= 0) {
-                            next = KeyValue.pair(new Bytes(nextOldFormat), valueConverter.apply(iterOldFormat.value()));
-                            nextOldFormat = null;
-                            iterOldFormat.next();
-                        } else {
-                            next = KeyValue.pair(new Bytes(nextNewFormat), iterNewFormat.value());
-                            nextNewFormat = null;
-                            iterNewFormat.next();
-                        }
-                    } else {
-                        if (comparator.compare(nextOldFormat, nextNewFormat) >= 0) {
-                            next = KeyValue.pair(new Bytes(nextOldFormat), valueConverter.apply(iterOldFormat.value()));
-                            nextOldFormat = null;
-                            iterOldFormat.prev();
-                        } else {
-                            next = KeyValue.pair(new Bytes(nextNewFormat), iterNewFormat.value());
-                            nextNewFormat = null;
-                            iterNewFormat.prev();
-                        }
-                    }
-                }
+                next = iterNewFormat.next();
             }
             return next;
         }
@@ -390,76 +356,6 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
         @Override
         public void onClose(final Runnable closeCallback) {
             this.closeCallback = closeCallback;
-        }
-    }
-
-    private static class RocksDBDualCFRangeIterator extends RocksDBDualCFIterator {
-    // RocksDB's JNI interface does not expose getters/setters that allow the
-    // comparator to be pluggable, and the default is lexicographic, so it's
-    // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = ByteUtils.BYTES_LEXICO_COMPARATOR;
-        private final byte[] rawLastKey;
-        private final boolean forward;
-        private final boolean toInclusive;
-
-        RocksDBDualCFRangeIterator(final String storeName,
-                                   final RocksIterator iterNewFormat,
-                                   final RocksIterator iterOldFormat,
-                                   final Bytes from,
-                                   final Bytes to,
-                                   final boolean forward,
-                                   final boolean toInclusive,
-                                   final Function<byte[], byte[]> valueConverter) {
-            super(storeName, iterNewFormat, iterOldFormat, forward, valueConverter);
-            this.forward = forward;
-            this.toInclusive = toInclusive;
-            if (forward) {
-                if (from == null) {
-                    iterNewFormat.seekToFirst();
-                    iterOldFormat.seekToFirst();
-                } else {
-                    iterNewFormat.seek(from.get());
-                    iterOldFormat.seek(from.get());
-                }
-                rawLastKey = to == null ? null : to.get();
-            } else {
-                if (to == null) {
-                    iterNewFormat.seekToLast();
-                    iterOldFormat.seekToLast();
-                } else {
-                    iterNewFormat.seekForPrev(to.get());
-                    iterOldFormat.seekForPrev(to.get());
-                }
-                rawLastKey = from == null ? null : from.get();
-            }
-        }
-
-        @Override
-        protected KeyValue<Bytes, byte[]> makeNext() {
-            final KeyValue<Bytes, byte[]> next = super.makeNext();
-
-            if (next == null) {
-                return allDone();
-            } else if (rawLastKey == null) {
-                // null means range endpoint is open
-                return next;
-            } else {
-                if (forward) {
-                    if (comparator.compare(next.key.get(), rawLastKey) < 0) {
-                        return next;
-                    } else if (comparator.compare(next.key.get(), rawLastKey) == 0) {
-                        return toInclusive ? next : allDone();
-                    } else {
-                        return allDone();
-                    }
-                } else {
-                    if (comparator.compare(next.key.get(), rawLastKey) >= 0) {
-                        return next;
-                    } else {
-                        return allDone();
-                    }
-                }
-            }
         }
     }
 }

@@ -55,20 +55,28 @@ import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
+import org.apache.kafka.server.share.PartitionMetadataProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
+import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQRecordParameter;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
+import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.InFlightBatch;
 import org.apache.kafka.server.share.fetch.InFlightState;
 import org.apache.kafka.server.share.fetch.RecordState;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionStateBatchData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateResult;
 import org.apache.kafka.server.share.persister.TopicData;
+import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.WriteShareGroupStateResult;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
@@ -81,6 +89,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
@@ -96,7 +108,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
@@ -117,7 +131,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("resource")
+@SuppressWarnings({"resource", "ClassFanOutComplexity"})
 public class SharePartitionTest {
 
     private static final String ACQUISITION_LOCK_NEVER_GOT_RELEASED = "Acquisition lock never got released.";
@@ -232,7 +246,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -283,7 +297,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -344,7 +358,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
@@ -399,7 +413,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -446,7 +460,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -492,7 +506,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -546,7 +560,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withPersister(persister)
             .withConfigProvider(new ShareGroupConfigProvider(groupConfigManager))
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -851,7 +865,7 @@ public class SharePartitionTest {
         Mockito.doReturn(new OffsetResultHolder(Optional.of(timestampAndOffset), Optional.empty())).
             when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
 
-        SharePartition sharePartition = SharePartitionBuilder.builder().withReplicaManager(replicaManager).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder().withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager)).build();
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
         assertTrue(result.isDone());
         assertFalse(result.isCompletedExceptionally());
@@ -2702,7 +2716,7 @@ public class SharePartitionTest {
             .thenReturn(140L) // for subsequent lock acquire
             .thenReturn(170L); // for subsequent lock release
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withTime(time)
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
@@ -2779,7 +2793,8 @@ public class SharePartitionTest {
     public void testAcknowledgeSingleRecordBatch() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
+            .withDelayedRequestNotifier(replicaManager::completeDelayedShareFetchRequest)
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -2814,7 +2829,8 @@ public class SharePartitionTest {
     public void testAcknowledgeMultipleRecordBatch() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
+            .withDelayedRequestNotifier(replicaManager::completeDelayedShareFetchRequest)
             .withState(SharePartitionState.ACTIVE)
             .build();
         MemoryRecords records = memoryRecords(5, 10);
@@ -12148,7 +12164,7 @@ public class SharePartitionTest {
     public void testInvalidAcknowledgeTypeInBatchAcknowledgement() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12168,7 +12184,7 @@ public class SharePartitionTest {
     public void testInvalidAcknowledgeTypeInSubsetAcknowledgement() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         SharePartition sharePartition = SharePartitionBuilder.builder()
-            .withReplicaManager(replicaManager)
+            .withMetadataProvider(new ReplicaManagerPartitionMetadataProvider(replicaManager))
             .withState(SharePartitionState.ACTIVE)
             .build();
 
@@ -12606,9 +12622,12 @@ public class SharePartitionTest {
 
     @Test
     public void testAcknowledgeRejectWithDlqEnabled() {
+        ShareGroupDLQManager dlqManager = mockDlqManager();
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
             .build();
 
         // Acquire 2 batches so that the first one stays in cache after being archived.
@@ -12640,13 +12659,18 @@ public class SharePartitionTest {
 
         // deliveryCompleteCount is 0 as evicted records are subtracted.
         assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        // The rejected batch (offsets 5-9) is enqueued to the DLQ exactly once.
+        Mockito.verify(dlqManager, Mockito.times(1)).enqueue(Mockito.any());
     }
 
     @Test
     public void testAcknowledgeRejectWithDlqDisabled() {
+        ShareGroupDLQManager dlqManager = mockDlqManager();
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withShareGroupDlqEnableSupplier(() -> false)
+            .withShareGroupDlqManager(dlqManager)
             .build();
 
         MemoryRecords records1 = memoryRecords(5, 5);
@@ -12670,13 +12694,99 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
         assertEquals(10, sharePartition.startOffset());
         assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        // DLQ is disabled, so the DLQ is never invoked.
+        Mockito.verify(dlqManager, Mockito.never()).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcknowledgeRejectWithDlqSupplierEnabledButNoDlqTopicConfigured() {
+        // The DLQ supplier returns true, but the group has no DLQ topic configured (the default
+        // ShareGroupConfigProvider returns an empty topic name). DLQ must therefore be treated as
+        // disabled: REJECT goes directly to ARCHIVED (no ARCHIVING intermediate state) and the DLQ
+        // is never invoked.
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire 2 batches so that the first one stays in cache after being archived.
+        MemoryRecords records1 = memoryRecords(5, 5);
+        MemoryRecords records2 = memoryRecords(10, 5);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 5);
+        assertEquals(1, acquiredRecordsList.size());
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 5);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Acknowledge the first batch with REJECT.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(5, 9, List.of(AcknowledgeType.REJECT.id))));
+        assertNull(ackResult.join());
+        assertFalse(ackResult.isCompletedExceptionally());
+
+        // Without an effective DLQ, REJECT goes directly to ARCHIVED and the batch at start offset
+        // is evicted from cache.
+        assertEquals(1, sharePartition.cachedState().size());
+        assertNull(sharePartition.cachedState().get(5L));
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(10, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        // The DLQ must not be invoked since no DLQ topic is configured for the group.
+        Mockito.verify(dlqManager, Mockito.never()).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testReleaseAcquiredRecordsMaxDeliveryWithDlqSupplierEnabledButNoDlqTopicConfigured() {
+        // The DLQ supplier returns true, but the group has no DLQ topic configured (the default
+        // ShareGroupConfigProvider returns an empty topic name). DLQ must therefore be treated as
+        // disabled: when the delivery count reaches the max on release, records go directly to
+        // ARCHIVED (no ARCHIVING intermediate state) and the DLQ is never invoked.
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withMaxDeliveryCount(2) // Only 2 delivery attempts will be made before archiving the records.
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Leading batch (offsets 0-9) stays acquired so the archived batch remains in cache.
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+
+        MemoryRecords records2 = memoryRecords(10, 5);
+        // First delivery attempt for offsets 10-14, delivery count becomes 1.
+        fetchAcquiredRecords(sharePartition, records2, 5);
+        // Release them back to AVAILABLE.
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.RELEASE.id))));
+        // Second delivery attempt, delivery count reaches the max (2).
+        fetchAcquiredRecords(sharePartition, records2, 5);
+
+        // Release again. Delivery count has reached the max, so the records are archived.
+        CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
+        assertNull(releaseResult.join());
+        assertFalse(releaseResult.isCompletedExceptionally());
+
+        // Without an effective DLQ, the records go directly to ARCHIVED (not ARCHIVING).
+        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(10L).batchState());
+        assertNull(sharePartition.cachedState().get(10L).offsetState());
+
+        // The DLQ must not be invoked since no DLQ topic is configured for the group.
+        Mockito.verify(dlqManager, Mockito.never()).enqueue(Mockito.any());
     }
 
     @Test
     public void testAcknowledgePerOffsetRejectWithDlqEnabled() {
+        ShareGroupDLQManager dlqManager = mockDlqManager();
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
             .build();
 
         // Acquire a batch with 5 records (offsets 0-4) and a second batch to keep cache populated.
@@ -12704,13 +12814,18 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
         assertEquals(5, sharePartition.startOffset());
         assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        // Offsets 3 and 4 are rejected per-offset, so each is enqueued to the DLQ separately.
+        Mockito.verify(dlqManager, Mockito.times(2)).enqueue(Mockito.any());
     }
 
     @Test
     public void testAcknowledgePerOffsetRejectWithDlqDisabled() {
+        ShareGroupDLQManager dlqManager = mockDlqManager();
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withShareGroupDlqEnableSupplier(() -> false)
+            .withShareGroupDlqManager(dlqManager)
             .build();
 
         MemoryRecords records1 = memoryRecords(5);
@@ -12736,6 +12851,631 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
         assertEquals(5, sharePartition.startOffset());
         assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        // DLQ is disabled, so the DLQ is never invoked.
+        Mockito.verify(dlqManager, Mockito.never()).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutWithDlqEnabledCompleteBatch() throws InterruptedException {
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire two batches so the first stays in cache after being archived.
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 10), 10);
+
+        assertEquals(2, sharePartition.timer().size());
+
+        // First timeout: delivery count 1 < maxDeliveryCount 2, so records go to AVAILABLE.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(0L).batchDeliveryCount() == 1 &&
+                sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(10L).batchDeliveryCount() == 1,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(), 10L, List.of())));
+
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        // Re-acquire the first batch, bringing delivery count to 2 (== maxDeliveryCount).
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(2, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        assertEquals(1, sharePartition.timer().size());
+
+        // Second timeout: delivery count 2 >= maxDeliveryCount 2, tryUpdateState redirects
+        // AVAILABLE -> ARCHIVING (DLQ enabled). Phase 2 completes: ARCHIVING -> ARCHIVED.
+        // With NoOp DLQ + NoOp persister, the full 2-phase flow completes synchronously.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L) == null,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> "Batch at offset 0 was not evicted after DLQ archival. Timer size: " +
+                sharePartition.timer().size() + ", cachedState keys: " + sharePartition.cachedState().keySet());
+
+        // Batch at offset 0 is evicted from cache after reaching ARCHIVED and start offset advancing.
+        assertEquals(10, sharePartition.startOffset());
+        // deliveryCompleteCount is 0 because eviction subtracts the count.
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+        // Second batch remains AVAILABLE.
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
+
+        // The archived complete batch (offsets 0-9) is enqueued to the DLQ exactly once.
+        Mockito.verify(dlqManager, Mockito.times(1)).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutWithDlqEnabledPerOffsetBatch() throws InterruptedException {
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire a batch of 10 records (offsets 0-9).
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        assertEquals(1, sharePartition.timer().size());
+
+        // First timeout: all go to AVAILABLE with delivery count 1.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(0L).batchDeliveryCount() == 1,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
+
+        // Re-acquire only the first 5 records (offsets 0-4), forcing offset state initialization.
+        fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
+
+        // Offsets 0-4 should be ACQUIRED with delivery count 2, offsets 5-9 remain AVAILABLE.
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+        for (long i = 0; i < 5; i++) {
+            assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(0L).offsetState().get(i).state());
+            assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(i).deliveryCount());
+        }
+        for (long i = 5; i < 10; i++) {
+            assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).offsetState().get(i).state());
+            assertEquals(1, sharePartition.cachedState().get(0L).offsetState().get(i).deliveryCount());
+        }
+
+        // Second timeout for offsets 0-4: delivery count 2 >= maxDeliveryCount 2.
+        // tryUpdateState redirects AVAILABLE -> ARCHIVING. Phase 2: ARCHIVING -> ARCHIVED.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> {
+                Map<Long, InFlightState> offsetState = sharePartition.cachedState().get(0L).offsetState();
+                if (offsetState == null) return false;
+                for (long i = 0; i < 5; i++) {
+                    if (offsetState.get(i).state() != RecordState.ARCHIVED || offsetState.get(i).deliveryCount() != 2) {
+                        return false;
+                    }
+                }
+                for (long i = 5; i < 10; i++) {
+                    if (offsetState.get(i).state() != RecordState.AVAILABLE || offsetState.get(i).deliveryCount() != 1) {
+                        return false;
+                    }
+                }
+                return sharePartition.timer().size() == 0;
+            },
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L))));
+
+        // Offsets 0-4 are ARCHIVED, 5-9 are AVAILABLE. Next fetch offset moves to 5
+        // since offsets 0-4 are no longer fetchable.
+        assertEquals(5, sharePartition.nextFetchOffset());
+
+        // Offsets 0-4 are archived per-offset, so each is enqueued to the DLQ separately.
+        Mockito.verify(dlqManager, Mockito.times(5)).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutWithDlqDisabledCompleteBatch() throws InterruptedException {
+        // Verify that without DLQ, max delivery count still causes ARCHIVED (not ARCHIVING).
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> false)
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire two batches.
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 10), 10);
+
+        // First timeout: records go to AVAILABLE.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
+
+        // Re-acquire first batch.
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+
+        // Second timeout: delivery count reaches max, goes directly to ARCHIVED (no ARCHIVING).
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L) == null,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> "Batch at offset 0 was not evicted after archival. Timer size: " +
+                sharePartition.timer().size() + ", cachedState keys: " + sharePartition.cachedState().keySet());
+
+        // Batch evicted, start offset advances.
+        assertEquals(10, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        // DLQ is disabled, so the DLQ is never invoked.
+        Mockito.verify(dlqManager, Mockito.never()).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutWithDlqEnabledMixedOffsets() throws InterruptedException {
+        // Test where some offsets in a batch exceed max delivery count and some don't.
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire batch of 10 records (offsets 0-9).
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+
+        // Timeout #1: all go to AVAILABLE, delivery count 1.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(0L).batchDeliveryCount() == 1,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
+
+        // Re-acquire only offsets 0-4. This forces offset state initialization.
+        fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
+
+        // Acknowledge offsets 0-2 as ACCEPT. Only offsets 3-4 remain ACQUIRED.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(0, 4, List.of(
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
+                AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id))));
+        assertNull(ackResult.join());
+
+        // Re-acquire offsets 5-9. These will have delivery count 2.
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
+
+        // Now offsets 0-4: ACKNOWLEDGED (delivery count 2), offsets 5-9: ACQUIRED (delivery count 2).
+        // Timeout #2 for offsets 5-9: delivery count 2 >= max 2 → ARCHIVING → ARCHIVED.
+        // Once all offsets reach terminal state, the batch is evicted from cache.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L) == null,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> "Batch at offset 0 was not evicted after DLQ archival. Timer size: " +
+                sharePartition.timer().size() + ", cachedState keys: " + sharePartition.cachedState().keySet());
+
+        // Offsets 5-9 are archived per-offset, so each is enqueued to the DLQ separately.
+        Mockito.verify(dlqManager, Mockito.times(5)).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutWithDlqEnabledWriteFailureCompleteBatch() throws InterruptedException {
+        // Phase 1 persist of ARCHIVING fails, but phase 2 still proceeds unconditionally
+        // because timeout path uses tryUpdateState (no rollback).
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+
+        // First call succeeds (for acknowledge of first batch), subsequent calls fail.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire two batches.
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 10), 10);
+        assertEquals(2, sharePartition.timer().size());
+
+        // First timeout: delivery count 1 < max 2, records go to AVAILABLE.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(0L).batchDeliveryCount() == 1,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(), 10L, List.of())));
+
+        // Re-acquire first batch, delivery count becomes 2 (== max).
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        assertEquals(2, sharePartition.cachedState().get(0L).batchDeliveryCount());
+
+        // Second timeout: tryUpdateState redirects AVAILABLE → ARCHIVING.
+        // Phase 1 persist fails. Phase 2 proceeds (DLQ enqueue + tryUpdateState(ARCHIVED)).
+        // Phase 2 persist also fails, but since isTimeout=true, no rollback — ARCHIVED stays in memory.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L) == null,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> "Batch at offset 0 was not evicted. Timer size: " +
+                sharePartition.timer().size() + ", cachedState keys: " + sharePartition.cachedState().keySet());
+
+        // Despite both persists failing, batch reached ARCHIVED in memory (no rollback for timeout)
+        // and was evicted from cache.
+        assertEquals(10, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+        // Second batch went to AVAILABLE (delivery count 1 < max).
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
+
+        // The archived complete batch (offsets 0-9) is enqueued to the DLQ exactly once.
+        Mockito.verify(dlqManager, Mockito.times(1)).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutWithDlqEnabledWriteFailurePerOffsetBatch() throws InterruptedException {
+        // Phase 1 persist of ARCHIVING fails for per-offset batch, but phase 2 still proceeds.
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+
+        // All write calls return error.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire batch of 10 records (offsets 0-9).
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        assertEquals(1, sharePartition.timer().size());
+
+        // First timeout: all go to AVAILABLE, delivery count 1.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(0L).batchDeliveryCount() == 1,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
+
+        // Re-acquire only first 5 offsets, forcing offset state initialization.
+        fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+        for (long i = 0; i < 5; i++) {
+            assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(i).deliveryCount());
+        }
+
+        // Second timeout for offsets 0-4: delivery count 2 >= max 2 → ARCHIVING.
+        // Phase 1 persist fails. Phase 2 proceeds (tryUpdateState(ARCHIVED), no rollback).
+        // Phase 2 persist also fails, but ARCHIVED stays in memory.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> {
+                Map<Long, InFlightState> offsetState = sharePartition.cachedState().get(0L).offsetState();
+                if (offsetState == null) return false;
+                for (long i = 0; i < 5; i++) {
+                    if (offsetState.get(i).state() != RecordState.ARCHIVED || offsetState.get(i).deliveryCount() != 2) {
+                        return false;
+                    }
+                }
+                for (long i = 5; i < 10; i++) {
+                    if (offsetState.get(i).state() != RecordState.AVAILABLE || offsetState.get(i).deliveryCount() != 1) {
+                        return false;
+                    }
+                }
+                return sharePartition.timer().size() == 0;
+            },
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L))));
+
+        // Despite both persists failing, offsets 0-4 reached ARCHIVED in memory (no rollback for timeout).
+        // Offsets 5-9 remain AVAILABLE.
+        assertEquals(5, sharePartition.nextFetchOffset());
+
+        // Offsets 0-4 are archived per-offset, so each is enqueued to the DLQ separately.
+        Mockito.verify(dlqManager, Mockito.times(5)).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutWithDlqPhase1FailsPhase2SucceedsCompleteBatch() throws InterruptedException {
+        // Phase 1 persist (ARCHIVING) fails, phase 2 persist (ARCHIVED) succeeds.
+        // Records should reach ARCHIVED despite phase 1 failure.
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+
+        WriteShareGroupStateResult failureResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(failureResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
+
+        WriteShareGroupStateResult successResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(successResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        // First writeState call (phase 1) fails, subsequent calls (phase 2) succeed.
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(failureResult))
+            .thenReturn(CompletableFuture.completedFuture(successResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire two batches.
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 10), 10);
+        assertEquals(2, sharePartition.timer().size());
+
+        // First timeout: delivery count 1 < max 2, records go to AVAILABLE.
+        // This also calls writeState (fails), but timeout path commits unconditionally.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(0L).batchDeliveryCount() == 1,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(), 10L, List.of())));
+
+        // Re-acquire first batch, delivery count becomes 2 (== max).
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        assertEquals(2, sharePartition.cachedState().get(0L).batchDeliveryCount());
+
+        // Reset mock: phase 1 fails, phase 2 succeeds.
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(failureResult))
+            .thenReturn(CompletableFuture.completedFuture(successResult));
+
+        // Second timeout: ARCHIVING (phase 1 persist fails), phase 2 proceeds and succeeds.
+        // DLQ enqueue + ARCHIVING → ARCHIVED persisted successfully.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L) == null,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> "Batch at offset 0 was not evicted. Timer size: " +
+                sharePartition.timer().size() + ", cachedState keys: " + sharePartition.cachedState().keySet());
+
+        // Phase 1 failed but phase 2 succeeded — batch reached ARCHIVED and was evicted.
+        assertEquals(10, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
+
+        // The archived complete batch (offsets 0-9) is enqueued to the DLQ exactly once.
+        Mockito.verify(dlqManager, Mockito.times(1)).enqueue(Mockito.any());
+    }
+
+    @Test
+    public void testAcquisitionLockTimeoutWithDlqPhase1FailsPhase2SucceedsPerOffsetBatch() throws InterruptedException {
+        // Phase 1 persist (ARCHIVING) fails, phase 2 persist (ARCHIVED) succeeds for per-offset batch.
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+
+        WriteShareGroupStateResult failureResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(failureResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.GROUP_ID_NOT_FOUND.code(), Errors.GROUP_ID_NOT_FOUND.message())))));
+
+        WriteShareGroupStateResult successResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(successResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+
+        // First writeState call fails, subsequent calls succeed.
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(failureResult))
+            .thenReturn(CompletableFuture.completedFuture(successResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
+            .withMaxDeliveryCount(2)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        // Acquire batch of 10 records (offsets 0-9).
+        fetchAcquiredRecords(sharePartition, memoryRecords(10), 10);
+        assertEquals(1, sharePartition.timer().size());
+
+        // First timeout: all go to AVAILABLE, delivery count 1.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> sharePartition.timer().size() == 0 &&
+                sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
+                sharePartition.cachedState().get(0L).batchDeliveryCount() == 1,
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of())));
+
+        // Re-acquire only first 5 offsets, forcing offset state initialization.
+        fetchAcquiredRecords(sharePartition, memoryRecords(5), 5);
+        assertNotNull(sharePartition.cachedState().get(0L).offsetState());
+        for (long i = 0; i < 5; i++) {
+            assertEquals(2, sharePartition.cachedState().get(0L).offsetState().get(i).deliveryCount());
+        }
+
+        // Reset mock: phase 1 fails, phase 2 calls succeed.
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(failureResult))
+            .thenReturn(CompletableFuture.completedFuture(successResult));
+
+        // Second timeout for offsets 0-4: delivery count 2 >= max 2 → ARCHIVING.
+        // Phase 1 persist fails, but phase 2 succeeds for each offset → ARCHIVED.
+        mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
+        TestUtils.waitForCondition(
+            () -> {
+                Map<Long, InFlightState> offsetState = sharePartition.cachedState().get(0L).offsetState();
+                if (offsetState == null) return false;
+                for (long i = 0; i < 5; i++) {
+                    if (offsetState.get(i).state() != RecordState.ARCHIVED || offsetState.get(i).deliveryCount() != 2) {
+                        return false;
+                    }
+                }
+                for (long i = 5; i < 10; i++) {
+                    if (offsetState.get(i).state() != RecordState.AVAILABLE || offsetState.get(i).deliveryCount() != 1) {
+                        return false;
+                    }
+                }
+                return sharePartition.timer().size() == 0;
+            },
+            DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
+            () -> assertionFailedMessage(sharePartition, Map.of(0L, List.of(0L, 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L))));
+
+        // Phase 1 failed but phase 2 succeeded — offsets 0-4 reached ARCHIVED.
+        // Offsets 5-9 remain AVAILABLE.
+        assertEquals(5, sharePartition.nextFetchOffset());
+
+        // Offsets 0-4 are archived per-offset, so each is enqueued to the DLQ separately.
+        Mockito.verify(dlqManager, Mockito.times(5)).enqueue(Mockito.any());
+    }
+
+    // Unit tests for processDlqPhase2 method directly.
+
+    private static Stream<Arguments> initiateDLQAndArchiveParameters() {
+        return Stream.of(
+            //          name,                                     persistSucceeds, expectedState,        dlqCause,                             firstOffset, lastOffset, deliveryCount
+            Arguments.of("persist succeeds",                      true,            RecordState.ARCHIVED, ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
+            Arguments.of("persist fails, no rollback",            false,           RecordState.ARCHIVED, ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED, 0L,          9L,         (short) 2),
+            Arguments.of("client reject cause",                   true,            RecordState.ARCHIVED, ShareGroupDLQManager.CLIENT_REJECT,           5L,          5L,         (short) 1),
+            Arguments.of("null cause",                            true,            RecordState.ARCHIVED, null,                                  0L,          4L,         (short) 1),
+            Arguments.of("single offset",                         true,            RecordState.ARCHIVED, ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED, 7L,          7L,         (short) 3),
+            Arguments.of("delivery count exceeded cause",         true,            RecordState.ARCHIVED, ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED, 10L,         19L,        (short) 5)
+        );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("initiateDLQAndArchiveParameters")
+    public void testInitiateDLQAndArchive(String name, boolean persistSucceeds,
+                                          RecordState expectedState, Throwable dlqCause,
+                                          long firstOffset, long lastOffset, short deliveryCount) {
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateMethod(persister);
+
+        WriteShareGroupStateResult writeResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Errors error = persistSucceeds ? Errors.NONE : Errors.GROUP_ID_NOT_FOUND;
+        Mockito.when(writeResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, error.code(), error.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeResult));
+
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        InFlightState state = new InFlightState(RecordState.ARCHIVING, deliveryCount, EMPTY_MEMBER_ID);
+
+        sharePartition.initiateDLQAndArchive(state, firstOffset, lastOffset, deliveryCount, dlqCause);
+
+        assertEquals(expectedState, state.state());
+        assertFalse(state.hasOngoingStateTransition());
+
+        // Verify the records were enqueued to the DLQ exactly once with the expected parameters.
+        ArgumentCaptor<ShareGroupDLQRecordParameter> dlqCaptor =
+            ArgumentCaptor.forClass(ShareGroupDLQRecordParameter.class);
+        Mockito.verify(dlqManager, Mockito.times(1)).enqueue(dlqCaptor.capture());
+        ShareGroupDLQRecordParameter dlqParam = dlqCaptor.getValue();
+        assertEquals(firstOffset, dlqParam.firstOffset());
+        assertEquals(lastOffset, dlqParam.lastOffset());
+        assertEquals(Optional.of(deliveryCount), dlqParam.deliveryCount());
+        assertEquals(Optional.ofNullable(dlqCause), dlqParam.cause());
+
+        // Verify persister.writeState was called exactly once with the correct state batch.
+        ArgumentCaptor<WriteShareGroupStateParameters> captor =
+            ArgumentCaptor.forClass(WriteShareGroupStateParameters.class);
+        Mockito.verify(persister, Mockito.times(1)).writeState(captor.capture());
+
+        WriteShareGroupStateParameters params = captor.getValue();
+        GroupTopicPartitionData<PartitionStateBatchData> data =
+            params.groupTopicPartitionData();
+        assertEquals(GROUP_ID, data.groupId());
+        assertEquals(1, data.topicsData().size());
+        assertEquals(TOPIC_ID_PARTITION.topicId(), data.topicsData().get(0).topicId());
+        assertEquals(1, data.topicsData().get(0).partitions().size());
+
+        PartitionStateBatchData partitionData = data.topicsData().get(0).partitions().get(0);
+        assertEquals(1, partitionData.stateBatches().size());
+        PersisterStateBatch stateBatch = partitionData.stateBatches().get(0);
+        assertEquals(firstOffset, stateBatch.firstOffset());
+        assertEquals(lastOffset, stateBatch.lastOffset());
+        assertEquals(RecordState.ARCHIVED.id(), stateBatch.deliveryState());
+        assertEquals(deliveryCount, stateBatch.deliveryCount());
+
+        // Verify readState was not called by processDlqPhase2.
+        Mockito.verify(persister, Mockito.never()).readState(Mockito.any());
+    }
+
+    private static ShareGroupDLQManager mockDlqManager() {
+        ShareGroupDLQManager dlqManager = Mockito.mock(ShareGroupDLQManager.class);
+        Mockito.when(dlqManager.enqueue(Mockito.any())).thenReturn(CompletableFuture.completedFuture(null));
+        return dlqManager;
+    }
+
+    private static ShareGroupConfigProvider configProviderWithDlqTopic() {
+        GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
+        GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
+        Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
+        Mockito.when(groupConfig.errorsDLQTopicName()).thenReturn("test-dlq-topic");
+        return new ShareGroupConfigProvider(groupConfigManager);
     }
 
     private static ShareGroupConfigProvider configProviderWithRenewDisabled() {
@@ -12754,12 +13494,14 @@ public class SharePartitionTest {
         private int defaultMaxInflightRecords = DEFAULT_MAX_IN_FLIGHT_RECORDS;
 
         private Persister persister = new NoOpStatePersister();
-        private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        private PartitionMetadataProvider metadataProvider = Mockito.mock(PartitionMetadataProvider.class);
+        private Consumer<DelayedShareFetchKey> delayedRequestNotifier = Mockito.mock(Consumer.class);
         private ShareGroupConfigProvider configProvider = new ShareGroupConfigProvider(Mockito.mock(GroupConfigManager.class));
         private SharePartitionState state = SharePartitionState.EMPTY;
         private Time time = MOCK_TIME;
         private SharePartitionMetrics sharePartitionMetrics = Mockito.mock(SharePartitionMetrics.class);
         private Supplier<Boolean> shareGroupDlqEnableSupplier = () -> false;
+        private ShareGroupDLQManager shareGroupDLQManager = new NoOpShareGroupDLQManager();
 
         private SharePartitionBuilder withMaxInflightRecords(int defaultMaxInflightRecords) {
             this.defaultMaxInflightRecords = defaultMaxInflightRecords;
@@ -12781,8 +13523,13 @@ public class SharePartitionTest {
             return this;
         }
 
-        private SharePartitionBuilder withReplicaManager(ReplicaManager replicaManager) {
-            this.replicaManager = replicaManager;
+        private SharePartitionBuilder withMetadataProvider(PartitionMetadataProvider metadataProvider) {
+            this.metadataProvider = metadataProvider;
+            return this;
+        }
+
+        private SharePartitionBuilder withDelayedRequestNotifier(Consumer<DelayedShareFetchKey> delayedRequestNotifier) {
+            this.delayedRequestNotifier = delayedRequestNotifier;
             return this;
         }
 
@@ -12811,14 +13558,20 @@ public class SharePartitionTest {
             return this;
         }
 
+        private SharePartitionBuilder withShareGroupDlqManager(ShareGroupDLQManager shareGroupDLQManager) {
+            this.shareGroupDLQManager = shareGroupDLQManager;
+            return this;
+        }
+
         public static SharePartitionBuilder builder() {
             return new SharePartitionBuilder();
         }
 
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, defaultMaxInflightRecords, defaultMaxDeliveryCount,
-                    defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, configProvider,
-                    state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics, shareGroupDlqEnableSupplier);
+                defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, metadataProvider, delayedRequestNotifier, configProvider,
+                state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics, shareGroupDlqEnableSupplier,
+                shareGroupDLQManager);
         }
     }
 }
