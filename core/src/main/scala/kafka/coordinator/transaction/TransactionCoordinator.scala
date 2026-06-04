@@ -34,7 +34,6 @@ import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.util.Scheduler
 
 import java.util
-import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.jdk.OptionConverters._
 
@@ -1004,7 +1003,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     }
   }
 
-  def transactionTopicConfigs: Properties = txnManager.transactionTopicConfigs
+  def transactionTopicConfigs: util.Map[String, String] = txnManager.transactionTopicConfigs
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 

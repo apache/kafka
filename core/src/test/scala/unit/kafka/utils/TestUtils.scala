@@ -317,10 +317,10 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-    topicConfig: Properties = new Properties,
+    topicConfig: util.Map[String, String] = util.Map.of(),
   ): Uuid = {
     val configsMap = new util.HashMap[String, String]()
-    topicConfig.forEach((k, v) => configsMap.put(k.toString, v.toString))
+    topicConfig.asScala.foreach { case (k, v) => configsMap.put(k, v) }
 
     val result = if (replicaAssignment.isEmpty) {
       admin.createTopics(util.List.of(new NewTopic(
@@ -347,7 +347,7 @@ object TestUtils extends Logging {
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
-    topicConfig: Properties = new Properties,
+    topicConfig: util.Map[String, String] = util.Map.of(),
   ): scala.collection.immutable.Map[Int, Int] = {
     val effectiveNumPartitions = if (replicaAssignment.isEmpty) {
       numPartitions

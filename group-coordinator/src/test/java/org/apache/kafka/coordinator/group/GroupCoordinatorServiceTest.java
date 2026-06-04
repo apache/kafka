@@ -133,7 +133,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -968,12 +967,14 @@ public class GroupCoordinatorServiceTest {
             .setRuntime(runtime)
             .build();
 
-        Properties expectedProperties = new Properties();
-        expectedProperties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
-        expectedProperties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
-        expectedProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000");
-
-        assertEquals(expectedProperties, service.groupMetadataTopicConfigs());
+        assertEquals(
+            Map.of(
+                TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT,
+                TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name,
+                TopicConfig.SEGMENT_BYTES_CONFIG, "1000"
+            ),
+            service.groupMetadataTopicConfigs()
+        );
     }
 
     @Test
