@@ -22,6 +22,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
@@ -45,6 +47,8 @@ import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.storage.internals.log.FetchDataInfo;
+import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -55,6 +59,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,6 +79,7 @@ import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.Produc
 import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_OFFSET;
 import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_PARTITION;
 import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_TOPIC;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -84,6 +90,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -222,7 +229,8 @@ class ShareGroupDLQStateManagerTest {
      * request. {@code sharedHeaders} are expected to be identical on every record in that partition;
      * the offset header is built per-record from {@code firstOffset}..{@code lastOffset}.
      */
-    private record ExpectedDlqPartition(long firstOffset, long lastOffset, Map<String, String> sharedHeaders) {
+    private record ExpectedDlqPartition(long firstOffset, long lastOffset, Map<String, String> sharedHeaders,
+                                        List<byte[]> keys, List<byte[]> values) {
     }
 
     /**
@@ -257,12 +265,44 @@ class ShareGroupDLQStateManagerTest {
                 expectedHeaders.put(HEADER_DLQ_ERRORS_OFFSET, Long.toString(expectedOffset));
                 assertEquals(expectedHeaders, actualHeaders,
                     "Partition " + partition.index() + " record at offset " + expectedOffset + " has unexpected headers");
+
+                if (!expected.keys().isEmpty()) {
+                    assertKeyValue(record, expected.keys.get(recordCount), true);
+                } else {
+                    assertFalse(record.hasKey());
+                }
+
+                if (!expected.values().isEmpty()) {
+                    assertKeyValue(record, expected.values.get(recordCount), false);
+                } else {
+                    assertFalse(record.hasValue());
+                }
+
                 expectedOffset++;
                 recordCount++;
             }
             assertEquals((int) (expected.lastOffset() - expected.firstOffset() + 1), recordCount,
                 "Partition " + partition.index() + " has unexpected number of records");
         }
+    }
+
+    private static void assertKeyValue(Record record, byte[] expectedData, boolean isKey) {
+        if (isKey && !record.hasKey()) {
+            fail("record key not found");
+        }
+
+        if (!isKey && !record.hasValue()) {
+            fail("record value not found");
+        }
+
+        byte[] actualChunk = new byte[expectedData.length];
+        if (isKey) {
+            record.key().get(actualChunk);
+        } else {
+            record.value().get(actualChunk);
+        }
+
+        assertArrayEquals(expectedData, actualChunk);
     }
 
     // ---- Constructor null-check tests ----
@@ -450,7 +490,7 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                 HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-            ))
+            ), List.of(), List.of())
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
@@ -503,7 +543,7 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                 HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-            ))
+            ), List.of(), List.of())
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
@@ -561,7 +601,7 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                 HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-            ))
+            ), List.of(), List.of())
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
@@ -716,7 +756,7 @@ class ShareGroupDLQStateManagerTest {
                     HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                     HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                     HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-                ))
+                ), List.of(), List.of())
             ));
             // CreateTopics retried, but produce only ran once (after the eventual create success).
             verify(mockMetrics).recordDLQProduce(GROUP_ID);
@@ -764,7 +804,7 @@ class ShareGroupDLQStateManagerTest {
                     HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                     HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                     HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-                ))
+                ), List.of(), List.of())
             );
             for (ProduceRequest pr : capturedProduces) {
                 assertDlqProduceRecordHeaders(pr, expectedByPartition);
@@ -1013,12 +1053,12 @@ class ShareGroupDLQStateManagerTest {
             HEADER_DLQ_ERRORS_TOPIC, "source-topic",
             HEADER_DLQ_ERRORS_PARTITION, "0",
             HEADER_DLQ_ERRORS_GROUP, GROUP_ID
-        ));
+        ), List.of(), List.of());
         ExpectedDlqPartition expectedDlqPartition1 = new ExpectedDlqPartition(0L, 0L, Map.of(
             HEADER_DLQ_ERRORS_TOPIC, "source-topic",
             HEADER_DLQ_ERRORS_PARTITION, "1",
             HEADER_DLQ_ERRORS_GROUP, GROUP_ID
-        ));
+        ), List.of(), List.of());
         if (capturedProduces.size() == 1) {
             assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
                 0, expectedDlqPartition0,
@@ -1076,7 +1116,7 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_TOPIC, "source-topic",
                 HEADER_DLQ_ERRORS_PARTITION, "0",
                 HEADER_DLQ_ERRORS_GROUP, GROUP_ID
-            ))
+            ), List.of(), List.of())
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 1);
@@ -1429,6 +1469,115 @@ class ShareGroupDLQStateManagerTest {
             3);
     }
 
+    // --- DLQ record with copy record enabled ---
+
+    @Test
+    public void testHappyPathWithDLQRecordCopyEnabled() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+        LogReader logReader = mock(LogReader.class);
+        LogReadResult readResult = mock(LogReadResult.class);
+        when(readResult.error()).thenReturn(Errors.NONE);
+        when(readResult.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
+            )
+        ));
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+        readResultMap.put(param.topicIdPartition(), readResult);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(readResultMap);
+
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = happyCacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testErrorPathWithDLQRecordCopyEnabled() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();
+        LogReader logReader = mock(LogReader.class);
+        LogReadResult readResult = mock(LogReadResult.class);
+        when(readResult.error()).thenReturn(Errors.UNKNOWN_SERVER_ERROR);
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+        readResultMap.put(param.topicIdPartition(), readResult);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(readResultMap);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = happyCacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), List.of(), List.of())
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
 
     // ---- Response builder helpers ----
 
