@@ -14491,6 +14491,7 @@ public class GroupMetadataManagerTest {
 
         GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request, true, true);
         joinResult.appendFuture.complete(null);
+        assertTrue(joinResult.joinFuture.isDone());
 
         JoinGroupResponseData response = joinResult.joinFuture.get();
         assertEquals(Errors.NONE.code(), response.errorCode());
@@ -14504,7 +14505,6 @@ public class GroupMetadataManagerTest {
         String groupId = "group-id";
         String oldMemberId = "old-member";
         String instanceId = "instance-id";
-
         String newInstanceId = "new-instance-id";
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
