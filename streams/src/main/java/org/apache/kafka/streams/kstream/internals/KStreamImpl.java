@@ -1186,6 +1186,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                                 final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                                 final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner) {
@@ -1208,6 +1209,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                                 final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                                 final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
@@ -1231,6 +1233,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                                     final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                                     final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner) {
@@ -1253,6 +1256,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
+    @Deprecated
     public <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                                     final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                                     final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
@@ -1310,6 +1314,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         }
         builder.addGraphNode(graphNode, streamTableJoinNode);
 
+        // do not have serde for joined result
         return new KStreamImpl<>(
             name,
             keySerde,

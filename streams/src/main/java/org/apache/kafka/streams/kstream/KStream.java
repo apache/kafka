@@ -1347,7 +1347,10 @@ public interface KStream<K, V> {
      *
      * <p>Note that the {@link KStream} key is read-only and must not be modified, as this can lead to corrupt
      * partitioning and incorrect results.
+     *
+     * @deprecated Use {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKeys)} instead. This overload passes the {@link KStream} record's key as {@code readOnlyKey}, not the join key produced by {@code keySelector}.
      */
+    @Deprecated
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                          final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                          final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
@@ -1370,7 +1373,10 @@ public interface KStream<K, V> {
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
      *
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     *
+     * @deprecated Use {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKeys, Named)} instead. This overload passes the {@link KStream} record's key as {@code readOnlyKey}, not the join key produced by {@code keySelector}.
      */
+    @Deprecated
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                          final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                          final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
@@ -1469,7 +1475,10 @@ public interface KStream<K, V> {
      *
      * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
      * incorrect results.
+     *
+     * @deprecated Use {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKeys)} instead. This overload passes the {@link KStream} record's key as {@code readOnlyKey}, not the join key produced by {@code keySelector}.
      */
+    @Deprecated
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                              final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                              final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
@@ -1497,7 +1506,10 @@ public interface KStream<K, V> {
      * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
      *
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     *
+     * @deprecated Use {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKeys, Named)} instead. This overload passes the {@link KStream} record's key as {@code readOnlyKey}, not the join key produced by {@code keySelector}.
      */
+    @Deprecated
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                              final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
                                                              final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,

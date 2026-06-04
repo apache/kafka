@@ -63,29 +63,30 @@ class KStreamGlobalKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableVa
 
     @Override
     public void process(final Record<StreamKey, StreamValue> record) {
-        final TableKey mappedKey = keyMapper.apply(record.key(), record.value());
-        if (shouldDrop(record, mappedKey)) {
+        if (maybeDropRecord(record)) {
             return;
         }
-        final TableValue tableValue = lookup(record, mappedKey);
-        if (leftJoin || tableValue != null) {
-            context().forward(record.withValue(joiner.apply(mappedKey, record.key(), record.value(), tableValue)));
+        doJoin(record);
+    }
+
+    private void doJoin(final Record<StreamKey, StreamValue> record) {
+        final TableKey mappedKey = keyMapper.apply(record.key(), record.value());
+        final TableValue value2 = getTableValue(record, mappedKey);
+        if (leftJoin || value2 != null) {
+            context().forward(record.withValue(joiner.apply(mappedKey, record.key(), record.value(), value2)));
         }
     }
 
-    private TableValue lookup(final Record<StreamKey, StreamValue> record, final TableKey mappedKey) {
-        if (mappedKey == null) {
-            return null;
-        }
+    private TableValue getTableValue(final Record<StreamKey, StreamValue> record, final TableKey mappedKey) {
+        if (mappedKey == null) return null;
         final ValueTimestampHeaders<TableValue> valueTimestampHeaders = valueGetter.isVersioned()
             ? valueGetter.get(mappedKey, record.timestamp())
             : valueGetter.get(mappedKey);
         return getValueOrNull(valueTimestampHeaders);
     }
 
-    private boolean shouldDrop(final Record<StreamKey, StreamValue> record, final TableKey mappedKey) {
-        // mirror KStreamKTableJoinProcessor#maybeDropRecord: left-join with null mappedKey but non-null
-        // value is allowed (produces a null-table-side join result). Drop otherwise.
+    private boolean maybeDropRecord(final Record<StreamKey, StreamValue> record) {
+        final TableKey mappedKey = keyMapper.apply(record.key(), record.value());
         if (leftJoin && mappedKey == null && record.value() != null) {
             return false;
         }
@@ -98,7 +99,9 @@ class KStreamGlobalKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableVa
                     recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
                 );
             } else {
-                LOG.warn("Skipping record due to null join key or value. Topic, partition, and offset not known.");
+                LOG.warn(
+                    "Skipping record due to null join key or value. Topic, partition, and offset not known."
+                );
             }
             droppedRecordsSensor.record();
             return true;
