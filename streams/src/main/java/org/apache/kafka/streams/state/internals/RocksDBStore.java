@@ -144,6 +144,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     protected Position position;
     private TaskId taskId;
 
+    // KIP-1035 stale-offset prevention (applies to BOTH at-least-once and exactly-once):
+    // the changelog offset is persisted inside RocksDB (offsets CF) and is otherwise only durable on
+    // an organic memtable flush or a clean close.
+    static final String MAX_FLUSH_INTERVAL_MS_CONFIG = "rocksdb.max.flush.interval.ms";
+    static final long DEFAULT_MAX_FLUSH_INTERVAL_MS = 30_000L;
+    private long maxFlushIntervalMs = DEFAULT_MAX_FLUSH_INTERVAL_MS;
+    private long lastFlushMs = 0L;
+
     public RocksDBStore(final String name,
                         final String metricsScope) {
         this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, name));
@@ -191,6 +199,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @SuppressWarnings("unchecked")
     void openDB(final Map<String, Object> configs, final File stateDir) {
         final boolean eosEnabled = Objects.equals(configs.get(PROCESSING_GUARANTEE_CONFIG), EXACTLY_ONCE_V2);
+
+        final Object flushIntervalCfg = configs.get(MAX_FLUSH_INTERVAL_MS_CONFIG);
+        if (flushIntervalCfg != null) {
+            this.maxFlushIntervalMs = Long.parseLong(flushIntervalCfg.toString());
+        }
+        this.lastFlushMs = System.currentTimeMillis();
+
         // initialize the default rocksdb options
         final DBOptions dbOptions = new DBOptions();
         // Defaults to true. Supports offset managements: KAFKA-20212
@@ -761,8 +776,26 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         try {
             cfAccessor.commit(dbAccessor, changelogOffsets);
+            maybeFlush();
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while executing commit from store " + name, e);
+        }
+    }
+
+    /**
+     * Bound the staleness of the persisted changelog offset (KIP-1035) by flushing the store's
+     * memtables to disk at most once per {@link #maxFlushIntervalMs}.
+     * This prevents the offset from drifting far enough behind the changelog log-start offset
+     * to trigger an OffsetOutOfRange / TaskCorrupted on restore, under both at-least-once and exactly-once.
+     */
+    private void maybeFlush() throws RocksDBException {
+        if (maxFlushIntervalMs < 0) {
+            return;
+        }
+        final long now = System.currentTimeMillis();
+        if (now - lastFlushMs >= maxFlushIntervalMs) {
+            cfAccessor.flush(dbAccessor);
+            lastFlushMs = now;
         }
     }
 
@@ -1063,6 +1096,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
         Long getCommittedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
+
+        /**
+         * Flush all of this accessor's column families (data CF(s) and the offsets CF) to disk.
+         * With {@code atomicFlush} enabled this persists the data and the changelog offset atomically.
+         */
+        void flush(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
     }
 
     class SingleColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
@@ -1071,6 +1110,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         SingleColumnFamilyAccessor(final ColumnFamilyHandle offsetsColumnFamily, final ColumnFamilyHandle columnFamily) {
             super(offsetsColumnFamily, open);
             this.columnFamily = columnFamily;
+        }
+
+        @Override
+        protected ColumnFamilyHandle[] columnFamilies() {
+            return new ColumnFamilyHandle[] {columnFamily};
         }
 
         @Override

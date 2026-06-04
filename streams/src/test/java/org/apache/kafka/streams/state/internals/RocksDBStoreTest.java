@@ -281,6 +281,39 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldFlushStoreOnCommitWhenMaxFlushIntervalElapsed() throws Exception {
+        final TopicPartition tp0 = new TopicPartition("topic-0", 0);
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(RocksDBStore.MAX_FLUSH_INTERVAL_MS_CONFIG, "0");
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(getProcessorContext(props), rocksDBStore);
+
+        rocksDBStore.put(new Bytes("key".getBytes()), "value".getBytes());
+        rocksDBStore.commit(Map.of(tp0, 100L));
+
+        // atomicFlush => all memtables (data + offsets CFs) were flushed to disk on commit
+        assertEquals(0L, rocksDBStore.db.getAggregatedLongProperty("rocksdb.num-entries-active-mem-table"));
+        assertEquals(100L, rocksDBStore.committedOffset(tp0));
+    }
+
+    @Test
+    public void shouldNotFlushStoreOnCommitBeforeMaxFlushIntervalElapsed() throws Exception {
+        final TopicPartition tp0 = new TopicPartition("topic-0", 0);
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(RocksDBStore.MAX_FLUSH_INTERVAL_MS_CONFIG, String.valueOf(Long.MAX_VALUE));
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(getProcessorContext(props), rocksDBStore);
+
+        rocksDBStore.put(new Bytes("key".getBytes()), "value".getBytes());
+        rocksDBStore.commit(Map.of(tp0, 100L));
+
+        // interval not elapsed => no forced flush; writes remain in the active memtable
+        assertTrue(rocksDBStore.db.getAggregatedLongProperty("rocksdb.num-entries-active-mem-table") > 0L);
+        // offset is still readable from the memtable within the same process
+        assertEquals(100L, rocksDBStore.committedOffset(tp0));
+    }
+
+    @Test
     public void shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         try {

@@ -52,6 +52,19 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
         this.storeOpen = storeOpen;
     }
 
+    /**
+     * The data column family handle(s) backing this accessor (excluding the offsets CF).
+     */
+    protected abstract ColumnFamilyHandle[] columnFamilies();
+
+    @Override
+    public final void flush(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
+        final ColumnFamilyHandle[] dataColumnFamilies = columnFamilies();
+        final ColumnFamilyHandle[] allColumnFamilies = Arrays.copyOf(dataColumnFamilies, dataColumnFamilies.length + 1);
+        allColumnFamilies[dataColumnFamilies.length] = offsetColumnFamilyHandle;
+        accessor.flush(allColumnFamilies);
+    }
+
     @Override
     public final void commit(final RocksDBStore.DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
         if (changelogOffsets.isEmpty()) {

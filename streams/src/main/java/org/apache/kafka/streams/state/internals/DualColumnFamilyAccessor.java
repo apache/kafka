@@ -78,6 +78,11 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     @Override
+    protected ColumnFamilyHandle[] columnFamilies() {
+        return new ColumnFamilyHandle[] {oldColumnFamily, newColumnFamily};
+    }
+
+    @Override
     public void put(final DBAccessor accessor,
                     final byte[] key,
                     final byte[] value) {
