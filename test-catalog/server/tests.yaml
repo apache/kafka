@@ -487,8 +487,14 @@ org.apache.kafka.server.requests.ProduceRequestTest:
 org.apache.kafka.server.share.CachedSharePartitionTest:
 - testCachedSharePartitionEqualsAndHashCode
 org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
+- testCoalesceProduceRequestsKeepsDifferentDlqTopicsSeparate
+- testCoalesceProduceRequestsMergesPartitionsForSameDlqTopic
+- testCoalesceProduceRequestsSkipsHandlerWhoseTopicProduceDataThrows
+- testCoalesceProduceRequestsWithEmptyHandlerListProducesEmptyRequest
+- testCoalesceProduceRequestsWithSingleHandlerProducesOneTopicOnePartition
 - testConstructorRejectsNullCacheHelper
 - testConstructorRejectsNullClient
+- testConstructorRejectsNullShareGroupMetrics
 - testConstructorRejectsNullTime
 - testConstructorRejectsNullTimer
 - testDlqCreateTopicFatalErrorFailsFuture
@@ -499,9 +505,11 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDlqEmptyTopicNameFailsValidation
 - testDlqExistingTopicWithoutDlqConfigFailsValidation
 - testDlqHappyPathExistingTopic
+- testDlqMultipleGroupsWithMixedOutcomes
 - testDlqProduceDisconnectIsRetriedNotImmediatelyFailed
 - testDlqProduceEmptyResponseFailsFuture
 - testDlqProduceFatalErrorFailsFuture
+- testDlqProduceNotLeaderOrFollowerExhaustsAndRecordsFailure
 - testDlqProducePartialFailuresThenSucceeds
 - testDlqProduceRetriesExhaustedFailsWithNetworkException
 - testDlqResolvesSourceTopicNameViaCacheHelperWhenMissing
@@ -511,6 +519,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDlqTopicStartingWithUnderscoreFailsValidation
 - testDlqTwoEnqueuedRecordsBothComplete
 - testDlqValidationFailureCompletesFutureBeforeStart
+- testMultipleAccumulatedHandlersInNodeRPCMap
 - testStartIsIdempotent
 - testStopWithoutStartIsNoOp
 org.apache.kafka.server.share.fetch.DelayedShareFetchKeyTest:
