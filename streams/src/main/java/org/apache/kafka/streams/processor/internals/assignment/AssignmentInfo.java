@@ -389,7 +389,7 @@ public class AssignmentInfo {
                                           final DataInputStream in,
                                           final int length) throws IOException {
         final int count = in.readInt();
-        if (count > length) {
+        if (count < 0 || count > length) {
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         assignmentInfo.activeTasks = new ArrayList<>(count);
@@ -402,7 +402,7 @@ public class AssignmentInfo {
                                            final DataInputStream in,
                                            final int length) throws IOException {
         final int count = in.readInt();
-        if (count > length) {
+        if (count < 0 || count > length) {
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         assignmentInfo.standbyTasks = new HashMap<>(count);
@@ -417,7 +417,7 @@ public class AssignmentInfo {
                                                final int length) throws IOException {
         assignmentInfo.partitionsByHost = new HashMap<>();
         final int numEntries = in.readInt();
-        if (numEntries > length) {
+        if (numEntries < 0 || numEntries > length) {
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         for (int i = 0; i < numEntries; i++) {
@@ -429,7 +429,7 @@ public class AssignmentInfo {
     private static Set<TopicPartition> readTopicPartitions(final DataInputStream in,
                                                            final int length) throws IOException {
         final int numPartitions = in.readInt();
-        if (numPartitions > length) {
+        if (numPartitions < 0 || numPartitions > length) {
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
@@ -442,7 +442,7 @@ public class AssignmentInfo {
     private static Map<Integer, String> decodeTopicIndexAndGet(final DataInputStream in,
                                                                final int length) throws IOException {
         final int dictSize = in.readInt();
-        if (dictSize > length) {
+        if (dictSize < 0 || dictSize > length) {
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         final Map<Integer, String> topicIndexDict = new HashMap<>(dictSize);
@@ -456,7 +456,7 @@ public class AssignmentInfo {
                                                                                             final Map<Integer, String> topicIndexDict,
                                                                                             final int length) throws IOException {
         final int numEntries = in.readInt();
-        if (numEntries > length) {
+        if (numEntries < 0 || numEntries > length) {
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         final Map<HostInfo, Set<TopicPartition>> hostPartitionMap = new HashMap<>(numEntries);
@@ -486,7 +486,7 @@ public class AssignmentInfo {
                                                            final Map<Integer, String> topicIndexDict,
                                                            final int length) throws IOException {
         final int numPartitions = in.readInt();
-        if (numPartitions > length) {
+        if (numPartitions < 0 || numPartitions > length) {
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
