@@ -1953,7 +1953,6 @@ public class GroupMetadataManager {
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @param memberEndpointEpoch The last endpoint information epoch seen be the group member.
-     * @param requestVersion      The API version of the request, used to set version-specific response fields.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -1973,8 +1972,7 @@ public class GroupMetadataManager {
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
         boolean shutdownApplication,
-        int memberEndpointEpoch,
-        short requestVersion
+        int memberEndpointEpoch
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -5045,8 +5043,7 @@ public class GroupMetadataManager {
                 request.userEndpoint(),
                 request.clientTags(),
                 request.shutdownApplication(),
-                request.endpointInformationEpoch(),
-                (short) context.requestVersion()
+                request.endpointInformationEpoch()
             );
         }
     }
