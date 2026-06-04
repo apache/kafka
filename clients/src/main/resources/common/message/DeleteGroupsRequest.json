@@ -21,7 +21,11 @@
   // Version 1 is the same as version 0.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "0-2",
+  //
+  // Version 3 corresponds to the addition of an ErrorMessage field on each per-group
+  // result in the response (populated when the broker needs to surface a cause to the
+  // caller). The request body shape is unchanged at version 3.
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "GroupsNames", "type": "[]string", "versions": "0+", "entityType": "groupId",

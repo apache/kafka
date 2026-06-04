@@ -14,28 +14,28 @@
 // limitations under the License.
 
 {
-  "apiKey": 42,
+  "apiKey": 93,
   "type": "response",
-  "name": "DeleteGroupsResponse",
-  // Starting in version 1, on quota violation, brokers send out responses before throttling.
-  //
-  // Version 2 is the first flexible version.
-  //
-  // Version 3 adds the per-group ErrorMessage field so the broker can surface a cause
-  // string when GROUP_DELETION_FAILED (or any other non-NONE error) is returned for a group.
-  "validVersions": "0-3",
-  "flexibleVersions": "2+",
+  "name": "StreamsGroupTopologyDescriptionUpdateResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // Supported errors:
+  // - GROUP_AUTHORIZATION_FAILED (version 0+)
+  // - NOT_COORDINATOR (version 0+)
+  // - COORDINATOR_NOT_AVAILABLE (version 0+)
+  // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
+  // - INVALID_REQUEST (version 0+)
+  // - UNSUPPORTED_VERSION (version 0+)
+  // - UNKNOWN_MEMBER_ID (version 0+)
+  // - GROUP_ID_NOT_FOUND (version 0+)
+  // - STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED (version 0+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "Results", "type": "[]DeletableGroupResult", "versions": "0+",
-      "about": "The deletion results.", "fields": [
-      { "name": "GroupId", "type": "string", "versions": "0+", "mapKey": true, "entityType": "groupId",
-        "about": "The group id." },
-      { "name": "ErrorCode", "type": "int16", "versions": "0+",
-        "about": "The deletion error, or 0 if the deletion succeeded." },
-      { "name": "ErrorMessage", "type": "string", "versions": "3+", "nullableVersions": "3+", "ignorable": true, "default": "null",
-        "about": "The error message, or null if there was no error." }
-    ]}
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The top-level error code, or 0 if there was no error." },
+    { "name": "ErrorMessage", "type": "string", "versions": "0+",
+      "nullableVersions": "0+", "default": "null",
+      "about": "The top-level error message, or null if there was no error." }
   ]
 }
