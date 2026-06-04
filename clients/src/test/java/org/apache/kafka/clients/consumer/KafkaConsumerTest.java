@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
@@ -1509,7 +1510,21 @@ public class KafkaConsumerTest {
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testWakeupWithFetchDataAvailable(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
-        MockClient client = new MockClient(time, metadata);
+
+        AtomicInteger fetchCorrelationId = new AtomicInteger(-1);
+        AtomicBoolean fetchResponseCompleted = new AtomicBoolean(false);
+        MockClient client = new MockClient(time, metadata) {
+            @Override
+            public List<ClientResponse> poll(long timeoutMs, long now) {
+                List<ClientResponse> completed = super.poll(timeoutMs, now);
+                completed.stream()
+                        .filter(response -> response.requestHeader().apiKey() == ApiKeys.FETCH)
+                        .filter(response -> response.requestHeader().correlationId() == fetchCorrelationId.get())
+                        .findAny()
+                        .ifPresent(response -> fetchResponseCompleted.set(true));
+                return completed;
+            }
+        };
 
         initMetadata(client, Map.of(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
@@ -1522,9 +1537,15 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         // respond to the outstanding fetch so that we have data available on the next poll
-        client.respondFrom(fetchResponse(tp0, 0, 5), node);
-        client.poll(0, time.milliseconds());
+        ClientRequest fetchRequest = findRequest(client, ApiKeys.FETCH);
+        fetchCorrelationId.set(fetchRequest.correlationId());
 
+        client.respondFrom(fetchResponse(tp0, 0, 5), node);
+        TestUtils.waitForCondition(() -> {
+            client.poll(0, time.milliseconds());
+            return fetchResponseCompleted.get();
+        }, "Fetch response was not completed.");
+        
         consumer.wakeup();
 
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));

@@ -290,6 +290,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return AlterShareGroupOffsetsResponse.parse(readable, version);
             case DELETE_SHARE_GROUP_OFFSETS:
                 return DeleteShareGroupOffsetsResponse.parse(readable, version);
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE:
+                return StreamsGroupTopologyDescriptionUpdateResponse.parse(readable, version);
             case UNREGISTER_CONTROLLER:
                 return UnregisterControllerResponse.parse(readable, version);
             default:

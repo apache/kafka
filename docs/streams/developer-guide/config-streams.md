@@ -65,6 +65,7 @@ This section contains the most common Streams configuration parameters. For a fu
     * default.timestamp.extractor
     * default.value.serde
     * deserialization.exception.handler
+    * dsl.store.format
     * enable.metrics.push
     * ensure.explicit.internal.resource.naming
     * group.protocol
@@ -600,6 +601,23 @@ Defines a default state store implementation to be used by any stateful DSL oper
 `BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers`
 </td> </tr>  
 <tr>  
+<td>
+
+dsl.store.format
+</td>
+<td>
+
+Low
+</td>
+<td>
+
+Controls whether DSL operators materialize headers-aware state stores. Case-insensitive. Accepted values: `default` (uses existing timestamped or plain store variants per operator) and `headers` (selects headers-aware stores that can persist record headers alongside values and timestamps; local state can be larger than under `default`).
+</td>
+<td>
+
+`default`
+</td> </tr>
+<tr>
 <td>
 
 ensure.explicit.internal.resource.naming
@@ -1358,6 +1376,21 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 
 > 
 > This is discussed in more detail in [Data types and serialization](datatypes.html#streams-developer-guide-serdes).
+
+### dsl.store.format {#dsl-store-format}
+
+> Selects the state store format used by all DSL operators that materialize a state store. Accepted values are `DEFAULT` and `HEADERS` (case-insensitive); the default is `DEFAULT`.
+>
+> * `DEFAULT`: Uses the existing timestamped or plain store variant per operator. Existing applications are unaffected.
+> * `HEADERS`: Uses headers-aware stores (introduced by [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G)) that can persist record headers alongside the value and timestamp.
+>
+> This config is global. Per-operator customization is possible by providing a custom `DslStoreSuppliers` via `Materialized.withStoreType(...)`, or by supplying explicit headers-aware store suppliers. Note that `dsl.store.format` is orthogonal to `dsl.store.suppliers.class`, which selects the store *implementation* (e.g., RocksDB vs in-memory); the two can be set independently.
+>
+> The accepted string values are `DEFAULT` and `HEADERS` (case-insensitive). These differ from the `DslStoreFormat` Java enum, which has constants `PLAIN`, `TIMESTAMPED`, and `HEADERS`; `DslStoreFormat.DEFAULT` does not exist as an enum constant.
+>
+> See [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G) for migration procedures, changelog compatibility, restore behavior, and per-record overhead.
+>
+> **Current limitations**: `dsl.store.format=HEADERS` changes the state store format. It does not define how DSL operators create headers for output records. Some operators write empty headers to their materialized stores, and the buffer stores used by `suppress()` and left/outer stream-stream joins are not headers-aware. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) and the [Streams upgrade guide](/{version}/streams/upgrade-guide.html#current-limitations) for details.
 
 ### ensure.explicit.internal.resource.naming
 

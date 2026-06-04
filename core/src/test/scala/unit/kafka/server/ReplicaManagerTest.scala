@@ -47,8 +47,8 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.server.share.LogReader;
-import org.apache.kafka.server.share.PartitionMetadataProvider;
+import org.apache.kafka.server.share.LogReader
+import org.apache.kafka.server.share.PartitionMetadataProvider
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -5440,6 +5440,53 @@ class ReplicaManagerTest {
 
       // Listener is not updated anymore.
       listener.verify()
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testPartitionListenerWhenPartitionBecomesFollower(): Unit = {
+    val aliveBrokersIds = Seq(0, 1)
+    val leaderEpoch = 5
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      brokerId = 0, aliveBrokersIds)
+    try {
+      val tp = new TopicPartition(topic, 0)
+      val replicas = aliveBrokersIds.toList.map(Int.box).asJava
+
+      val listener = new MockPartitionListener
+      listener.verify()
+
+      // Broker 0 becomes leader of the partition.
+      val leaderDelta = createLeaderDelta(
+        topicId = topicId,
+        partition = tp,
+        leaderId = 0,
+        replicas = replicas,
+        isr = replicas,
+        leaderEpoch = leaderEpoch
+      )
+      replicaManager.applyDelta(leaderDelta, imageFromTopics(leaderDelta.apply()))
+
+      // Register a listener.
+      assertTrue(replicaManager.maybeAddListener(tp, listener))
+      listener.verify()
+
+      // Broker 0 transitions to follower of the partition with broker 1 as the new
+      // leader. The listener is notified that the partition is becoming a follower.
+      // This happens before the follower starts fetching from the new leader, hence
+      // before any high watermark update reflecting the new leader's records.
+      val followerDelta = createFollowerDelta(
+        topicId = topicId,
+        partition = tp,
+        followerId = 0,
+        leaderId = 1,
+        leaderEpoch = leaderEpoch + 1
+      )
+      replicaManager.applyDelta(followerDelta, imageFromTopics(followerDelta.apply()))
+
+      listener.verify(expectedFollower = true)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
