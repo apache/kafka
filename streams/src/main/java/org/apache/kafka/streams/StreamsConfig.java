@@ -455,8 +455,10 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
-    /** {@code buffered.records.per.partition} */
+    /** {@code buffered.records.per.partition}
+     * @deprecated Since 4.4. Use {@link #INPUT_BUFFER_MAX_BYTES_CONFIG "input.buffer.max.bytes"} instead. */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     @Deprecated
     public static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
@@ -617,6 +619,11 @@ public class StreamsConfig extends AbstractConfig {
     private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
             "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.\n" +
             "Note: This configuration applies only to regular stream processing tasks. It does not apply to global state store updates (global threads).";
+
+    /** {@code input.buffer.max.bytes} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
+    private static final String INPUT_BUFFER_MAX_BYTES_DOC = "Maximum bytes of records to buffer across all threads";
 
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
@@ -983,6 +990,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(-1),
                     Importance.LOW,
                     STATESTORE_UNCOMMITTED_MAX_BYTES_DOC)
+            .define(INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    Type.LONG,
+                    512 * 1024 * 1024L,
+                    atLeast(0),
+                    Importance.MEDIUM,
+                    INPUT_BUFFER_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",

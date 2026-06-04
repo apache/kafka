@@ -180,6 +180,16 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public long totalBytesBuffered() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
+    public Set<TopicPartition> getNonEmptyTopicPartitions() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
         throw new UnsupportedOperationException("This task is read-only");
     }

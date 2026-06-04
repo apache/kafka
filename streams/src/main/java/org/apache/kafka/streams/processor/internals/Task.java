@@ -194,6 +194,14 @@ public interface Task {
         return false;
     }
 
+    default long totalBytesBuffered() {
+        return 0L;
+    }
+
+    default Set<TopicPartition> getNonEmptyTopicPartitions() {
+        return Collections.emptySet();
+    }
+
     /**
      * @throws StreamsException fatal error, should close the thread
      */

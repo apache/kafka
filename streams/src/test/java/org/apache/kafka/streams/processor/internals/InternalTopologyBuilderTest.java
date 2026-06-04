@@ -1064,6 +1064,24 @@ public class InternalTopologyBuilderTest {
         assertThat(topologyBuilder.topologyConfigs().cacheSize, equalTo(200L));
     }
 
+    @Test
+    @SuppressWarnings("deprecation")
+    public void shouldSetBufferedPartitionsToNegativeValueWhenBothBufferedRecordsPerPartitionAndInputBufferMaxBytesConfigAreSet() {
+        // both set -> legacy is disabled (-1), bytes guard wins.
+        final Properties topologyOverrides = new Properties();
+        topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
+        topologyOverrides.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 100L);
+
+        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                topologyOverrides)
+        );
+        assertThat(topologyBuilder.topologyConfigs().getTaskConfig().maxBufferedSize, is(-1));
+    }
+
     @SuppressWarnings("deprecation")
     @Test
     public void shouldOverrideGlobalStreamsConfigWhenGivenNamedTopologyProps() {

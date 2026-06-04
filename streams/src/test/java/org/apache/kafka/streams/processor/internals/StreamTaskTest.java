@@ -310,6 +310,7 @@ public class StreamTaskTest {
         return createConfig(eosConfig, enforcedProcessingValue, deserializationExceptionHandler, processingExceptionHandler, timestampExtractor, false);
     }
 
+    @SuppressWarnings("deprecation")
     private static StreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,
@@ -1177,6 +1178,39 @@ public class StreamTaskTest {
 
         assertTrue(task.process(0L)); // drain head record (ie, last corrupted record)
         assertFalse(task.process(0L));
+        assertFalse(task.hasRecordsQueued());
+    }
+
+    @Test
+    public void shouldNotPauseOrResumeAtStreamTaskLevelWhenBytesPathIsActive() {
+        // with the legacy config absent, maxBufferedSize == -1 and both per-task arms must stay off.
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        final StreamsConfig configWithoutLegacy = new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, BASE_DIR.getAbsolutePath()),
+            mkEntry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
+            mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, "-1"),
+            mkEntry(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName())
+        )));
+        task = createStatelessTask(configWithoutLegacy);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        // adding plenty of records — per-task pause must not fire under the bytes path.
+        task.addRecords(partition1, asList(
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 30),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 40),
+            getConsumerRecordWithOffsetAsTimestamp(partition1, 50)
+        ));
+        assertEquals(0, consumer.paused().size());
+
+        while (task.process(0L)) { /* drain */ }
+        task.resumePollingForPartitionsWithAvailableSpace();
+        assertEquals(0, consumer.paused().size());
         assertFalse(task.hasRecordsQueued());
     }
 

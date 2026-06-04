@@ -495,6 +495,67 @@ public class RecordQueueTest {
 
     }
 
+    @Test
+    public void shouldTrackTotalBytesBufferedAcrossAddAndPoll() {
+        final byte[] key = intSerializer.serialize(null, 1);
+        final byte[] value = intSerializer.serialize(null, 10);
+        final ConsumerRecord<byte[], byte[]> r1 = new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, key, value, new RecordHeaders(), Optional.empty());
+        final ConsumerRecord<byte[], byte[]> r2 = new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0, 0, key, value, new RecordHeaders(), Optional.empty());
+
+        assertEquals(0L, queue.getTotalBytesBuffered());
+        queue.addRawRecords(Arrays.asList(r1, r2));
+        assertEquals(consumerRecordSizeInBytes(r1) + consumerRecordSizeInBytes(r2), queue.getTotalBytesBuffered());
+
+        queue.poll(0);
+        assertEquals(consumerRecordSizeInBytes(r2), queue.getTotalBytesBuffered());
+
+        queue.poll(0);
+        assertEquals(0L, queue.getTotalBytesBuffered());
+    }
+
+    @Test
+    public void shouldDecrementTotalBytesWhenSkippingInvalidTimestampRecord() {
+        // dropped records must subtract from totalBytesBuffered or the counter drifts up over time.
+        final byte[] key = intSerializer.serialize(null, 1);
+        final byte[] value = intSerializer.serialize(null, 10);
+        final ConsumerRecord<byte[], byte[]> bad = new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0, 0, key, value, new RecordHeaders(), Optional.empty());
+        final ConsumerRecord<byte[], byte[]> good = new ConsumerRecord<>("topic", 1, 2, 5L, TimestampType.CREATE_TIME, 0, 0, key, value, new RecordHeaders(), Optional.empty());
+
+        queueThatSkipsInvalidTimestamps.addRawRecords(Arrays.asList(bad, good));
+        // both raw records are accounted at add-time
+        // then updateHead drops `bad` and stops at `good`, so only `good`'s bytes should remain
+        assertEquals(consumerRecordSizeInBytes(good), queueThatSkipsInvalidTimestamps.getTotalBytesBuffered());
+    }
+
+    @Test
+    public void shouldDecrementTotalBytesWhenSkippingCorruptedRecord() {
+        // same invariant for the deserializer-skip branch.
+        final byte[] key = intSerializer.serialize(null, 1);
+        final byte[] badValue = "not-an-int".getBytes();
+        final byte[] goodValue = intSerializer.serialize(null, 10);
+        final ConsumerRecord<byte[], byte[]> bad = new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, key, badValue, new RecordHeaders(), Optional.empty());
+        final ConsumerRecord<byte[], byte[]> good = new ConsumerRecord<>("topic", 1, 2, 0L, TimestampType.CREATE_TIME, 0, 0, key, goodValue, new RecordHeaders(), Optional.empty());
+
+        queueThatSkipsDeserializeErrors.addRawRecords(Arrays.asList(bad, good));
+        assertEquals(consumerRecordSizeInBytes(good), queueThatSkipsDeserializeErrors.getTotalBytesBuffered());
+    }
+
+    @Test
+    public void shouldRetainCorruptedRecordBytesWhenAllRecordsAreCorrupted() {
+        // last corrupted record becomes the head (KAFKA-6502), so its bytes stay until poll().
+        final byte[] key = intSerializer.serialize(null, 1);
+        final byte[] value = intSerializer.serialize(null, 10);
+        final ConsumerRecord<byte[], byte[]> bad1 = new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0, 0, key, value, new RecordHeaders(), Optional.empty());
+        final ConsumerRecord<byte[], byte[]> bad2 = new ConsumerRecord<>("topic", 1, 2, -1L, TimestampType.CREATE_TIME, 0, 0, key, value, new RecordHeaders(), Optional.empty());
+
+        queueThatSkipsInvalidTimestamps.addRawRecords(Arrays.asList(bad1, bad2));
+        assertTrue(queueThatSkipsInvalidTimestamps.headRecordIsCorrupted());
+        assertEquals(consumerRecordSizeInBytes(bad2), queueThatSkipsInvalidTimestamps.getTotalBytesBuffered());
+
+        queueThatSkipsInvalidTimestamps.poll(0);
+        assertEquals(0L, queueThatSkipsInvalidTimestamps.getTotalBytesBuffered());
+    }
+
     private static class PartitionTimeTrackingTimestampExtractor implements TimestampExtractor {
         private long partitionTime = RecordQueue.UNKNOWN;
 
