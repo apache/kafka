@@ -43,6 +43,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -339,6 +340,71 @@ public class MirrorSourceTaskTest {
         // No more syncs should take place; we've been able to publish all of them so far
         verify(offsetSyncWriter, times(1)).promoteDelayedOffsetSyncs();
         verify(offsetSyncWriter, times(2)).firePendingOffsetSyncs();
+    }
+
+    @Test
+    public void testDetectTruncationFailsFast() {
+        // Source log has advanced (retention purged un-replicated records): begin > expected,
+        // end >= expected. This is unrecoverable data loss -> LogTruncationException.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        Set<TopicPartition> assignment = Set.of(tp);
+        when(consumer.assignment()).thenReturn(assignment);
+        when(consumer.beginningOffsets(assignment)).thenReturn(Map.of(tp, 500L));
+        when(consumer.endOffsets(assignment)).thenReturn(Map.of(tp, 1000L));
+
+        MirrorSourceTask task = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null);
+        task.expectedOffsets.put(tp, 100L); // we expected to read 100, but earliest is now 500
+
+        LogTruncationException thrown = assertThrows(LogTruncationException.class,
+                task::detectTruncationAndReset);
+        assertEquals(tp, thrown.topicPartition());
+        assertEquals(100L, thrown.expectedOffset());
+        assertEquals(500L, thrown.logStartOffset());
+    }
+
+    @Test
+    public void testDetectTopicResetRecovers() {
+        // Source topic was deleted and recreated: the log end offset is now smaller than the
+        // offset we expected to read next. Recoverable -> seek to the new beginning and continue.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        Set<TopicPartition> assignment = Set.of(tp);
+        when(consumer.assignment()).thenReturn(assignment);
+        when(consumer.beginningOffsets(assignment)).thenReturn(Map.of(tp, 0L));
+        when(consumer.endOffsets(assignment)).thenReturn(Map.of(tp, 5L));
+
+        MirrorSourceTask task = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null);
+        task.expectedOffsets.put(tp, 1000L); // expected 1000, but fresh log only reaches 5
+
+        task.detectTruncationAndReset(); // must not throw
+
+        verify(consumer).seek(tp, 0L);
+        assertEquals(0L, task.expectedOffsets.get(tp).longValue());
+    }
+
+    @Test
+    public void testDetectNoFalsePositiveOnNormalReplication() {
+        // Healthy steady state: begin <= expected <= end. No exception, no seek.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        Set<TopicPartition> assignment = Set.of(tp);
+        when(consumer.assignment()).thenReturn(assignment);
+        when(consumer.beginningOffsets(assignment)).thenReturn(Map.of(tp, 0L));
+        when(consumer.endOffsets(assignment)).thenReturn(Map.of(tp, 1000L));
+
+        MirrorSourceTask task = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null);
+        task.expectedOffsets.put(tp, 500L);
+
+        task.detectTruncationAndReset(); // must not throw
+        verify(consumer, times(0)).seek(any(TopicPartition.class), org.mockito.ArgumentMatchers.anyLong());
+        assertEquals(500L, task.expectedOffsets.get(tp).longValue());
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {

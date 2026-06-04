@@ -36,9 +36,11 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
@@ -59,6 +61,14 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
+
+    // The offset MirrorMaker 2 expects to read next from each source topic-partition.
+    // Seeded in initializeConsumer() and advanced after every successfully polled record.
+    // Used to detect (a) log truncation -- data purged by retention before replication
+    // (fail-fast, Task 2) and (b) source topic reset -- delete/recreate (auto-recover, Task 3).
+    // ConcurrentHashMap because poll() and initializeConsumer() may run on different threads.
+    // visible for testing
+    final Map<TopicPartition, Long> expectedOffsets = new ConcurrentHashMap<>();
 
     public MirrorSourceTask() {}
 
@@ -138,12 +148,22 @@ public class MirrorSourceTask extends SourceTask {
             return null;
         }
         try {
+            // Before polling, verify no source records have been purged or reset out from
+            // under us. Because the source consumer uses auto.offset.reset=earliest, Kafka
+            // would otherwise silently skip missing data instead of raising an error.
+            // This may throw LogTruncationException (Task 2, fail-fast) or transparently
+            // resubscribe a reset topic-partition from the beginning (Task 3, auto-recover).
+            detectTruncationAndReset();
+
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
                 TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
+                // Advance the expected read position for this source partition. We track the
+                // *source* topic-partition (record.topic(), not the renamed downstream topic).
+                expectedOffsets.put(new TopicPartition(record.topic(), record.partition()), record.offset() + 1L);
                 long age = System.currentTimeMillis() - record.timestamp();
                 long size = byteSize(record.value());
                 if (legacyMetrics != null) {
@@ -164,6 +184,12 @@ public class MirrorSourceTask extends SourceTask {
             }
         } catch (WakeupException e) {
             return null;
+        } catch (LogTruncationException e) {
+            // Task 2: unrecoverable data loss. Re-throw so Kafka Connect fails the task.
+            // Must precede the KafkaException clause below, since LogTruncationException
+            // is itself a KafkaException and would otherwise be swallowed and logged at WARN.
+            log.error("Failing MirrorSourceTask due to detected log truncation / silent data loss.", e);
+            throw e;
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
@@ -236,6 +262,78 @@ public class MirrorSourceTask extends SourceTask {
             long nextOffsetToCommittedOffset = offset + 1L;
             log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
             consumer.seek(topicPartition, nextOffsetToCommittedOffset);
+            // Seed truncation/reset detection with the offset we intend to read next.
+            expectedOffsets.put(topicPartition, nextOffsetToCommittedOffset);
+        });
+    }
+
+    /**
+     * Detects, for every assigned source topic-partition, whether records that
+     * MirrorMaker 2 still needs have been removed from the source log. This handles
+     * the two failure scenarios that vanilla MM2 ignores because its consumer uses
+     * {@code auto.offset.reset=earliest}:
+     *
+     * <ul>
+     *   <li><b>Log truncation (Task 2):</b> the source retention policy purged records
+     *       at offsets we had not yet replicated, but the topic itself still exists and
+     *       has grown beyond our expected offset. This is unrecoverable data loss, so we
+     *       throw {@link LogTruncationException} to fail fast.</li>
+     *   <li><b>Topic reset (Task 3):</b> the source topic was deleted and recreated, so
+     *       the log has been rewound to a fresh, smaller log. We treat this as a recoverable
+     *       event: log it and resubscribe from the beginning offset.</li>
+     * </ul>
+     *
+     * <p>The distinguishing signal is the source end offset. After a delete/recreate the
+     * fresh topic's end offset is smaller than the offset we expected to read next (the
+     * log was rewound). Pure retention truncation leaves the end offset at or beyond our
+     * expected offset (the log only lost its tail-end, not its head).
+     */
+    // visible for testing
+    void detectTruncationAndReset() {
+        if (expectedOffsets.isEmpty()) {
+            return;
+        }
+        Set<TopicPartition> assignment = consumer.assignment();
+        if (assignment.isEmpty()) {
+            return;
+        }
+        Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(assignment);
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignment);
+        Map<TopicPartition, Long> partitionsToRewind = new HashMap<>();
+
+        for (TopicPartition tp : assignment) {
+            Long expected = expectedOffsets.get(tp);
+            if (expected == null) {
+                // Never read or seeded for this partition yet; nothing to compare against.
+                continue;
+            }
+            long logStartOffset = beginningOffsets.getOrDefault(tp, 0L);
+            long logEndOffset = endOffsets.getOrDefault(tp, 0L);
+
+            if (logEndOffset < expected) {
+                // The log is shorter than where we expect to read -> the topic was reset
+                // (deleted and recreated). Recoverable: resubscribe from the new beginning.
+                log.warn("Detected source topic reset on {} at {} ms (epoch). Expected to read "
+                                + "from offset {} but the source log now ends at offset {} "
+                                + "(begins at {}). The topic was deleted and recreated. "
+                                + "Automatically resubscribing from the beginning offset {}.",
+                        tp, System.currentTimeMillis(), expected, logEndOffset,
+                        logStartOffset, logStartOffset);
+                partitionsToRewind.put(tp, logStartOffset);
+            } else if (logStartOffset > expected) {
+                // The earliest available record is past where we need to read, but the log
+                // still extends beyond us -> retention purged un-replicated records.
+                // Unrecoverable data loss: fail fast.
+                throw new LogTruncationException(tp, expected, logStartOffset);
+            }
+        }
+
+        // Apply Task 3 recovery after iterating so detection isn't affected by seeks.
+        partitionsToRewind.forEach((tp, beginning) -> {
+            consumer.seek(tp, beginning);
+            expectedOffsets.put(tp, beginning);
+            log.info("Resubscribed source topic-partition {} from offset {} after topic reset.",
+                    tp, beginning);
         });
     }
 

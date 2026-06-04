@@ -1,0 +1,96 @@
+# =============================================================================
+# docker-compose.yml
+#
+# Brings up the full PR -> DR replication environment:
+#   - primary-kafka : single-node KRaft Kafka cluster, hosts `commit-log`
+#   - dr-kafka      : single-node KRaft Kafka cluster, hosts `primary.commit-log`
+#   - mm2           : Enhanced MirrorMaker 2 (custom image with Task 2/3 changes)
+#   - producer      : Commit Log Producer CLI (custom image)
+#
+# Images: by default this references images you have pushed to Docker Hub.
+# Override DOCKERHUB_USER (and TAG) via environment or a .env file. You can also
+# uncomment the `build:` blocks to build locally instead of pulling.
+# =============================================================================
+
+services:
+  primary-kafka:
+    image: apache/kafka:4.0.0
+    container_name: primary-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://primary-kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@primary-kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Allow topic deletion for the reset scenario.
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+      # Check retention frequently so the truncation test triggers quickly.
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 5000
+      CLUSTER_ID: "primary-cluster-00000001"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  dr-kafka:
+    image: apache/kafka:4.0.0
+    container_name: dr-kafka
+    ports:
+      - "9093:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9094,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://dr-kafka:29092,EXTERNAL://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@dr-kafka:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+      CLUSTER_ID: "dr-cluster-000000000001"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  mm2:
+    image: ${DOCKERHUB_USER:-youruser}/enhanced-mm2:${TAG:-latest}
+    # To build locally instead of pulling, uncomment:
+    # build:
+    #   context: ..                                  # repo root (Kafka fork)
+    #   dockerfile: mm2-replication-project/mm2/Dockerfile
+    container_name: mm2
+    depends_on:
+      primary-kafka:
+        condition: service_healthy
+      dr-kafka:
+        condition: service_healthy
+    restart: on-failure
+
+  producer:
+    image: ${DOCKERHUB_USER:-youruser}/commit-log-producer:${TAG:-latest}
+    # build:
+    #   context: ./producer        # run compose from mm2-replication-project/
+    container_name: producer
+    depends_on:
+      primary-kafka:
+        condition: service_healthy
+    # Default command; run_challenge.sh overrides this via `docker compose run`.
+    command: ["--count", "1000", "--bootstrap-servers", "primary-kafka:29092", "--topic", "commit-log"]
+    profiles:
+      - manual
