@@ -28,7 +28,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -38,9 +39,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     private static final Logger log = LoggerFactory.getLogger(ConsumerRecords.class);
 
-    // Ensures the tainted-records error (see nextOffsets()) is logged at most once per JVM since nextOffsets() is called on every poll
-    static final AtomicBoolean TAINTED_NEXT_OFFSETS_LOGGED = new AtomicBoolean(false);
-
     public static final ConsumerRecords<Object, Object> EMPTY = new ConsumerRecords<>(Map.of(), Map.of());
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
@@ -48,6 +46,8 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     // Flag to detect if legacy ConsumerRecords(Map) constructor is used. See KAFKA-20660 for more details.
     private final boolean tainted;
+    static final long TAINT_LOG_INTERVAL_NS = TimeUnit.MINUTES.toNanos(5);
+    static final AtomicLong TAINTED_NEXT_OFFSETS_LAST_LOG_NS = new AtomicLong(System.nanoTime() - TAINT_LOG_INTERVAL_NS);
 
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerRecords(Map, Map)} instead.
@@ -93,13 +93,19 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
      * @return The next offsets that the consumer will consume
      */
     public Map<TopicPartition, OffsetAndMetadata> nextOffsets() {
-        if (this.tainted && TAINTED_NEXT_OFFSETS_LOGGED.compareAndSet(false, true)) {
-            log.error("ConsumerRecords#nextOffsets() returned empty because this instance was built with the " +
-                    "deprecated ConsumerRecords(Map) constructor (see KIP-1094), which does not supply next offsets. " +
-                    "Downstream logic that relies on these offsets to advance the consumer's committed position " +
-                    "(for example, Kafka Streams under exactly-once semantics) will be unable to commit, leading to " +
-                    "reprocessing. Update the interceptor or wrapper that constructed it to use the " +
-                    "ConsumerRecords(Map, Map) constructor that supplies next offsets.");
+        if (this.tainted) {
+            final long now = System.nanoTime();
+            final long lastLog = TAINTED_NEXT_OFFSETS_LAST_LOG_NS.get();
+            // nextOffsets() is called on every poll, so a tainted instance would otherwise log the deprecation error log on
+            // every call. A time based approach is used to avoid this. See KAFKA-20660 for more details.
+            if (now - lastLog >= TAINT_LOG_INTERVAL_NS && TAINTED_NEXT_OFFSETS_LAST_LOG_NS.compareAndSet(lastLog, now)) {
+                log.error("ConsumerRecords#nextOffsets() returned empty because this instance was built with the " +
+                        "deprecated ConsumerRecords(Map) constructor (see KIP-1094), which does not supply next offsets. " +
+                        "Downstream logic that relies on these offsets to advance the consumer's committed position " +
+                        "(for example, Kafka Streams under exactly-once semantics) will be unable to commit, leading to " +
+                        "reprocessing. Update the interceptor or wrapper that constructed it to use the " +
+                        "ConsumerRecords(Map, Map) constructor that supplies next offsets.");
+            }
         }
         return nextOffsets;
     }

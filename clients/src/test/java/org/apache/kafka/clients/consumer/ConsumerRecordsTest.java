@@ -184,14 +184,16 @@ public class ConsumerRecordsTest {
 
     @Test
     @SuppressWarnings("deprecation")
-    public void testNextOffsetsLogsErrorOnceWhenConstructedWithDeprecatedConstructor() {
-        ConsumerRecords.TAINTED_NEXT_OFFSETS_LOGGED.set(false);
-
+    public void testNextOffsetsLogsErrorPeriodicallyWhenConstructedWithDeprecatedConstructor() {
         TopicPartition tp = new TopicPartition("topic", 0);
         Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records =
             Map.of(tp, List.of(new ConsumerRecord<>("topic", 0, 0L, 0, "value")));
 
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ConsumerRecords.class)) {
+            // Force the rate-limit window to have elapsed so the next tainted call logs.
+            ConsumerRecords.TAINTED_NEXT_OFFSETS_LAST_LOG_NS.set(
+                System.nanoTime() - ConsumerRecords.TAINT_LOG_INTERVAL_NS - 1);
+
             ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records);
 
             // deprecated constructor does not supply next offsets, so the map is empty
@@ -202,10 +204,16 @@ public class ConsumerRecordsTest {
             assertTrue(errors.get(0).contains("deprecated ConsumerRecords(Map) constructor"),
                 "Unexpected error message: " + errors.get(0));
 
-            // check that error log for deprecated constructor is only logged once
+            // Within the rate-limit window, neither repeated calls nor new tainted instances log again.
             assertTrue(consumerRecords.nextOffsets().isEmpty());
             assertTrue(new ConsumerRecords<>(records).nextOffsets().isEmpty());
             assertEquals(1, appender.getMessages("ERROR").size());
+
+            // Once the window has elapsed, the error is logged again.
+            ConsumerRecords.TAINTED_NEXT_OFFSETS_LAST_LOG_NS.set(
+                System.nanoTime() - ConsumerRecords.TAINT_LOG_INTERVAL_NS - 1);
+            assertTrue(consumerRecords.nextOffsets().isEmpty());
+            assertEquals(2, appender.getMessages("ERROR").size());
         }
     }
 
