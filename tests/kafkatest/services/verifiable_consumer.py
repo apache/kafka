@@ -442,7 +442,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
-        if self.close_timeout_sec > 0:
+        if self.close_timeout_sec >= 0:
             cmd += " --close-timeout %s" % (self.close_timeout_sec * 1000)
 
         version = get_version(node)
