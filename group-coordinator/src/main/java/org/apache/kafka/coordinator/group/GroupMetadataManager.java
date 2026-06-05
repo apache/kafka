@@ -87,7 +87,6 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
@@ -4134,7 +4133,7 @@ public class GroupMetadataManager {
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
 
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
+                new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(consumerGroupAssignors.get(preferredServerAssignor))
                     .withTime(time)
                     .withMembers(updatedMembersAndTargetAssignment.members())
                     .withSubscriptionType(subscriptionType)
@@ -4156,11 +4155,19 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs);
             }
 
-            records.addAll(assignmentResult.records());
+            new TargetAssignmentRecordsBuilder.ConsumerTargetAssignmentRecordsBuilder(logContext, group.groupId())
+                .withAssignmentEpoch(groupEpoch)
+                .withAssignmentTimestampMs(assignmentResult.assignmentTimestampMs())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withPreviousStaticMembers(updatedMembersAndTargetAssignment.staticMembers())
+                .withCurrentStaticMembers(updatedMembersAndTargetAssignment.staticMembers())
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withNewTargetAssignment(assignmentResult.targetAssignment())
+                .build(records);
 
-            MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
+            Assignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
             if (newMemberAssignment != null) {
-                return new UpdateTargetAssignmentResult<>(groupEpoch, new Assignment(newMemberAssignment.partitions()));
+                return new UpdateTargetAssignmentResult<>(groupEpoch, newMemberAssignment);
             } else {
                 return new UpdateTargetAssignmentResult<>(groupEpoch, Assignment.EMPTY);
             }
@@ -4217,7 +4224,7 @@ public class GroupMetadataManager {
             updatedMembersAndTargetAssignment.addOrUpdateMember(updatedMember.memberId(), updatedMember.instanceId(), updatedMember);
 
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
+                new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(shareGroupAssignor)
                     .withTime(time)
                     .withMembers(updatedMembersAndTargetAssignment.members())
                     .withSubscriptionType(subscriptionType)
@@ -4239,11 +4246,19 @@ public class GroupMetadataManager {
                     group.groupId(), groupEpoch, shareGroupAssignor, assignorTimeMs);
             }
 
-            records.addAll(assignmentResult.records());
+            new TargetAssignmentRecordsBuilder.ShareTargetAssignmentRecordsBuilder(logContext, group.groupId())
+                .withAssignmentEpoch(groupEpoch)
+                .withAssignmentTimestampMs(assignmentResult.assignmentTimestampMs())
+                .withCurrentMemberIds(updatedMembersAndTargetAssignment.members().keySet())
+                .withPreviousStaticMembers(Map.of())
+                .withCurrentStaticMembers(Map.of())
+                .withCurrentTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
+                .withNewTargetAssignment(assignmentResult.targetAssignment())
+                .build(records);
 
-            MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
+            Assignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
             if (newMemberAssignment != null) {
-                return new UpdateTargetAssignmentResult<>(groupEpoch, new Assignment(newMemberAssignment.partitions()));
+                return new UpdateTargetAssignmentResult<>(groupEpoch, newMemberAssignment);
             } else {
                 return new UpdateTargetAssignmentResult<>(groupEpoch, Assignment.EMPTY);
             }
