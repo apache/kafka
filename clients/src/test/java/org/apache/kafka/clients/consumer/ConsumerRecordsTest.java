@@ -189,6 +189,8 @@ public class ConsumerRecordsTest {
         Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records =
             Map.of(tp, List.of(new ConsumerRecord<>("topic", 0, 0L, 0, "value")));
 
+        // Capture the global throttle state so it can be restored, to avoid leaking into other tests.
+        final long previousLastLogNs = ConsumerRecords.TAINTED_NEXT_OFFSETS_LAST_LOG_NS.get();
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ConsumerRecords.class)) {
             // Force the rate-limit window to have elapsed so the next tainted call logs.
             ConsumerRecords.TAINTED_NEXT_OFFSETS_LAST_LOG_NS.set(
@@ -214,6 +216,8 @@ public class ConsumerRecordsTest {
                 System.nanoTime() - ConsumerRecords.TAINT_LOG_INTERVAL_NS - 1);
             assertTrue(consumerRecords.nextOffsets().isEmpty());
             assertEquals(2, appender.getMessages("ERROR").size());
+        } finally {
+            ConsumerRecords.TAINTED_NEXT_OFFSETS_LAST_LOG_NS.set(previousLastLogNs);
         }
     }
 

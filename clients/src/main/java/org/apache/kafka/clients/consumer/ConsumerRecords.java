@@ -46,7 +46,9 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     // Flag to detect if legacy ConsumerRecords(Map) constructor is used. See KAFKA-20660 for more details.
     private final boolean tainted;
+    // Visible for testing
     static final long TAINT_LOG_INTERVAL_NS = TimeUnit.MINUTES.toNanos(5);
+    // Visible for testing
     static final AtomicLong TAINTED_NEXT_OFFSETS_LAST_LOG_NS = new AtomicLong(System.nanoTime() - TAINT_LOG_INTERVAL_NS);
 
     /**
