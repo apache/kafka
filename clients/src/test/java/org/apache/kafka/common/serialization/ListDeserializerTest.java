@@ -338,7 +338,7 @@ public class ListDeserializerTest {
     public void shouldThrowOnTooLargeEntrySize() {
         final byte[] corruptedData = new byte[] {
             (byte) Serdes.ListSerde.SerializationStrategy.VARIABLE_SIZE.ordinal(),
-            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, // encodes length == 0
+            (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, // encodes length == 1
             (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF, // encodes entrySize == 255
         };
 
