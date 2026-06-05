@@ -379,12 +379,14 @@ public class ResetIntegrationTest {
     public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal(ClusterInstance cluster) throws Exception {
         final String appId = generateAppId();
         cluster.createTopic(INPUT_TOPIC, 1, (short) 1);
+
         final String[] parameters = new String[] {
             "--application-id", appId,
             "--force",
             "--bootstrap-server", cluster.bootstrapServers(),
             "--internal-topics", INPUT_TOPIC
         };
+
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));

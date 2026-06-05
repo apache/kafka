@@ -207,7 +207,6 @@ public class StreamsResetter {
         }
     }
 
-
     // visible for testing
     void maybeDeleteActiveConsumers(final String groupId,
                                     final Admin adminClient,
