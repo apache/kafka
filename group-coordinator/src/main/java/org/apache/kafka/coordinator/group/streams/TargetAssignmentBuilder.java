@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.streams.assignor.AssignmentConfigs;
 import org.apache.kafka.coordinator.group.api.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.streams.assignor.MemberAssignment;
@@ -29,10 +29,8 @@ import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberMetadataAndStateImpl;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -40,13 +38,6 @@ import java.util.stream.Collectors;
 
 /**
  * Build the new target member assignments based on the provided parameters by calling the task assignor.
- * As a result,
- * it yields the records that must be persisted to the log and the new member assignments as a map from member ID to tasks tuple.
- * <p>
- * Records are only created for members which have a new target assignment. If their assignment did not change, no new record is needed.
- * <p>
- * When a member is deleted, it is assumed that its target assignment record is deleted as part of the member deletion process. In other
- * words, this class does not yield a tombstone for removed members.
  */
 public class TargetAssignmentBuilder {
 
@@ -55,10 +46,6 @@ public class TargetAssignmentBuilder {
      */
     private Time time;
 
-    /**
-     * The group ID.
-     */
-    private final String groupId;
     /**
      * The group epoch.
      */
@@ -85,11 +72,6 @@ public class TargetAssignmentBuilder {
     private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
-     * The existing target assignment.
-     */
-    private Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment = Map.of();
-
-    /**
      * The topology.
      */
     private ConfiguredTopology topology;
@@ -103,17 +85,14 @@ public class TargetAssignmentBuilder {
     /**
      * Constructs the object.
      *
-     * @param groupId    The group ID.
      * @param groupEpoch The group epoch to compute a target assignment for.
      * @param assignor   The assignor to use to compute the target assignment.
      */
     public TargetAssignmentBuilder(
-        String groupId,
         int groupEpoch,
         TaskAssignor assignor,
         Map<String, String> assignmentConfigs
     ) {
-        this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
         this.assignmentConfigs = AssignmentConfigsImpl.fromMap(Objects.requireNonNull(assignmentConfigs));
@@ -190,19 +169,6 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the existing target assignment.
-     *
-     * @param targetAssignment The existing target assignment.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withTargetAssignment(
-        Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment
-    ) {
-        this.targetAssignment = targetAssignment;
-        return this;
-    }
-
-    /**
      * Adds the topology image.
      *
      * @param topology The topology.
@@ -248,45 +214,15 @@ public class TargetAssignmentBuilder {
                 memberMetadataMap.keySet().stream().collect(Collectors.toMap(x -> x, x -> new MemberAssignment(Map.of(), Map.of()))));
         }
 
-        // Compute delta from previous to new target assignment and create the
-        // relevant records.
-        List<CoordinatorRecord> records = new ArrayList<>();
         Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> newTargetAssignment = new HashMap<>();
-
         memberMetadataMap.keySet().forEach(memberId -> {
-            org.apache.kafka.coordinator.group.streams.TasksTuple oldMemberAssignment = targetAssignment.get(memberId);
-            org.apache.kafka.coordinator.group.streams.TasksTuple newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
-
-            newTargetAssignment.put(memberId, newMemberAssignment);
-
-            if (oldMemberAssignment == null) {
-                // If the member had no assignment, we always create a record for it.
-                records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(
-                    groupId,
-                    memberId,
-                    newMemberAssignment
-                ));
-            } else {
-                // If the member had an assignment, we only create a record if the
-                // new assignment is different.
-                if (!newMemberAssignment.equals(oldMemberAssignment)) {
-                    records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(
-                        groupId,
-                        memberId,
-                        newMemberAssignment
-                    ));
-                }
-            }
+            newTargetAssignment.put(memberId, newMemberAssignment(newGroupAssignment, memberId));
         });
 
-        // Bump the target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
-            groupId,
-            groupEpoch,
-            time.milliseconds()
-        ));
-
-        return new TargetAssignmentResult(records, newTargetAssignment);
+        return new TargetAssignmentResult(
+            newTargetAssignment,
+            new TargetAssignmentMetadata(groupEpoch, time.milliseconds())
+        );
     }
 
     private TasksTuple newMemberAssignment(
@@ -315,18 +251,18 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * The assignment result returned by {{@link TargetAssignmentBuilder#build()}}.
+     * The assignment result returned by {@link TargetAssignmentBuilder#build()}.
      *
-     * @param records          The records that must be applied to the __consumer_offsets topics to persist the new target assignment.
-     * @param targetAssignment The new target assignment for the group.
+     * @param targetAssignment         The new target assignment for the group.
+     * @param targetAssignmentMetadata The new target assignment metadata.
      */
     public record TargetAssignmentResult(
-        List<CoordinatorRecord> records,
-        Map<String, TasksTuple> targetAssignment
+        Map<String, TasksTuple> targetAssignment,
+        TargetAssignmentMetadata targetAssignmentMetadata
     ) {
         public TargetAssignmentResult {
-            Objects.requireNonNull(records);
             Objects.requireNonNull(targetAssignment);
+            Objects.requireNonNull(targetAssignmentMetadata);
         }
     }
 }
