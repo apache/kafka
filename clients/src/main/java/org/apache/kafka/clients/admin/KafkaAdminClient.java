@@ -91,6 +91,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -1578,7 +1579,13 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
-                List<ClientResponse> responses = client.poll(Math.max(0L, pollTimeout), now);
+                List<ClientResponse> responses;
+                try {
+                    responses = client.poll(Math.max(0L, pollTimeout), now);
+                } catch (BootstrapResolutionException e) {
+                    failAllPendingCalls(e, now);
+                    break;
+                }
                 log.trace("KafkaClient#poll retrieved {} response(s)", responses.size());
 
                 // unassign calls to disconnected nodes
@@ -1588,6 +1595,24 @@ public class KafkaAdminClient extends AdminClient {
                 now = time.milliseconds();
                 handleResponses(now, responses);
             }
+        }
+
+        private void failAllPendingCalls(Throwable cause, long now) {
+            synchronized (this) {
+                for (Call call : newCalls)
+                    call.fail(now, cause);
+                newCalls.clear();
+            }
+            for (Call call : pendingCalls)
+                call.fail(now, cause);
+            pendingCalls.clear();
+            for (List<Call> callList : callsToSend.values())
+                for (Call call : callList)
+                    call.fail(now, cause);
+            callsToSend.clear();
+            for (Call call : correlationIdToCalls.values())
+                call.fail(now, cause);
+            correlationIdToCalls.clear();
         }
 
         /**
