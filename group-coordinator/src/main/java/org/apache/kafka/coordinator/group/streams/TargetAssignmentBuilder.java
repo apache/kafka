@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
@@ -27,23 +26,14 @@ import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
  * Build the new target member assignments based on the provided parameters by calling the task assignor.
- * As a result,
- * it yields the records that must be persisted to the log and the new member assignments as a map from member ID to tasks tuple.
- * <p>
- * Records are only created for members which have a new target assignment. If their assignment did not change, no new record is needed.
- * <p>
- * When a member is deleted, it is assumed that its target assignment record is deleted as part of the member deletion process. In other
- * words, this class does not yield a tombstone for removed members.
  */
 public class TargetAssignmentBuilder {
 
@@ -51,15 +41,6 @@ public class TargetAssignmentBuilder {
      * The time.
      */
     private Time time;
-
-    /**
-     * The group ID.
-     */
-    private final String groupId;
-    /**
-     * The group epoch.
-     */
-    private final int groupEpoch;
 
     /**
      * The partition assignor used to compute the assignment.
@@ -94,18 +75,12 @@ public class TargetAssignmentBuilder {
     /**
      * Constructs the object.
      *
-     * @param groupId    The group ID.
-     * @param groupEpoch The group epoch to compute a target assignment for.
      * @param assignor   The assignor to use to compute the target assignment.
      */
     public TargetAssignmentBuilder(
-        String groupId,
-        int groupEpoch,
         TaskAssignor assignor,
         Map<String, String> assignmentConfigs
     ) {
-        this.groupId = Objects.requireNonNull(groupId);
-        this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
         this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
     }
@@ -223,45 +198,12 @@ public class TargetAssignmentBuilder {
                 memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignment.empty())));
         }
 
-        // Compute delta from previous to new target assignment and create the
-        // relevant records.
-        List<CoordinatorRecord> records = new ArrayList<>();
         Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> newTargetAssignment = new HashMap<>();
-
         memberSpecs.keySet().forEach(memberId -> {
-            org.apache.kafka.coordinator.group.streams.TasksTuple oldMemberAssignment = targetAssignment.get(memberId);
-            org.apache.kafka.coordinator.group.streams.TasksTuple newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
-
-            newTargetAssignment.put(memberId, newMemberAssignment);
-
-            if (oldMemberAssignment == null) {
-                // If the member had no assignment, we always create a record for it.
-                records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(
-                    groupId,
-                    memberId,
-                    newMemberAssignment
-                ));
-            } else {
-                // If the member had an assignment, we only create a record if the
-                // new assignment is different.
-                if (!newMemberAssignment.equals(oldMemberAssignment)) {
-                    records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(
-                        groupId,
-                        memberId,
-                        newMemberAssignment
-                    ));
-                }
-            }
+            newTargetAssignment.put(memberId, newMemberAssignment(newGroupAssignment, memberId));
         });
 
-        // Bump the target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
-            groupId,
-            groupEpoch,
-            time.milliseconds()
-        ));
-
-        return new TargetAssignmentResult(records, newTargetAssignment);
+        return new TargetAssignmentResult(newTargetAssignment, time.milliseconds());
     }
 
     private TasksTuple newMemberAssignment(
@@ -281,17 +223,16 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * The assignment result returned by {{@link TargetAssignmentBuilder#build()}}.
+     * The assignment result returned by {@link TargetAssignmentBuilder#build()}.
      *
-     * @param records          The records that must be applied to the __consumer_offsets topics to persist the new target assignment.
-     * @param targetAssignment The new target assignment for the group.
+     * @param targetAssignment      The new target assignment for the group.
+     * @param assignmentTimestampMs The time at which the target assignment calculation finished.
      */
     public record TargetAssignmentResult(
-        List<CoordinatorRecord> records,
-        Map<String, TasksTuple> targetAssignment
+        Map<String, TasksTuple> targetAssignment,
+        long assignmentTimestampMs
     ) {
         public TargetAssignmentResult {
-            Objects.requireNonNull(records);
             Objects.requireNonNull(targetAssignment);
         }
     }
