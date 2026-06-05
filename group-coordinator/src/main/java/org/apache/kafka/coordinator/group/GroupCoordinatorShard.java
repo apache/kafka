@@ -914,19 +914,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     /**
      * Validates that a streams group exists and that the given member is a current member of it
-     * (KIP-1331). Read-only; runs against the live state machine, so the caller must schedule this
-     * on the coordinator runtime like any other read.
+     * (KIP-1331). The lookup runs at {@code committedOffset} so an uncommitted fence/leave does not
+     * cause a still-live member to appear unknown (or vice versa). Must be scheduled on the
+     * coordinator runtime like any other read.
      *
-     * @param groupId   The group ID.
-     * @param memberId  The member ID.
+     * @param groupId          The group ID.
+     * @param memberId         The member ID.
+     * @param committedOffset  A committed offset corresponding to the desired snapshot.
      * @throws GroupIdNotFoundException if the group does not exist.
      * @throws UnknownMemberIdException if the member is not in the group.
      */
     public void validateStreamsGroupMember(
         String groupId,
-        String memberId
+        String memberId,
+        long committedOffset
     ) {
-        groupMetadataManager.validateStreamsGroupMember(groupId, memberId);
+        groupMetadataManager.validateStreamsGroupMember(groupId, memberId, committedOffset);
     }
 
     /**

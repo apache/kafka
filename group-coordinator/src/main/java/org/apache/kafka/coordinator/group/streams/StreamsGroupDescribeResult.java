@@ -27,7 +27,10 @@ import java.util.Objects;
  * Bundles the per-group describe response data with the persisted topology epoch the plugin has stored
  * for each successfully described group (KIP-1331). The stored epoch lets the service layer decide
  * whether to call the topology description plugin's {@code getTopology} for a group — the plugin is
- * only consulted when {@code storedTopologyEpoch == currentTopologyEpoch}.
+ * only consulted when {@code storedTopologyEpoch != -1 && storedTopologyEpoch == currentTopologyEpoch}.
+ * The {@code != -1} guard handles the brand-new-group case where both epochs are -1 (no member has pushed
+ * a topology yet and the plugin has nothing stored): there the equality holds trivially but the plugin
+ * has nothing to serve, so the broker reports NOT_STORED without making a call.
  *
  * @param describedGroups      The described groups (one per requested group id, including errored ones).
  * @param storedTopologyEpochs Per-group stored topology epoch, keyed by group id. Only present for groups

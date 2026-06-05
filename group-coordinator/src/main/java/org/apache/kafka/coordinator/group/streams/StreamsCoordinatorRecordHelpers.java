@@ -101,24 +101,6 @@ public class StreamsCoordinatorRecordHelpers {
         int newGroupEpoch,
         long metadataHash,
         int validatedTopologyEpoch,
-        Map<String, String> assignmentConfigs
-    ) {
-        return newStreamsGroupMetadataRecord(
-            groupId,
-            newGroupEpoch,
-            metadataHash,
-            validatedTopologyEpoch,
-            assignmentConfigs,
-            -1,
-            -1
-        );
-    }
-
-    public static CoordinatorRecord newStreamsGroupMetadataRecord(
-        String groupId,
-        int newGroupEpoch,
-        long metadataHash,
-        int validatedTopologyEpoch,
         Map<String, String> assignmentConfigs,
         int storedTopologyEpoch,
         int lastFailedTopologyEpoch

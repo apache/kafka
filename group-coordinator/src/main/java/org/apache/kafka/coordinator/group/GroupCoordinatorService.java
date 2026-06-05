@@ -1224,15 +1224,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-                runtime.scheduleReadOperation("streams-group-describe",
-                        topicPartition,
-                        (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset))
-                    .thenApply(StreamsGroupDescribeResult::describedGroups)
-                    .exceptionally(exception -> handleOperationException("streams-group-describe",
-                        groupList,
-                        exception,
-                        (error, __) -> StreamsGroupDescribeRequest.getErrorDescribedGroupList(groupList, error),
-                        log));
+                runtime.scheduleReadOperation(
+                    "streams-group-describe",
+                    topicPartition,
+                    (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset)
+                ).thenApply(StreamsGroupDescribeResult::describedGroups)
+                .exceptionally(exception -> handleOperationException(
+                    "streams-group-describe",
+                    groupList,
+                    exception,
+                    (error, __) -> StreamsGroupDescribeRequest.getErrorDescribedGroupList(groupList, error),
+                    log
+                ));
 
             futures.add(future);
         });

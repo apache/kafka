@@ -752,7 +752,9 @@ public class GroupMetadataManager {
             try {
                 StreamsGroup group = streamsGroup(groupId, committedOffset);
                 describedGroups.add(group.asDescribedGroup(committedOffset));
-                groupIdToStoredTopologyEpochs.put(groupId, group.storedTopologyEpoch());
+                // KIP-1331: read the stored epoch at the same committedOffset so describedGroup and the
+                // stored-epoch map describe a single consistent snapshot of the group.
+                groupIdToStoredTopologyEpochs.put(groupId, group.storedTopologyEpoch(committedOffset));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
@@ -2207,7 +2209,10 @@ public class GroupMetadataManager {
 
         response.setStatus(returnedStatus);
 
-        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated, group.currentTopologyEpoch()));
+        // KIP-1331: use updatedTopology.topologyEpoch() rather than group.currentTopologyEpoch(). On the first
+        // push, maybeUpdateTopology has appended a topology record to `records` but group.topology() has not
+        // been replayed yet, so reading it here would return -1 instead of the just-pushed epoch.
+        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated, updatedTopology.topologyEpoch()));
     }
 
     /**
@@ -8047,19 +8052,23 @@ public class GroupMetadataManager {
      * Validates that a streams group exists and that the given member is a current member of it.
      * Used by the StreamsGroupTopologyDescriptionUpdate RPC handler (KIP-1331) to enforce the
      * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID contract before consulting the topology description plugin.
+     * The lookup runs at {@code committedOffset} so an uncommitted fence/leave does not cause a
+     * still-live member to appear unknown (or vice versa).
      *
-     * @param groupId  The group ID.
-     * @param memberId The member ID.
+     * @param groupId         The group ID.
+     * @param memberId        The member ID.
+     * @param committedOffset A committed offset corresponding to the desired snapshot.
      * @return The matching {@link StreamsGroupMember}.
      * @throws GroupIdNotFoundException if no streams group with this id exists.
      * @throws UnknownMemberIdException if the member is not currently in the group.
      */
     public StreamsGroupMember validateStreamsGroupMember(
         String groupId,
-        String memberId
+        String memberId,
+        long committedOffset
     ) throws GroupIdNotFoundException, UnknownMemberIdException {
-        StreamsGroup group = getStreamsGroupOrThrow(groupId);
-        return group.getMemberOrThrow(memberId);
+        StreamsGroup group = streamsGroup(groupId, committedOffset);
+        return group.getMemberOrThrow(memberId, committedOffset);
     }
 
     /**

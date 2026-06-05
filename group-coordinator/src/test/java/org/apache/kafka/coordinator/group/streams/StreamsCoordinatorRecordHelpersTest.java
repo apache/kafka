@@ -255,7 +255,7 @@ class StreamsCoordinatorRecordHelpersTest {
     @Test
     public void testNewStreamsGroupMetadataRecordWithNullAssignmentConfig() {
         assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, null));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, null, -1, -1));
     }
 
     @Test
@@ -280,7 +280,7 @@ class StreamsCoordinatorRecordHelpersTest {
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 42, 43, 44, Map.of(
             "num.standby.replicas", "2"
-        )));
+        ), -1, -1));
     }
 
     @Test
@@ -303,17 +303,6 @@ class StreamsCoordinatorRecordHelpersTest {
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
             GROUP_ID, 42, 43, 44, Map.of(), 7, 5));
-    }
-
-    @Test
-    public void testNewStreamsGroupMetadataRecordFiveArgOverloadDefaultsToMinusOne() {
-        // The 5-arg back-compat overload must persist -1 for both new fields so a routine call site
-        // that hasn't been retrofitted does not accidentally clear a previously-stored epoch.
-        StreamsGroupMetadataValue value = (StreamsGroupMetadataValue)
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(GROUP_ID, 1, 2, 3, Map.of())
-                .value().message();
-        assertEquals(-1, value.storedTopologyEpoch());
-        assertEquals(-1, value.lastFailedTopologyEpoch());
     }
 
     @Test
@@ -722,7 +711,7 @@ class StreamsCoordinatorRecordHelpersTest {
     @Test
     public void testNewStreamsGroupMetadataRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, Map.of()));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(null, 1, 1, 1, Map.of(), -1, -1));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 

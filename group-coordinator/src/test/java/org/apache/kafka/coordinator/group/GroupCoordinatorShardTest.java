@@ -244,21 +244,21 @@ public class GroupCoordinatorShardTest {
         );
 
         // Happy path: manager returns a member, shard returns void.
-        when(groupMetadataManager.validateStreamsGroupMember("foo", "m1"))
+        when(groupMetadataManager.validateStreamsGroupMember("foo", "m1", 100L))
             .thenReturn(mock(StreamsGroupMember.class));
-        coordinator.validateStreamsGroupMember("foo", "m1");
+        coordinator.validateStreamsGroupMember("foo", "m1", 100L);
 
         // GROUP_ID_NOT_FOUND propagates.
-        when(groupMetadataManager.validateStreamsGroupMember("missing", "m1"))
+        when(groupMetadataManager.validateStreamsGroupMember("missing", "m1", 100L))
             .thenThrow(new GroupIdNotFoundException("nope"));
         assertThrows(GroupIdNotFoundException.class,
-            () -> coordinator.validateStreamsGroupMember("missing", "m1"));
+            () -> coordinator.validateStreamsGroupMember("missing", "m1", 100L));
 
         // UNKNOWN_MEMBER_ID propagates.
-        when(groupMetadataManager.validateStreamsGroupMember("foo", "stranger"))
+        when(groupMetadataManager.validateStreamsGroupMember("foo", "stranger", 100L))
             .thenThrow(new UnknownMemberIdException("not a member"));
         assertThrows(UnknownMemberIdException.class,
-            () -> coordinator.validateStreamsGroupMember("foo", "stranger"));
+            () -> coordinator.validateStreamsGroupMember("foo", "stranger", 100L));
     }
 
     @Test

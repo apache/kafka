@@ -254,6 +254,10 @@ public class StreamsGroup implements Group {
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        // Match the schema default (-1) so a freshly-created in-memory group is indistinguishable
+        // from a replayed one; otherwise the heartbeat's `validatedTopologyEpoch !=
+        // group.validatedTopologyEpoch()` comparison reads 0 here vs. -1 after replay.
+        this.validatedTopologyEpoch.set(-1);
         this.storedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.storedTopologyEpoch.set(-1);
         this.lastFailedTopologyEpoch = new TimelineInteger(snapshotRegistry);
@@ -400,6 +404,28 @@ public class StreamsGroup implements Group {
         String memberId
     ) throws UnknownMemberIdException {
         StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            return member;
+        }
+
+        throw new UnknownMemberIdException(
+            String.format("Member %s is not a member of group %s.", memberId, groupId)
+        );
+    }
+
+    /**
+     * Gets a member at the snapshot identified by {@code committedOffset} or throws if not present.
+     *
+     * @param memberId        The member ID.
+     * @param committedOffset A committed offset corresponding to the desired snapshot.
+     * @throws UnknownMemberIdException If the member is not found at the given snapshot.
+     * @return A StreamsGroupMember.
+     */
+    public StreamsGroupMember getMemberOrThrow(
+        String memberId,
+        long committedOffset
+    ) throws UnknownMemberIdException {
+        StreamsGroupMember member = members.get(memberId, committedOffset);
         if (member != null) {
             return member;
         }
@@ -667,6 +693,15 @@ public class StreamsGroup implements Group {
      */
     public int storedTopologyEpoch() {
         return storedTopologyEpoch.get();
+    }
+
+    /**
+     * @param committedOffset A committed offset corresponding to the desired snapshot.
+     * @return The topology epoch most recently accepted by the topology description plugin at the given
+     *         committed offset, or -1 if none.
+     */
+    public int storedTopologyEpoch(long committedOffset) {
+        return storedTopologyEpoch.get(committedOffset);
     }
 
     /**
