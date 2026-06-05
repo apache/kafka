@@ -16,8 +16,44 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.reset;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.ws.rs.core.MediaType;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.apache.http.HttpHost;
+import org.apache.http.HttpRequest;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpOptions;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicResponseHandler;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Monitorable;
@@ -30,21 +66,6 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import org.apache.http.HttpHost;
-import org.apache.http.HttpRequest;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpOptions;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.BasicResponseHandler;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,30 +75,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.slf4j.LoggerFactory;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-import jakarta.ws.rs.core.MediaType;
-
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.reset;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -325,6 +322,52 @@ public class ConnectRestServerTest {
         HttpRequest request = new HttpGet("/admin/loggers");
         HttpResponse response = executeRequest(server.advertisedUrl(), request);
         assertEquals(404, response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void testAdminListenersConflictingWithListenersFailsFast() {
+        reset(herder);
+
+        Map<String, String> configMap = new HashMap<>(baseServerProps());
+        configMap.put(RestServerConfig.LISTENERS_CONFIG, "http://localhost:8083");
+        configMap.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://localhost:8083");
+
+        ConfigException e = assertThrows(ConfigException.class,
+            () -> new ConnectRestServer(null, restClient, configMap));
+        assertTrue(e.getMessage().contains(RestServerConfig.ADMIN_LISTENERS_CONFIG));
+    }
+
+    @Test
+    public void testWildcardAdminListenerConflictsWithListenerOnSamePort() {
+        reset(herder);
+
+        Map<String, String> configMap = new HashMap<>(baseServerProps());
+        configMap.put(RestServerConfig.LISTENERS_CONFIG, "http://localhost:8083");
+        configMap.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://0.0.0.0:8083");
+
+        assertThrows(ConfigException.class, () -> new ConnectRestServer(null, restClient, configMap));
+    }
+
+    @Test
+    public void testAdminListenersDistinctFromListenersAllowed() {
+        reset(herder);
+
+        Map<String, String> configMap = new HashMap<>(baseServerProps());
+        configMap.put(RestServerConfig.LISTENERS_CONFIG, "http://localhost:8083");
+        configMap.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://localhost:8084");
+
+        server = new ConnectRestServer(null, restClient, configMap);
+    }
+
+    @Test
+    public void testAdminListenersWithEphemeralPortNotTreatedAsConflict() {
+        reset(herder);
+
+        Map<String, String> configMap = new HashMap<>(baseServerProps());
+        configMap.put(RestServerConfig.LISTENERS_CONFIG, "http://localhost:0");
+        configMap.put(RestServerConfig.ADMIN_LISTENERS_CONFIG, "http://localhost:0");
+
+        server = new ConnectRestServer(null, restClient, configMap);
     }
 
     @Test

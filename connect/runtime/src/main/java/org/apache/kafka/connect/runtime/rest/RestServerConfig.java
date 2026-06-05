@@ -86,6 +86,8 @@ public abstract class RestServerConfig extends AbstractConfig {
             " The supported protocols are HTTP and HTTPS." +
             " An empty or blank string will disable this feature." +
             " The default behavior is to use the regular listener (specified by the 'listeners' property)." +
+            " These URIs must not share a host and port with any 'listeners' entry; to expose the admin endpoints" +
+            " on the regular listener, leave this property unset." +
             " A comma-separated list of valid URLs, e.g., http://localhost:8080,https://localhost:8443.";
     public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin.listeners.https.";
 
