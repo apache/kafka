@@ -17,6 +17,8 @@
 
 package org.apache.kafka.metadata.authorizer;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
@@ -34,6 +36,12 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 public record StandardAcl(ResourceType resourceType, String resourceName, PatternType patternType, String principal,
                           String host, AclOperation operation,
                           AclPermissionType permissionType) implements Comparable<StandardAcl> {
+    // Cache of parsed KafkaPrincipal per unique principal string.
+    // The cache is bounded by the number of distinct principals in the ACL store,
+    // which is typically orders of magnitude smaller than the total ACL count.
+    // ACL data is infrequently updated, so no eviction mechanism is needed.
+    private static final Map<String, KafkaPrincipal> PRINCIPAL_CACHE = new ConcurrentHashMap<>();
+
     public static StandardAcl fromRecord(AccessControlEntryRecord record) {
         return new StandardAcl(
             ResourceType.fromCode(record.resourceType()),
@@ -57,14 +65,14 @@ public record StandardAcl(ResourceType resourceType, String resourceName, Patter
     }
 
     public KafkaPrincipal kafkaPrincipal() {
-        int colonIndex = principal.indexOf(":");
-        if (colonIndex == -1) {
-            throw new IllegalStateException("Could not parse principal from `" + principal + "` " +
-                "(no colon is present separating the principal type from the principal name)");
-        }
-        String principalType = principal.substring(0, colonIndex);
-        String principalName = principal.substring(colonIndex + 1);
-        return new KafkaPrincipal(principalType, principalName);
+        return PRINCIPAL_CACHE.computeIfAbsent(principal, principalStr -> {
+            int colonIndex = principalStr.indexOf(":");
+            if (colonIndex == -1) {
+                throw new IllegalStateException("Could not parse principal from `" + principalStr + "` " +
+                    "(no colon is present separating the principal type from the principal name)");
+            }
+            return new KafkaPrincipal(principalStr.substring(0, colonIndex), principalStr.substring(colonIndex + 1));
+        });
     }
 
     public AclBinding toBinding() {
