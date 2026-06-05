@@ -320,8 +320,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     /**
      * Returns the single read-only {@link ColumnFamilyOptions} instance used for the offsets CF.
      *
-     * <p>The instance is created in {@link #openDB} before the open path runs, so this is a pure
-     * getter (no lazy initialization, hence no data race). The same instance backs every offsets
+     * <p>The instance is created in {@link #openDB} before the open path runs
      * {@code ColumnFamilyDescriptor} and is freed once in {@link #close()} /
      * {@link #closeNativeResources()}.
      */
