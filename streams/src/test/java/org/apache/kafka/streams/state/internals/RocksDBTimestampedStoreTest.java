@@ -519,7 +519,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     }
 
     // KAFKA-20456 regression: the offsets-CF ColumnFamilyOptions allocated by
-    // createOffsetsCFOptions() must be released on close(); otherwise the JNI-auto-allocated
+    // offsetsCFOptions() must be released on close(); otherwise the JNI-auto-allocated
     // default BlockBasedTableFactory and its LRUCache leak per store open.
     @Test
     public void shouldCloseOffsetsCfOptionsOnStoreClose() {
@@ -528,7 +528,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         rocksDBStore.init(context, rocksDBStore);
 
         final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
-        assertNotNull(captured, "createOffsetsCFOptions should have been invoked during init");
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
         assertTrue(captured.isOwningHandle(),
                 "offsets CF options should own its native handle while store is open");
 
@@ -546,8 +546,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         }
 
         @Override
-        protected ColumnFamilyOptions createOffsetsCFOptions() {
-            capturedOffsetsOptions = super.createOffsetsCFOptions();
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
             return capturedOffsetsOptions;
         }
     }

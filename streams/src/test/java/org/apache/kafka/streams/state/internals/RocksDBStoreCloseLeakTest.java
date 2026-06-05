@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <ol>
  * <li>KAFKA-20456 — the {@link ColumnFamilyOptions} returned by
- *     {@code RocksDBStore#createOffsetsCFOptions()} must be released on {@code close()}.
+ *     {@code RocksDBStore#offsetsCFOptions()} must be released on {@code close()}.
  *     Constructing a {@code ColumnFamilyOptions} on the JNI side auto-allocates a default
  *     {@code BlockBasedTableFactory} and its {@code LRUCache}; the cache itself has no Java
  *     handle, so we assert on the options' own handle and rely on the destructor contract.</li>
@@ -87,7 +87,7 @@ public class RocksDBStoreCloseLeakTest {
         rocksDBStore.init(context, rocksDBStore);
 
         final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
-        assertNotNull(captured, "createOffsetsCFOptions should have been invoked during init");
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
         assertTrue(captured.isOwningHandle(),
                 "offsets CF options should own its native handle while store is open");
 
@@ -131,8 +131,8 @@ public class RocksDBStoreCloseLeakTest {
         }
 
         @Override
-        protected ColumnFamilyOptions createOffsetsCFOptions() {
-            capturedOffsetsOptions = super.createOffsetsCFOptions();
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
             return capturedOffsetsOptions;
         }
     }

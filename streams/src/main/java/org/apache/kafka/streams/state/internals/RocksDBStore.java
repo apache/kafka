@@ -231,6 +231,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         fOptions = new FlushOptions();
         fOptions.setWaitForFlush(true);
 
+        // The offsets CF stores only a small number of key-value pairs (one per changelog
+        // partition), so it does not need the heavyweight options used for the data CF;
+        offsetsCfOptions = new ColumnFamilyOptions();
+        offsetsCfOptions.setCompressionType(CompressionType.NO_COMPRESSION);
+        offsetsCfOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
+
         final Class<RocksDBConfigSetter> configSetterClass =
                 (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
@@ -312,15 +318,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     /**
-     * The offsets CF stores only a small number of key-value pairs
-     * (one per changelog partition), so it does not need the heavyweight
-     * options used for the data CF.
-     * Uses the default options for compaction and max write buffer number.
+     * Returns the single read-only {@link ColumnFamilyOptions} instance used for the offsets CF.
+     *
+     * <p>The instance is created in {@link #openDB} before the open path runs, so this is a pure
+     * getter (no lazy initialization, hence no data race). The same instance backs every offsets
+     * {@code ColumnFamilyDescriptor} and is freed once in {@link #close()} /
+     * {@link #closeNativeResources()}.
      */
-    protected ColumnFamilyOptions createOffsetsCFOptions() {
-        offsetsCfOptions = new ColumnFamilyOptions();
-        offsetsCfOptions.setCompressionType(CompressionType.NO_COMPRESSION);
-        offsetsCfOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
+    protected ColumnFamilyOptions offsetsCFOptions() {
         return offsetsCfOptions;
     }
 
@@ -329,7 +334,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
                 dbOptions,
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, createOffsetsCFOptions())
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, offsetsCFOptions())
         );
 
         cfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1), columnFamilies.get(0));

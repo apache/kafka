@@ -1049,7 +1049,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
     // KAFKA-20456 regression: both RocksDBTimestampedStoreWithHeaders open paths
     // (openFromDefaultStore and openFromTimestampedStore) independently call
-    // createOffsetsCFOptions(); the returned ColumnFamilyOptions must be released on close().
+    // offsetsCFOptions(); the returned ColumnFamilyOptions must be released on close().
 
     @Test
     public void shouldCloseOffsetsCfOptionsAfterOpenFromDefaultStore() {
@@ -1069,7 +1069,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         rocksDBStore.init(context, rocksDBStore);
 
         final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
-        assertNotNull(captured, "createOffsetsCFOptions should have been invoked during init");
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
         assertTrue(captured.isOwningHandle(),
                 "offsets CF options should own its native handle while store is open");
 
@@ -1087,8 +1087,8 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         }
 
         @Override
-        protected ColumnFamilyOptions createOffsetsCFOptions() {
-            capturedOffsetsOptions = super.createOffsetsCFOptions();
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
             return capturedOffsetsOptions;
         }
     }

@@ -546,7 +546,7 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         rocksDBStore.init(context, rocksDBStore);
 
         final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
-        assertNotNull(captured, "createOffsetsCFOptions should have been invoked during init");
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
         assertTrue(captured.isOwningHandle(),
                 "offsets CF options should own its native handle while store is open");
 
@@ -600,8 +600,8 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         }
 
         @Override
-        protected ColumnFamilyOptions createOffsetsCFOptions() {
-            capturedOffsetsOptions = super.createOffsetsCFOptions();
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
             return capturedOffsetsOptions;
         }
     }
