@@ -510,7 +510,6 @@ public class StreamsResetterTest {
 
     @Test
     public void shouldFailWithTypoInApplicationId() throws Exception {
-        // user types "my-ap" instead of "my-app-v1"
         final String groupId = "my-ap";
 
         final Admin adminClient = mock(Admin.class);
@@ -527,14 +526,12 @@ public class StreamsResetterTest {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
 
-        // error message should mention the bad application-id and --force hint
         assertTrue(ex.getMessage().contains("my-ap"));
         assertTrue(ex.getMessage().contains("--force"));
     }
 
     @Test
     public void shouldMatchExactGroupIdNotSubstring() throws Exception {
-        // "foo" should NOT match "foobar" or "foo-v1"
         final String groupId = "foo";
 
         final Admin adminClient = mock(Admin.class);
