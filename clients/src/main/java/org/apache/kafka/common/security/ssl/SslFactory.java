@@ -370,7 +370,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             this.subjectPrincipal = cert.getSubjectX500Principal();
             Collection<List<?>> altNames = cert.getSubjectAlternativeNames();
             // use a set for comparison
-            this.subjectAltNames = altNames != null ? Set.copyOf(altNames) : Collections.emptySet();
+            this.subjectAltNames = altNames != null ? Set.copyOf(altNames) : Set.of();
         }
 
         @Override
