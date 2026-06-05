@@ -39,8 +39,9 @@ public class TopicConfig {
         "which Kafka will force the log to roll even if the segment file isn't full to ensure that retention " +
         "can delete or compact old data. " +
         "This forces active segment rolling by time, even if the active segment has not reached " +
-        "segment.bytes. For compacted topics, max.compaction.lag.ms can trigger active segment rolling " +
-        "sooner: the effective time-based roll deadline is the smaller of segment.ms and max.compaction.lag.ms.";
+        "<code>segment.bytes</code>. For compacted topics, <code>max.compaction.lag.ms</code> can trigger " +
+        "active segment rolling sooner: the effective time-based roll threshold is the smaller of " +
+        "<code>segment.ms</code> and <code>max.compaction.lag.ms</code>.";
 
     public static final String SEGMENT_JITTER_MS_CONFIG = "segment.jitter.ms";
     public static final String SEGMENT_JITTER_MS_DOC = "The maximum random jitter subtracted from the scheduled " +
@@ -157,10 +158,10 @@ public class TopicConfig {
     public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
         "ineligible for compaction in the log. Only applicable for logs that are being compacted. " +
         "Because the active segment is never compacted, for compacted topics this value also drives " +
-        "active segment rolling: the effective time-based roll deadline is the smaller of segment.ms " +
-        "and max.compaction.lag.ms. Active segment rolling moves records out of the active segment, " +
-        "after which max.compaction.lag.ms makes them eligible for compaction even if " +
-        "min.cleanable.dirty.ratio is not met. See " +
+        "active segment rolling: the effective time-based roll threshold is the smaller of " +
+        "<code>segment.ms</code> and <code>max.compaction.lag.ms</code>. Active segment rolling moves " +
+        "records out of the active segment, after which <code>max.compaction.lag.ms</code> makes them " +
+        "eligible for compaction even if <code>min.cleanable.dirty.ratio</code> is not met. See " +
         "<a href=\"https://kafka.apache.org/documentation/#compaction\">log compaction</a>.";
 
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
