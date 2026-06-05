@@ -5247,6 +5247,12 @@ org.apache.kafka.common.security.ssl.Tls13SslFactoryTest:
 - testUsedConfigs
 org.apache.kafka.common.serialization.ListDeserializerTest:
 - shouldPassHeadersToUnderlyingDeserializer
+- shouldThrowOnNegativeEntrySize
+- shouldThrowOnNegativeLength
+- shouldThrowOnNegativeNullEntryLength
+- shouldThrowOnTooLargeEntrySize
+- shouldThrowOnTooLargeLength
+- shouldThrowOnTooLargeNullEntryLength
 - testListKeyDeserializerNoArgConstructorsShouldThrowConfigExceptionDueInnerSerdeClassNotFound
 - testListKeyDeserializerNoArgConstructorsShouldThrowConfigExceptionDueListClassNotFound
 - testListKeyDeserializerNoArgConstructorsShouldThrowConfigExceptionDueMissingInnerClassProp
