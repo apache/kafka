@@ -19,8 +19,7 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
@@ -31,66 +30,31 @@ import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpress
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.util.UnionSet;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
 /**
- * Build a new Target Assignment based on the provided parameters. As a result,
- * it yields the records that must be persisted to the log and the new member
- * assignments as a map.
- *
- * Records are only created for members which have a new target assignment. If
- * their assignment did not change, no new record is needed.
- *
- * When a member is deleted, it is assumed that its target assignment record
- * is deleted as part of the member deletion process. In other words, this class
- * does not yield a tombstone for removed members.
+ * Build a new Target Assignment based on the provided parameters.
  */
 public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U extends TargetAssignmentBuilder<T, U>> {
 
     /**
-     * The assignment result returned by {{@link TargetAssignmentBuilder#build()}}.
+     * The assignment result returned by {@link TargetAssignmentBuilder#build()}.
+     *
+     * @param targetAssignment         The new target assignment for the group.
+     * @param targetAssignmentMetadata The new target assignment metadata.
      */
-    public static class TargetAssignmentResult {
-        /**
-         * The records that must be applied to the __consumer_offsets
-         * topics to persist the new target assignment.
-         */
-        private final List<CoordinatorRecord> records;
-
-        /**
-         * The new target assignment for the group.
-         */
-        private final Map<String, MemberAssignment> targetAssignment;
-
-        TargetAssignmentResult(
-            List<CoordinatorRecord> records,
-            Map<String, MemberAssignment> targetAssignment
-        ) {
-            Objects.requireNonNull(records);
+    public record TargetAssignmentResult(
+        Map<String, Assignment> targetAssignment,
+        TargetAssignmentMetadata targetAssignmentMetadata
+    ) {
+        public TargetAssignmentResult {
             Objects.requireNonNull(targetAssignment);
-            this.records = records;
-            this.targetAssignment = targetAssignment;
-        }
-
-        /**
-         * @return The records.
-         */
-        public List<CoordinatorRecord> records() {
-            return records;
-        }
-
-        /**
-         * @return The target assignment.
-         */
-        public Map<String, MemberAssignment> targetAssignment() {
-            return targetAssignment;
+            Objects.requireNonNull(targetAssignmentMetadata);
         }
     }
 
@@ -102,11 +66,10 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         private Map<String, ResolvedRegularExpression> resolvedRegularExpressions = Map.of();
 
         public ConsumerTargetAssignmentBuilder(
-            String groupId,
             int groupEpoch,
             PartitionAssignor assignor
         ) {
-            super(groupId, groupEpoch, assignor);
+            super(groupEpoch, assignor);
         }
 
         /**
@@ -125,32 +88,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         @Override
         protected ConsumerTargetAssignmentBuilder self() {
             return this;
-        }
-
-        @Override
-        protected CoordinatorRecord newTargetAssignmentRecord(
-            String groupId,
-            String memberId,
-            Map<Uuid, Set<Integer>> partitions
-        ) {
-            return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(
-                groupId,
-                memberId,
-                partitions
-            );
-        }
-
-        @Override
-        protected CoordinatorRecord newTargetAssignmentMetadataRecord(
-            String groupId,
-            int assignmentEpoch,
-            long assignmentTimestamp
-        ) {
-            return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(
-                groupId,
-                assignmentEpoch,
-                assignmentTimestamp
-            );
         }
 
         @Override
@@ -189,42 +126,15 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
 
     public static class ShareTargetAssignmentBuilder extends TargetAssignmentBuilder<ShareGroupMember, ShareTargetAssignmentBuilder> {
         public ShareTargetAssignmentBuilder(
-            String groupId,
             int groupEpoch,
             PartitionAssignor assignor
         ) {
-            super(groupId, groupEpoch, assignor);
+            super(groupEpoch, assignor);
         }
 
         @Override
         protected ShareTargetAssignmentBuilder self() {
             return this;
-        }
-
-        @Override
-        protected CoordinatorRecord newTargetAssignmentRecord(
-            String groupId,
-            String memberId,
-            Map<Uuid, Set<Integer>> partitions
-        ) {
-            return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentRecord(
-                groupId,
-                memberId,
-                partitions
-            );
-        }
-
-        @Override
-        protected CoordinatorRecord newTargetAssignmentMetadataRecord(
-            String groupId,
-            int assignmentEpoch,
-            long assignmentTimestamp
-        ) {
-            return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(
-                groupId,
-                assignmentEpoch,
-                assignmentTimestamp
-            );
         }
 
         @Override
@@ -246,11 +156,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      * The time.
      */
     private Time time;
-
-    /**
-     * The group id.
-     */
-    private final String groupId;
 
     /**
      * The group epoch.
@@ -296,16 +201,13 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * Constructs the object.
      *
-     * @param groupId       The group id.
      * @param groupEpoch    The group epoch to compute a target assignment for.
      * @param assignor      The assignor to use to compute the target assignment.
      */
     public TargetAssignmentBuilder(
-        String groupId,
         int groupEpoch,
         PartitionAssignor assignor
     ) {
-        this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
     }
@@ -424,43 +326,18 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
             new SubscribedTopicDescriberImpl(metadataImage)
         );
 
-        // Compute delta from previous to new target assignment and create the relevant records.
-        List<CoordinatorRecord> records = new ArrayList<>();
-
+        Map<String, Assignment> newTargetAssignment = new HashMap<>();
         for (String memberId : memberSpecs.keySet()) {
-            Assignment oldMemberAssignment = targetAssignment.get(memberId);
-            Assignment newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
-
-            if (!newMemberAssignment.equals(oldMemberAssignment)) {
-                // If the member had no assignment or had a different assignment, we
-                // create a record for the new assignment.
-                records.add(newTargetAssignmentRecord(
-                    groupId,
-                    memberId,
-                    newMemberAssignment.partitions()
-                ));
-            }
+            newTargetAssignment.put(memberId, newMemberAssignment(newGroupAssignment, memberId));
         }
 
-        // Bump the target assignment epoch.
-        records.add(newTargetAssignmentMetadataRecord(groupId, groupEpoch, time.milliseconds()));
-
-        return new TargetAssignmentResult(records, newGroupAssignment.members());
+        return new TargetAssignmentResult(
+            newTargetAssignment,
+            new TargetAssignmentMetadata(groupEpoch, time.milliseconds())
+        );
     }
 
     protected abstract U self();
-
-    protected abstract CoordinatorRecord newTargetAssignmentRecord(
-        String groupId,
-        String memberId,
-        Map<Uuid, Set<Integer>> partitions
-    );
-
-    protected abstract CoordinatorRecord newTargetAssignmentMetadataRecord(
-        String groupId,
-        int assignmentEpoch,
-        long timestampMs
-    );
 
     protected abstract MemberSubscriptionAndAssignmentImpl newMemberSubscriptionAndAssignment(
         T member,
