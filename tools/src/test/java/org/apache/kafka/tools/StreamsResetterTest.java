@@ -551,11 +551,4 @@ public class StreamsResetterTest {
         assertThrows(IllegalArgumentException.class,
                 () -> streamsResetter.validateApplicationIdExists(groupId, adminClient));
     }
-
-    @Test
-    public void shouldSkipValidationWhenForceOptionProvided() throws Exception {
-        final Admin adminClient = mock(Admin.class);
-
-        verify(adminClient, never()).listGroups(any(ListGroupsOptions.class));
-    }
 }

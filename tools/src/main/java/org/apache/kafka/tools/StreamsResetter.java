@@ -184,7 +184,6 @@ public class StreamsResetter {
         }
     }
 
-
     void validateApplicationIdExists(final String applicationId,
                                              final Admin adminClient)
             throws ExecutionException, InterruptedException, TimeoutException {
