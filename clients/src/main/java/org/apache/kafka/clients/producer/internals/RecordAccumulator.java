@@ -58,6 +58,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * This class acts as a queue that accumulates records into {@link MemoryRecords}
@@ -68,23 +69,23 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class RecordAccumulator {
 
-    private final LogContext logContext;
-    private final Logger log;
-    private volatile boolean closed;
+    protected final LogContext logContext;
+    protected final Logger log;
+    protected volatile boolean closed;
     private final AtomicInteger flushesInProgress;
-    private final AtomicInteger appendsInProgress;
-    private final int batchSize;
-    private final Compression compression;
+    protected final AtomicInteger appendsInProgress;
+    protected final int batchSize;
+    protected final Compression compression;
     private final int lingerMs;
     private final ExponentialBackoff retryBackoff;
     private final int deliveryTimeoutMs;
     private final long partitionAvailabilityTimeoutMs;  // latency threshold for marking partition temporary unavailable
-    private final boolean partitionerRackAware;
-    private final String rack;
+    protected final boolean partitionerRackAware;
+    protected final String rack;
     private final boolean enableAdaptivePartitioning;
     private final BufferPool free;
-    private final Time time;
-    private final ConcurrentMap<String /*topic*/, TopicInfo> topicInfoMap = new CopyOnWriteMap<>();
+    protected final Time time;
+    protected final ConcurrentMap<String /*topic*/, TopicInfo> topicInfoMap = new CopyOnWriteMap<>();
     private final ConcurrentMap<Integer /*nodeId*/, NodeLatencyStats> nodeStats = new CopyOnWriteMap<>();
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
@@ -217,7 +218,7 @@ public class RecordAccumulator {
             (config, now) -> free.availableMemory());
     }
 
-    private void setPartition(AppendCallbacks callbacks, int partition) {
+    protected void setPartition(AppendCallbacks callbacks, int partition) {
         if (callbacks != null)
             callbacks.setPartition(partition);
     }
@@ -234,7 +235,7 @@ public class RecordAccumulator {
      * @return 'true' if partition changed and we need to get new partition info and retry,
      *         'false' otherwise
      */
-    private boolean partitionChanged(String topic,
+    protected boolean partitionChanged(String topic,
                                      TopicInfo topicInfo,
                                      BuiltInPartitioner.StickyPartitionInfo partitionInfo,
                                      Deque<ProducerBatch> deque, long nowMs,
@@ -347,7 +348,10 @@ public class RecordAccumulator {
                     if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
                         continue;
 
-                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
+                    final ByteBuffer batchBuffer = buffer;
+                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
+                            () -> MemoryRecords.builder(batchBuffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L),
+                            nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
@@ -374,10 +378,13 @@ public class RecordAccumulator {
      * @param value The value for the record
      * @param headers the Headers for the record
      * @param callbacks The callbacks to execute
-     * @param buffer The buffer for the new batch
+     * @param recordsBuilderSupplier Supplies the {@link MemoryRecordsBuilder} for the new
+     *        batch. Invoked lazily, only when this method is committed to creating a new
+     *        batch (i.e. after the in-lock concurrent-append race check has lost). The
+     *        chunked subclass passes a supplier that produces a stream-backed builder.
      * @param nowMs The current time, in milliseconds
      */
-    private RecordAppendResult appendNewBatch(String topic,
+    protected RecordAppendResult appendNewBatch(String topic,
                                               int partition,
                                               Deque<ProducerBatch> dq,
                                               long timestamp,
@@ -385,7 +392,7 @@ public class RecordAccumulator {
                                               byte[] value,
                                               Header[] headers,
                                               AppendCallbacks callbacks,
-                                              ByteBuffer buffer,
+                                              Supplier<MemoryRecordsBuilder> recordsBuilderSupplier,
                                               long nowMs) {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
@@ -395,7 +402,7 @@ public class RecordAccumulator {
             return appendResult;
         }
 
-        MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
+        MemoryRecordsBuilder recordsBuilder = recordsBuilderSupplier.get();
         ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
@@ -406,14 +413,10 @@ public class RecordAccumulator {
         return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer) {
-        return MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L);
-    }
-
     /**
      * Check if all batches in the queue are full.
      */
-    private boolean allBatchesFull(Deque<ProducerBatch> deque) {
+    protected boolean allBatchesFull(Deque<ProducerBatch> deque) {
         // Only the last batch may be incomplete, so we just check that.
         ProducerBatch last = deque.peekLast();
         return last == null || last.isFull();
@@ -427,7 +430,7 @@ public class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    protected RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         if (closed)
             throw new KafkaException("Producer closed while send in progress");
@@ -1058,9 +1061,17 @@ public class RecordAccumulator {
                     free.deallocate(ByteBuffer.allocate(batch.initialCapacity()));
                     throw new IllegalStateException("Attempting to deallocate a batch that is inflight. Batch is " + batch);
                 }
-                free.deallocate(batch.buffer(), batch.initialCapacity());
+                deallocateBatchBuffer(batch);
             }
         }
+    }
+
+    /**
+     * Return the batch's underlying buffer to the pool.
+     * This default implementation returns the buffer at its initial capacity (single buffer).
+     */
+    protected void deallocateBatchBuffer(ProducerBatch batch) {
+        free.deallocate(batch.buffer(), batch.initialCapacity());
     }
 
     /**
@@ -1298,7 +1309,7 @@ public class RecordAccumulator {
     /**
      * Per topic info.
      */
-    private static class TopicInfo {
+    protected static class TopicInfo {
         public final ConcurrentMap<Integer /*partition*/, Deque<ProducerBatch>> batches = new CopyOnWriteMap<>();
         public final BuiltInPartitioner builtInPartitioner;
 

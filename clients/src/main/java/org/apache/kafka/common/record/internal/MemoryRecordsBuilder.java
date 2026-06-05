@@ -211,6 +211,15 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         return bufferStream.initialCapacity();
     }
 
+    /**
+     * The underlying output stream. Exposed so the dynamic-strategy callers can attach
+     * pre-allocated chunks to a {@code ChunkedByteBufferOutputStream} and route deallocation
+     * polymorphically.
+     */
+    public ByteBufferOutputStream bufferStream() {
+        return bufferStream;
+    }
+
     public double compressionRatio() {
         return actualCompressionRatio;
     }

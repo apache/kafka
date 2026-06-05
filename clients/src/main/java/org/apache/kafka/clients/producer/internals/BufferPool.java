@@ -48,15 +48,19 @@ public class BufferPool {
 
     private final long totalMemory;
     private final int poolableSize;
-    private final ReentrantLock lock;
-    private final Deque<ByteBuffer> free;
-    private final Deque<Condition> waiters;
-    /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize.  */
-    private long nonPooledAvailableMemory;
+    /** Lock held for any read or write of {@link #free}, {@link #waiters}, {@link #nonPooledAvailableMemory}, or {@link #closed}. */
+    protected final ReentrantLock lock;
+    /** Pooled buffers of capacity {@link #poolableSize}, available for reuse. Guarded by {@link #lock}. */
+    protected final Deque<ByteBuffer> free;
+    /** FIFO queue of pending allocation requests; the longest-waiting thread is woken first. Guarded by {@link #lock}. */
+    protected final Deque<Condition> waiters;
+    /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize. Guarded by {@link #lock}. */
+    protected long nonPooledAvailableMemory;
     private final Metrics metrics;
-    private final Time time;
+    protected final Time time;
     private final Sensor waitTime;
-    private boolean closed;
+    /** True once {@link #close()} has been invoked. */
+    protected boolean closed;
 
     /**
      * Create a new buffer pool
@@ -192,8 +196,7 @@ public class BufferPool {
             // signal any additional waiters if there is more memory left
             // over for them
             try {
-                if (!(this.nonPooledAvailableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
-                    this.waiters.peekFirst().signal();
+                signalNextWaiterIfMemoryAvailable();
             } finally {
                 // Another finally... otherwise find bugs complains
                 lock.unlock();
@@ -212,6 +215,15 @@ public class BufferPool {
     }
 
     /**
+     * Wake the longest-waiting thread if any memory (pooled or non-pooled) is available.
+     * Must be called with {@link #lock} held. No-op if no waiters or no memory is free.
+     */
+    protected void signalNextWaiterIfMemoryAvailable() {
+        if (!(this.nonPooledAvailableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
+            this.waiters.peekFirst().signal();
+    }
+
+    /**
      * Allocate a buffer.  If buffer allocation fails (e.g. because of OOM) then return the size count back to
      * available memory and signal the next waiter if it exists.
      */
@@ -222,16 +234,24 @@ public class BufferPool {
             error = false;
             return buffer;
         } finally {
-            if (error) {
-                this.lock.lock();
-                try {
-                    this.nonPooledAvailableMemory += size;
-                    if (!this.waiters.isEmpty())
-                        this.waiters.peekFirst().signal();
-                } finally {
-                    this.lock.unlock();
-                }
-            }
+            if (error)
+                releaseReservedBytes(size);
+        }
+    }
+
+    /**
+     * Return previously-reserved non-pooled bytes to the pool and signal the next
+     * waiter. Acquires {@link #lock} internally. Used by callers
+     * that reserve memory and then need to roll back the reservation (e.g., upon errors).
+     */
+    protected void releaseReservedBytes(long bytes) {
+        this.lock.lock();
+        try {
+            this.nonPooledAvailableMemory += bytes;
+            if (!this.waiters.isEmpty())
+                this.waiters.peekFirst().signal();
+        } finally {
+            this.lock.unlock();
         }
     }
 
@@ -242,9 +262,9 @@ public class BufferPool {
 
     /**
      * Attempt to ensure we have at least the requested number of bytes of memory for allocation by deallocating pooled
-     * buffers (if needed)
+     * buffers (if needed). Must be called with {@link #lock} held.
      */
-    private void freeUp(int size) {
+    protected void freeUp(int size) {
         while (!this.free.isEmpty() && this.nonPooledAvailableMemory < size)
             this.nonPooledAvailableMemory += this.free.pollLast().capacity();
     }

@@ -31,6 +31,7 @@ import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 
@@ -138,6 +139,38 @@ public final class ProducerBatch {
         return attempts == attemptsWhenLeaderLastChanged;
     }
 
+
+    /**
+     * Bytes of physical buffer this batch needs before {@code tryAppend} could accept the given
+     * record. Returns 0 when the record fits (either logically full, or stream has room).
+     * Positive when {@code hasRoomFor} allows the record but the underlying stream lacks
+     * physical capacity — used by the dynamic strategy to allocate exactly the missing bytes
+     * before retrying.
+     * <p>
+     * For batches with the default {@link ByteBufferOutputStream} (legacy path), the stream's
+     * {@code remaining()} is large enough that this almost always returns 0.
+     */
+    int extensionBytesNeeded(long timestamp, byte[] key, byte[] value, Header[] headers) {
+        if (recordCount == 0)
+            return 0;
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers))
+            return 0;
+        // Upper-bound estimate is fine: over-counting by header bytes only over-allocates by a
+        // small fraction of one chunk. Under-estimation would be unsafe.
+        int recordSize = AbstractRecords.estimateSizeInBytesUpperBound(
+                magic(), recordsBuilder.compression().type(), key, value, headers);
+        int gap = recordSize - recordsBuilder.bufferStream().remaining();
+        return Math.max(0, gap);
+    }
+
+    /**
+     * The batch's underlying output stream. Exposed for the dynamic strategy to attach
+     * extension chunks and route deallocation through the chunked stream rather than the
+     * standard {@code BufferPool.deallocate(ByteBuffer, int)} path.
+     */
+    ByteBufferOutputStream bufferStream() {
+        return recordsBuilder.bufferStream();
+    }
 
     /**
      * Append the record to the current record set and return the relative offset within that record set
