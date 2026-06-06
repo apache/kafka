@@ -33,6 +33,8 @@ import org.apache.kafka.shell.state.MetadataShellState;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 
 import org.slf4j.Logger;
@@ -42,6 +44,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -55,6 +58,8 @@ import java.util.concurrent.TimeUnit;
  */
 public final class MetadataShell {
     private static final Logger log = LoggerFactory.getLogger(MetadataShell.class);
+
+    record MetadataShellArguments(String checkpointPath, List<String> command) { }
 
     public static class Builder {
         private String snapshotPath = null;
@@ -73,6 +78,36 @@ public final class MetadataShell {
         public MetadataShell build() {
             return new MetadataShell(snapshotPath, faultHandler);
         }
+    }
+
+    static ArgumentParser createArgumentParser() {
+        ArgumentParser parser = ArgumentParsers
+            .newArgumentParser("kafka-metadata-shell")
+            .defaultHelp(true)
+            .description("The Apache Kafka metadata shell");
+        MutuallyExclusiveGroup checkpointGroup = parser.addMutuallyExclusiveGroup().required(true);
+        checkpointGroup.addArgument("--checkpoint")
+            .type(String.class)
+            .help("The metadata checkpoint file to read.");
+        checkpointGroup.addArgument("--snapshot", "-s")
+            .type(String.class)
+            .help("(DEPRECATED) The metadata snapshot file to read. Use --checkpoint instead.");
+        parser.addArgument("command")
+            .nargs("*")
+            .help("The command to run.");
+        return parser;
+    }
+
+    static MetadataShellArguments parseArguments(String[] args, PrintStream out) throws ArgumentParserException {
+        Namespace res = createArgumentParser().parseArgs(args);
+        String checkpointPath = res.getString("checkpoint");
+        String snapshotPath = res.getString("snapshot");
+        if (snapshotPath != null) {
+            out.println("Option --snapshot is deprecated and will be removed in a future version. " +
+                "Use --checkpoint instead.");
+            checkpointPath = snapshotPath;
+        }
+        return new MetadataShellArguments(checkpointPath, res.getList("command"));
     }
 
     /**
@@ -200,21 +235,17 @@ public final class MetadataShell {
     }
 
     public static void main(String[] args) {
-        ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("kafka-metadata-shell")
-            .defaultHelp(true)
-            .description("The Apache Kafka metadata shell");
-        parser.addArgument("--snapshot", "-s")
-            .type(String.class)
-            .required(true)
-            .help("The metadata snapshot file to read.");
-        parser.addArgument("command")
-            .nargs("*")
-            .help("The command to run.");
-        Namespace res = parser.parseArgsOrFail(args);
+        MetadataShellArguments shellArguments;
+        try {
+            shellArguments = parseArguments(args, System.out);
+        } catch (ArgumentParserException e) {
+            e.getParser().handleError(e);
+            Exit.exit(1);
+            return;
+        }
         try {
             Builder builder = new Builder();
-            builder.setSnapshotPath(res.getString("snapshot"));
+            builder.setSnapshotPath(shellArguments.checkpointPath());
             Path tempDir = Files.createTempDirectory("MetadataShell");
             Exit.addShutdownHook("agent-shutdown-hook", () -> {
                 log.debug("Removing temporary directory " + tempDir.toAbsolutePath());
@@ -227,7 +258,7 @@ public final class MetadataShell {
             });
             MetadataShell shell = builder.build();
             try {
-                shell.run(res.getList("command"));
+                shell.run(shellArguments.command());
             } finally {
                 shell.close();
             }
