@@ -20,16 +20,11 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.expiring.ExpiringCredential;
 import org.apache.kafka.common.security.oauthbearer.internals.expiring.ExpiringCredentialRefreshConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.expiring.ExpiringCredentialRefreshingLogin;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.common.security.oauthbearer.internals.expiring.OAuthBearerExpiringCredentialRefreshingLogin;
 
 import java.util.Map;
-import java.util.Set;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.Configuration;
@@ -77,7 +72,6 @@ import javax.security.auth.login.LoginException;
  * @see SaslConfigs#SASL_LOGIN_REFRESH_BUFFER_SECONDS_DOC
  */
 public class OAuthBearerRefreshingLogin implements Login {
-    private static final Logger log = LoggerFactory.getLogger(OAuthBearerRefreshingLogin.class);
     private ExpiringCredentialRefreshingLogin expiringCredentialRefreshingLogin = null;
 
     @Override
@@ -92,41 +86,9 @@ public class OAuthBearerRefreshingLogin implements Login {
          * reasonable.
          */
         Class<OAuthBearerRefreshingLogin> classToSynchronizeOnPriorToRefresh = OAuthBearerRefreshingLogin.class;
-        expiringCredentialRefreshingLogin = new ExpiringCredentialRefreshingLogin(contextName, configuration,
+        expiringCredentialRefreshingLogin = new OAuthBearerExpiringCredentialRefreshingLogin(contextName, configuration,
                 new ExpiringCredentialRefreshConfig(configs, true), loginCallbackHandler,
-                classToSynchronizeOnPriorToRefresh) {
-            @Override
-            public ExpiringCredential expiringCredential() {
-                Set<OAuthBearerToken> privateCredentialTokens = expiringCredentialRefreshingLogin.subject()
-                        .getPrivateCredentials(OAuthBearerToken.class);
-                if (privateCredentialTokens.isEmpty())
-                    return null;
-                final OAuthBearerToken token = privateCredentialTokens.iterator().next();
-                if (log.isDebugEnabled())
-                    log.debug("Found expiring credential with principal '{}'.", token.principalName());
-                return new ExpiringCredential() {
-                    @Override
-                    public String principalName() {
-                        return token.principalName();
-                    }
-
-                    @Override
-                    public Long startTimeMs() {
-                        return token.startTimeMs();
-                    }
-
-                    @Override
-                    public long expireTimeMs() {
-                        return token.lifetimeMs();
-                    }
-
-                    @Override
-                    public Long absoluteLastRefreshTimeMs() {
-                        return null;
-                    }
-                };
-            }
-        };
+                classToSynchronizeOnPriorToRefresh);
     }
 
     @Override

@@ -157,7 +157,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 mandatoryClassToSynchronizeOnPriorToRefresh, new LoginContextFactory(), Time.SYSTEM);
     }
 
-    public ExpiringCredentialRefreshingLogin(String contextName, Configuration configuration,
+    ExpiringCredentialRefreshingLogin(String contextName, Configuration configuration,
             ExpiringCredentialRefreshConfig expiringCredentialRefreshConfig,
             AuthenticateCallbackHandler callbackHandler, Class<?> mandatoryClassToSynchronizeOnPriorToRefresh,
             LoginContextFactory loginContextFactory, Time time) {

@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -33,21 +34,44 @@ import java.util.Set;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.LoginException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 public class OAuthBearerLoginModuleTest {
 
     public static final SaslExtensions RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG = null;
+
+    private OAuthBearerToken[] tokens;
+    private SaslExtensions[] extensions;
+
+    @BeforeEach
+    public void setup() {
+        tokens = new OAuthBearerToken[] {
+                mock(OAuthBearerToken.class),
+                mock(OAuthBearerToken.class),
+                mock(OAuthBearerToken.class)
+        };
+        extensions = new SaslExtensions[] {
+                saslExtensions(),
+                saslExtensions(),
+                saslExtensions()
+        };
+    }
 
     private static class TestCallbackHandler implements AuthenticateCallbackHandler {
         private final OAuthBearerToken[] tokens;
@@ -126,10 +150,6 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
-            mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {saslExtensions(),
-            saslExtensions(), saslExtensions()};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
@@ -222,10 +242,6 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
-            mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {saslExtensions(),
-            saslExtensions()};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
@@ -282,10 +298,6 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
-            mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {saslExtensions(),
-            saslExtensions()};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login module
@@ -334,10 +346,6 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
-            mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {saslExtensions(), saslExtensions(),
-            saslExtensions()};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
@@ -415,8 +423,6 @@ public class OAuthBearerLoginModuleTest {
         Subject subject = new Subject();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
-                mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, new SaslExtensions[] {RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG});
 
         // Create login modules
@@ -434,11 +440,171 @@ public class OAuthBearerLoginModuleTest {
         verifyNoInteractions((Object[]) tokens);
     }
 
+    @Test
+    public void testInitializeThrowsIfCallbackHandlerIsNotInstanceOfAuthenticateCallbackHandler() {
+        Subject subject = new Subject();
+        CallbackHandler nonAuthCallbackHandler = callbacks -> { };
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> loginModule.initialize(subject, nonAuthCallbackHandler, Collections.emptyMap(), Collections.emptyMap()));
+    }
+
+    @Test
+    public void testLoginThrowsIfAlreadyLoggedInWithToken() throws Exception {
+        Subject subject = new Subject();
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+
+        loginModule.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
+        loginModule.login();
+
+        assertThrows(IllegalStateException.class, loginModule::login);
+    }
+
+    @Test
+    public void testLoginThrowsIfAlreadyLoggedInWithoutToken() throws Exception {
+        Subject subject = new Subject();
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+
+        AuthenticateCallbackHandler callbackHandler = mock(AuthenticateCallbackHandler.class);
+
+        loginModule.initialize(subject, callbackHandler, Collections.emptyMap(), Collections.emptyMap());
+        loginModule.login();
+
+        assertThrows(IllegalStateException.class, loginModule::login);
+    }
+
+    @Test
+    public void testLoginCatchesIOExceptionFromHandleAndThrowsLoginException() throws Exception {
+        Subject subject = new Subject();
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+
+        AuthenticateCallbackHandler callbackHandler = mock(AuthenticateCallbackHandler.class);
+        doThrow(IOException.class).when(callbackHandler).handle(any());
+
+        loginModule.initialize(subject, callbackHandler, Collections.emptyMap(), Collections.emptyMap());
+
+        assertThrows(LoginException.class, loginModule::login);
+    }
+
+    @Test
+    public void testLoginThrowsIfAlreadyCommittedWithToken() throws Exception {
+        Subject subject = new Subject();
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+
+        loginModule.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
+        loginModule.login();
+        loginModule.commit();
+
+        assertThrows(IllegalStateException.class, loginModule::login);
+    }
+
+    @Test
+    public void testLoginThrowsIfAlreadyCommittedWithoutToken() throws Exception {
+        Subject subject = new Subject();
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+        AuthenticateCallbackHandler callbackHandler = mock(AuthenticateCallbackHandler.class);
+
+        loginModule.initialize(subject, callbackHandler, Collections.emptyMap(), Collections.emptyMap());
+        loginModule.login();
+        loginModule.commit();
+
+        assertThrows(IllegalStateException.class, loginModule::login);
+    }
+
+    @Test
+    public void testLoginThrowsLoginExceptionWhenCallbackReturnsErrorCode() throws Exception {
+        Subject subject = new Subject();
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+
+        AuthenticateCallbackHandler callbackHandler = mock(AuthenticateCallbackHandler.class);
+        doAnswer(invocation -> {
+            OAuthBearerTokenCallback callback = (OAuthBearerTokenCallback) ((Callback[]) invocation.getArgument(0))[0];
+            callback.error("invalid_token", "the token was invalid", "https://example.com/error");
+            return null;
+        }).when(callbackHandler).handle(any());
+
+        loginModule.initialize(subject, callbackHandler, Collections.emptyMap(), Collections.emptyMap());
+
+        assertThrows(LoginException.class, loginModule::login);
+    }
+
+    @Test
+    public void testLoginThrowsLoginExceptionWhenExtensionCallbackHandlerThrowsIOException() throws Exception {
+        Subject subject = new Subject();
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+
+        AuthenticateCallbackHandler callbackHandler = mock(AuthenticateCallbackHandler.class);
+        doAnswer(invocation -> {
+            OAuthBearerTokenCallback callback = (OAuthBearerTokenCallback) ((Callback[]) invocation.getArgument(0))[0];
+            callback.token(mock(OAuthBearerToken.class));
+            return null;
+        }).doThrow(IOException.class).when(callbackHandler).handle(any());
+
+        loginModule.initialize(subject, callbackHandler, Collections.emptyMap(), Collections.emptyMap());
+
+        assertThrows(LoginException.class, loginModule::login);
+    }
+
+    @Test
+    public void testLogoutThrowsIfLogoutCalledBeforeCommit() throws Exception {
+        Subject subject = new Subject();
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
+
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+        loginModule.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
+
+        loginModule.login();
+
+        assertThrows(IllegalStateException.class, loginModule::logout);
+    }
+
+    @Test
+    public void testLogoutReturnsFalseIfLogoutCalledBeforeLogin() {
+        Subject subject = new Subject();
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
+
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+        loginModule.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
+
+        assertFalse(loginModule::logout);
+    }
+
+    @Test
+    public void testCommitReturnsFalseIfCalledBeforeLogin() {
+        Subject subject = new Subject();
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
+
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+        loginModule.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
+
+        assertFalse(loginModule::commit);
+    }
+
+    @Test
+    public void testAbortReturnsFalseIfCalledBeforeLogin() {
+        Subject subject = new Subject();
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
+
+        OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
+        loginModule.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
+                Collections.emptyMap());
+
+        assertFalse(loginModule::abort);
+    }
+
     /**
      * We don't want to use mocks for our tests as we need to make sure to test
      * {@link SaslExtensions}' {@link SaslExtensions#equals(Object)} and
      * {@link SaslExtensions#hashCode()} methods.
-     *
      * <p/>
      *
      * We need to make distinct calls to this method (vs. caching the result and reusing it

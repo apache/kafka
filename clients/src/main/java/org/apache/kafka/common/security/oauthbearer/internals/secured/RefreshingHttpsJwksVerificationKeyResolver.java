@@ -41,11 +41,11 @@ import javax.security.auth.login.AppConfigurationEntry;
  * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a
  * {@link VerificationKeyResolver} implementation that will periodically refresh the
  * JWKS using its {@link HttpsJwks} instance.
- *
+ * <p/>
  * A <a href="https://datatracker.ietf.org/doc/html/rfc7517#section-5">JWKS (JSON Web Key Set)</a>
  * is a JSON document provided by the OAuth/OIDC provider that lists the keys used to sign the JWTs
  * it issues.
- *
+ * <p/>
  * Here is a sample JWKS JSON document:
  *
  * <pre>
@@ -76,7 +76,7 @@ import javax.security.auth.login.AppConfigurationEntry;
  * order to match up the JWT's signing key with the key in the JWKS. During the validation step of
  * the broker, the jose4j OAuth library will use the contents of the appropriate key in the JWKS
  * to validate the signature.
- *
+ * <p/>
  * Given that the JWKS is referenced by the JWT, the JWKS must be made available by the
  * OAuth/OIDC provider so that a JWT can be validated.
  *
