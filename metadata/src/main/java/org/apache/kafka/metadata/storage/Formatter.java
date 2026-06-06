@@ -445,11 +445,12 @@ public class Formatter {
                     build());
             }
             copier.setPreWriteHandler((writeLogDir, __, ____) -> {
+                DirectoryType directoryType = directoryTypes.get(writeLogDir);
                 printStream.printf("Formatting %s %s with %s %s.%n",
-                    directoryTypes.get(writeLogDir).description(), writeLogDir,
+                    directoryType.description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                if (writeBootstrapSnapshot) {
+                if (writeBootstrapSnapshot && directoryType.isMetadataDirectory()) {
                     writeBoostrapSnapshot(writeLogDir,
                         bootstrapMetadata,
                         initialControllers,
@@ -480,9 +481,8 @@ public class Formatter {
             };
         }
 
-        boolean isDynamicMetadataDirectory() {
-            return this == DYNAMIC_METADATA_NON_VOTER_DIRECTORY ||
-                this == DYNAMIC_METADATA_VOTER_DIRECTORY;
+        boolean isMetadataDirectory() {
+            return this != LOG_DIRECTORY;
         }
 
         static DirectoryType calculate(

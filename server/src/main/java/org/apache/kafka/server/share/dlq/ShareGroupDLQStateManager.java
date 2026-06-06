@@ -45,6 +45,7 @@ import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoffManager;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.apache.kafka.server.util.timer.Timer;
@@ -56,6 +57,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -80,6 +82,7 @@ public class ShareGroupDLQStateManager {
     private final Time time;
     private final Timer timer;
     private final ShareGroupDLQMetadataCacheHelper cacheHelper;
+    private final ShareGroupMetrics shareGroupMetrics;
     public static final long REQUEST_BACKOFF_MS = 1_000L;
     public static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
     private static final int MAX_REQUEST_ATTEMPTS = 5;
@@ -91,7 +94,13 @@ public class ShareGroupDLQStateManager {
     private final Map<Node, List<ProduceRequestHandler>> nodeRPCMap = new HashMap<>();
     private final Object nodeMapLock = new Object();
 
-    public ShareGroupDLQStateManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
+    public ShareGroupDLQStateManager(
+        KafkaClient client,
+        ShareGroupDLQMetadataCacheHelper cacheHelper,
+        Time time,
+        Timer timer,
+        ShareGroupMetrics shareGroupMetrics
+    ) {
         if (client == null) {
             throw new IllegalArgumentException("Kafkaclient must not be null.");
         }
@@ -108,9 +117,14 @@ public class ShareGroupDLQStateManager {
             throw new IllegalArgumentException("Timer must not be null.");
         }
 
+        if (shareGroupMetrics == null) {
+            throw new IllegalArgumentException("ShareGroupMetrics must not be null.");
+        }
+
         this.time = time;
         this.timer = timer;
         this.cacheHelper = cacheHelper;
+        this.shareGroupMetrics = shareGroupMetrics;
         this.sender = new SendThread(
             "ShareGroupDLQSendThread",
             client,
@@ -125,7 +139,6 @@ public class ShareGroupDLQStateManager {
         if (isStarted.compareAndSet(false, true)) {
             log.info("Starting ShareGroupDLQStateManager");
             this.sender.start();
-            isStarted.set(true);
         }
     }
 
@@ -152,6 +165,16 @@ public class ShareGroupDLQStateManager {
         ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future, requestBackoffMs, requestBackoffMaxMs, maxRequestAttempts);
         enqueue(requestHandler);
         return future;
+    }
+
+    // Visibility for tests
+    Map<Node, List<ShareGroupDLQStateManager.ProduceRequestHandler>> nodeRPCMap() {
+        // Using Collections.unmodifiableMap and not Map.copyOf as we are looking for a quick
+        // immutable view of the map in the tests. The tests will invoke the
+        // method repeatedly to check the state of the map. Map.copyOf will create
+        // a deep copy of the map on every call and changes will might get missed resulting
+        // in flakiness.
+        return Collections.unmodifiableMap(nodeRPCMap);
     }
 
     private void enqueue(ProduceRequestHandler requestHandler) {
@@ -332,6 +355,10 @@ public class ShareGroupDLQStateManager {
                 Compression.NONE,
                 simpleRecords.toArray(new SimpleRecord[]{})
             );
+
+            // Update the metric to say a new request is created to se sent. This might not be the
+            // actual RPC count as we coalesce the requests before sending.
+            shareGroupMetrics.recordDLQProduce(param.groupId());
 
             return new ProduceRequestData.TopicProduceData()
                 .setName(dlqTopicPartitionData.topicName())
@@ -580,6 +607,7 @@ public class ShareGroupDLQStateManager {
                     switch (error) {
                         case NONE:
                             LOG.debug("Successfully produced records {} to dlq topic node {}.", this, dlqPartitionLeaderNode());
+                            shareGroupMetrics.recordDLQRecordWrite(param.groupId(), (int) (param.lastOffset() - param.firstOffset() + 1));
                             produceRequestBackoff.resetAttempts();
                             this.result.complete(null);
                             break;
@@ -588,6 +616,7 @@ public class ShareGroupDLQStateManager {
                             LOG.debug("Received retriable error produce response for {} to dlq topic node {} - {}.", this, dlqPartitionLeaderNode(), errorMessage);
                             if (!produceRequestBackoff.canAttempt()) {
                                 LOG.error("Exhausted max retries to produce {} to  DLQ topic node {}.", this, dlqPartitionLeaderNode());
+                                shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                                 requestErrorResponse(new Exception("Exhausted max retries to produce to DLQ topic without success."));
                                 break;
                             }
@@ -598,6 +627,7 @@ public class ShareGroupDLQStateManager {
                             LOG.error("Unable to produce {} to DLQ topic node {} - {}.", this, dlqPartitionLeaderNode(), errorMessage);
                             partitionResponse.recordErrors().forEach(recordError ->
                                 LOG.error("Records with errors {} - {}.", recordError.batchIndex(), recordError.batchIndexErrorMessage()));
+                            shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                             requestErrorResponse(error.exception());
                     }
                     break;
@@ -609,6 +639,7 @@ public class ShareGroupDLQStateManager {
                     if (!produceRequestBackoff.canAttempt()) {
                         LOG.error("Exhausted max retries to produce {} to  DLQ topic node {} due to client response error {}.",
                             param, dlqPartitionLeaderNode(), clientResponseErrorMessage);
+                        shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                         requestErrorResponse(clientResponseError.exception());
                         break;
                     }
@@ -618,6 +649,7 @@ public class ShareGroupDLQStateManager {
                 default:
                     LOG.error("Unable to produce {} to DLQ topic node {} due to client response error {}.",
                         param, dlqPartitionLeaderNode(), clientResponseErrorMessage);
+                    shareGroupMetrics.recordDLQProduceFailed(param.groupId());
                     requestErrorResponse(clientResponseError.exception());
             }
         }
@@ -772,13 +804,19 @@ public class ShareGroupDLQStateManager {
         }
     }
 
-    private record CoalesceResults(
+    // Visibility for tests
+    record CoalesceResults(
         AbstractRequest.Builder<? extends AbstractRequest> request,
         List<ProduceRequestHandler> liveHandlers
     ) {
     }
 
-    private static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers) {
+    // Visibility for tests
+    static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers) {
+        // Above handlers are destined for the same broker node - it could be for different DLQ topics and partitions
+        // but the same broker node. Now the produce request requires each topic data request to be
+        // scoped to a specific topic/topicId and the partition data could have all the record information
+        // and the destination DLQ partition. To accomplish this, we will map handlers by DLQ topic id.
         Map<Uuid, ProduceRequestData.TopicProduceData> produceHandlerMap = new HashMap<>();
         List<ProduceRequestHandler> liveHandlers = new ArrayList<>(handlers.size());
         handlers.forEach(handler -> {

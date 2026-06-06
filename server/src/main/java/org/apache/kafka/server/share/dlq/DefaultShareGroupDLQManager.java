@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.timer.Timer;
 
 import org.slf4j.Logger;
@@ -39,14 +40,26 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultShareGroupDLQManager.class);
 
-    public static ShareGroupDLQManager instance(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer);
+    public static ShareGroupDLQManager instance(
+        KafkaClient client,
+        ShareGroupDLQMetadataCacheHelper cacheHelper,
+        Time time,
+        Timer timer,
+        ShareGroupMetrics metrics
+    ) {
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, metrics);
         instance.start();
         return instance;
     }
 
-    private DefaultShareGroupDLQManager(KafkaClient client, ShareGroupDLQMetadataCacheHelper cacheHelper, Time time, Timer timer) {
-        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer);
+    private DefaultShareGroupDLQManager(
+        KafkaClient client,
+        ShareGroupDLQMetadataCacheHelper cacheHelper,
+        Time time,
+        Timer timer,
+        ShareGroupMetrics shareGroupMetrics
+    ) {
+        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics);
     }
 
     private void start() {

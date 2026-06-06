@@ -18,7 +18,6 @@
 package kafka.network
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import kafka.server.EnvelopeUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigResource, SaslConfigs, SslConfigs, TopicConfig}
@@ -35,6 +34,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.internals.SecurityUtils
 import org.apache.kafka.network.{Request, RequestConvertToJson}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
+import org.apache.kafka.server.EnvelopeUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
