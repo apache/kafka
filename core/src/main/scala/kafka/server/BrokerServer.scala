@@ -177,6 +177,8 @@ class BrokerServer(
 
   private var shareGroupDLQManager: ShareGroupDLQManager = _
 
+  private var shareGroupLogReader: ReplicaManagerLogReader = _
+
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
     try {
@@ -465,9 +467,11 @@ class BrokerServer(
       }
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
+      shareGroupLogReader = new ReplicaManagerLogReader(replicaManager)
+
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
-        new ReplicaManagerLogReader(replicaManager),
+        shareGroupLogReader,
         new ReplicaManagerPartitionMetadataProvider(replicaManager),
         (key: DelayedShareFetchKey) => replicaManager.completeDelayedShareFetchRequest(key),
         time,
@@ -779,7 +783,7 @@ class BrokerServer(
           shareGroupTimer,
           shareGroupMetrics,
           config.getInt(ServerConfigs.FETCH_MAX_BYTES_CONFIG),
-          new ReplicaManagerLogReader(replicaManager)
+          shareGroupLogReader
         )
       } else if (klass.getName.equals(classOf[NoOpShareGroupDLQManager].getName)) {
         info("Using no-op share group DLQ manager")

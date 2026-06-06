@@ -38,7 +38,6 @@ import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper.TopicPartitionData;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
@@ -110,7 +109,7 @@ class ShareGroupDLQStateManagerTest {
     private static final Uuid SOURCE_TOPIC_ID = Uuid.randomUuid();
     private static final Node DEFAULT_LEADER = new Node(0, HOST, PORT);
     private static final LogReader MOCK_LOG_READER = mock(LogReader.class);
-    private static final int MAX_FETCH_BYTES = ServerConfigs.FETCH_MAX_BYTES_DEFAULT;
+    private static final int MAX_FETCH_BYTES = 1024 * 1024;
 
     private final MockTimer mockTimer = new MockTimer(MOCK_TIME);
     private final ShareGroupMetrics mockMetrics = mock(ShareGroupMetrics.class);

@@ -233,7 +233,7 @@ public class ShareGroupDLQStateManager {
         private Node dlqPartitionLeaderNode;
         private int dlqDestinationPartition;
         private ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
-        private List<Record> originalRecordData;
+        private Map<Long, Record> originalRecordData;
 
         public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
         public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
@@ -251,7 +251,6 @@ public class ShareGroupDLQStateManager {
         ) {
             this.param = param;
             this.result = result;
-            this.originalRecordData = new ArrayList<>();
             this.createTopicsBackoff = new ExponentialBackoffManager(
                 maxRPCRetryAttempts,
                 backoffMs,
@@ -371,13 +370,14 @@ public class ShareGroupDLQStateManager {
             List<SimpleRecord> simpleRecords = new ArrayList<>();
             for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
                 long timestamp = time.hiResClockMs();
-                int recordIndex = (int) (i - param.firstOffset());
                 ByteBuffer key = null;
                 ByteBuffer value = null;
-                if (originalRecordData.size() > recordIndex) {
-                    Record record = originalRecordData.get(recordIndex);
-                    key = record.hasKey() ? record.key() : null;
-                    value = record.hasValue() ? record.value() : null;
+                if (originalRecordData != null) {
+                    Record record = originalRecordData.get(i);
+                    if (record != null) {
+                        key = record.hasKey() ? record.key() : null;
+                        value = record.hasValue() ? record.value() : null;
+                    }
                 }
                 simpleRecords.add(new SimpleRecord(timestamp, key, value, headers(i)));
             }
@@ -687,7 +687,13 @@ public class ShareGroupDLQStateManager {
 
         private void maybeFetchRecordData() {
             if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-                if (!originalRecordData.isEmpty()) {
+                // A non-null originalRecordData indicates that the data for the offsets was
+                // already fetched at a previous time. This could happen in case there was
+                // a retriable exception in a previous produce request, and it is being re-sent.
+                // This optimization will help in reducing LogReader.read calls. Note that an
+                // empty (but non-null) map means a previous fetch found no records in range
+                // (e.g. all offsets compacted away), so we still skip re-fetching in that case.
+                if (originalRecordData != null) {
                     return;
                 }
 
@@ -708,11 +714,16 @@ public class ShareGroupDLQStateManager {
                 long endOffset = param.lastOffset();
                 int recordCount = (int) (param.lastOffset() - param.firstOffset() + 1);
 
-                List<Record> records = new ArrayList<>(recordCount);
+                Map<Long, Record> recordMap = new HashMap<>(recordCount);
                 LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
                 LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
                 maxBytesMap.put(tp, maxFetchBytes);
 
+                // We are fetching data for one TopicIdPartition only. Hence, there
+                // is no need to keep recreating the maxBytes map, and we can re-use a
+                // single copy. In similar vein, we needn't clear the offsets map
+                // either and just update the value corresponding to the TopicIdPartition
+                // key in offsets map within the while loop.
                 while (nextOffset <= endOffset) {
                     offsets.put(tp, nextOffset);
 
@@ -732,10 +743,10 @@ public class ShareGroupDLQStateManager {
                             if (record.offset() > param.lastOffset()) {
                                 log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
                                     recordCount, param.firstOffset(), this);
-                                originalRecordData = records;
+                                originalRecordData = recordMap;
                                 return;
                             }
-                            records.add(record);
+                            recordMap.put(record.offset(), record);
                             nextOffset = record.offset() + 1;
                             done = true;
                         }
@@ -744,7 +755,7 @@ public class ShareGroupDLQStateManager {
                 }
                 log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
                     recordCount, param.firstOffset(), this);
-                originalRecordData = records;
+                originalRecordData = recordMap;
             }
         }
     }
