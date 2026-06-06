@@ -271,7 +271,10 @@ public class StateDirectory implements AutoCloseable {
                     } finally {
                         // Make sure the state manager writes the local checkpoint file before closing the stores
                         // This will be replaced in the future when removing the checkpoint file dependency.
-                        temporaryStateManager.close();
+                        StateManagerUtil.closeStateManager(
+                            log, threadLogPrefix, true, eosEnabled,
+                            temporaryStateManager, this, Task.TaskType.ACTIVE
+                        );
                     }
                     tasksInLocalState.add(task);
                 }

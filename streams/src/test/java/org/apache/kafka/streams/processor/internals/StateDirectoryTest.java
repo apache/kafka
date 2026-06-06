@@ -878,11 +878,20 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldNotHoldLockAfterInitializeStartupStores() {
+        final TaskId taskId = new TaskId(0, 0);
+        initializeStartupStores(taskId, true);
+
+        assertTrue(directory.hasStartupTasks());
+        assertNull(directory.lockOwner(taskId));
+    }
+
+    @Test
     public void shouldUnlockStartupStateOnClose() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupStores(taskId, true);
 
-        assertEquals(Thread.currentThread(), directory.lockOwner(taskId));
+        assertNull(directory.lockOwner(taskId));
         directory.close();
         assertNull(directory.lockOwner(taskId));
     }
