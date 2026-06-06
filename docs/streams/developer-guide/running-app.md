@@ -70,7 +70,7 @@ You can set a `StreamsUncaughtExceptionHandler` to handle unexpected exceptions 
 
   * `REPLACE_THREAD` -- Replace the failed thread with a new one.
   * `SHUTDOWN_CLIENT` -- Shut down this `KafkaStreams` client.
-  * `SHUTDOWN_APPLICATION` -- Shut down all instances of the application.
+  * `SHUTDOWN_APPLICATION` -- Request all instances of the application to shut down. This is best-effort: the signal is propagated via the rebalance protocol, so there is no guarantee that other instances will receive or act on it (for example, if they are unreachable).
 
 Example:
 
@@ -92,7 +92,7 @@ You can set a `StateRestoreListener` to be notified about the progress of state 
   * `onRestoreStart` -- Called when restoration begins for a state store partition, providing the starting and ending offsets.
   * `onBatchRestored` -- Called after each batch of records is restored, providing the batch end offset and the number of records restored in the batch.
   * `onRestoreEnd` -- Called when restoration completes for a state store partition, providing the total number of records restored.
-  * `onRestoreSuspended` -- Called when restoration is suspended because the task was migrated to another instance. This is a default method with an empty implementation.
+  * `onRestoreSuspended` -- Called when restoration is suspended because the task was migrated to another instance.
 
 Example:
 
@@ -118,7 +118,7 @@ Example:
         }
     });
 
-The listener is shared across all `StreamThread` instances, so it should be **stateless** or properly synchronized. Note that this listener does **not** monitor standby task updates. To monitor standby tasks, use the standby update listener described below.
+Because the listener is shared across all `StreamThread` instances, the implementation **must be thread-safe**. Note that this listener does **not** monitor standby task updates. To monitor standby tasks, use the standby update listener described below.
 
 ## Standby update listener
 
