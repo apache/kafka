@@ -624,59 +624,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     /**
-     * Swaps the listener ports for two brokers to simulate a network routing anomaly.
-     *
-     * @param nodeId1       The ID of the first broker.
-     * @param nodeId2       The ID of the second broker.
-     */
-    public void swapBrokerExternalListenerPorts(
-        int nodeId1,
-        int nodeId2,
-        int brokerPort1,
-        int brokerPort2
-    ) throws IOException {
-        BrokerServer broker1 = brokers.get(nodeId1);
-        if (broker1 == null) {
-            throw new IllegalArgumentException("Unknown broker ID " + nodeId1);
-        }
-        BrokerServer broker2 = brokers.get(nodeId2);
-        if (broker2 == null) {
-            throw new IllegalArgumentException("Unknown broker ID " + nodeId2);
-        }
-
-        String brokerListener = nodes.brokerListenerName().value();
-        socketFactoryManager.swapPortsForListener(nodeId1, nodeId2, brokerListener, brokerPort1, brokerPort2);
-
-        SharedServer sharedServer1 = new SharedServer(
-            broker1.config(),
-            broker1.sharedServer().metaPropsEnsemble(),
-            Time.SYSTEM,
-            new Metrics(),
-            CompletableFuture.completedFuture(
-                QuorumConfig.parseVoterConnections(broker1.config().quorumConfig().voters())),
-            QuorumConfig.parseBootstrapServers(broker1.config().quorumConfig().bootstrapServers()),
-            faultHandlerFactory,
-            socketFactoryManager.getOrCreateSocketFactory(nodeId1)
-        );
-        broker1 = new BrokerServer(sharedServer1);
-        brokers.put(nodeId1, broker1);
-
-        SharedServer sharedServer2 = new SharedServer(
-            broker2.config(),
-            broker2.sharedServer().metaPropsEnsemble(),
-            Time.SYSTEM,
-            new Metrics(),
-            CompletableFuture.completedFuture(
-                QuorumConfig.parseVoterConnections(broker2.config().quorumConfig().voters())),
-            QuorumConfig.parseBootstrapServers(broker2.config().quorumConfig().bootstrapServers()),
-            faultHandlerFactory,
-            socketFactoryManager.getOrCreateSocketFactory(nodeId2)
-        );
-        broker2 = new BrokerServer(sharedServer2);
-        brokers.put(nodeId2, broker2);
-    }
-
-    /**
      * Wait for a controller to mark all the brokers as ready (registered and unfenced).
      * And also wait for the metadata cache up-to-date in each broker server.
      */
