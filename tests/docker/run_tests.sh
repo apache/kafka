@@ -40,7 +40,10 @@ else
     export KAFKA_MODE="jvm"
 fi
 
+# TODO: remove the REBUILD env var path in 5.0; users should pass
+# `--clean-build` (or `-c`) to `ducker-ak test` instead.
 if [ "$REBUILD" == "t" ]; then
+    echo "WARNING: REBUILD=t is deprecated and will be removed in 5.0. Use './tests/docker/ducker-ak test --clean-build' instead." 1>&2
     ./gradlew clean systemTestLibs
     if [ "$KAFKA_MODE" == "native" ]; then
         ./gradlew clean releaseTarGz
