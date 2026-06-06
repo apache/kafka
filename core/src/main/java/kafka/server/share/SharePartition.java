@@ -3351,7 +3351,7 @@ public class SharePartition {
         // Step 1: Enqueue to DLQ
         shareGroupDLQManager.enqueue(new ShareGroupDLQRecordParameter(
             groupId, topicIdPartition, firstOffset, lastOffset,
-            Optional.of(deliveryCount), Optional.ofNullable(dlqCause), false
+            Optional.of(deliveryCount), Optional.ofNullable(dlqCause)
         )).whenComplete((v1, dlqException) -> {
             if (dlqException != null) {
                 log.error("Failed to write to DLQ, proceeding to ARCHIVED regardless.", dlqException);
