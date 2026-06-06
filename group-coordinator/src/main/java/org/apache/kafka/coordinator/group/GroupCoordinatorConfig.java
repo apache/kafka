@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.api.ConsumerGroupRebalanceListener;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
@@ -253,6 +254,10 @@ public class GroupCoordinatorConfig {
     public static final String CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_DOC = "The interval at which the group coordinator will refresh " +
         "the topics matching the group subscribed regexes. This is only applicable to consumer groups using the consumer group protocol. ";
     public static final int CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_DEFAULT = 10 * 60 * 1000; // 10 minutes
+    public static final String CONSUMER_GROUP_REBALANCE_LISTENER_CLASSES_CONFIG = "group.consumer.rebalance.listener.classes";
+    public static final String CONSUMER_GROUP_REBALANCE_LISTENER_CLASSES_DOC = "The server side rebalance listeners implementing " +
+        ConsumerGroupRebalanceListener.class.getName() + ".";
+    public static final List<String> CONSUMER_GROUP_REBALANCE_LISTENER_CLASSES_DEFAULT = List.of();
 
     ///
     /// Share group configs
@@ -458,6 +463,7 @@ public class GroupCoordinatorConfig {
         .define(CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, MEDIUM, CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         // Interval config used for testing purposes.
         .defineInternal(CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG, INT, CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_DEFAULT, atLeast(10 * 1000), MEDIUM, CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_DOC)
+        .define(CONSUMER_GROUP_REBALANCE_LISTENER_CLASSES_CONFIG, LIST, CONSUMER_GROUP_REBALANCE_LISTENER_CLASSES_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), MEDIUM, CONSUMER_GROUP_REBALANCE_LISTENER_CLASSES_DOC)
 
         // Share group configs
         .define(SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, SHARE_GROUP_SESSION_TIMEOUT_MS_DOC)
@@ -533,6 +539,7 @@ public class GroupCoordinatorConfig {
     private final int consumerGroupMinAssignmentIntervalMs;
     private final int consumerGroupMaxAssignmentIntervalMs;
     private final int consumerGroupRegexRefreshIntervalMs;
+    private final List<ConsumerGroupRebalanceListener> consumerGroupRebalanceListeners;
     // Share group configurations
     private final int shareGroupMaxSize;
     private final int shareGroupSessionTimeoutMs;
@@ -602,6 +609,7 @@ public class GroupCoordinatorConfig {
         this.consumerGroupMinAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.consumerGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.consumerGroupRegexRefreshIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_REGEX_REFRESH_INTERVAL_MS_CONFIG);
+        this.consumerGroupRebalanceListeners = consumerGroupRebalanceListeners(config);
         // Share group configurations
         this.shareGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.shareGroupMinSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
@@ -897,6 +905,34 @@ public class GroupCoordinatorConfig {
         return assignors;
     }
 
+    protected List<ConsumerGroupRebalanceListener> consumerGroupRebalanceListeners(
+        AbstractConfig config
+    ) {
+        List<ConsumerGroupRebalanceListener> listeners = new ArrayList<>();
+        try {
+            for (String klass : config.getList(CONSUMER_GROUP_REBALANCE_LISTENER_CLASSES_CONFIG)) {
+                ConsumerGroupRebalanceListener listener;
+                try {
+                    listener = Utils.newInstance(klass, ConsumerGroupRebalanceListener.class);
+                } catch (ClassNotFoundException e) {
+                    throw new KafkaException("Class " + klass + " cannot be found", e);
+                } catch (ClassCastException e) {
+                    throw new KafkaException(klass + " is not an instance of " + ConsumerGroupRebalanceListener.class.getName());
+                }
+                listeners.add(listener);
+                if (listener instanceof Configurable configurable) {
+                    configurable.configure(config.originals());
+                }
+            }
+        } catch (Exception e) {
+            for (ConsumerGroupRebalanceListener listener : listeners) {
+                maybeCloseQuietly(listener, "AutoCloseable object constructed and configured during failed call to consumerGroupRebalanceListeners");
+            }
+            throw e;
+        }
+        return listeners;
+    }
+
     /**
      * The number of threads or event loops running.
      */
@@ -1141,6 +1177,10 @@ public class GroupCoordinatorConfig {
      */
     public int consumerGroupRegexRefreshIntervalMs() {
         return consumerGroupRegexRefreshIntervalMs;
+    }
+
+    public List<ConsumerGroupRebalanceListener> consumerGroupRebalanceListeners() {
+        return consumerGroupRebalanceListeners;
     }
 
     /**
