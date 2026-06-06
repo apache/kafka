@@ -398,6 +398,9 @@ class BrokerServer(
       /* create metrics object to be shared with share DLQ manager share partition manager*/
       shareGroupMetrics = new ShareGroupMetrics(time)
 
+      /* create log reader object to share with share group DLQ manager and SharePartitionManager */
+      shareGroupLogReader = new ReplicaManagerLogReader(replicaManager)
+
       /* create share group DLQ manager */
       shareGroupDLQManager = createShareGroupDLQManager()
 
@@ -466,8 +469,6 @@ class BrokerServer(
         ))
       }
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
-
-      shareGroupLogReader = new ReplicaManagerLogReader(replicaManager)
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
