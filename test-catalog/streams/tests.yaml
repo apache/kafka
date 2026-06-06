@@ -2618,6 +2618,7 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldNotCreateTaskStateDirectory
 - shouldNotDeleteAppDirWhenCleanUpIfNotEmpty
 - shouldNotFailWhenCreatingTaskDirectoryInParallel
+- shouldNotHoldLockAfterInitializeStartupStores
 - shouldNotInitializeStartupStateWhenNoLocalState
 - shouldNotLockStateDirLockedByAnotherThread
 - shouldNotRemoveDirsThatDoNotMatchNamedTopologyDirsWhenCallingClean
