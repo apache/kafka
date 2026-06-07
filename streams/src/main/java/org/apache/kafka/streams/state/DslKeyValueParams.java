@@ -30,19 +30,6 @@ public class DslKeyValueParams {
     private final DslStoreFormat dslStoreFormat;
 
     /**
-     * @deprecated Since 4.3. Use {@link #DslKeyValueParams(String, DslStoreFormat)} instead.
-     * @param name          the name of the store (cannot be {@code null})
-     * @param isTimestamped whether the returned stores should be timestamped, see ({@link TimestampedKeyValueStore}
-     */
-    @Deprecated
-    public DslKeyValueParams(final String name, final boolean isTimestamped) {
-        Objects.requireNonNull(name);
-        this.name = name;
-        // If isTimestamped is false and the user is still calling the old deprecated constructor, we should assume they mean plain.
-        this.dslStoreFormat = isTimestamped ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.PLAIN;
-    }
-
-    /**
      * @param name           the name of the store (cannot be {@code null})
      * @param dslStoreFormat the format of the state store, see ({@link DslStoreFormat}
      */
@@ -53,15 +40,6 @@ public class DslKeyValueParams {
 
     public String name() {
         return name;
-    }
-
-    /**
-     * @deprecated Since 4.3. Use {@link #dslStoreFormat()} instead to check the store format.
-     * @return {@code true} if the store format is {@link DslStoreFormat#TIMESTAMPED}, {@code false} otherwise
-     */
-    @Deprecated
-    public boolean isTimestamped() {
-        return dslStoreFormat == DslStoreFormat.TIMESTAMPED;
     }
 
     /**

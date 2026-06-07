@@ -37,40 +37,6 @@ public class DslWindowParams {
     private final DslStoreFormat dslStoreFormat;
 
     /**
-     * @deprecated Since 4.3. Use {@link #DslWindowParams(String, Duration, Duration, boolean, EmitStrategy, boolean, DslStoreFormat)} Params(String, DslStoreFormat)} instead.
-     * @param name             name of the store (cannot be {@code null})
-     * @param retentionPeriod  length of time to retain data in the store (cannot be negative)
-     *                         (note that the retention period must be at least long enough to contain the
-     *                         windowed data's entire life cycle, from window-start through window-end,
-     *                         and for the entire grace period)
-     * @param windowSize       size of the windows (cannot be negative)
-     * @param retainDuplicates whether to retain duplicates. Turning this on will automatically disable
-     *                         caching and means that null values will be ignored.
-     * @param emitStrategy     defines how to emit results
-     * @param isSlidingWindow  whether the requested store is a sliding window
-     * @param isTimestamped    whether the requested store should be timestamped (see {@link TimestampedWindowStore}
-     */
-    @Deprecated
-    public DslWindowParams(
-            final String name,
-            final Duration retentionPeriod,
-            final Duration windowSize,
-            final boolean retainDuplicates,
-            final EmitStrategy emitStrategy,
-            final boolean isSlidingWindow,
-            final boolean isTimestamped
-    ) {
-        this.name = Objects.requireNonNull(name);
-        this.retentionPeriod = retentionPeriod;
-        this.windowSize = windowSize;
-        this.retainDuplicates = retainDuplicates;
-        this.emitStrategy = emitStrategy;
-        this.isSlidingWindow = isSlidingWindow;
-        // If isTimestamped is false and the user is still calling the old deprecated constructor, we should assume they mean plain.
-        this.dslStoreFormat = isTimestamped ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.PLAIN;
-    }
-
-    /**
      * @param name             name of the store (cannot be {@code null})
      * @param retentionPeriod  length of time to retain data in the store (cannot be negative)
      *                         (note that the retention period must be at least long enough to contain the
@@ -123,15 +89,6 @@ public class DslWindowParams {
 
     public boolean isSlidingWindow() {
         return isSlidingWindow;
-    }
-
-    /**
-     * @deprecated Since 4.3. Use {@link #dslStoreFormat()} instead to check the store format.
-     * @return {@code true} if the store format is {@link DslStoreFormat#TIMESTAMPED}, {@code false} otherwise
-     */
-    @Deprecated
-    public boolean isTimestamped() {
-        return dslStoreFormat == DslStoreFormat.TIMESTAMPED;
     }
 
     /**

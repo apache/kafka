@@ -33,22 +33,6 @@ public class DslSessionParams {
     private final EmitStrategy emitStrategy;
     private final DslStoreFormat storeFormat;
 
-    /**
-     * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
-     *                          (note that the retention period must be at least as long enough to
-     *                          contain the inactivity gap of the session and the entire grace period.)
-     * @param emitStrategy      defines how to emit results
-     */
-    @Deprecated
-    public DslSessionParams(
-            final String name,
-            final Duration retentionPeriod,
-            final EmitStrategy emitStrategy
-    ) {
-        this(name, retentionPeriod, emitStrategy, DslStoreFormat.PLAIN);
-    }
-
     public DslSessionParams(final String name,
                             final Duration retentionPeriod,
                             final EmitStrategy emitStrategy,
