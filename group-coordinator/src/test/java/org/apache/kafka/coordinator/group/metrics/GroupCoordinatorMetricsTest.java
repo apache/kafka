@@ -150,7 +150,30 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of("state", StreamsGroupState.NOT_READY.toString()))
+                Map.of("state", StreamsGroupState.NOT_READY.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.OFFSET_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.PREPARING_REBALANCE.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.COMPLETING_REBALANCE.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.STABLE.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.DEAD.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.EMPTY.toString()))
         );
 
         try {
@@ -252,6 +275,61 @@ public class GroupCoordinatorMetricsTest {
             7
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumOffsets"), 7);
+        assertGaugeValue(
+            metrics,
+            metrics.metricName(GroupCoordinatorMetrics.OFFSET_COUNT_METRIC_NAME, METRICS_GROUP),
+            7
+        );
+
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsPreparingRebalance"), 2);
+        assertGaugeValue(
+            metrics,
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.PREPARING_REBALANCE.toString())),
+            2
+        );
+
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsCompletingRebalance"), 2);
+        assertGaugeValue(
+            metrics,
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.COMPLETING_REBALANCE.toString())),
+            2
+        );
+
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsStable"), 2);
+        assertGaugeValue(
+            metrics,
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.STABLE.toString())),
+            2
+        );
+
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsDead"), 1);
+        assertGaugeValue(
+            metrics,
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.DEAD.toString())),
+            1
+        );
+
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsEmpty"), 2);
+        assertGaugeValue(
+            metrics,
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.EMPTY.toString())),
+            2
+        );
 
         assertEquals(2, shard0.numShareGroups());
         assertEquals(6, shard1.numShareGroups());
