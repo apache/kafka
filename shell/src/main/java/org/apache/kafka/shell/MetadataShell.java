@@ -62,11 +62,11 @@ public final class MetadataShell {
     record MetadataShellArguments(String checkpointPath, List<String> command) { }
 
     public static class Builder {
-        private String snapshotPath = null;
+        private String checkpointPath = null;
         private FaultHandler faultHandler = new LoggingFaultHandler("shell", () -> { });
 
-        public Builder setSnapshotPath(String snapshotPath) {
-            this.snapshotPath = snapshotPath;
+        public Builder setCheckpointPath(String checkpointPath) {
+            this.checkpointPath = checkpointPath;
             return this;
         }
 
@@ -76,7 +76,7 @@ public final class MetadataShell {
         }
 
         public MetadataShell build() {
-            return new MetadataShell(snapshotPath, faultHandler);
+            return new MetadataShell(checkpointPath, faultHandler);
         }
     }
 
@@ -91,7 +91,7 @@ public final class MetadataShell {
             .help("The metadata checkpoint file to read.");
         checkpointGroup.addArgument("--snapshot", "-s")
             .type(String.class)
-            .help("(DEPRECATED) The metadata snapshot file to read. Use --checkpoint instead.");
+            .help("(DEPRECATED) The metadata checkpoint file to read. Use --checkpoint instead.");
         parser.addArgument("command")
             .nargs("*")
             .help("The command to run.");
@@ -101,11 +101,11 @@ public final class MetadataShell {
     static MetadataShellArguments parseArguments(String[] args, PrintStream out) throws ArgumentParserException {
         Namespace res = createArgumentParser().parseArgs(args);
         String checkpointPath = res.getString("checkpoint");
-        String snapshotPath = res.getString("snapshot");
-        if (snapshotPath != null) {
+        String deprecatedCheckpointPath = res.getString("snapshot");
+        if (deprecatedCheckpointPath != null) {
             out.println("Option --snapshot is deprecated and will be removed in a future version. " +
                 "Use --checkpoint instead.");
-            checkpointPath = snapshotPath;
+            checkpointPath = deprecatedCheckpointPath;
         }
         return new MetadataShellArguments(checkpointPath, res.getList("command"));
     }
@@ -245,7 +245,7 @@ public final class MetadataShell {
         }
         try {
             Builder builder = new Builder();
-            builder.setSnapshotPath(shellArguments.checkpointPath());
+            builder.setCheckpointPath(shellArguments.checkpointPath());
             Path tempDir = Files.createTempDirectory("MetadataShell");
             Exit.addShutdownHook("agent-shutdown-hook", () -> {
                 log.debug("Removing temporary directory " + tempDir.toAbsolutePath());
