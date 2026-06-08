@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tiered.storage.utils;
 
-import kafka.server.KafkaBroker;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -28,27 +27,21 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
-import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import org.junit.jupiter.api.Assertions;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG;
@@ -72,34 +65,6 @@ public class TieredStorageTestUtils {
     private static final Integer LOG_CLEANUP_INTERVAL_MS = 500;
     private static final Integer RLM_TASK_INTERVAL_MS = 500;
     private static final Integer RLMM_INIT_RETRY_INTERVAL_MS = 300;
-
-    public static List<LocalTieredStorage> remoteStorageManagers(Collection<KafkaBroker> brokers) {
-        List<LocalTieredStorage> storages = new ArrayList<>();
-        brokers.forEach(broker -> {
-            if (broker.remoteLogManagerOpt().isDefined()) {
-                RemoteLogManager remoteLogManager = broker.remoteLogManagerOpt().get();
-                RemoteStorageManager storageManager = remoteLogManager.storageManager();
-                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager loaderAwareRSM) {
-                    if (loaderAwareRSM.delegate() instanceof LocalTieredStorage) {
-                        storages.add((LocalTieredStorage) loaderAwareRSM.delegate());
-                    }
-                } else if (storageManager instanceof LocalTieredStorage) {
-                    storages.add((LocalTieredStorage) storageManager);
-                }
-            } else {
-                throw new AssertionError("Broker " + broker.config().brokerId()
-                        + " does not have a remote log manager.");
-            }
-        });
-        return storages;
-    }
-
-    public static List<BrokerLocalStorage> localStorages(Collection<KafkaBroker> brokers) {
-        return brokers.stream()
-                .map(b -> new BrokerLocalStorage(b.config().brokerId(), Set.copyOf(b.config().logDirs()),
-                        STORAGE_WAIT_TIMEOUT_SEC))
-                .collect(Collectors.toList());
-    }
 
     public static TopicDescription describeTopic(TieredStorageTestContext context, String topic)
             throws ExecutionException, InterruptedException {

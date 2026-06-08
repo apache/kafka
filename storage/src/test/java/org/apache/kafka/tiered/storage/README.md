@@ -1,6 +1,6 @@
 # The Test Flow
 
-Step 1: Each test is a standalone class. It declares a `clusterConfig()` method that returns a `ClusterConfig` with tiered storage enabled (via `TieredStorageTestUtils.createServerPropsForRemoteStorage`), and test methods annotated with `@ClusterTemplate("clusterConfig")` that receive a `ClusterInstance` provided by the test framework.
+Step 1: Each test is a standalone class. It declares a `clusterConfig()` method that returns a `List<ClusterConfig>` with tiered storage enabled (via `TieredStorageTestUtils.createServerPropsForRemoteStorage`), and test methods annotated with `@ClusterTemplate("clusterConfig")` that receive a `ClusterInstance` provided by the test framework.
 
 Step 2: The test is written as a specification consisting of sequential actions and assertions. The spec for the complete test is built first using `TieredStorageTestBuilder`, which creates the "actions" to be executed.
 
