@@ -88,31 +88,30 @@ public class AclControlManagerTest {
      */
     @Test
     public void testValidateNewAcl() {
-        AclControlManager manager = new AclControlManager.Builder().build();
-        manager.validateNewAcl(new AclBinding(
+        AclControlManager.validateNewAcl(new AclBinding(
             new ResourcePattern(TOPIC, "*", LITERAL),
             new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0);
         assertEquals("Invalid patternType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
-                manager.validateNewAcl(new AclBinding(
+                AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", PatternType.UNKNOWN),
                     new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
         assertEquals("Invalid resourceType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
-                manager.validateNewAcl(new AclBinding(
+                AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(ResourceType.UNKNOWN, "*", LITERAL),
                     new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
         assertEquals("Invalid operation UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
-                manager.validateNewAcl(new AclBinding(
+                AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("User:*", "*", AclOperation.UNKNOWN, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
         assertEquals("Invalid permissionType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
-                manager.validateNewAcl(new AclBinding(
+                AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("User:*", "*", ALTER, AclPermissionType.UNKNOWN)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
@@ -123,11 +122,10 @@ public class AclControlManagerTest {
      */
     @Test
     public void testValidateAclWithBadPrincipal() {
-        AclControlManager manager = new AclControlManager.Builder().build();
         assertEquals("Could not parse principal from `invalid` (no colon is present " +
                 "separating the principal type from the principal name)",
             assertThrows(InvalidRequestException.class, () ->
-                manager.validateNewAcl(new AclBinding(
+                AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("invalid", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                 getMessage());
@@ -138,11 +136,10 @@ public class AclControlManagerTest {
      */
     @Test
     public void testValidateAclWithEmptyPrincipal() {
-        AclControlManager manager = new AclControlManager.Builder().build();
         assertEquals("Could not parse principal from `` (no colon is present " +
                 "separating the principal type from the principal name)",
             assertThrows(InvalidRequestException.class, () ->
-                manager.validateNewAcl(new AclBinding(
+                AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
                         getMessage());
