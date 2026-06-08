@@ -27,6 +27,8 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SimpleAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
@@ -38,11 +40,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupCoordinatorConfigTest {
 
@@ -819,6 +823,63 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_PREFIX_CONFIG, "my-dlq-");
         GroupCoordinatorConfig config = createConfig(configs);
         assertEquals("my-dlq-", config.errorsDLQTopicNamePrefix());
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginDefaultIsEmpty() {
+        GroupCoordinatorConfig config = createConfig(new HashMap<>());
+        assertTrue(config.streamsGroupTopologyDescriptionPlugin().isEmpty());
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginLoadedAndConfigured() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class.getName());
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        var plugin = config.streamsGroupTopologyDescriptionPlugin();
+        assertTrue(plugin.isPresent());
+        assertInstanceOf(TestTopologyDescriptionPlugin.class, plugin.get());
+        assertNotNull(((TestTopologyDescriptionPlugin) plugin.get()).configs);
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginAcceptsClassObject() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        assertInstanceOf(TestTopologyDescriptionPlugin.class,
+            config.streamsGroupTopologyDescriptionPlugin().orElseThrow());
+    }
+
+    public static class TestTopologyDescriptionPlugin implements StreamsGroupTopologyDescriptionPlugin {
+        public Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+        }
+
+        @Override
+        public CompletableFuture<Void> setTopology(String groupId, int topologyEpoch, StreamsGroupTopologyDescription description) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> deleteTopology(String groupId) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public java.util.concurrent.CompletableFuture<StreamsGroupTopologyDescription> getTopology(String groupId, int topologyEpoch) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public void close() { }
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
