@@ -285,6 +285,7 @@ if (repo != null) {
         'gradle/wrapper/gradle-wrapper.properties',
         'trogdor/README.md',
         '**/README.md',
+        '**/AGENTS.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
