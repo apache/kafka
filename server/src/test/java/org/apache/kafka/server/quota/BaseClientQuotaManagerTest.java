@@ -71,22 +71,6 @@ public class BaseClientQuotaManagerTest {
         }
     };
 
-    private <T extends AbstractRequest> Request buildRequest(AbstractRequest.Builder<T> builder) throws UnknownHostException {
-        return buildRequest(builder, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
-    }
-
-    private <T extends AbstractRequest> Request buildRequest(AbstractRequest.Builder<T> builder, ListenerName listenerName) throws UnknownHostException {
-        T request = builder.build();
-        ByteBuffer buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey(), request.version(), "", 0));
-        RequestChannelMetrics requestChannelMetrics = mock(RequestChannelMetrics.class);
-
-        // read the header from the buffer first so that the body can be read next from the Request constructor
-        RequestHeader header = RequestHeader.parse(buffer);
-        RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-                listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-        return new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
-    }
-
     protected Session buildSession(String user) {
         KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user);
         return new Session(principal, null);
@@ -97,7 +81,16 @@ public class BaseClientQuotaManagerTest {
     }
 
     protected void throttle(ClientQuotaManager quotaManager, int throttleTimeMs, ThrottleCallback channelThrottlingCallback) throws UnknownHostException {
-        Request request = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 1000, Map.of()));
+        AbstractRequest.Builder<FetchRequest> builder = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 1000, Map.of());
+        FetchRequest fetchRequest = builder.build();
+        ByteBuffer buffer = fetchRequest.serializeWithHeader(new RequestHeader(builder.apiKey(), fetchRequest.version(), "", 0));
+        RequestChannelMetrics requestChannelMetrics = mock(RequestChannelMetrics.class);
+
+        // read the header from the buffer first so that the body can be read next from the Request constructor
+        RequestHeader header = RequestHeader.parse(buffer);
+        RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+                ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+        Request request = new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
         quotaManager.throttle(request.header().clientId(), request.session(), channelThrottlingCallback, throttleTimeMs);
     }
 
