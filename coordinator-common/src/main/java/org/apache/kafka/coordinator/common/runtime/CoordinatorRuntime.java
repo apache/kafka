@@ -20,7 +20,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -825,7 +829,23 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     // Free up the current batch.
                     freeCurrentBatch();
                 } catch (Throwable t) {
-                    log.error("Writing records to {} failed due to: {}.", tp, t.getMessage());
+                    if (t instanceof NotCoordinatorException) {
+                        // Thrown above when the state machine is out of sync; it is already logged there.
+                    } else if (t instanceof NotLeaderOrFollowerException) {
+                        log.debug("Failed to write records to {} because this broker is no longer the " +
+                            "leader of the partition.", tp, t);
+                    } else if (t instanceof InvalidProducerEpochException) {
+                        log.debug("Failed to write records to {} because the producer {} with epoch {} has been fenced.",
+                            tp, currentBatch.builder.producerId(), currentBatch.builder.producerEpoch(), t);
+                    } else if (t instanceof RecordTooLargeException || t instanceof RecordBatchTooLargeException) {
+                        log.error("Failed to write a batch of {} record(s) to {} because it is " +
+                            "larger than the maximum batch size of {} bytes. This usually means " +
+                            "that a single record is too large. Consider increasing the maximum " +
+                            "batch size.", currentBatch.builder.numRecords(), tp, currentBatch.maxBatchSize, t);
+                    } else {
+                        log.error("Failed to write records to {} due to an unexpected error: {}.",
+                            tp, t.getMessage(), t);
+                    }
                     failCurrentBatch(t);
                     // We rethrow the exception for the caller to handle it too.
                     throw t;
@@ -896,7 +916,17 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             // to ensure that the linger time is respected.
                             enqueueFirst(new CoordinatorInternalEvent("FlushBatch", tp, () -> {
                                 if (this.isCancelled()) return;
-                                withActiveContextOrThrow(tp, CoordinatorContext::flushCurrentBatch);
+                                withActiveContext(tp, context -> {
+                                    try {
+                                        context.flushCurrentBatch();
+                                    } catch (Throwable t) {
+                                        // The failure has already been logged by flushCurrentBatch. We log it
+                                        // here too, rather than rely on that, so a failure is always traced on
+                                        // the flush path, and we do not propagate it to avoid it being re-logged
+                                        // at ERROR by the CoordinatorInternalEvent.
+                                        log.debug("Failed to flush the pending records to {}: {}.", tp, t.getMessage());
+                                    }
+                                });
                             }));
                         }
                     });
@@ -1140,6 +1170,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                 deferredEventQueue.add(offset, DeferredEventCollection.of(log, event));
             } catch (Throwable t) {
+                if (t instanceof NotLeaderOrFollowerException) {
+                    log.debug("Failed to write the transaction marker to {} because this broker is " +
+                        "no longer the leader of the partition.", tp, t);
+                } else if (t instanceof InvalidProducerEpochException) {
+                    log.debug("Failed to write the transaction marker to {} because the producer {} " +
+                        "with epoch {} has been fenced.", tp, producerId, producerEpoch, t);
+                } else if (t instanceof RecordTooLargeException || t instanceof RecordBatchTooLargeException) {
+                    log.error("Failed to write the transaction marker to {} because it is too large " +
+                        "to be persisted. Consider increasing the maximum batch size.", tp, t);
+                } else {
+                    log.error("Failed to write the transaction marker to {} due to an unexpected " +
+                        "error: {}.", tp, t.getMessage(), t);
+                }
                 coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
                 event.complete(t);
             }
@@ -2166,6 +2209,32 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         } finally {
             context.lock.unlock();
+        }
+    }
+
+    /**
+     * Calls the provided function with the context of the partition if the coordinator
+     * is active and does nothing otherwise. Unlike {@link #withActiveContextOrThrow}, it
+     * does not throw when the coordinator does not exist or is not active. The context
+     * lock is acquired before calling the function and released afterwards.
+     *
+     * @param tp    The topic partition.
+     * @param func  The function that will receive the context.
+     */
+    private void withActiveContext(
+        TopicPartition tp,
+        Consumer<CoordinatorContext> func
+    ) {
+        CoordinatorContext context = coordinators.get(tp);
+        if (context != null) {
+            try {
+                context.lock.lock();
+                if (context.state == CoordinatorState.ACTIVE) {
+                    func.accept(context);
+                }
+            } finally {
+                context.lock.unlock();
+            }
         }
     }
 
