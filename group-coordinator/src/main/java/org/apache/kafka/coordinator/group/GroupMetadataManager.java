@@ -2145,6 +2145,10 @@ public class GroupMetadataManager {
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
             .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
+
+        // AcceptableRecoveryLag is marked as `ignorable` so we can just blindly set it
+        response.setAcceptableRecoveryLag(streamsGroupAcceptableRecoveryLag(groupId));
+
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -8936,6 +8940,15 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         return groupConfig.flatMap(GroupConfig::streamsTaskOffsetIntervalMs)
             .orElse(config.streamsGroupTaskOffsetIntervalMs());
+    }
+
+    /**
+     * Get the acceptable recovery lag of the provided streams group.
+     */
+    private long streamsGroupAcceptableRecoveryLag(String groupId) {
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.flatMap(GroupConfig::streamsAcceptableRecoveryLag)
+            .orElse(config.streamsGroupAcceptableRecoveryLag());
     }
 
     /**

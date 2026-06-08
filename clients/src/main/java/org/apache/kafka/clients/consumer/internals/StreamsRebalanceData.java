@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -121,6 +122,7 @@ public class StreamsRebalanceData {
         }
 
     }
+
     public static class EndpointPartitions {
         private final List<TopicPartition> activePartitions;
         private final List<TopicPartition> standbyPartitions;
@@ -347,6 +349,8 @@ public class StreamsRebalanceData {
 
     private final AtomicInteger taskOffsetIntervalMs = new AtomicInteger(-1);
 
+    private final AtomicLong acceptableRecoveryLag = new AtomicLong(-1);
+
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Optional<String> rackId,
@@ -437,6 +441,28 @@ public class StreamsRebalanceData {
     /** Returns the task offset interval in milliseconds, or -1 if not yet set. */
     public int taskOffsetIntervalMs() {
         return taskOffsetIntervalMs.get();
+    }
+
+    /**
+     * Updated whenever a heartbeat response is received from the broker.
+     *
+     * <p>If the broker does not support warmup tasks, this field should be set to {@code -1}.
+     * For this case, the Kafka Streams client is not required to populate {@code TaskOffsets} or
+     * {@code TaskEndOffsets} fields in {@link org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest}.
+     */
+    public void setAcceptableRecoveryLag(final long acceptableRecoveryLag) {
+        this.acceptableRecoveryLag.set(acceptableRecoveryLag);
+    }
+
+    /**
+     * Returns the acceptable recovery lag.
+     *
+     * <p>If acceptable recovery lag is set to {@code -1}, it means the broker doesn't support warmup tasks,
+     * and the Kafka Streams client is not required to populate {@code TaskOffsets} or {@code TaskEndOffsets} fields
+     * in {@link org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest}.
+     */
+    public long acceptableRecoveryLag() {
+        return acceptableRecoveryLag.get();
     }
 
 }

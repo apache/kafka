@@ -179,6 +179,8 @@ import org.apache.kafka.common.message.StreamsGroupDescribeRequestDataJsonConver
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseDataJsonConverter;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestDataJsonConverter;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseDataJsonConverter;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestDataJsonConverter;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseDataJsonConverter;
 import org.apache.kafka.common.message.SyncGroupRequestDataJsonConverter;
 import org.apache.kafka.common.message.SyncGroupResponseDataJsonConverter;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestDataJsonConverter;
@@ -362,6 +364,8 @@ import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
+import org.apache.kafka.common.requests.StreamsGroupTopologyDescriptionUpdateRequest;
+import org.apache.kafka.common.requests.StreamsGroupTopologyDescriptionUpdateResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -564,6 +568,8 @@ public class RequestConvertToJson {
                 UpdateFeaturesRequestDataJsonConverter.write(((UpdateFeaturesRequest) request).data(), request.version());
             case UPDATE_RAFT_VOTER ->
                 UpdateRaftVoterRequestDataJsonConverter.write(((UpdateRaftVoterRequest) request).data(), request.version());
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE ->
+                StreamsGroupTopologyDescriptionUpdateRequestDataJsonConverter.write(((StreamsGroupTopologyDescriptionUpdateRequest) request).data(), request.version());
             case VOTE -> VoteRequestDataJsonConverter.write(((VoteRequest) request).data(), request.version());
             case WRITE_SHARE_GROUP_STATE ->
                 WriteShareGroupStateRequestDataJsonConverter.write(((WriteShareGroupStateRequest) request).data(), request.version());
@@ -741,6 +747,8 @@ public class RequestConvertToJson {
                 UpdateFeaturesResponseDataJsonConverter.write(((UpdateFeaturesResponse) response).data(), version);
             case UPDATE_RAFT_VOTER ->
                 UpdateRaftVoterResponseDataJsonConverter.write(((UpdateRaftVoterResponse) response).data(), version);
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE ->
+                StreamsGroupTopologyDescriptionUpdateResponseDataJsonConverter.write(((StreamsGroupTopologyDescriptionUpdateResponse) response).data(), version);
             case VOTE -> VoteResponseDataJsonConverter.write(((VoteResponse) response).data(), version);
             case WRITE_SHARE_GROUP_STATE ->
                 WriteShareGroupStateResponseDataJsonConverter.write(((WriteShareGroupStateResponse) response).data(), version);

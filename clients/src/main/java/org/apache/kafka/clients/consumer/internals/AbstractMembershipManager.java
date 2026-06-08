@@ -805,9 +805,12 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
      *
-     * @param canCommit Controls whether reconciliation can proceed when auto-commit is enabled.
-     *                  Set to true only when the current offset positions are safe to commit.
-     *                  If false and auto-commit enabled, the reconciliation will be skipped.
+     * @param canCommit Controls whether reconciliation can proceed when auto-commit is enabled or
+     *                  there are partitions to revoke. Auto-commit and partition revocation can only
+     *                  be triggered on reconciliations initiated within a call to {@code consumer.poll()}.
+     *                  Set to {@code true} when invoked from the consumer poll path (offsets are safe to
+     *                  commit before rebalance); {@code false} from the background thread poll. If
+     *                  {@code false} and either condition applies, the reconciliation will be skipped.
      */
     public void maybeReconcile(boolean canCommit) {
         if (state != MemberState.RECONCILING) {
@@ -831,6 +834,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         final LocalAssignment resolvedAssignment = new LocalAssignment(currentTargetAssignment.localEpoch, assignedTopicIdPartitions);
 
         if (!currentAssignment.isNone() && resolvedAssignment.partitions.equals(currentAssignment.partitions)) {
+            if (currentAssignment.localEpoch == resolvedAssignment.localEpoch) {
+                return;
+            }
             log.debug("There are unresolved partitions, and the resolvable fragment of the target assignment {} is equal to the current " +
                 "assignment. Bumping the local epoch of the assignment and acknowledging the partially resolved assignment",
                 resolvedAssignment.partitions);

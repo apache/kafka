@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -28,6 +29,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -49,6 +51,7 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -100,6 +103,7 @@ public class TransactionManager {
     private final String transactionalId;
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
+    private final Metadata metadata;
 
     private final TxnPartitionMap txnPartitionMap;
 
@@ -231,6 +235,7 @@ public class TransactionManager {
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
                               final ApiVersions apiVersions,
+                              final Metadata metadata,
                               final boolean enable2PC) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
@@ -248,6 +253,7 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
+        this.metadata = metadata;
         this.enable2PC = enable2PC;
     }
 
@@ -1243,14 +1249,43 @@ public class TransactionManager {
     private TxnOffsetCommitHandler txnOffsetCommitHandler(TransactionalRequestResult result,
                                                           Map<TopicPartition, OffsetAndMetadata> offsets,
                                                           ConsumerGroupMetadata groupMetadata) {
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-            OffsetAndMetadata offsetAndMetadata = entry.getValue();
-            CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
-                    offsetAndMetadata.metadata(), offsetAndMetadata.leaderEpoch());
-            pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
+        // Resolve topic ids from the metadata cache at request build time.
+        // KafkaProducer.sendOffsetsToTransaction has already ensured the cache
+        // is fresh for these topics, so this is a non-blocking lookup.
+        var topicIds = metadata.topicIds();
+        var requestTopicsByName = new HashMap<String, TxnOffsetCommitRequestTopic>();
+        var topicNamesByIds = new HashMap<Uuid, String>();
+        var topics = new ArrayList<TxnOffsetCommitRequestTopic>();
+        var allHaveTopicIds = true;
+        for (var entry : offsets.entrySet()) {
+            var tp = entry.getKey();
+            var offsetAndMetadata = entry.getValue();
+            pendingTxnOffsetCommits.put(
+                tp,
+                new CommittedOffset(
+                    offsetAndMetadata.offset(),
+                    offsetAndMetadata.metadata(),
+                    offsetAndMetadata.leaderEpoch()
+                )
+            );
+            var topicId = topicIds.getOrDefault(tp.topic(), Uuid.ZERO_UUID);
+            allHaveTopicIds &= !topicId.equals(Uuid.ZERO_UUID);
+            var topic = requestTopicsByName.computeIfAbsent(tp.topic(), name -> {
+                var t = new TxnOffsetCommitRequestTopic().setName(name).setTopicId(topicId);
+                topics.add(t);
+                if (!topicId.equals(Uuid.ZERO_UUID)) {
+                    topicNamesByIds.put(topicId, name);
+                }
+                return t;
+            });
+            topic.partitions().add(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                .setPartitionIndex(tp.partition())
+                .setCommittedOffset(offsetAndMetadata.offset())
+                .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                .setCommittedMetadata(offsetAndMetadata.metadata()));
         }
 
-        final TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
+        var data = new TxnOffsetCommitRequestData()
             .setTransactionalId(transactionalId)
             .setGroupId(groupMetadata.groupId())
             .setProducerId(producerIdAndEpoch.producerId)
@@ -1258,14 +1293,15 @@ public class TransactionManager {
             .setMemberId(groupMetadata.memberId())
             .setGenerationIdOrMemberEpoch(groupMetadata.generationId())
             .setGroupInstanceId(groupMetadata.groupInstanceId().orElse(null))
-            .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits));
-        final TxnOffsetCommitRequest.Builder builder =
-            TxnOffsetCommitRequest.Builder.forTopicNames(data, isTransactionV2Enabled());
+            .setTopics(topics);
+        var builder = allHaveTopicIds
+            ? TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, isTransactionV2Enabled(), true)
+            : TxnOffsetCommitRequest.Builder.forTopicNames(data, isTransactionV2Enabled());
         if (result == null) {
             // In this case, transaction V2 is in use.
-            return new TxnOffsetCommitHandler(builder);
+            return new TxnOffsetCommitHandler(builder, topicNamesByIds);
         }
-        return new TxnOffsetCommitHandler(result, builder);
+        return new TxnOffsetCommitHandler(result, builder, topicNamesByIds);
     }
 
     private void throwIfPendingState(TransactionOperation operation) {
@@ -1877,16 +1913,25 @@ public class TransactionManager {
 
     private class TxnOffsetCommitHandler extends TxnRequestHandler {
         private final TxnOffsetCommitRequest.Builder builder;
+        // Snapshot of the topic-id -> name map captured when the request was
+        // built. v6+ responses omit the topic name on the wire, so we resolve
+        // it via this snapshot rather than the live metadata cache (which may
+        // have changed by the time the response arrives).
+        private final Map<Uuid, String> topicNamesByIds;
 
         private TxnOffsetCommitHandler(TransactionalRequestResult result,
-                                       TxnOffsetCommitRequest.Builder builder) {
+                                       TxnOffsetCommitRequest.Builder builder,
+                                       Map<Uuid, String> topicNamesByIds) {
             super(result);
             this.builder = builder;
+            this.topicNamesByIds = topicNamesByIds;
         }
 
-        private TxnOffsetCommitHandler(TxnOffsetCommitRequest.Builder builder) {
+        private TxnOffsetCommitHandler(TxnOffsetCommitRequest.Builder builder,
+                                       Map<Uuid, String> topicNamesByIds) {
             super("TxnOffsetCommitHandler");
             this.builder = builder;
+            this.topicNamesByIds = topicNamesByIds;
         }
 
         @Override
@@ -1909,6 +1954,7 @@ public class TransactionManager {
             return builder.data.groupId();
         }
 
+        @SuppressWarnings({"checkstyle:NPathComplexity"})
         @Override
         public void handleResponse(AbstractResponse response) {
             TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
@@ -1918,8 +1964,18 @@ public class TransactionManager {
                 builder.data.groupId(), txnOffsetCommitResponse.data().topics());
 
             for (TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic responseTopic : txnOffsetCommitResponse.data().topics()) {
+                // v6+ responses omit the topic name on the wire; fall back to
+                // the snapshot taken at request build time.
+                String topicName = responseTopic.name() != null && !responseTopic.name().isEmpty()
+                    ? responseTopic.name()
+                    : topicNamesByIds.get(responseTopic.topicId());
+                if (topicName == null) {
+                    log.warn("Received TxnOffsetCommit response for consumer group {} with an unknown topic id {}",
+                        builder.data.groupId(), responseTopic.topicId());
+                    continue;
+                }
                 for (TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition responsePartition : responseTopic.partitions()) {
-                    TopicPartition topicPartition = new TopicPartition(responseTopic.name(), responsePartition.partitionIndex());
+                    TopicPartition topicPartition = new TopicPartition(topicName, responsePartition.partitionIndex());
                     Errors error = Errors.forCode(responsePartition.errorCode());
                     if (error == Errors.NONE) {
                         pendingTxnOffsetCommits.remove(topicPartition);

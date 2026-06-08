@@ -248,6 +248,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS => handleDeleteShareGroupOffsetsRequest(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_DESCRIBE => handleStreamsGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsGroupHeartbeat(request).exceptionally(handleError)
+        case ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE => handleStreamsGroupTopologyDescriptionUpdate(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -1532,10 +1533,22 @@ class KafkaApis(val requestChannel: RequestChannel,
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       } else if (!apiVersionRequest.isValid) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
+      } else if (clusterIdOrNodeIdIsInvalid(apiVersionRequest)) {
+        apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.REBOOTSTRAP_REQUIRED.exception)
       } else {
         apiVersionManager.apiVersionResponse(requestThrottleMs, request.header.apiVersion() < 4)
       }
     }
+
+    // KIP-1242 checks the cluster ID and node ID in the request if provided to ensure the
+    // client is connecting to the correct broker. If both are specified, they must match
+    // the expected values for this broker.
+    def clusterIdOrNodeIdIsInvalid(apiVersionRequest: ApiVersionsRequest): Boolean = {
+      apiVersionRequest.version >= 5 &&
+        apiVersionRequest.data.clusterId != null &&
+        (apiVersionRequest.data.clusterId != clusterId || apiVersionRequest.data.nodeId != brokerId)
+    }
+
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
   }
 
@@ -1835,7 +1848,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (controlRecords.nonEmpty) {
           replicaManager.appendRecords(
             timeout = config.requestTimeoutMs.toLong,
-            requiredAcks = -1,
+            requiredAcks = TransactionCoordinator.EnforcedRequiredAcks,
             internalTopicsAllowed = true,
             origin = AppendOrigin.COORDINATOR,
             entriesPerPartition = controlRecords,
@@ -2895,6 +2908,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
     }
+  }
+
+  // Stub handler for KIP-1331. The full handler lands in a later sub-task; until then this
+  // responds with UNSUPPORTED_VERSION so callers fail loud rather than hit the IllegalStateException
+  // default branch in handle().
+  def handleStreamsGroupTopologyDescriptionUpdate(request: Request): CompletableFuture[Unit] = {
+    val updateRequest = request.body(classOf[StreamsGroupTopologyDescriptionUpdateRequest])
+    requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   def handleStreamsGroupDescribe(request: Request): CompletableFuture[Unit] = {

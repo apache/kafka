@@ -45,6 +45,7 @@ import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -262,6 +263,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public void startBroker(int brokerId) {
             findBrokerOrThrow(brokerId).startup();
+        }
+
+        @Override
+        public void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2) {
+            try {
+                clusterTestKit.restartBrokersWithSwappedClientListenerPorts(brokerId1, brokerId2);
+            } catch (IOException e) {
+                throw new AssertionError("Failed while swapping ports for brokers", e);
+            }
         }
 
         @Override
