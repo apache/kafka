@@ -267,15 +267,23 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
     private boolean maybeCompleteWithPreviousException(CompletableFuture<Void> result) {
         Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
+        if (cachedException == null) {
+            return false;
+        }
+
         Set<String> topics = Stream.concat(
                 subscriptionState.subscription().stream(),
                 subscriptionState.assignedPartitions().stream().map(TopicPartition::topic)
         ).collect(Collectors.toUnmodifiableSet());
-        if (cachedException != null && !isErrorProvablyUnrelated(cachedException, topics)) {
-            result.completeExceptionally(cachedException);
-            return true;
+
+        if (isErrorProvablyUnrelated(cachedException, topics)) {
+            log.debug("Dropping cached update-positions exception deemed unrelated to current topics {}",
+                    topics, cachedException);
+            return false;
         }
-        return false;
+
+        result.completeExceptionally(cachedException);
+        return true;
     }
 
     /**
