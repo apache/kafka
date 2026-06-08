@@ -59,7 +59,6 @@ versions += [
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "12.3.1",
   commonsValidator: "1.10.1",
   commonsNet: "3.13.0",
-  commonsValidator: "1.10.0",
   classgraph: "4.8.179",
   gradle: "9.4.1",
   grgit: "5.3.3",

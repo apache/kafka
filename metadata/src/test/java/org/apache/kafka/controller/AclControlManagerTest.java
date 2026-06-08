@@ -534,15 +534,15 @@ public class AclControlManagerTest {
         AclControlManager manager = new AclControlManager.Builder().build();
 
         // Valid CIDR with supported version
-        assertAclCreateSucceeds(manager, "192.168.0.0/24", MetadataVersion.IBP_4_4_IV0);
-        assertAclCreateSucceeds(manager, "2001:db8::/32", MetadataVersion.IBP_4_4_IV0);
+        assertAclCreateSucceeds(manager, "192.168.0.0/24", MetadataVersion.IBP_4_4_IV1);
+        assertAclCreateSucceeds(manager, "2001:db8::/32", MetadataVersion.IBP_4_4_IV1);
 
         // Regular hosts with older version
         assertAclCreateSucceeds(manager, "192.168.0.1", MetadataVersion.IBP_4_0_IV0);
         assertAclCreateSucceeds(manager, "*", MetadataVersion.IBP_4_0_IV0);
 
         // Invalid CIDR notation
-        assertAclCreateFails(manager, "192.168.0.0/33", MetadataVersion.IBP_4_4_IV0,
+        assertAclCreateFails(manager, "192.168.0.0/33", MetadataVersion.IBP_4_4_IV1,
             InvalidRequestException.class, "Invalid CIDR notation");
 
         // Valid CIDR with unsupported version
