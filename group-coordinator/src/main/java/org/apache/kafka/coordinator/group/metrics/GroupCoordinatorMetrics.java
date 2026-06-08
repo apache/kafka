@@ -35,10 +35,14 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import com.yammer.metrics.core.MetricsRegistry;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -46,6 +50,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * They generally pertain to aspects of group management, such as the number of groups in different states.
  */
 public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(GroupCoordinatorMetrics.class);
 
     public static final String METRICS_GROUP = "group-coordinator-metrics";
 
@@ -126,6 +132,15 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupEligibleGroups";
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteSuccess";
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteError";
+
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionSetSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionSetError";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteError";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionGetSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionGetError";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupCycleRuns";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupEligibleGroups";
 
     private final MetricName offsetCountMetricName;
     private final MetricName classicGroupCountMetricName;
@@ -514,6 +529,35 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     private long numShareGroups(ShareGroup.ShareGroupState state) {
         return shards.values().stream().mapToLong(shard -> shard.numShareGroups(state)).sum();
+    }
+
+    private final Set<String> warnedUnknownSensors = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Records a single observation on a global sensor by name. No-op when the sensor is unknown
+     * (warns once per unknown name so a typo at the call site doesn't silently swallow metrics).
+     * Used by service-layer call sites that don't otherwise reach into the per-shard metrics.
+     */
+    public void recordSensor(String sensorName) {
+        Sensor sensor = globalSensors.get(sensorName);
+        if (sensor != null) {
+            sensor.record();
+        } else if (warnedUnknownSensors.add(sensorName)) {
+            LOG.warn("recordSensor called for unknown sensor {}; metric is dropped.", sensorName);
+        }
+    }
+
+    /**
+     * Records {@code value} on a global sensor by name (e.g. count of items processed in one
+     * batch). No-op when the sensor is unknown (warns once per unknown name).
+     */
+    public void recordSensor(String sensorName, double value) {
+        Sensor sensor = globalSensors.get(sensorName);
+        if (sensor != null) {
+            sensor.record(value);
+        } else if (warnedUnknownSensors.add(sensorName)) {
+            LOG.warn("recordSensor called for unknown sensor {}; metric is dropped.", sensorName);
+        }
     }
 
     @Override

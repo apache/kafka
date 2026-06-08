@@ -940,6 +940,24 @@ public class GroupMetadataManager {
         }
     }
 
+    /**
+     * Validates that a streams group exists and that the given member is a current member of it.
+     * Used by the StreamsGroupTopologyDescriptionUpdate RPC handler (KIP-1331) to enforce the
+     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID contract before consulting the topology description plugin.
+     *
+     * @param groupId  The group ID.
+     * @param memberId The member ID.
+     * @return The matching {@link StreamsGroupMember}.
+     * @throws GroupIdNotFoundException if no streams group with this id exists.
+     * @throws UnknownMemberIdException if the member is not currently in the group.
+     */
+    public StreamsGroupMember validateStreamsGroupMember(
+        String groupId,
+        String memberId
+    ) throws GroupIdNotFoundException, UnknownMemberIdException {
+        return getStreamsGroupOrThrow(groupId).getMemberOrThrow(memberId);
+    }
+
     private StreamsGroup castToStreamsGroup(final Group group) {
         if (group.type() == STREAMS) {
             return (StreamsGroup) group;
@@ -957,7 +975,7 @@ public class GroupMetadataManager {
      * @return A StreamsGroup.
      * @throws GroupIdNotFoundException if the group does not exist or is not a streams group.
      */
-    private StreamsGroup streamsGroup(
+    StreamsGroup streamsGroup(
         String groupId,
         long committedOffset
     ) throws GroupIdNotFoundException {
@@ -2346,13 +2364,7 @@ public class GroupMetadataManager {
 
         response.setStatus(returnedStatus);
 
-        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(
-            response,
-            internalTopicsToBeCreated,
-            updatedTopology.topologyEpoch(),
-            group.storedDescriptionTopologyEpoch(),
-            group.failedDescriptionTopologyEpoch()
-        ));
+        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated, updatedTopology.topologyEpoch(), group.storedDescriptionTopologyEpoch(), group.failedDescriptionTopologyEpoch()));
     }
 
     /**
@@ -2419,6 +2431,33 @@ public class GroupMetadataManager {
         } else {
             throw new IllegalStateException("The topology is null and the group topology is also null.");
         }
+    }
+
+    /**
+     * Builds a {@link CoordinatorResult} that updates the topology-description plugin
+     * tracking fields ({@code StoredDescriptionTopologyEpoch}, {@code FailedDescriptionTopologyEpoch}) on
+     * a streams group's metadata record. Any {@code null} parameter preserves the current
+     * field value. The emitted record carries the group's existing epoch, hash,
+     * validated-topology epoch, assignment configs, and creation time unchanged.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> updateStreamsGroupTopologyFields(
+        String groupId,
+        Integer newStoredEpoch,
+        Integer newLastFailedEpoch
+    ) throws GroupIdNotFoundException {
+        StreamsGroup group = streamsGroup(groupId);
+        int storedEpoch = newStoredEpoch == null ? group.storedDescriptionTopologyEpoch() : newStoredEpoch;
+        int lastFailedEpoch = newLastFailedEpoch == null ? group.failedDescriptionTopologyEpoch() : newLastFailedEpoch;
+        List<CoordinatorRecord> records = List.of(newStreamsGroupMetadataRecord(
+            groupId,
+            group.groupEpoch(),
+            group.metadataHash(),
+            group.validatedTopologyEpoch(),
+            group.lastAssignmentConfigs(),
+            storedEpoch,
+            lastFailedEpoch
+        ));
+        return new CoordinatorResult<>(records);
     }
 
     private static List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
@@ -4494,13 +4533,7 @@ public class GroupMetadataManager {
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
             log.info("[GroupId {}][MemberId {}] Member {} left the streams group.", groupId, memberId, memberId);
-            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(
-                response,
-                Map.of(),
-                group.currentTopologyEpoch(),
-                group.storedDescriptionTopologyEpoch(),
-                group.failedDescriptionTopologyEpoch()
-            ));
+            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch(), group.storedDescriptionTopologyEpoch(), group.failedDescriptionTopologyEpoch()));
         } else {
             StreamsGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -4512,13 +4545,7 @@ public class GroupMetadataManager {
             } else {
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} left the streams group.",
                     group.groupId(), memberId, memberId, instanceId);
-                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(
-                    response,
-                    Map.of(),
-                    group.currentTopologyEpoch(),
-                    group.storedDescriptionTopologyEpoch(),
-                    group.failedDescriptionTopologyEpoch()
-                ));
+                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch(), -1, -1));
             }
         }
     }
@@ -4587,13 +4614,7 @@ public class GroupMetadataManager {
 
         return new CoordinatorResult<>(
             List.of(record),
-            new StreamsGroupHeartbeatResult(
-                response,
-                Map.of(),
-                group.currentTopologyEpoch(),
-                group.storedDescriptionTopologyEpoch(),
-                group.failedDescriptionTopologyEpoch()
-            )
+            new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch(), -1, -1)
         );
     }
 

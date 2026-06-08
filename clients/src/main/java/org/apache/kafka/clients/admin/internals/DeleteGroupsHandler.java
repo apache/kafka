@@ -97,7 +97,7 @@ public abstract class DeleteGroupsHandler extends AdminApiHandler.Batched<Coordi
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(deletedGroup.groupId());
             Errors error = Errors.forCode(deletedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, error, failed, groupsToUnmap);
+                handleError(groupIdKey, error, deletedGroup.errorMessage(), failed, groupsToUnmap);
                 continue;
             }
 
@@ -110,6 +110,7 @@ public abstract class DeleteGroupsHandler extends AdminApiHandler.Batched<Coordi
     private void handleError(
         CoordinatorKey groupId,
         Errors error,
+        String errorMessage,
         Map<CoordinatorKey, Throwable> failed,
         Set<CoordinatorKey> groupsToUnmap
     ) {
@@ -120,6 +121,15 @@ public abstract class DeleteGroupsHandler extends AdminApiHandler.Batched<Coordi
             case GROUP_ID_NOT_FOUND:
                 log.debug("`{}` request for group id {} failed due to error {}", displayName(), groupId.idValue, error);
                 failed.put(groupId, error.exception());
+                break;
+
+            case GROUP_DELETION_FAILED:
+                // A terminal per-group failure surfaced by the broker — no retry. Use the
+                // per-group ErrorMessage (which carries the underlying cause, e.g. a streams-group
+                // topology description plugin failure) instead of the generic enum message.
+                log.debug("`{}` request for group id {} returned GROUP_DELETION_FAILED: {}",
+                    displayName(), groupId.idValue, errorMessage);
+                failed.put(groupId, error.exception(errorMessage));
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:

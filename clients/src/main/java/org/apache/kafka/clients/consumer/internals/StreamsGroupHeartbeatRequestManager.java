@@ -673,6 +673,16 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             }
         }
 
+        boolean previouslyRequired = streamsRebalanceData.topologyDescriptionRequired();
+        boolean nowRequired = data.topologyDescriptionRequired();
+        if (previouslyRequired && !nowRequired) {
+            // A true→false transition without an intervening successful push usually means the
+            // broker re-soliciting elapsed; log so operators can correlate "I requested topology
+            // but it never arrived" with the actual wire sequence.
+            logger.debug("Heartbeat cleared TopologyDescriptionRequired without an intervening successful push.");
+        }
+        streamsRebalanceData.setTopologyDescriptionRequired(nowRequired);
+
         membershipManager.onHeartbeatSuccess(response);
     }
 

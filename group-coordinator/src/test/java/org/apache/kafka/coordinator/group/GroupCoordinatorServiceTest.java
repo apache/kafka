@@ -72,6 +72,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -83,15 +85,19 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
@@ -156,6 +162,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -183,7 +191,16 @@ public class GroupCoordinatorServiceTest {
 
     @SuppressWarnings("unchecked")
     private CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> mockRuntime() {
-        return (CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord>) mock(CoordinatorRuntime.class);
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime =
+            (CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord>) mock(CoordinatorRuntime.class);
+        // The explicit-DeleteGroups path now begins with a read of streams-group stored topology
+        // epochs (per checklist item 8: call plugin before tombstoning). Default the mock to an
+        // empty map so DeleteGroups tests that don't care about the plugin path still flow.
+        when(runtime.<Map<String, Integer>>scheduleReadOperation(
+            ArgumentMatchers.eq("list-streams-stored-topology-epochs"),
+            ArgumentMatchers.any(), ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        return runtime;
     }
 
     private GroupCoordinatorConfig createConfig() {
@@ -475,8 +492,8 @@ public class GroupCoordinatorServiceTest {
                 new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             future.get()
         );
@@ -508,9 +525,7 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData(),
                 Map.of(),
-                -1,
-                -1,
-                -1
+                -1, -1, -1
             )
         ));
 
@@ -579,9 +594,7 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(expectedErrorCode)
                     .setErrorMessage(expectedErrorMessage),
                 Map.of(),
-                -1,
-                -1,
-                -1
+                -1, -1, -1
             ),
             future.get(5, TimeUnit.SECONDS)
         );
@@ -604,8 +617,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("WarmupTasks are not supported yet."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -621,8 +634,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("Regular expressions for source topics are not supported yet."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -657,8 +670,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("MemberId can't be empty."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -674,8 +687,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("MemberId can't be empty."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -692,8 +705,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("GroupId can't be empty."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -710,8 +723,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("GroupId can't be empty."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -729,8 +742,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("RebalanceTimeoutMs must be provided in first request."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -749,8 +762,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("ActiveTasks must be empty when (re-)joining."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -770,8 +783,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("StandbyTasks must be empty when (re-)joining."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -792,8 +805,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("WarmupTasks must be empty when (re-)joining."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -815,8 +828,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("Topology must be non-null when (re-)joining."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -839,8 +852,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("RackId can't be empty."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -860,8 +873,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("InstanceId can't be null."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -885,8 +898,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("MemberEpoch is -3, but must be greater than or equal to -2."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -906,8 +919,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("Topology can only be provided when (re-)joining."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -931,8 +944,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorMessage("Changelog topic changelog_topic_with_fixed_partition must have an undefined partition count, but it is set to 3."),
                 Map.of(),
                 -1,
-                -1,
-                -1
+            -1,
+            -1
             ),
             service.streamsGroupHeartbeat(
                 context,
@@ -2248,6 +2261,12 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
+    private static StreamsGroupDescribeResponseData.DescribedGroup describedGroupWithTopology(String groupId) {
+        return new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setTopology(new StreamsGroupDescribeResponseData.Topology().setEpoch(0));
+    }
+
     @Test
     public void testDeleteOffsets() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
@@ -3491,7 +3510,6 @@ public class GroupCoordinatorServiceTest {
             ).get(5, TimeUnit.SECONDS)
         );
     }
-
 
     @Test
     public void testShareGroupDescribe() throws InterruptedException, ExecutionException {
@@ -5931,7 +5949,9 @@ public class GroupCoordinatorServiceTest {
         private Persister persister = new NoOpStatePersister();
         private MetadataImage metadataImage = null;
         private PartitionMetadataClient partitionMetadataClient = null;
-        private Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin = Optional.empty();
+        private Optional<StreamsGroupTopologyDescriptionPlugin> plugin = Optional.empty();
+        private Time time = Time.SYSTEM;
+        private MockTimer timer = null;
 
         GroupCoordinatorService build() {
             return build(false);
@@ -5943,8 +5963,10 @@ public class GroupCoordinatorServiceTest {
                     .addTopic(TOPIC_ID, TOPIC_NAME, 1)
                     .build();
             }
+            if (timer == null) {
+                timer = new MockTimer();
+            }
 
-            MockTimer mockTimer = new MockTimer();
             var service = new GroupCoordinatorService(
                 logContext,
                 config,
@@ -5952,10 +5974,10 @@ public class GroupCoordinatorServiceTest {
                 metrics,
                 configManager,
                 persister,
-                mockTimer,
+                timer,
                 partitionMetadataClient,
-                streamsGroupTopologyDescriptionPlugin,
-                mockTimer.time()
+                plugin,
+                time
             );
 
             if (serviceStartup) {
@@ -5966,6 +5988,18 @@ public class GroupCoordinatorServiceTest {
             }
 
             return service;
+        }
+
+        /**
+         * Exposes the MockTimer constructed by {@link #build}. Tests that need to advance the
+         * clock past the periodic topology-cleanup interval can call this before {@code build}
+         * so that they hold the same instance the service uses.
+         */
+        public MockTimer timer() {
+            if (timer == null) {
+                timer = new MockTimer();
+            }
+            return timer;
         }
 
         public GroupCoordinatorServiceBuilder setConfig(GroupCoordinatorConfig config) {
@@ -5992,6 +6026,393 @@ public class GroupCoordinatorServiceTest {
             this.partitionMetadataClient = partitionMetadataClient;
             return this;
         }
+
+        public GroupCoordinatorServiceBuilder setTopologyDescriptionPlugin(StreamsGroupTopologyDescriptionPlugin plugin) {
+            this.plugin = Optional.ofNullable(plugin);
+            return this;
+        }
+
+        public GroupCoordinatorServiceBuilder setTime(Time time) {
+            this.time = time;
+            return this;
+        }
+    }
+
+    // ========== Topology Description Plugin Tests ==========
+
+    private StreamsGroupHeartbeatRequestData streamsHeartbeatRequest() {
+        return new StreamsGroupHeartbeatRequestData()
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(0)
+            .setRebalanceTimeoutMs(1500)
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of())
+            .setTopology(new StreamsGroupHeartbeatRequestData.Topology());
+    }
+
+    private void mockHeartbeatWriteOperation(
+            CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
+            StreamsGroupHeartbeatResponseData responseData, int topologyEpoch) {
+        mockHeartbeatWriteOperation(runtime, responseData, topologyEpoch, -1, -1);
+    }
+
+    private void mockHeartbeatWriteOperation(
+            CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
+            StreamsGroupHeartbeatResponseData responseData, int topologyEpoch,
+            int storedDescriptionTopologyEpoch, int failedDescriptionTopologyEpoch) {
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("streams-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new StreamsGroupHeartbeatResult(responseData, Map.of(), topologyEpoch,
+                storedDescriptionTopologyEpoch, failedDescriptionTopologyEpoch)
+        ));
+    }
+
+    @Test
+    public void testHeartbeatSetsTopologyDescriptionRequiredWhenStoredEpochBelowCurrent() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1, -1, -1);
+
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertTrue(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatDoesNotSetFlagWhenStoredEpochMatchesCurrent() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1, 1, -1);
+
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatDoesNotSetFlagOnPermanentFailureAtCurrentEpoch() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1, -1, 1);
+
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatSkipsPluginCheckWhenNoPluginConfigured() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).build(true);
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1);
+
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatSkipsCheckForStaleTopologyMember() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
+        StreamsGroupHeartbeatResponseData responseData = new StreamsGroupHeartbeatResponseData()
+            .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code())
+                .setStatusDetail("Stale topology")));
+        mockHeartbeatWriteOperation(runtime, responseData, 1, -1, -1);
+
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatSkipsCheckWhenTopologyEpochNegative() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), -1);
+
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatDoesNotSetFlagInTheBackOffWindowAfterTransientFailure() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        MockTime time = new MockTime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin)
+            .setTime(time).build(true);
+
+        // First: a transient setTopology failure arms the back-off.
+        when(runtime.<Boolean>scheduleReadOperation(
+            ArgumentMatchers.eq("validate-streams-group-member"),
+            ArgumentMatchers.any(), ArgumentMatchers.any()))
+            .thenReturn(CompletableFuture.completedFuture(true));
+        when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("transient")));
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
+                .setGroupId("foo")
+                .setMemberId("member-1")
+                .setTopologyEpoch(1)
+                .setTopologyDescription(
+                    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of())))
+            .get(5, TimeUnit.SECONDS);
+        assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), response.errorCode());
+
+        // Heartbeat right after the failure: gating says re-solicit (storedEpoch=-1, lastFailedEpoch=-1),
+        // but the back-off (30 s) must suppress it.
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1, -1, -1);
+        StreamsGroupHeartbeatResult firstHb = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertFalse(firstHb.data().topologyDescriptionRequired(),
+            "Back-off should suppress re-solicitation in the 30 s window after a transient failure");
+
+        // Advance past the first back-off (30 s) and confirm the next heartbeat re-solicits.
+        time.sleep(30_001L);
+        StreamsGroupHeartbeatResult secondHb = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertTrue(secondHb.data().topologyDescriptionRequired(),
+            "After the back-off window elapses, heartbeats should re-solicit");
+    }
+
+    @Test
+    public void testHeartbeatSetsFlagAtNewTopologyEpochIgnoringPriorBackOff() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        MockTime time = new MockTime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin)
+            .setTime(time).build(true);
+
+        when(runtime.<Boolean>scheduleReadOperation(
+            ArgumentMatchers.eq("validate-streams-group-member"),
+            ArgumentMatchers.any(), ArgumentMatchers.any()))
+            .thenReturn(CompletableFuture.completedFuture(true));
+        when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("transient")));
+
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
+                .setGroupId("foo")
+                .setMemberId("member-1")
+                .setTopologyEpoch(1)
+                .setTopologyDescription(
+                    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of())))
+            .get(5, TimeUnit.SECONDS);
+
+        // Heartbeat at topologyEpoch=2 (epoch advanced) within the same 30 s window: the stale
+        // back-off entry is for epoch=1, so the new epoch's solicitation goes through.
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 2, -1, -1);
+        StreamsGroupHeartbeatResult hb = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertTrue(hb.data().topologyDescriptionRequired(),
+            "Back-off should not apply across topology-epoch boundaries");
+    }
+
+    @Test
+    public void testHeartbeatSetsFlagImmediatelyAfterSuccessfulPushFollowingAFailure() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        MockTime time = new MockTime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin)
+            .setTime(time).build(true);
+
+        when(runtime.<Boolean>scheduleReadOperation(
+            ArgumentMatchers.eq("validate-streams-group-member"),
+            ArgumentMatchers.any(), ArgumentMatchers.any()))
+            .thenReturn(CompletableFuture.completedFuture(true));
+        when(runtime.<Void>scheduleWriteOperation(
+            ArgumentMatchers.eq("record-topology-description-stored"),
+            ArgumentMatchers.any(), ArgumentMatchers.any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        // Arm the back-off via one transient failure...
+        when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("transient")));
+        StreamsGroupTopologyDescriptionUpdateRequestData updateRequest =
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
+                .setGroupId("foo")
+                .setMemberId("member-1")
+                .setTopologyEpoch(1)
+                .setTopologyDescription(
+                    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of()));
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), updateRequest).get(5, TimeUnit.SECONDS);
+
+        // ...then a successful push (advance past the back-off so the next push is allowed).
+        time.sleep(30_001L);
+        when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE), updateRequest).get(5, TimeUnit.SECONDS);
+
+        // The next heartbeat at the same epoch sees no stored field yet (storedEpoch=-1 in this mock setup)
+        // and the back-off is cleared on success, so it re-solicits immediately.
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1, -1, -1);
+        StreamsGroupHeartbeatResult hb = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertTrue(hb.data().topologyDescriptionRequired(),
+            "After a successful push clears the back-off, a fresh solicitation should not be suppressed");
+    }
+
+    @Test
+    public void testHeartbeatOnlySetsFlagOnFirstOfConcurrentHeartbeatsForSameGroup() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin)
+            .setTime(new MockTime()).build(true);
+        // Return a fresh response object each time to avoid mutation side effects;
+        // each shard write returns storedDescriptionTopologyEpoch=-1 so the broker would otherwise solicit.
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("streams-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.any()
+        )).thenAnswer(invocation -> CompletableFuture.completedFuture(
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), 1, -1, -1)));
+
+        StreamsGroupHeartbeatRequestData request = streamsHeartbeatRequest();
+        assertTrue(service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), request).get(5, TimeUnit.SECONDS)
+            .data().topologyDescriptionRequired());
+        // Second heartbeat for the same group within the in-flight window is suppressed.
+        assertFalse(service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), request).get(5, TimeUnit.SECONDS)
+            .data().topologyDescriptionRequired());
+    }
+
+    private static Stream<Arguments> setTopologyPluginFailures() {
+        // All plugin failures now map to STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED on the wire.
+        // StreamsTopologyDescriptionPermanentFailureException additionally ratchets FailedDescriptionTopologyEpoch (covered
+        // by a separate test); transient failures arm the per-group back-off instead.
+        return Stream.of(
+            Arguments.of(new RuntimeException("Storage failure"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED),
+            Arguments.of(new org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionTransientFailureException("backend down"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED),
+            Arguments.of(new org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException("too big"), Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED)
+        );
+    }
+
+    private static Stream<Arguments> validateMemberFailures() {
+        return Stream.of(
+            Arguments.of(new org.apache.kafka.common.errors.UnknownMemberIdException("Member dropped from group."),
+                Errors.UNKNOWN_MEMBER_ID),
+            Arguments.of(new org.apache.kafka.common.errors.GroupIdNotFoundException("Group not found."),
+                Errors.GROUP_ID_NOT_FOUND)
+        );
+    }
+
+    private static StreamsGroupTopologyDescriptionUpdateRequestData updateRequest(String groupId, int topologyEpoch) {
+        return new StreamsGroupTopologyDescriptionUpdateRequestData()
+            .setGroupId(groupId)
+            .setMemberId("member-1")
+            .setTopologyEpoch(topologyEpoch)
+            .setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
+    }
+
+    @Test
+    public void testHeartbeatDoesNotSetFlagForV0Client() throws Exception {
+        // A v0 client doesn't speak StreamsGroupTopologyDescriptionUpdate and doesn't have the
+        // TopologyDescriptionRequired field in its response schema. The broker must NOT set
+        // the flag even when a plugin is configured and the group would otherwise be eligible
+        // for solicitation — otherwise the v0 client silently ignores the (now ungated) signal
+        // and the broker's back-off arms against a client that can't respond.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
+        // Group state: stored != current, no failure, no back-off → eligible for solicitation.
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1, -1, -1);
+
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 0),
+            streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertFalse(result.data().topologyDescriptionRequired(),
+            "v0 heartbeat must never set TopologyDescriptionRequired");
+    }
+
+    @Test
+    public void testHeartbeatDoesNotSetFlagWhenStoredAndLastFailedBothMatchCurrent() throws Exception {
+        // Truth-table cell: stored == lastFailed == current. The push has already succeeded at the
+        // current epoch, so no fresh solicitation is needed even though FailedDescriptionTopologyEpoch
+        // also equals the current epoch (a stale ratchet from a prior incarnation).
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin).build(true);
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1, 1, 1);
+
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatBackoffSaturatesAtCapAfterManyTransientFailures() throws Exception {
+        // RETRY_BACKOFF: initial 30 s, multiplier 2, cap 3_600_000 ms (1 h), no jitter.
+        // After 8+ doublings we should be saturated at the cap, never longer.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        MockTime time = new MockTime();
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setRuntime(runtime).setConfig(createConfig()).setTopologyDescriptionPlugin(plugin)
+            .setTime(time).build(true);
+
+        when(runtime.<Boolean>scheduleReadOperation(
+            ArgumentMatchers.eq("validate-streams-group-member"),
+            ArgumentMatchers.any(), ArgumentMatchers.any()))
+            .thenReturn(CompletableFuture.completedFuture(true));
+        when(plugin.setTopology(eq("foo"), eq(1), any(StreamsGroupTopologyDescription.class)))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("transient")));
+
+        StreamsGroupTopologyDescriptionUpdateRequestData updateRequest =
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
+                .setGroupId("foo")
+                .setMemberId("member-1")
+                .setTopologyEpoch(1)
+                .setTopologyDescription(
+                    new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription().setSubtopologies(List.of()));
+
+        // 10 consecutive transient failures, each separated by enough time for the previous
+        // back-off to elapse and a fresh solicitation to re-arm.
+        for (int i = 0; i < 10; i++) {
+            service.streamsGroupTopologyDescriptionUpdate(
+                requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+                updateRequest).get(5, TimeUnit.SECONDS);
+            // Advance past the (now-capped) back-off window so the next heartbeat re-solicits.
+            time.sleep(3_600_001L);
+        }
+
+        // After saturation, sleeping 3_600_001 ms past the most-recent failure must be enough to
+        // re-solicit (i.e. the back-off window did not exceed the cap of 3_600_000 ms).
+        mockHeartbeatWriteOperation(runtime, new StreamsGroupHeartbeatResponseData(), 1, -1, -1);
+        StreamsGroupHeartbeatResult hb = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), streamsHeartbeatRequest()).get(5, TimeUnit.SECONDS);
+        assertTrue(hb.data().topologyDescriptionRequired(),
+            "After 10 consecutive failures, the back-off must be capped at 3_600_000 ms — anything past " +
+                "that window must re-solicit");
     }
 
     private static DeleteShareGroupStateParameters createDeleteShareRequest(String groupId, Uuid topic, List<Integer> partitions) {

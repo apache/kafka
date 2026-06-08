@@ -1818,6 +1818,32 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
     
+    def describe_streams_group_topology(self, group, node=None, command_config=None):
+        """ Run kafka-streams-groups.sh --describe --topology --group <group>.
+            Returns (stdout, exit_code). Exit code 0 indicates AVAILABLE; 1 indicates any
+            non-AVAILABLE status (NOT_REQUESTED / NOT_STORED / ERROR) or an underlying
+            describe error.
+        """
+        if node is None:
+            node = self.nodes[0]
+        script = self.path.script("kafka-streams-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --describe --topology --group %s" % (
+            script, self.bootstrap_servers(self.security_protocol), command_config, group)
+
+        # ssh() returns the exit code; capture stdout via a redirect.
+        stdout_path = "/tmp/streams_groups_topology_%s.out" % group.replace("/", "_")
+        exit_code = node.account.ssh("%s > %s 2>&1" % (cmd, stdout_path), allow_fail=True)
+        stdout = node.account.ssh_output("cat %s" % stdout_path, allow_fail=True).decode("utf-8", errors="replace")
+        self.logger.debug("kafka-streams-groups --topology exit=%d stdout=%s", exit_code, stdout)
+        return stdout, exit_code
+
     def describe_share_group(self, group, node=None, command_config=None):
         """ Describe a share group.
         """

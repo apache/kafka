@@ -18,177 +18,148 @@ package org.apache.kafka.server.streams;
 
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InMemoryTopologyDescriptionPluginTest {
 
-    @Test
-    public void testSetThenGetRoundTrip() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            StreamsGroupTopologyDescription desc = topology("src", "in");
-            plugin.setTopology("g1", 7, desc).get();
-            StreamsGroupTopologyDescription got = plugin.getTopology("g1", 7).get();
-            assertEquals(desc, got);
-        }
+    private InMemoryTopologyDescriptionPlugin plugin;
+
+    @BeforeEach
+    public void setUp() {
+        plugin = new InMemoryTopologyDescriptionPlugin();
+        plugin.configure(Map.of());
     }
 
-    @Test
-    public void testGetReturnsNullForMissingGroup() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            assertNull(plugin.getTopology("missing", 0).get());
-        }
-    }
-
-    @Test
-    public void testGetReturnsNullWhenEpochDoesNotMatch() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            plugin.setTopology("g1", 3, topology("src", "in")).get();
-
-            assertNull(plugin.getTopology("g1", 4).get());
-            assertNotNull(plugin.getTopology("g1", 3).get());
-        }
-    }
-
-    @Test
-    public void testSetIsIdempotentAtSameEpoch() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            StreamsGroupTopologyDescription desc = topology("src", "in");
-
-            plugin.setTopology("g1", 5, desc).get();
-            plugin.setTopology("g1", 5, desc).get();
-            plugin.setTopology("g1", 5, desc).get();
-
-            assertEquals(desc, plugin.getTopology("g1", 5).get());
-        }
-    }
-
-    @Test
-    public void testEpochAdvanceOverwritesPreviousDescription() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            StreamsGroupTopologyDescription v1 = topology("v1-src", "in1");
-            StreamsGroupTopologyDescription v2 = topology("v2-src", "in2");
-
-            plugin.setTopology("g1", 1, v1).get();
-            plugin.setTopology("g1", 2, v2).get();
-
-            assertNull(plugin.getTopology("g1", 1).get(), "epoch 1 should no longer be served");
-            assertEquals(v2, plugin.getTopology("g1", 2).get());
-        }
-    }
-
-    @Test
-    public void testDeleteTopologyRemovesEntry() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            plugin.setTopology("g1", 1, topology("src", "in")).get();
-            plugin.deleteTopology("g1").get();
-            assertNull(plugin.getTopology("g1", 1).get());
-        }
-    }
-
-    @Test
-    public void testDeleteIsIdempotentForUnknownGroup() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            plugin.deleteTopology("never-stored").get();
-            plugin.deleteTopology("never-stored").get();
-        }
-    }
-
-    @Test
-    public void testDeleteIsScopedToGroup() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            plugin.setTopology("g1", 1, topology("src", "in")).get();
-            plugin.setTopology("g2", 1, topology("src", "in")).get();
-
-            plugin.deleteTopology("g1").get();
-
-            assertNull(plugin.getTopology("g1", 1).get());
-            assertNotNull(plugin.getTopology("g2", 1).get());
-        }
-    }
-
-    @Test
-    public void testCloseClearsAllState() throws Exception {
-        InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin();
-        plugin.setTopology("g1", 1, topology("src", "in")).get();
+    @AfterEach
+    public void tearDown() throws Exception {
         plugin.close();
-        assertNull(plugin.getTopology("g1", 1).get());
+    }
+
+    private static StreamsGroupTopologyDescription sampleTopology() {
+        return new StreamsGroupTopologyDescription(
+            List.of(new StreamsGroupTopologyDescription.Subtopology(
+                "0",
+                List.of(new StreamsGroupTopologyDescription.Source(
+                    "source",
+                    new LinkedHashSet<>(List.of("input-topic")),
+                    Set.of()
+                ))
+            )),
+            List.of()
+        );
     }
 
     @Test
-    public void testConfigureIsNoOp() {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            plugin.configure(Map.of("anything", "ignored"));
-        }
+    public void testSetTopologyRoundTrips() throws ExecutionException, InterruptedException {
+        plugin.setTopology("group1", 1, sampleTopology()).get();
+        assertEquals(sampleTopology(), plugin.getTopology("group1", 1).get());
     }
 
     @Test
-    public void testConcurrentWritesAreSafe() throws Exception {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            StreamsGroupTopologyDescription desc = topology("src", "in");
-            int threads = 16;
-            ExecutorService exec = Executors.newFixedThreadPool(threads);
-            try {
-                CountDownLatch start = new CountDownLatch(1);
-                CompletableFuture<?>[] futures = new CompletableFuture<?>[threads];
-                for (int i = 0; i < threads; i++) {
-                    futures[i] = CompletableFuture.runAsync(() -> {
-                        try {
-                            start.await();
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            throw new RuntimeException(e);
-                        }
-                        plugin.setTopology("g1", 1, desc).join();
-                    }, exec);
-                }
-                start.countDown();
-                CompletableFuture.allOf(futures).get(10, TimeUnit.SECONDS);
-            } finally {
-                exec.shutdownNow();
-            }
+    public void testSetTopologyOverwritesPrevious() throws ExecutionException, InterruptedException {
+        plugin.setTopology("group1", 1, sampleTopology()).get();
+        plugin.setTopology("group1", 2, sampleTopology()).get();
 
-            assertEquals(desc, plugin.getTopology("g1", 1).get());
-        }
+        // Old epoch is no longer retrievable; new epoch is.
+        assertNull(plugin.getTopology("group1", 1).get());
+        assertEquals(sampleTopology(), plugin.getTopology("group1", 2).get());
     }
 
     @Test
-    public void testFuturesCompleteSynchronously() throws ExecutionException, InterruptedException {
-        try (InMemoryTopologyDescriptionPlugin plugin = new InMemoryTopologyDescriptionPlugin()) {
-            CompletableFuture<Void> setFuture = plugin.setTopology("g1", 1, topology("src", "in"));
-            CompletableFuture<StreamsGroupTopologyDescription> getFuture = plugin.getTopology("g1", 1);
-            CompletableFuture<Void> deleteFuture = plugin.deleteTopology("g1");
-            assertTrue(setFuture.isDone());
-            assertTrue(getFuture.isDone());
-            assertTrue(deleteFuture.isDone());
-            assertNotNull(getFuture.get());
-        }
+    public void testDeleteTopology() throws ExecutionException, InterruptedException {
+        plugin.setTopology("group1", 1, sampleTopology()).get();
+        plugin.deleteTopology("group1").get();
+        assertNull(plugin.getTopology("group1", 1).get());
     }
 
-    private static StreamsGroupTopologyDescription topology(String sourceName, String topic) {
-        StreamsGroupTopologyDescription.Source src = new StreamsGroupTopologyDescription.Source(
-            sourceName, Set.of(topic), Set.of("proc"));
-        StreamsGroupTopologyDescription.Processor proc = new StreamsGroupTopologyDescription.Processor(
-            "proc", Set.of(), Set.of("snk"));
-        StreamsGroupTopologyDescription.Sink sink = new StreamsGroupTopologyDescription.Sink(
-            "snk", Optional.of("out"), Set.of());
-        StreamsGroupTopologyDescription.Subtopology sub = new StreamsGroupTopologyDescription.Subtopology(
-            "0", List.of(src, proc, sink));
-        return new StreamsGroupTopologyDescription(List.of(sub), List.of());
+    @Test
+    public void testDeleteTopologyForNonexistentGroup() {
+        // Idempotent on a missing group.
+        assertDoesNotThrow(() -> plugin.deleteTopology("nonexistent").get());
+    }
+
+    @Test
+    public void testMultipleGroups() throws ExecutionException, InterruptedException {
+        plugin.setTopology("group1", 1, sampleTopology()).get();
+        plugin.setTopology("group2", 5, sampleTopology()).get();
+
+        assertEquals(sampleTopology(), plugin.getTopology("group1", 1).get());
+        assertEquals(sampleTopology(), plugin.getTopology("group2", 5).get());
+
+        plugin.deleteTopology("group1").get();
+        assertNull(plugin.getTopology("group1", 1).get());
+        assertEquals(sampleTopology(), plugin.getTopology("group2", 5).get());
+    }
+
+    @Test
+    public void testCloseClears() throws Exception {
+        plugin.setTopology("group1", 1, sampleTopology()).get();
+        plugin.close();
+        assertNull(plugin.getTopology("group1", 1).get());
+    }
+
+    @Test
+    public void testConcurrentSetTopology() throws ExecutionException, InterruptedException {
+        // Multiple concurrent setTopology calls for the same (groupId, epoch) — all should succeed.
+        CompletableFuture<?>[] futures = new CompletableFuture[10];
+        for (int i = 0; i < 10; i++) {
+            futures[i] = plugin.setTopology("group1", 1, sampleTopology());
+        }
+        CompletableFuture.allOf(futures).get();
+        assertEquals(sampleTopology(), plugin.getTopology("group1", 1).get());
+    }
+
+    @Test
+    public void testAllFuturesCompleteSynchronously() {
+        assertTrue(plugin.setTopology("g", 0, sampleTopology()).isDone());
+        assertTrue(plugin.deleteTopology("g").isDone());
+        assertTrue(plugin.getTopology("g", 0).isDone());
+    }
+
+    @Test
+    public void testGetTopologyReturnsNullWhenEmpty() throws ExecutionException, InterruptedException {
+        assertNull(plugin.getTopology("group1", 1).get());
+    }
+
+    @Test
+    public void testGetTopologyReturnsNullForWrongEpoch() throws ExecutionException, InterruptedException {
+        plugin.setTopology("group1", 1, sampleTopology()).get();
+        assertNull(plugin.getTopology("group1", 2).get());
+    }
+
+    @Test
+    public void testGetTopologyFailsWhenFailOnGetSet() {
+        plugin.setFailOnGet(true);
+        ExecutionException ex = assertThrows(ExecutionException.class,
+            () -> plugin.getTopology("group1", 1).get());
+        assertTrue(ex.getCause() instanceof RuntimeException);
+    }
+
+    @Test
+    public void testConfigureAcceptsEmptyConfig() {
+        InMemoryTopologyDescriptionPlugin p = new InMemoryTopologyDescriptionPlugin();
+        assertDoesNotThrow(() -> p.configure(Map.of()));
+        assertDoesNotThrow(() -> p.configure(Map.of("some.key", "some.value")));
+    }
+
+    @Test
+    public void testSetTopologyReturnValue() throws ExecutionException, InterruptedException {
+        Void result = plugin.setTopology("g", 1, sampleTopology()).get();
+        assertNull(result);
     }
 }

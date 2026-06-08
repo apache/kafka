@@ -706,6 +706,7 @@ class BrokerServer(
     val writer = new CoordinatorPartitionWriter(
       replicaManager
     )
+
     new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
       .withTime(time)
       .withTimer(timer)

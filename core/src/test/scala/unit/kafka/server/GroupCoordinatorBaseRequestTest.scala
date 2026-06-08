@@ -777,12 +777,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def streamsGroupDescribe(
     groupIds: List[String],
     includeAuthorizedOperations: Boolean = false,
+    includeTopologyDescription: Boolean = false,
     version: Short = ApiKeys.STREAMS_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled)
   ): List[StreamsGroupDescribeResponseData.DescribedGroup] = {
     val streamsGroupDescribeRequest = new StreamsGroupDescribeRequest.Builder(
       new StreamsGroupDescribeRequestData()
         .setGroupIds(groupIds.asJava)
         .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+        .setIncludeTopologyDescription(includeTopologyDescription)
     ).build(version)
 
     val streamsGroupDescribeResponse = connectAndReceive[StreamsGroupDescribeResponse](streamsGroupDescribeRequest)

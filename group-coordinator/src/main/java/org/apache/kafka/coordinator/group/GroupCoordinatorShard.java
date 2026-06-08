@@ -1105,6 +1105,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * For each group, remove all expired offsets. If all offsets for the group are removed and the group is eligible
      * for deletion, delete the group.
      *
+     * <p>When a topology description plugin is configured, streams groups with
+     * {@code storedDescriptionTopologyEpoch != -1} are deferred — a later cycle tombstones them once
+     * {@code storedDescriptionTopologyEpoch} is cleared. With no plugin configured, this sweep tombstones
+     * streams groups regardless of {@code storedDescriptionTopologyEpoch}.
+     *
      * @return The list of tombstones (offset commit and group metadata) to append.
      */
     public CoordinatorResult<Void, CoordinatorRecord> cleanupGroupMetadata() {

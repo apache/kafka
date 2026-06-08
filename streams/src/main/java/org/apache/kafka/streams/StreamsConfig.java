@@ -862,6 +862,14 @@ public class StreamsConfig extends AbstractConfig {
         + "for optimizations to take effect.";
 
     /**
+     * {@code topology.description.push.enabled}
+     */
+    public static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG = "topology.description.push.enabled";
+    private static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC = "Controls whether the Kafka Streams client "
+        + "sends topology descriptions to the broker when requested via the heartbeat flag. When set to false, the "
+        + "client ignores TopologyDescriptionRequired=true in heartbeat responses.";
+
+    /**
      * {@code windowed.inner.class.serde}
      *
      * @deprecated since 4.1.0.
@@ -1113,6 +1121,11 @@ public class StreamsConfig extends AbstractConfig {
 
             // LOW
 
+            .define(TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.LOW,
+                    TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC)
             .define(ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG,
                     Type.BOOLEAN,
                     false,

@@ -3788,6 +3788,7 @@ public class StreamThreadTest {
         final InternalTopologyBuilder topologyBuilder = mock(InternalTopologyBuilder.class);
         when(topologyBuilder.subtopologyToTopicsInfo()).thenReturn(Map.of());
         when(topologyBuilder.copartitionGroups()).thenReturn(Set.of(Set.of("source1")));
+        lenient().when(topologyBuilder.describe()).thenReturn(new InternalTopologyBuilder.TopologyDescription());
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -4735,6 +4736,99 @@ public class StreamThreadTest {
             mockTime.sleep(10);
         }
         return false;
+    }
+
+    @Test
+    public void convertNodeHandlesAllNodeTypes() throws Exception {
+        // Build a topology with two source topics into a Source node, a Processor with a state
+        // store, a Sink, and a GlobalStore.
+        final org.apache.kafka.streams.Topology topology = new org.apache.kafka.streams.Topology();
+        topology.addSource("source", "topic-a", "topic-b")
+            .addProcessor("processor", () -> new org.apache.kafka.streams.processor.api.Processor<Object, Object, Object, Object>() {
+                @Override
+                public void process(final org.apache.kafka.streams.processor.api.Record<Object, Object> record) { }
+            }, "source")
+            .addStateStore(new MockKeyValueStoreBuilder("processor-store", false), "processor")
+            .addSink("sink", "dynamic-sink-topic", "processor");
+
+        final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("global-store"),
+            Serdes.String(), Serdes.String()).withLoggingDisabled();
+        topology.addGlobalStore(
+            globalStoreBuilder,
+            "global-source",
+            new org.apache.kafka.common.serialization.StringDeserializer(),
+            new org.apache.kafka.common.serialization.StringDeserializer(),
+            "global-topic",
+            "global-processor",
+            () -> new org.apache.kafka.streams.processor.api.ContextualProcessor<String, String, Void, Void>() {
+                @Override
+                public void process(final org.apache.kafka.streams.processor.api.Record<String, String> record) { }
+            });
+
+        final org.apache.kafka.streams.TopologyDescription topoDesc = topology.describe();
+
+        // convertTopologyDescription is private static — invoke via reflection.
+        final java.lang.reflect.Method m = StreamThread.class.getDeclaredMethod(
+            "convertTopologyDescription", org.apache.kafka.streams.TopologyDescription.class);
+        m.setAccessible(true);
+        final org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
+            (org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription)
+                m.invoke(null, topoDesc);
+
+        // Subtopologies — one subtopology from source→processor→sink.
+        assertEquals(topoDesc.subtopologies().size(), wire.subtopologies().size());
+        assertEquals(1, wire.subtopologies().size(),
+            "Expected exactly one non-global subtopology");
+        final org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology sub =
+            wire.subtopologies().get(0);
+
+        // Sort nodes by name for deterministic lookup.
+        final Map<String, org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode> byName =
+            sub.nodes().stream().collect(Collectors.toMap(
+                org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode::name,
+                n -> n));
+
+        final org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode src = byName.get("source");
+        assertNotNull(src);
+        assertEquals((byte) 1, src.nodeType(), "Source nodes have nodeType=1");
+        assertEquals(new HashSet<>(Arrays.asList("topic-a", "topic-b")), new HashSet<>(src.sourceTopics()));
+        assertTrue(src.successors().contains("processor"));
+        // SinkTopic is null on a source; stores list is empty on the wire (it's null/empty since not set).
+        assertNull(src.sinkTopic());
+
+        final org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode proc = byName.get("processor");
+        assertNotNull(proc);
+        assertEquals((byte) 2, proc.nodeType(), "Processor nodes have nodeType=2");
+        assertTrue(proc.stores().contains("processor-store"));
+        assertTrue(proc.successors().contains("sink"));
+        assertNull(proc.sinkTopic());
+
+        final org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode sink = byName.get("sink");
+        assertNotNull(sink);
+        assertEquals((byte) 3, sink.nodeType(), "Sink nodes have nodeType=3");
+        assertEquals("dynamic-sink-topic", sink.sinkTopic());
+        // Sinks have no successors and no source topics.
+        assertTrue(sink.successors().isEmpty());
+
+        // Reflectively verify that "predecessors" is NOT a field on the wire TopologyNode schema —
+        // the read side reconstructs predecessors from successors.
+        for (final java.lang.reflect.Field f :
+            org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode.class.getDeclaredFields()) {
+            assertFalse(f.getName().equalsIgnoreCase("predecessors"),
+                "predecessors should not be on the wire TopologyNode schema; found field " + f.getName());
+        }
+
+        // Global store: one source + one processor.
+        assertEquals(1, wire.globalStores().size());
+        final org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore gs =
+            wire.globalStores().get(0);
+        assertNotNull(gs.source());
+        assertEquals((byte) 1, gs.source().nodeType());
+        assertTrue(gs.source().sourceTopics().contains("global-topic"));
+        assertNotNull(gs.processor());
+        assertEquals((byte) 2, gs.processor().nodeType());
+        assertTrue(gs.processor().stores().contains("global-store"));
     }
 
 }

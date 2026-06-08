@@ -279,7 +279,7 @@
     <suppress checks="ClassDataAbstractionCoupling"
               files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupCoordinatorService|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest|GroupCoordinatorRecordSerde|StreamsGroupTest).java"/>
     <suppress checks="JavaNCSS"
-              files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
+              files="(GroupMetadataManager|GroupMetadataManagerTest|GroupCoordinatorServiceTest).java"/>
 
     <!-- coordinator-common -->
     <suppress checks="JavaNCSS"

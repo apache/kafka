@@ -2725,16 +2725,33 @@ To delete the offset information for a topic in a share group, the application m
 <td>
 
 DELETE_SHARE_GROUP_OFFSETS (92)
-</td>  
+</td>
 <td>
 
 Read
-</td>  
+</td>
 <td>
 
 Topic
-</td>  
+</td>
 <td>
 
 
+</td> </tr>
+<tr>
+<td>
+
+STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE (93)
+</td>
+<td>
+
+Read
+</td>
+<td>
+
+Group
+</td>
+<td>
+
+Required for sending the topology description for a streams group.
 </td> </tr> </table>
