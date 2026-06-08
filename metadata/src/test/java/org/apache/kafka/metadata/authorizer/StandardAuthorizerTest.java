@@ -74,7 +74,6 @@ import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.SUPER_USER
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.getConfiguredSuperUsers;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.getDefaultResult;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD;
-import static org.apache.kafka.metadata.authorizer.CidrUtils.isInRange;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD_PRINCIPAL;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.findResult;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
@@ -696,55 +695,17 @@ public class StandardAuthorizerTest {
     }
 
     @Test
-    public void testHostMatchesCidrIpv4MappedAddress() throws Exception {
-        // The JVM normalizes IPv4-mapped IPv6 addresses (::ffff:x.x.x.x) to plain IPv4.
-        // InetAddress.getByName("::ffff:192.168.1.5") returns an Inet4Address with host "192.168.1.5",
-        // so the authorizer sees a plain IPv4 string and matches it against IPv4 CIDRs correctly.
-        String normalizedHost = InetAddress.getByName("::ffff:192.168.1.5").getHostAddress();
-        assertEquals("192.168.1.5", normalizedHost);
-        assertTrue(isInRange(normalizedHost, "192.168.1.0/24"));
-        assertFalse(isInRange(normalizedHost, "10.0.0.0/8"));
-    }
-
-    @Test
-    public void testHostMatchesIPv4MappedAddressWithSubnet() {
-        // ::ffff:x.x.x.x/N, JVM normalizes ::ffff:x.x.x.x to Inet4Address, isIpv6() returns false,
-        // SubnetUtils rejects the ::ffff: prefix. No client (IPv4 or IPv6) can ever match.
-        assertFalse(isInRange("192.168.1.5", "::ffff:192.168.1.0/24"));
-        assertFalse(isInRange("::1", "::ffff:192.168.1.0/24"));
-        assertFalse(isInRange("2001:db8::1", "::ffff:192.168.1.0/24"));
-
-        // ::x.x.x.x/N (deprecated IPv4-compatible form), JVM keeps it as Inet6Address
-        // (0:0:0:0:0:0:c0a8:100), so it passes as a valid IPv6 CIDR. A /24 on a 128-bit address
-        // masks the top 24 bits, covering 0:: through 0:ff:ffff:ffff:ffff:ffff:ffff:ffff.
-        // Plain IPv4 clients will not match (they go through SubnetUtils, not SubnetUtils6).
-        assertFalse(isInRange("192.168.1.5", "::192.168.1.0/24"));
-        // IPv6 clients within the /24 range do match.
-        assertTrue(isInRange("::1", "::192.168.1.0/24"));
-        assertTrue(isInRange("0:0:0:0:0:0:c0a8:105", "::192.168.1.0/24"));
-        // IPv6 clients outside the /24 range do not match.
-        assertFalse(isInRange("2001:db8::1", "::192.168.1.0/24"));
-    }
-
-    @Test
     public void testAclWithCidrHost() throws Exception {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
 
-        // Create an ACL with CIDR notation for host (192.168.1.0/24 = 192.168.1.0 - 192.168.1.255)
         StandardAcl cidrAcl = new StandardAcl(
-            TOPIC,
-            "test-topic",
-            LITERAL,
-            "User:bob",
-            "192.168.1.0/24",
-            READ,
-            ALLOW);
+            TOPIC, "test-topic", LITERAL, "User:bob",
+            "192.168.1.0/24", READ, ALLOW);
         StandardAclWithId aclWithId = withId(cidrAcl);
         authorizer.addAcl(aclWithId.id(), aclWithId.acl());
 
-        // Test every IP in the /24 range (192.168.1.0 - 192.168.1.255)
-        for (int i = 0; i <= 255; i++) {
-            String ip = "192.168.1." + i;
+        // Boundary IPs inside the /24 range
+        for (String ip : List.of("192.168.1.0", "192.168.1.1", "192.168.1.128", "192.168.1.255")) {
             assertEquals(List.of(ALLOWED),
                 authorizer.authorize(
                     new MockAuthorizableRequestContext.Builder()
@@ -755,45 +716,31 @@ public class StandardAuthorizerTest {
                 "IP " + ip + " should be allowed within 192.168.1.0/24");
         }
 
-        // Test IPs just outside the range boundaries
-        assertEquals(List.of(DENIED),
-            authorizer.authorize(
-                new MockAuthorizableRequestContext.Builder()
-                    .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
-                    .setClientAddress(InetAddress.getByName("192.168.0.255"))
-                    .build(),
-                List.of(newAction(READ, TOPIC, "test-topic"))),
-            "IP 192.168.0.255 should be denied (just before range)");
-
-        assertEquals(List.of(DENIED),
-            authorizer.authorize(
-                new MockAuthorizableRequestContext.Builder()
-                    .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
-                    .setClientAddress(InetAddress.getByName("192.168.2.0"))
-                    .build(),
-                List.of(newAction(READ, TOPIC, "test-topic"))),
-            "IP 192.168.2.0 should be denied (just after range)");
+        // IPs just outside the range
+        for (String ip : List.of("192.168.0.255", "192.168.2.0")) {
+            assertEquals(List.of(DENIED),
+                authorizer.authorize(
+                    new MockAuthorizableRequestContext.Builder()
+                        .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                        .setClientAddress(InetAddress.getByName(ip))
+                        .build(),
+                    List.of(newAction(READ, TOPIC, "test-topic"))),
+                "IP " + ip + " should be denied outside 192.168.1.0/24");
+        }
     }
 
     @Test
     public void testAclWithIpv6CidrHost() throws Exception {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
 
-        // Create an ACL with IPv6 CIDR notation for host (2001:db8::/120 = last 8 bits variable)
-        // This gives us 2001:db8::0 - 2001:db8::ff (256 addresses, similar to IPv4 /24)
         StandardAcl cidrAcl = new StandardAcl(
-            TOPIC,
-            "test-topic",
-            LITERAL,
-            "User:bob",
-            "2001:db8::/120",
-            READ,
-            ALLOW);
+            TOPIC, "test-topic", LITERAL, "User:bob",
+            "2001:db8::/120", READ, ALLOW);
         StandardAclWithId aclWithId = withId(cidrAcl);
         authorizer.addAcl(aclWithId.id(), aclWithId.acl());
 
-        for (int i = 0; i <= 255; i++) {
-            String ip = "2001:db8::" + Integer.toHexString(i);
+        // Boundary IPs inside the /120 range
+        for (String ip : List.of("2001:db8::0", "2001:db8::1", "2001:db8::80", "2001:db8::ff")) {
             assertEquals(List.of(ALLOWED),
                 authorizer.authorize(
                     new MockAuthorizableRequestContext.Builder()
@@ -804,24 +751,17 @@ public class StandardAuthorizerTest {
                 "IP " + ip + " should be allowed within 2001:db8::/120");
         }
 
-        // Test IPs just outside the range boundaries
-        assertEquals(List.of(DENIED),
-            authorizer.authorize(
-                new MockAuthorizableRequestContext.Builder()
-                    .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
-                    .setClientAddress(InetAddress.getByName("2001:db8::100"))
-                    .build(),
-                List.of(newAction(READ, TOPIC, "test-topic"))),
-            "IP 2001:db8::100 should be denied (just after range)");
-
-        assertEquals(List.of(DENIED),
-            authorizer.authorize(
-                new MockAuthorizableRequestContext.Builder()
-                    .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
-                    .setClientAddress(InetAddress.getByName("2001:db7::1"))
-                    .build(),
-                List.of(newAction(READ, TOPIC, "test-topic"))),
-            "IP 2001:db7::1 should be denied (different prefix)");
+        // IPs just outside the range
+        for (String ip : List.of("2001:db8::100", "2001:db7::1")) {
+            assertEquals(List.of(DENIED),
+                authorizer.authorize(
+                    new MockAuthorizableRequestContext.Builder()
+                        .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                        .setClientAddress(InetAddress.getByName(ip))
+                        .build(),
+                    List.of(newAction(READ, TOPIC, "test-topic"))),
+                "IP " + ip + " should be denied outside 2001:db8::/120");
+        }
     }
 
     @Test

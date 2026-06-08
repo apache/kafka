@@ -530,73 +530,45 @@ public class AclControlManagerTest {
     }
 
     @Test
-    public void testCreateAclWithValidCidrHost() {
+    public void testCreateAclWithCidrHosts() {
         AclControlManager manager = new AclControlManager.Builder().build();
 
-        AclBinding ipv4CidrAcl = new AclBinding(
-            new ResourcePattern(TOPIC, "test-topic", LITERAL),
-            new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
+        // Valid CIDR with supported version
+        assertAclCreateSucceeds(manager, "192.168.0.0/24", MetadataVersion.IBP_4_4_IV0);
+        assertAclCreateSucceeds(manager, "2001:db8::/32", MetadataVersion.IBP_4_4_IV0);
 
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(ipv4CidrAcl), MetadataVersion.IBP_4_4_IV0);
-        assertEquals(1, result.response().size());
-        assertFalse(result.response().get(0).exception().isPresent());
+        // Regular hosts with older version
+        assertAclCreateSucceeds(manager, "192.168.0.1", MetadataVersion.IBP_4_0_IV0);
+        assertAclCreateSucceeds(manager, "*", MetadataVersion.IBP_4_0_IV0);
 
-        AclBinding ipv6CidrAcl = new AclBinding(
-            new ResourcePattern(TOPIC, "test-topic-2", LITERAL),
-            new AccessControlEntry("User:test", "2001:db8::/32", ALTER, ALLOW));
+        // Invalid CIDR notation
+        assertAclCreateFails(manager, "192.168.0.0/33", MetadataVersion.IBP_4_4_IV0,
+            InvalidRequestException.class, "Invalid CIDR notation");
 
-        result = manager.createAcls(List.of(ipv6CidrAcl), MetadataVersion.IBP_4_4_IV0);
-        assertEquals(1, result.response().size());
-        assertFalse(result.response().get(0).exception().isPresent());
+        // Valid CIDR with unsupported version
+        assertAclCreateFails(manager, "192.168.0.0/24", MetadataVersion.IBP_4_0_IV0,
+            UnsupportedVersionException.class, "CIDR-based ACL host patterns require metadata version");
     }
 
-    @Test
-    public void testCreateAclWithInvalidCidrHost() {
-        AclControlManager manager = new AclControlManager.Builder().build();
+    private static void assertAclCreateSucceeds(AclControlManager manager, String host, MetadataVersion version) {
+        AclBinding acl = new AclBinding(
+            new ResourcePattern(TOPIC, "topic-" + host, LITERAL),
+            new AccessControlEntry("User:test", host, ALTER, ALLOW));
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(acl), version);
+        assertEquals(1, result.response().size());
+        assertFalse(result.response().get(0).exception().isPresent(),
+            "Expected success for host=" + host + " version=" + version);
+    }
 
-        AclBinding invalidCidrAcl = new AclBinding(
-            new ResourcePattern(TOPIC, "test-topic", LITERAL),
-            new AccessControlEntry("User:test", "192.168.0.0/33", ALTER, ALLOW));
-
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(invalidCidrAcl), MetadataVersion.IBP_4_4_IV0);
+    private static void assertAclCreateFails(AclControlManager manager, String host, MetadataVersion version,
+                                              Class<? extends Exception> exClass, String messageContains) {
+        AclBinding acl = new AclBinding(
+            new ResourcePattern(TOPIC, "topic-" + host, LITERAL),
+            new AccessControlEntry("User:test", host, ALTER, ALLOW));
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(acl), version);
         assertEquals(1, result.response().size());
         assertTrue(result.response().get(0).exception().isPresent());
-        assertTrue(result.response().get(0).exception().get().getMessage().contains("Invalid CIDR notation"));
-    }
-
-    @Test
-    public void testCreateAclWithCidrHostUnsupportedVersion() {
-        AclControlManager manager = new AclControlManager.Builder().build();
-
-        AclBinding cidrAcl = new AclBinding(
-            new ResourcePattern(TOPIC, "test-topic", LITERAL),
-            new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
-
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(cidrAcl), MetadataVersion.IBP_4_0_IV0);
-        assertEquals(1, result.response().size());
-        assertTrue(result.response().get(0).exception().isPresent());
-        assertTrue(result.response().get(0).exception().get() instanceof UnsupportedVersionException);
-        assertTrue(result.response().get(0).exception().get().getMessage().contains("CIDR-based ACL host patterns require metadata version"));
-    }
-
-    @Test
-    public void testCreateAclWithRegularHostOlderVersion() {
-        AclControlManager manager = new AclControlManager.Builder().build();
-
-        AclBinding regularAcl = new AclBinding(
-            new ResourcePattern(TOPIC, "test-topic", LITERAL),
-            new AccessControlEntry("User:test", "192.168.0.1", ALTER, ALLOW));
-
-        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(regularAcl), MetadataVersion.IBP_4_0_IV0);
-        assertEquals(1, result.response().size());
-        assertFalse(result.response().get(0).exception().isPresent());
-
-        AclBinding wildcardAcl = new AclBinding(
-            new ResourcePattern(TOPIC, "test-topic-2", LITERAL),
-            new AccessControlEntry("User:test", "*", ALTER, ALLOW));
-
-        result = manager.createAcls(List.of(wildcardAcl), MetadataVersion.IBP_4_0_IV0);
-        assertEquals(1, result.response().size());
-        assertFalse(result.response().get(0).exception().isPresent());
+        assertTrue(exClass.isInstance(result.response().get(0).exception().get()));
+        assertTrue(result.response().get(0).exception().get().getMessage().contains(messageContains));
     }
 }
