@@ -124,6 +124,7 @@ org.apache.kafka.clients.NetworkClientTest:
 - testLeastLoadedNode
 - testLeastLoadedNodeConsidersThrottledConnections
 - testLeastLoadedNodeProvideDisconnectedNodesPrioritizedByLastConnectionTimestamp
+- testMetadataClusterCheckFailureCausesRebootstrap
 - testRebootstrap
 - testReconnectAfterAddressChange
 - testRequestTimeout

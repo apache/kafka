@@ -1202,6 +1202,8 @@ kafka.server.AlterUserScramCredentialsRequestTest:
 kafka.server.ApiVersionsRequestTest:
 - testApiVersionsRequest
 - testApiVersionsRequestIncludesUnreleasedApis
+- testApiVersionsRequestMetadataClusterCheckFail
+- testApiVersionsRequestMetadataClusterCheckPass
 - testApiVersionsRequestThroughControllerListener
 - testApiVersionsRequestValidationV0
 - testApiVersionsRequestValidationV0ThroughControllerListener
