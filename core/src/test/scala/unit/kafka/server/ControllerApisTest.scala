@@ -52,7 +52,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.KRaftMetadataCache
-import org.apache.kafka.network.{Session, SocketServerConfigs}
+import org.apache.kafka.network.{Request, Session, SocketServerConfigs}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig, RaftManager}
 import org.apache.kafka.server.SimpleApiVersionManager
@@ -176,13 +176,13 @@ class ControllerApisTest {
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         true,
-        () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting())),
+        () => FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting())),
       metadataCache
     )
   }
 
   /**
-   * Build a RequestChannel.Request from the AbstractRequest
+   * Build a Request from the AbstractRequest
    *
    * @param request - AbstractRequest
    * @param listenerName - Default listener for the RequestChannel
@@ -192,15 +192,14 @@ class ControllerApisTest {
   private def buildRequest[T <: AbstractRequest](
     request: AbstractRequest,
     listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-  ): RequestChannel.Request = {
+  ): Request = {
     val buffer = request.serializeWithHeader(new RequestHeader(request.apiKey, request.version, clientID, 0))
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
       listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
-    new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
-      requestChannelMetrics)
+    new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics)
   }
 
   def createDenyAllAuthorizer(): Plugin[Authorizer] = {
@@ -360,8 +359,7 @@ class ControllerApisTest {
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None))
+      capturedResponse.capture())
     assertNotNull(capturedResponse.getValue)
     val response = capturedResponse.getValue.asInstanceOf[AlterConfigsResponse]
     assertEquals(Set(
@@ -459,8 +457,7 @@ class ControllerApisTest {
     controllerApis.handle(request, RequestLocal.withThreadConfinedCaching)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None))
+      capturedResponse.capture())
 
     assertNotNull(capturedResponse.getValue)
 
@@ -519,8 +516,7 @@ class ControllerApisTest {
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None))
+      capturedResponse.capture())
     assertNotNull(capturedResponse.getValue)
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     assertEquals(Set(new AlterConfigsResourceResponse().
@@ -634,8 +630,7 @@ class ControllerApisTest {
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None))
+      capturedResponse.capture())
     assertNotNull(capturedResponse.getValue)
     val response = capturedResponse.getValue.asInstanceOf[IncrementalAlterConfigsResponse]
     assertEquals(Set(
@@ -1250,8 +1245,7 @@ class ControllerApisTest {
       ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(req),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
 
     capturedResponse.getValue match {
@@ -1272,7 +1266,7 @@ class ControllerApisTest {
     val responseFuture = new CompletableFuture[ApiMessage]()
     val errorResponseFuture = new AtomicReference[AbstractResponse]()
     when(raftManager.handleRequest(any(), any(), any(), any())).thenReturn(responseFuture)
-    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+    when(requestChannel.sendResponse(any(), any())).thenAnswer { _ =>
       // Simulate an encoding failure in the initial fetch response
       throw new UnsupportedVersionException("Something went wrong")
     }.thenAnswer { invocation =>

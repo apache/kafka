@@ -628,12 +628,11 @@ public class DumpLogSegmentsTest {
 
         List<SimpleRecord> records = new ArrayList<>();
         for (ApiMessageAndVersion message : metadataRecords) {
-            MetadataRecordSerde serde = MetadataRecordSerde.INSTANCE;
             ObjectSerializationCache cache = new ObjectSerializationCache();
-            int size = serde.recordSize(message, cache);
+            int size = MetadataRecordSerde.INSTANCE.recordSize(message, cache);
             ByteBuffer buf = ByteBuffer.allocate(size);
             ByteBufferAccessor writer = new ByteBufferAccessor(buf);
-            serde.write(message, cache, writer);
+            MetadataRecordSerde.INSTANCE.write(message, cache, writer);
             buf.flip();
             records.add(new SimpleRecord(null, buf.array()));
         }

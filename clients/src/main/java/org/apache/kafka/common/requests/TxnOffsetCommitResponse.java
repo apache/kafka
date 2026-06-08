@@ -51,6 +51,10 @@ import java.util.function.Function;
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
 
+    public static boolean useTopicIds(short version) {
+        return version >= 6;
+    }
+
     public static Builder newBuilder(boolean useTopicIds) {
         if (useTopicIds) {
             return new TopicIdBuilder();
@@ -258,17 +262,6 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         return errorCounts(data.topics().stream().flatMap(topic ->
                 topic.partitions().stream().map(partition ->
                         Errors.forCode(partition.errorCode()))));
-    }
-
-    public Map<TopicPartition, Errors> errors() {
-        Map<TopicPartition, Errors> errorMap = new HashMap<>();
-        for (TxnOffsetCommitResponseTopic topic : data.topics()) {
-            for (TxnOffsetCommitResponsePartition partition : topic.partitions()) {
-                errorMap.put(new TopicPartition(topic.name(), partition.partitionIndex()),
-                             Errors.forCode(partition.errorCode()));
-            }
-        }
-        return errorMap;
     }
 
     public static TxnOffsetCommitResponse parse(Readable readable, short version) {

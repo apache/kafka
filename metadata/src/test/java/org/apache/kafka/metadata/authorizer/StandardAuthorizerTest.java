@@ -17,7 +17,6 @@
 
 package org.apache.kafka.metadata.authorizer;
 
-import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
@@ -37,7 +36,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
-import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -49,8 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -100,38 +96,6 @@ public class StandardAuthorizerTest {
         SecurityProtocol.PLAINTEXT,
         "127.0.0.1",
         9020);
-
-    public record AuthorizerTestServerInfo(Collection<Endpoint> endpoints) implements AuthorizerServerInfo {
-        public AuthorizerTestServerInfo {
-            assertFalse(endpoints.isEmpty());
-        }
-
-        @Override
-        public ClusterResource clusterResource() {
-            return new ClusterResource(Uuid.fromString("r7mqHQrxTNmzbKvCvWZzLQ").toString());
-        }
-
-        @Override
-        public int brokerId() {
-            return 0;
-        }
-
-        @Override
-        public Endpoint interBrokerEndpoint() {
-            return endpoints.iterator().next();
-        }
-
-        @Override
-        public Collection<String> earlyStartListeners() {
-            List<String> result = new ArrayList<>();
-            for (Endpoint endpoint : endpoints) {
-                if (endpoint.listener().equals("CONTROLLER")) {
-                    result.add(endpoint.listener());
-                }
-            }
-            return result;
-        }
-    }
 
     private final Metrics metrics = new Metrics();
 

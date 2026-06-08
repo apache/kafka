@@ -134,6 +134,13 @@ abstract class AbstractColumnFamilyAccessorTest {
     }
 
     @Test
+    public void shouldCommitStagedWritesWhenCommittingOffsets() throws RocksDBException {
+        final TopicPartition tp0 = new TopicPartition("testTopic", 0);
+        accessor.commit(dbAccessor, Map.of(tp0, 10L));
+        verify(dbAccessor).commitStagedWrites();
+    }
+
+    @Test
     public void shouldWipeCommittedOffsetsOnEmptyCommit() throws RocksDBException {
         dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
         final TopicPartition tp0 = new TopicPartition("testTopic", 0);

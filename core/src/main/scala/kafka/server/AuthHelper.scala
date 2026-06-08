@@ -19,7 +19,6 @@ package kafka.server
 
 import java.lang.{Byte => JByte}
 import java.util.Collections
-import kafka.network.RequestChannel
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE
@@ -27,6 +26,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.DescribeClusterResponseData
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection
+import org.apache.kafka.network.Request
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DescribeClusterRequest, RequestContext}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
@@ -54,12 +54,12 @@ class AuthHelper(authorizer: Option[Plugin[Authorizer]]) {
     }
   }
 
-  def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Unit = {
+  def authorizeClusterOperation(request: Request, operation: AclOperation): Unit = {
     if (!authorize(request.context, operation, CLUSTER, CLUSTER_NAME))
       throw new ClusterAuthorizationException(s"Request $request needs $operation permission.")
   }
 
-  def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
+  def authorizedOperations(request: Request, resource: Resource): Int = {
     val supportedOps = AclEntry.supportedOperations(resource.resourceType).asScala.toList
     val authorizedOps = authorizer match {
       case Some(authZ) =>
@@ -120,13 +120,13 @@ class AuthHelper(authorizer: Option[Plugin[Authorizer]]) {
   }
 
   def computeDescribeClusterResponse(
-    request: RequestChannel.Request,
+    request: Request,
     expectedEndpointType: EndpointType,
     clusterId: String,
     getNodes: () => DescribeClusterBrokerCollection,
     getControllerId: () => Int
   ): DescribeClusterResponseData = {
-    val describeClusterRequest = request.body[DescribeClusterRequest]
+    val describeClusterRequest = request.body(classOf[DescribeClusterRequest])
     val requestEndpointType = EndpointType.fromId(describeClusterRequest.data().endpointType())
     if (requestEndpointType.equals(EndpointType.UNKNOWN)) {
       return new DescribeClusterResponseData().

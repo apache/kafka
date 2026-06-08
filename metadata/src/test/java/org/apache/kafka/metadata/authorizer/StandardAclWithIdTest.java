@@ -17,13 +17,11 @@
 
 package org.apache.kafka.metadata.authorizer;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,20 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(value = 40)
 public class StandardAclWithIdTest {
-    public static final List<StandardAclWithId> TEST_ACLS = new ArrayList<>();
-
-    static {
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("QZDDv-R7SyaPgetDPGd0Mw"),
-            StandardAclTest.TEST_ACLS.get(0)));
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("SdDjEdlbRmy2__WFKe3RMg"),
-            StandardAclTest.TEST_ACLS.get(1)));
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A"),
-            StandardAclTest.TEST_ACLS.get(2)));
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("ab_5xjJXSbS1o5jGfhgQXg"),
-            StandardAclTest.TEST_ACLS.get(3)));
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("wP_cCK0LTEGSX9oDRInJHQ"),
-            StandardAclTest.TEST_ACLS.get(4)));
-    }
+    public static final List<StandardAclWithId> TEST_ACLS = StandardAclWithIdFixtures.TEST_ACLS;
 
     @Test
     public void testToRecordRoundTrips() {
