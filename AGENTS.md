@@ -127,6 +127,7 @@ Checkstyle reports: `<module>/build/reports/checkstyle/`.
 ## Coding conventions
 
 - **Commits / PR titles**: Start with `KAFKA-XXXXX`, `MINOR`, or `HOTFIX`. Use `KAFKA-XXXXX` only when there is a valid Jira ticket for the change.
+- **AI-generated contributions**: Follow the [AI-Generated Contributions](CONTRIBUTING.md#ai-generated-contributions) section in `CONTRIBUTING.md` — add a `Co-Authored-By` or `Generated-by` commit trailer for AI-assisted changes.
 - **Public API / KIP**: Changes to public client interfaces, wire protocol, broker configuration, or metrics generally require a [KIP](https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Improvement+Proposals). See the `javadoc` `include` list in [build.gradle](build.gradle) for packages treated as public API.
 - **License header**: New source files need the standard ASF license header (see existing files in the same module).
 - **Checkstyle**: Enforced on main and test sources; rules in `checkstyle/`. Import order is checked via Spotless.
