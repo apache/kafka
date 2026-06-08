@@ -22,7 +22,6 @@ import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.net.UnknownHostException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,7 +34,7 @@ public class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
 
     @Test
-    public void testRequestPercentageQuotaViolation() throws UnknownHostException {
+    public void testRequestPercentageQuotaViolation() {
         ClientRequestQuotaManager clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty());
         ClientQuotaEntity.ConfigEntity userEntity = new ClientQuotaManager.UserEntity("ANONYMOUS");
         ClientQuotaEntity.ConfigEntity clientEntity = new ClientQuotaManager.ClientIdEntity("test-client");

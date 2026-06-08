@@ -37,11 +37,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.mock;
 
 public class BaseClientQuotaManagerTest {
@@ -80,7 +80,7 @@ public class BaseClientQuotaManagerTest {
         return quotaManager.maybeRecordAndGetThrottleTimeMs(buildSession(user), clientId, value, time.milliseconds());
     }
 
-    protected void throttle(ClientQuotaManager quotaManager, int throttleTimeMs, ThrottleCallback channelThrottlingCallback) throws UnknownHostException {
+    protected void throttle(ClientQuotaManager quotaManager, int throttleTimeMs, ThrottleCallback channelThrottlingCallback) {
         AbstractRequest.Builder<FetchRequest> builder = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 1000, Map.of());
         FetchRequest fetchRequest = builder.build();
         ByteBuffer buffer = fetchRequest.serializeWithHeader(new RequestHeader(builder.apiKey(), fetchRequest.version(), "", 0));
@@ -88,10 +88,12 @@ public class BaseClientQuotaManagerTest {
 
         // read the header from the buffer first so that the body can be read next from the Request constructor
         RequestHeader header = RequestHeader.parse(buffer);
-        RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-                ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-        Request request = new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
-        quotaManager.throttle(request.header().clientId(), request.session(), channelThrottlingCallback, throttleTimeMs);
+        assertDoesNotThrow(() -> {
+            RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
+                    ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+            Request request = new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
+            quotaManager.throttle(request.header().clientId(), request.session(), channelThrottlingCallback, throttleTimeMs);
+        });
     }
 
 }

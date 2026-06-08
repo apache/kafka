@@ -383,7 +383,7 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
 
     @Test
-    public void testQuotaViolation() throws UnknownHostException {
+    public void testQuotaViolation() {
         ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "");
         KafkaMetric queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""));
         try {

@@ -30,7 +30,6 @@ import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.net.UnknownHostException;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -41,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
 
@@ -182,11 +180,7 @@ public class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTe
             assertEquals(1000, throttleTime, "Should be throttled");
 
             // Throttle
-            try {
-                throttle(quotaManager, throttleTime, callback);
-            } catch (UnknownHostException e) {
-                fail("throttle shouldn't throw UnknownHostException");
-            }
+            throttle(quotaManager, throttleTime, callback);
             assertEquals(1, ((Double) queueSizeMetric.metricValue()).intValue());
 
             // After a request is delayed, the callback cannot be triggered immediately
