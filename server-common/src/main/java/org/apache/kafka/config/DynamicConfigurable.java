@@ -16,32 +16,19 @@
  */
 package org.apache.kafka.config;
 
-import org.apache.kafka.common.config.AbstractConfig;
-
 import java.util.Set;
 
 /**
- * An interface for Kafka broker configs that support dynamic reconfiguration.
- * <p>
- * Components that implement this interface can have their configurations updated
- * at runtime without requiring a broker restart.
- * <p>
- * The reconfiguration process follows three steps:
- * <ol>
- *   <li>Determining which configurations can be dynamically updated via {@link #reconfigurableConfigs()}</li>
- *   <li>Validating the new configuration before applying it via {@link #validateReconfiguration(AbstractConfig)}</li>
- *   <li>Applying the new configuration via {@link #reconfigure(AbstractConfig, AbstractConfig)}</li>
- * </ol>
+ * An interface for components that support dynamic reconfiguration with a component-owned config type.
  *
  * @param <T> the configuration type used by the reconfigurable component
  */
-public interface BrokerReconfigurable<T extends AbstractConfig> {
+public interface DynamicConfigurable<T> {
     /**
      * Returns the set of configuration keys that can be dynamically reconfigured.
-     *
      * <p>
      * Only the configurations returned by this method will be considered for
-     * dynamic updates by the broker.
+     * dynamic updates.
      *
      * @return a set of configuration key names that can be dynamically updated
      */
