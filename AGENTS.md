@@ -25,7 +25,7 @@ AI assistants) operating on this repository.
 Apache Kafka is a distributed event streaming platform. This repo is a **Gradle**
 build in **Java** and **Scala 2.13**.
 
-- **Supported JDK**: 11+ for `clients` and `streams`; 17+ for other modules.
+- **Supported JDK**: 11+ for `clients`, `generator`, and `streams`; 17+ for other modules.
 - **Build/test JDK**: Java 17 and 25.
 - **Build tool**: Gradle, wrapper `./gradlew` is recommended.
 
@@ -42,7 +42,7 @@ build in **Java** and **Scala 2.13**.
 | `connect/` | Kafka Connect (api, runtime, plugins, transforms)                                    |
 | `streams/` | Kafka Streams (+ Scala, examples, upgrade system tests)                              |
 | `generator/` | RPC/message code generation                                                          |
-| `tools/`, `shell/` | CLI tools and kafka metadata shell                                                   
+| `tools/`, `shell/` | CLI tools and kafka metadata shell                                                   |
 | `examples/` | Kafka producer and consumer examples                                                 |
 | `jmh-benchmarks/` | Kafka benchmarks tests                                                               |
 | `trogdor/` | test framework                                                                       |
@@ -126,6 +126,8 @@ Checkstyle reports: `<module>/build/reports/checkstyle/`.
 
 ## Coding conventions
 
+- **Commits / PR titles**: Start with `KAFKA-XXXXX`, `MINOR`, or `HOTFIX`. Use `KAFKA-XXXXX` only when there is a valid Jira ticket for the change.
+- **Public API / KIP**: Changes to public client interfaces, wire protocol, broker configuration, or metrics generally require a [KIP](https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Improvement+Proposals). See the `javadoc` `include` list in [build.gradle](build.gradle) for packages treated as public API.
 - **License header**: New source files need the standard ASF license header (see existing files in the same module).
 - **Checkstyle**: Enforced on main and test sources; rules in `checkstyle/`. Import order is checked via Spotless.
 - **Generated code**: Do not hand-edit generated RPC/message sources. Regenerate with `processMessages` / `processTestMessages`. See [clients/src/main/resources/common/message/README.md](clients/src/main/resources/common/message/README.md).
