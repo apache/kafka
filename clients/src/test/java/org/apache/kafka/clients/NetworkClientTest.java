@@ -323,7 +323,7 @@ public class NetworkClientTest {
         NetworkClient client = new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
             reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
             defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, true, new ApiVersions(), new LogContext(),
-            MetadataRecoveryStrategy.REBOOTSTRAP, true);
+            MetadataRecoveryStrategy.REBOOTSTRAP, NetworkClient.BootstrapConfiguration.DISABLED, true);
 
         // Send the ApiVersionsRequest to the first node
         client.ready(node0, time.milliseconds());
@@ -1688,7 +1688,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config);
+                MetadataRecoveryStrategy.NONE, config, false);
 
         // Async DNS resolution: first poll starts the resolution
         client.poll(1000, time.milliseconds());
@@ -1717,7 +1717,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config);
+                MetadataRecoveryStrategy.NONE, config, false);
 
         // First poll to initialize bootstrap timer
         client.poll(10, time.milliseconds());
@@ -1743,7 +1743,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config);
+                MetadataRecoveryStrategy.NONE, config, false);
 
         // Directly call ensureBootstrapped
         // Should return without error even though bootstrap hasn't succeeded (will retry on next poll)
@@ -1766,7 +1766,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
                 time, false, new ApiVersions(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, config);
+                MetadataRecoveryStrategy.NONE, config, false);
 
         // Async DNS resolution: first poll starts the resolution
         client.poll(1000, time.milliseconds());

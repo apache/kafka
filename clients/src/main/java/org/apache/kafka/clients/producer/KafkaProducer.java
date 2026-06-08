@@ -48,6 +48,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -1054,6 +1055,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *                                when send is invoked after producer has been closed.
      * @throws InterruptException     If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws KafkaException         If a Kafka related error occurs that does not belong to the public API exceptions.
      * @see #partitionsFor(String)
      */
@@ -1362,6 +1364,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws AuthorizationException  if not authorized to the specified topic. See the exception for more details
      * @throws InterruptException      if the thread is interrupted while blocked
      * @throws TimeoutException        if the topic cannot be found in metadata within {@code max.block.ms}
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      * @throws KafkaException          for all Kafka-related exceptions, including the case where this method is called after producer close
      */
     @Override

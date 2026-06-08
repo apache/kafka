@@ -169,7 +169,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         if (!unsentRequests.isEmpty()) {
             pollTimeoutMs = Math.min(retryBackoffMs, pollTimeoutMs);
         }
-        this.client.poll(pollTimeoutMs, currentTimeMs);
+        try {
+            this.client.poll(pollTimeoutMs, currentTimeMs);
+        } catch (BootstrapResolutionException e) {
+            backgroundEventHandler.add(new ErrorEvent(e));
+        }
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs, onClose);
         asyncConsumerMetrics.recordUnsentRequestsQueueSize(unsentRequests.size(), currentTimeMs);

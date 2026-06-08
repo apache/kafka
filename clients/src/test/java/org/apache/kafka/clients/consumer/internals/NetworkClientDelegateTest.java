@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -26,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -63,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -247,6 +250,43 @@ public class NetworkClientDelegateTest {
         assertNotNull(event);
         assertEquals(BackgroundEvent.Type.ERROR, event.type());
         assertEquals(authException, ((ErrorEvent) event).error());
+    }
+
+    @Test
+    public void testBootstrapResolutionExceptionFromPollPropagatedViaErrorEvent() throws Exception {
+        BootstrapResolutionException bootstrapException = new BootstrapResolutionException("DNS resolution failed");
+        KafkaClient mockKafkaClient = mock(KafkaClient.class);
+        when(mockKafkaClient.poll(anyLong(), anyLong())).thenThrow(bootstrapException);
+
+        BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+
+        LogContext logContext = new LogContext();
+        Properties properties = new Properties();
+        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(GROUP_ID_CONFIG, GROUP_ID);
+        properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+        properties.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+
+        try (NetworkClientDelegate ncd = new NetworkClientDelegate(time,
+                new ConsumerConfig(properties),
+                logContext,
+                mockKafkaClient,
+                this.metadata,
+                this.backgroundEventHandler,
+                true,
+                mock(AsyncConsumerMetrics.class))) {
+
+            assertEquals(0, backgroundEventQueue.size());
+            ncd.poll(0, time.milliseconds());
+            assertEquals(1, backgroundEventQueue.size());
+
+            BackgroundEvent event = backgroundEventQueue.poll();
+            assertNotNull(event);
+            assertEquals(BackgroundEvent.Type.ERROR, event.type());
+            assertEquals(bootstrapException, ((ErrorEvent) event).error());
+        }
     }
 
     @ParameterizedTest
