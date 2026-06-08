@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -107,11 +106,11 @@ public class ClientJwtValidator implements JwtValidator {
         Collection<String> scopeRawCollection;
 
         if (scopeRaw instanceof String)
-            scopeRawCollection = Collections.singletonList((String) scopeRaw);
+            scopeRawCollection = List.of((String) scopeRaw);
         else if (scopeRaw instanceof Collection)
             scopeRawCollection = (Collection<String>) scopeRaw;
         else
-            scopeRawCollection = Collections.emptySet();
+            scopeRawCollection = Set.of();
 
         Number expirationRaw = (Number) getClaim(payload, EXPIRATION_CLAIM_NAME);
         String subRaw = (String) getClaim(payload, subClaimName);

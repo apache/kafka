@@ -192,7 +192,7 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
 
     @Override
     public Long committedOffset(final TopicPartition partition) {
-        for (final S segment : segments.values()) {
+        for (final S segment : segments.descendingMap().values()) {
             final Long offset = segment.committedOffset(partition);
             if (offset != null) {
                 return offset;
