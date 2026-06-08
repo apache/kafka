@@ -689,7 +689,8 @@ public class ReplicaVerificationTool {
                 new ApiVersions(),
                 logContext,
                 MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
-                NetworkClient.BootstrapConfiguration.DISABLED
+                NetworkClient.BootstrapConfiguration.DISABLED,
+                consumerConfig.getBoolean(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG)
             );
         }
 

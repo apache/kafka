@@ -288,7 +288,8 @@ public final class ClientUtils {
                     clientTelemetrySender,
                     config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
                     MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
-                    bootstrapConfiguration
+                    bootstrapConfiguration,
+                    config.getBoolean(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG)
             );
         } catch (Throwable t) {
             closeQuietly(selector, "Selector");

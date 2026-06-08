@@ -168,8 +168,7 @@ class ShareGroupDLQStateManagerTest {
             0L,
             2L,
             Optional.of((short) 1),
-            Optional.of(new RuntimeException("simulated cause")),
-            false
+            Optional.of(new RuntimeException("simulated cause"))
         );
     }
 
@@ -972,12 +971,12 @@ class ShareGroupDLQStateManagerTest {
             GROUP_ID,
             new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
             0L, 0L,
-            Optional.empty(), Optional.empty(), false);
+            Optional.empty(), Optional.empty());
         ShareGroupDLQRecordParameter p1 = new ShareGroupDLQRecordParameter(
             GROUP_ID,
             new TopicIdPartition(SOURCE_TOPIC_ID, 1, "source-topic"),
             0L, 0L,
-            Optional.empty(), Optional.empty(), false);
+            Optional.empty(), Optional.empty());
 
         CompletableFuture<Void> r0 = stateManager.dlq(p0);
         CompletableFuture<Void> r1 = stateManager.dlq(p1);
@@ -1043,7 +1042,7 @@ class ShareGroupDLQStateManagerTest {
             GROUP_ID,
             new TopicIdPartition(SOURCE_TOPIC_ID, 0, null),
             0L, 0L,
-            Optional.empty(), Optional.empty(), false);
+            Optional.empty(), Optional.empty());
         assertNull(stateManager.dlq(p).get(10, TimeUnit.SECONDS));
 
         assertEquals(1, capturedProduces.size());
@@ -1123,17 +1122,17 @@ class ShareGroupDLQStateManagerTest {
             groupA,
             new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
             0L, 0L,
-            Optional.empty(), Optional.empty(), false);
+            Optional.empty(), Optional.empty());
         ShareGroupDLQRecordParameter pB = new ShareGroupDLQRecordParameter(
             groupB,
             new TopicIdPartition(SOURCE_TOPIC_ID, 1, "source-topic"),
             0L, 0L,
-            Optional.empty(), Optional.empty(), false);
+            Optional.empty(), Optional.empty());
         ShareGroupDLQRecordParameter pC = new ShareGroupDLQRecordParameter(
             groupC,
             new TopicIdPartition(SOURCE_TOPIC_ID, 2, "source-topic"),
             0L, 0L,
-            Optional.empty(), Optional.empty(), false);
+            Optional.empty(), Optional.empty());
 
         CompletableFuture<Void> rA = stateManager.dlq(pA);
         CompletableFuture<Void> rB = stateManager.dlq(pB);
@@ -1206,7 +1205,7 @@ class ShareGroupDLQStateManagerTest {
                 GROUP_ID,
                 new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
                 0L, 0L,
-                Optional.empty(), Optional.empty(), false));
+                Optional.empty(), Optional.empty()));
         }
 
         // Wait until the callback observes nodeRPCMap with more than 2 handlers piled up.
@@ -1352,7 +1351,7 @@ class ShareGroupDLQStateManagerTest {
             new ShareGroupDLQRecordParameter(GROUP_ID,
                 new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
                 0L, 0L,
-                Optional.empty(), Optional.empty(), false),
+                Optional.empty(), Optional.empty()),
             goodFuture,
             ShareGroupDLQStateManager.REQUEST_BACKOFF_MS,
             ShareGroupDLQStateManager.REQUEST_BACKOFF_MAX_MS,
@@ -1367,7 +1366,7 @@ class ShareGroupDLQStateManagerTest {
             new ShareGroupDLQRecordParameter(GROUP_ID,
                 new TopicIdPartition(SOURCE_TOPIC_ID, 0, "source-topic"),
                 0L, 0L,
-                Optional.empty(), Optional.empty(), false),
+                Optional.empty(), Optional.empty()),
             brokenFuture,
             ShareGroupDLQStateManager.REQUEST_BACKOFF_MS,
             ShareGroupDLQStateManager.REQUEST_BACKOFF_MAX_MS,
@@ -1399,7 +1398,7 @@ class ShareGroupDLQStateManagerTest {
             groupId,
             new TopicIdPartition(SOURCE_TOPIC_ID, sourcePartition, "source-topic"),
             0L, 0L,
-            Optional.empty(), Optional.empty(), false);
+            Optional.empty(), Optional.empty());
         return manager.new ProduceRequestHandler(
             param,
             new CompletableFuture<>(),

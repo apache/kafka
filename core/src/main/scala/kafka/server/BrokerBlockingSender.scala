@@ -97,7 +97,8 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       new ApiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      NetworkClient.BootstrapConfiguration.DISABLED
+      NetworkClient.BootstrapConfiguration.DISABLED,
+      false
     )
     (networkClient, reconfigurableChannelBuilder)
   }

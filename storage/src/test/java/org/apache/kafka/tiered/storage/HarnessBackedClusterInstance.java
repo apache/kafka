@@ -127,6 +127,11 @@ public class HarnessBackedClusterInstance implements ClusterInstance {
     }
 
     @Override
+    public void restartBrokersWithSwappedClientListenerPorts(int brokerId1, int brokerId2) {
+        throw new UnsupportedOperationException("restartBrokersWithSwappedClientListenerPorts(int, int) is not supported in HarnessBackedClusterInstance");
+    }
+
+    @Override
     public void start() {
         throw new UnsupportedOperationException("start() is managed by KafkaServerTestHarness");
     }
