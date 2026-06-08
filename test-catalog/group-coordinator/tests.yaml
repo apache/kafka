@@ -288,7 +288,9 @@ org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 - testShareGroupHeartbeat
 - testSharePartitionDeleteRequests
 - testSharePartitionDeleteRequestsNonEmptyShareGroup
+- testStreamsGroupDescribeDelegatesAndReturnsBundledResult
 - testStreamsGroupHeartbeat
+- testValidateStreamsGroupMemberDelegates
 org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testCanComputeNextTargetAssignment
 - testCanComputeNextTargetAssignmentWithNoPreviousAssignmentTimestamp
@@ -634,6 +636,8 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupDescribeNoErrors
 - testStreamsGroupDescribeOnConsumerGroup
 - testStreamsGroupDescribeOnShareGroup
+- testStreamsGroupDescribeReadsStoredDescriptionTopologyEpochAtCommittedOffset
+- testStreamsGroupDescribeSurfacesStoredDescriptionTopologyEpoch
 - testStreamsGroupDescribeWithErrors
 - testStreamsGroupDynamicConfigs
 - testStreamsGroupEndpointInformationIncludesNewMember
@@ -657,6 +661,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsGroupMemberJoiningWithStaleTopology
 - testStreamsGroupMemberRequestingShutdownApplication
 - testStreamsGroupMemberRequestingShutdownApplicationUponLeaving
+- testStreamsGroupMetadataReplayRoundTripsTopologyDescriptionEpochs
 - testStreamsInitialRebalanceDelayEmptyDuringDelayAssignsAfterTimer
 - testStreamsLeavingMemberRemovesMemberAndBumpsGroupEpoch
 - testStreamsNewJoiningMemberTriggersNewTargetAssignment
@@ -701,6 +706,9 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testUpdatingSubscriptionTriggersNewTargetAssignment
 - testValidHeartbeat
 - testValidLeaveGroup
+- testValidateStreamsGroupMemberDoesNotSeeUncommittedFence
+- testValidateStreamsGroupMemberThrowsWhenGroupAbsent
+- testValidateStreamsGroupMemberThrowsWhenMemberAbsent
 org.apache.kafka.coordinator.group.OffsetAndMetadataTest:
 - testAttributes
 - testFromRecord
@@ -1196,6 +1204,7 @@ org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpersTest:
 - testNewStreamsGroupMetadataRecord
 - testNewStreamsGroupMetadataRecordNullGroupId
 - testNewStreamsGroupMetadataRecordWithNullAssignmentConfig
+- testNewStreamsGroupMetadataRecordWithTopologyDescriptionEpochs
 - testNewStreamsGroupTargetAssignmentMetadataRecord
 - testNewStreamsGroupTargetAssignmentMetadataRecordNullGroupId
 - testNewStreamsGroupTargetAssignmentMetadataTombstoneRecord
@@ -1215,6 +1224,15 @@ org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpersTest:
 - testNewStreamsGroupTopologyRecordTombstoneNullGroupId
 - testNewStreamsGroupTopologyRecordWithTopologyNullGroupId
 - testNewStreamsGroupTopologyRecordWithValueNullGroupId
+org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResultTest:
+- testCarriesDescribedGroupsAndPerGroupStoredEpoch
+- testCollectionsAreImmutable
+- testNullArgumentsRejected
+org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResultTest:
+- testCreatableTopicsMapIsImmutable
+- testCurrentTopologyEpochIsPartOfEquality
+- testNullDataIsRejected
+- testThreeArgConstructorPreservesTopologyEpoch
 org.apache.kafka.coordinator.group.streams.StreamsGroupMemberTest:
 - testAsStreamsGroupDescribeMember
 - testAsStreamsGroupDescribeWithTargetAssignmentNull
@@ -1239,6 +1257,7 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testCancelTimers
 - testComputeMetadataHash
 - testCreateGroupTombstoneRecords
+- testCurrentTopologyEpochReflectsLatestTopology
 - testDeletingMemberRemovesProcessId
 - testGetCachedEndpointToPartitionsReturnsEmptyWhenNoCache
 - testGetMemberOrThrow
@@ -1257,6 +1276,7 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testRemoveTaskProcessIds
 - testSetConfiguredTopologyClearsCache
 - testShutdownRequestedMethods
+- testTopologyDescriptionPluginEpochs
 - testUpdateMember
 - testUpdateMemberInvalidatesCache
 - testUpdatingMemberUpdatesProcessId

@@ -5354,6 +5354,8 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - shouldAddValueProvidersWithoutStatisticsToInjectedMetricsRecorderWhenRecordingLevelInfo
 - shouldAllowCustomManagedIterators
 - shouldCallRocksDbConfigSetter
+- shouldCloseAllDualColumnFamilyHandlesWhenAccessorPutThrowsDuringClose
+- shouldCloseOffsetsCfOptionsOnStoreClose
 - shouldCloseOpenRangeIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext
 - shouldCloseStatisticsWhenUserProvidesNoStatistics
 - shouldCloseStatisticsWhenUserProvidesStatistics
@@ -5430,6 +5432,9 @@ org.apache.kafka.streams.state.internals.RocksDBMigratingSessionStoreWithHeaders
 - testRestore
 - testRestoreWithDefaultSerdes
 - testSize
+org.apache.kafka.streams.state.internals.RocksDBMigratingWindowStoreWithHeadersCloseLeakTest:
+- shouldCloseAllDualColumnFamilyHandlesWhenAccessorPutThrowsDuringClose
+- shouldCloseOffsetsCfOptionsOnStoreClose
 org.apache.kafka.streams.state.internals.RocksDBRangeIteratorTest:
 - shouldCallCloseCallbackOnClose
 - shouldCloseIterator
@@ -5506,6 +5511,9 @@ org.apache.kafka.streams.state.internals.RocksDBSessionStoreWithHeadersTest:
 - shouldCollectExecutionInfoWhenRequested
 - shouldNotCollectExecutionInfoWhenNotRequested
 - shouldReturnUnknownQueryTypeForWindowRangeQuery
+org.apache.kafka.streams.state.internals.RocksDBStoreCloseLeakTest:
+- shouldCloseColumnFamilyHandlesWhenAccessorPutThrowsDuringClose
+- shouldCloseOffsetsCfOptionsOnStoreClose
 org.apache.kafka.streams.state.internals.RocksDBStoreTest:
 - prefixScanShouldNotThrowConcurrentModificationException
 - shouldAddValueProvidersWithStatisticsToInjectedMetricsRecorderWhenRecordingLevelDebug
@@ -5997,6 +6005,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldAddValueProvidersWithoutStatisticsToInjectedMetricsRecorderWhenRecordingLevelInfo
 - shouldAllowCustomManagedIterators
 - shouldCallRocksDbConfigSetter
+- shouldCloseOffsetsCfOptionsOnStoreClose
 - shouldCloseOpenRangeIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext
 - shouldCloseStatisticsWhenUserProvidesNoStatistics
 - shouldCloseStatisticsWhenUserProvidesStatistics
@@ -6080,6 +6089,8 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldAddValueProvidersWithoutStatisticsToInjectedMetricsRecorderWhenRecordingLevelInfo
 - shouldAllowCustomManagedIterators
 - shouldCallRocksDbConfigSetter
+- shouldCloseOffsetsCfOptionsAfterOpenFromDefaultStore
+- shouldCloseOffsetsCfOptionsAfterOpenFromTimestampedStore
 - shouldCloseOpenRangeIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext
 - shouldCloseStatisticsWhenUserProvidesNoStatistics
 - shouldCloseStatisticsWhenUserProvidesStatistics
