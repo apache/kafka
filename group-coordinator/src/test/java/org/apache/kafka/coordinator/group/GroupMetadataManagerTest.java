@@ -10743,7 +10743,7 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testStreamsGroupMetadataReplayRoundTripsTopologyDescriptionEpochs() {
-        // KIP-1331: replay must read storedTopologyEpoch and lastFailedTopologyEpoch from the record
+        // KIP-1331: replay must read storedDescriptionTopologyEpoch and failedDescriptionTopologyEpoch from the record
         // and apply them to the in-memory streams group.
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
@@ -10753,19 +10753,19 @@ public class GroupMetadataManagerTest {
             groupId, 1, 0L, -1, Map.of(), 7, 5));
 
         StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(groupId);
-        assertEquals(7, group.storedTopologyEpoch());
-        assertEquals(5, group.lastFailedTopologyEpoch());
+        assertEquals(7, group.storedDescriptionTopologyEpoch());
+        assertEquals(5, group.failedDescriptionTopologyEpoch());
 
         // A subsequent replay carrying defaults (-1, -1) overwrites — the latest record wins.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
             groupId, 2, 0L, -1, Map.of(), -1, -1));
-        assertEquals(-1, group.storedTopologyEpoch());
-        assertEquals(-1, group.lastFailedTopologyEpoch());
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
     }
 
     @Test
-    public void testStreamsGroupDescribeSurfacesStoredTopologyEpoch() {
-        // KIP-1331: describe bundles per-group storedTopologyEpoch so the service layer can decide
+    public void testStreamsGroupDescribeSurfacesStoredDescriptionTopologyEpoch() {
+        // KIP-1331: describe bundles per-group storedDescriptionTopologyEpoch so the service layer can decide
         // whether to consult the topology description plugin.
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
@@ -10783,13 +10783,13 @@ public class GroupMetadataManagerTest {
         // Two described groups: one found, one not.
         assertEquals(2, result.describedGroups().size());
         // Only the found group contributes to the epoch map.
-        assertEquals(Map.of(groupId, 9), result.storedTopologyEpochs());
+        assertEquals(Map.of(groupId, 9), result.storedDescriptionTopologyEpochs());
     }
 
     @Test
-    public void testStreamsGroupDescribeReadsStoredTopologyEpochAtCommittedOffset() {
-        // KIP-1331: describe must read storedTopologyEpoch at committedOffset so the bundled result is a
-        // single consistent snapshot — describedGroup and storedTopologyEpoch must agree on which write
+    public void testStreamsGroupDescribeReadsStoredDescriptionTopologyEpochAtCommittedOffset() {
+        // KIP-1331: describe must read storedDescriptionTopologyEpoch at committedOffset so the bundled result is a
+        // single consistent snapshot — describedGroup and storedDescriptionTopologyEpoch must agree on which write
         // the reader is observing. Writing an uncommitted record that flips the value to a new epoch
         // must not leak into a describe issued at the old committedOffset.
         String groupId = "streams-group";
@@ -10810,13 +10810,13 @@ public class GroupMetadataManagerTest {
         // Describing at the older committed offset must see the old value (3), not the uncommitted 7.
         StreamsGroupDescribeResult oldSnapshot = context.groupMetadataManager.streamsGroupDescribe(
             List.of(groupId), offsetWithThree);
-        assertEquals(Map.of(groupId, 3), oldSnapshot.storedTopologyEpochs());
+        assertEquals(Map.of(groupId, 3), oldSnapshot.storedDescriptionTopologyEpochs());
 
         // After committing, describing at the new committed offset reflects the new value.
         context.commit();
         StreamsGroupDescribeResult newSnapshot = context.groupMetadataManager.streamsGroupDescribe(
             List.of(groupId), context.lastCommittedOffset);
-        assertEquals(Map.of(groupId, 7), newSnapshot.storedTopologyEpochs());
+        assertEquals(Map.of(groupId, 7), newSnapshot.storedDescriptionTopologyEpochs());
     }
 
     @Test

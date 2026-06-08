@@ -608,7 +608,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return CompletableFuture.completedFuture(
                 new StreamsGroupHeartbeatResult(
                     new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
-                    Map.of()
+                    Map.of(),
+                    -1
                 )
             );
         }
@@ -623,7 +624,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(apiError.error().code())
                         .setErrorMessage(apiError.message()),
-                    Map.of()
+                    Map.of(),
+                    -1
                 )
             );
         }
@@ -641,7 +643,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(error.code())
                         .setErrorMessage(message),
-                    Map.of()
+                    Map.of(),
+                    -1
                 ),
             log
         ));

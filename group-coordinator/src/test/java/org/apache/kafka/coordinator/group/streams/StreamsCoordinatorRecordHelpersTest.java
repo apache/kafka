@@ -285,7 +285,6 @@ class StreamsCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewStreamsGroupMetadataRecordWithTopologyDescriptionEpochs() {
-        // KIP-1331: the 7-arg overload persists storedTopologyEpoch and lastFailedTopologyEpoch.
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new StreamsGroupMetadataKey()
                 .setGroupId(GROUP_ID),
@@ -295,8 +294,8 @@ class StreamsCoordinatorRecordHelpersTest {
                     .setMetadataHash(43)
                     .setValidatedTopologyEpoch(44)
                     .setLastAssignmentConfigs(List.of())
-                    .setStoredTopologyEpoch(7)
-                    .setLastFailedTopologyEpoch(5),
+                    .setStoredDescriptionTopologyEpoch(7)
+                    .setFailedDescriptionTopologyEpoch(5),
                 (short) 0
             )
         );

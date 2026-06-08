@@ -38,7 +38,7 @@ public class StreamsGroupDescribeResultTest {
 
         StreamsGroupDescribeResult result = new StreamsGroupDescribeResult(groups, epochs);
         assertEquals(groups, result.describedGroups());
-        assertEquals(epochs, result.storedTopologyEpochs());
+        assertEquals(epochs, result.storedDescriptionTopologyEpochs());
     }
 
     @Test
@@ -47,7 +47,7 @@ public class StreamsGroupDescribeResultTest {
         assertThrows(UnsupportedOperationException.class,
             () -> result.describedGroups().add(new StreamsGroupDescribeResponseData.DescribedGroup()));
         assertThrows(UnsupportedOperationException.class,
-            () -> result.storedTopologyEpochs().put("x", 1));
+            () -> result.storedDescriptionTopologyEpochs().put("x", 1));
     }
 
     @Test

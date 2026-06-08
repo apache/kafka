@@ -739,7 +739,7 @@ public class GroupMetadataManager {
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A {@link StreamsGroupDescribeResult} bundling the described groups with per-group
-     *         storedTopologyEpoch (KIP-1331). If a group is not found, its DescribedGroup carries the
+     *         storedDescriptionTopologyEpoch (KIP-1331). If a group is not found, its DescribedGroup carries the
      *         error code and message and is omitted from the stored-epoch map.
      */
     public StreamsGroupDescribeResult streamsGroupDescribe(
@@ -747,14 +747,12 @@ public class GroupMetadataManager {
         long committedOffset
     ) {
         final List<StreamsGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
-        final Map<String, Integer> groupIdToStoredTopologyEpochs = new HashMap<>();
+        final Map<String, Integer> groupIdToStoredDescriptionTopologyEpochs = new HashMap<>();
         groupIds.forEach(groupId -> {
             try {
                 StreamsGroup group = streamsGroup(groupId, committedOffset);
                 describedGroups.add(group.asDescribedGroup(committedOffset));
-                // KIP-1331: read the stored epoch at the same committedOffset so describedGroup and the
-                // stored-epoch map describe a single consistent snapshot of the group.
-                groupIdToStoredTopologyEpochs.put(groupId, group.storedTopologyEpoch(committedOffset));
+                groupIdToStoredDescriptionTopologyEpochs.put(groupId, group.storedDescriptionTopologyEpoch(committedOffset));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
@@ -764,7 +762,7 @@ public class GroupMetadataManager {
             }
         });
 
-        return new StreamsGroupDescribeResult(describedGroups, groupIdToStoredTopologyEpochs);
+        return new StreamsGroupDescribeResult(describedGroups, groupIdToStoredDescriptionTopologyEpochs);
     }
 
     /**
@@ -2091,17 +2089,14 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            // KIP-1331: persist storedTopologyEpoch/lastFailedTopologyEpoch unchanged on a routine epoch bump.
-            // The heartbeat-side gating predicate (currentTopologyEpoch comparisons) naturally invalidates a
-            // stale stored or failed epoch once the topology advances, so we don't reset them here.
             records.add(newStreamsGroupMetadataRecord(
                 groupId,
                 groupEpoch,
                 metadataHash,
                 validatedTopologyEpoch,
                 currentAssignmentConfigs,
-                group.storedTopologyEpoch(),
-                group.lastFailedTopologyEpoch()
+                group.storedDescriptionTopologyEpoch(),
+                group.failedDescriptionTopologyEpoch()
             ));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {} with metadata hash {} and validated topic epoch {}.", groupId, memberId, groupEpoch, metadataHash, validatedTopologyEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
@@ -2213,9 +2208,6 @@ public class GroupMetadataManager {
 
         response.setStatus(returnedStatus);
 
-        // KIP-1331: use updatedTopology.topologyEpoch() rather than group.currentTopologyEpoch(). On the first
-        // push, maybeUpdateTopology has appended a topology record to `records` but group.topology() has not
-        // been replayed yet, so reading it here would return -1 instead of the just-pushed epoch.
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated, updatedTopology.topologyEpoch()));
     }
 
@@ -4529,16 +4521,15 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        // KIP-1331: preserve storedTopologyEpoch/lastFailedTopologyEpoch across a fence. Fencing a single member
-        // does not invalidate the plugin's view of the topology.
+
         records.add(newStreamsGroupMetadataRecord(
             group.groupId(),
             groupEpoch,
             group.metadataHash(),
             group.validatedTopologyEpoch(),
             group.lastAssignmentConfigs(),
-            group.storedTopologyEpoch(),
-            group.lastFailedTopologyEpoch()
+            group.storedDescriptionTopologyEpoch(),
+            group.failedDescriptionTopologyEpoch()
         ));
 
         // If this is the last member, the group becomes empty so we must
@@ -5670,8 +5661,8 @@ public class GroupMetadataManager {
             streamsGroup.setGroupEpoch(value.epoch());
             streamsGroup.setMetadataHash(value.metadataHash());
             streamsGroup.setValidatedTopologyEpoch(value.validatedTopologyEpoch());
-            streamsGroup.setStoredTopologyEpoch(value.storedTopologyEpoch());
-            streamsGroup.setLastFailedTopologyEpoch(value.lastFailedTopologyEpoch());
+            streamsGroup.setStoredDescriptionTopologyEpoch(value.storedDescriptionTopologyEpoch());
+            streamsGroup.setFailedDescriptionTopologyEpoch(value.failedDescriptionTopologyEpoch());
 
             if (value.lastAssignmentConfigs() != null) {
                 streamsGroup.setLastAssignmentConfigs(
@@ -8054,7 +8045,7 @@ public class GroupMetadataManager {
 
     /**
      * Validates that a streams group exists and that the given member is a current member of it.
-     * Used by the StreamsGroupTopologyDescriptionUpdate RPC handler (KIP-1331) to enforce the
+     * Used by the StreamsGroupTopologyDescriptionUpdate RPC handler to enforce the
      * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID contract before consulting the topology description plugin.
      * The lookup runs at {@code committedOffset} so an uncommitted fence/leave does not cause a
      * still-live member to appear unknown (or vice versa).

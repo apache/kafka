@@ -902,7 +902,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param groupIds      The IDs of the groups to describe.
      *
      * @return A {@link StreamsGroupDescribeResult} containing the described groups and per-group
-     *         stored topology epoch (KIP-1331).
+     *         stored description topology epoch (KIP-1331).
      *
      */
     public StreamsGroupDescribeResult streamsGroupDescribe(
@@ -913,8 +913,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Validates that a streams group exists and that the given member is a current member of it
-     * (KIP-1331). The lookup runs at {@code committedOffset} so an uncommitted fence/leave does not
+     * Validates that a streams group exists and that the given member is a current member of it.
+     * The lookup runs at {@code committedOffset} so an uncommitted fence/leave does not
      * cause a still-live member to appear unknown (or vice versa). Must be scheduled on the
      * coordinator runtime like any other read.
      *

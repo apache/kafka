@@ -42,12 +42,4 @@ public record StreamsGroupHeartbeatResult(
         Objects.requireNonNull(data);
         creatableTopics = Collections.unmodifiableMap(Objects.requireNonNull(creatableTopics));
     }
-
-    public StreamsGroupHeartbeatResult(
-        StreamsGroupHeartbeatResponseData data,
-        Map<String, CreatableTopic> creatableTopics
-    ) {
-        this(data, creatableTopics, -1);
-    }
-
 }

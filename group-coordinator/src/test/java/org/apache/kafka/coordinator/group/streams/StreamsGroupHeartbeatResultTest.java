@@ -30,14 +30,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class StreamsGroupHeartbeatResultTest {
 
     @Test
-    public void testTwoArgConstructorDefaultsTopologyEpochToMinusOne() {
-        // KIP-1331 back-compat: existing callers that omit the topology epoch get -1.
-        StreamsGroupHeartbeatResult result = new StreamsGroupHeartbeatResult(
-            new StreamsGroupHeartbeatResponseData(), Map.of());
-        assertEquals(-1, result.currentTopologyEpoch());
-    }
-
-    @Test
     public void testThreeArgConstructorPreservesTopologyEpoch() {
         StreamsGroupHeartbeatResult result = new StreamsGroupHeartbeatResult(
             new StreamsGroupHeartbeatResponseData(), Map.of(), 7);

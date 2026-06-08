@@ -161,13 +161,13 @@ public class StreamsGroup implements Group {
      * The topology epoch most recently accepted by the topology description plugin (KIP-1331). -1 if none stored.
      * Drives the heartbeat-side decision to set TopologyDescriptionRequired=true.
      */
-    private final TimelineInteger storedTopologyEpoch;
+    private final TimelineInteger storedDescriptionTopologyEpoch;
 
     /**
      * The topology epoch for which the topology description plugin most recently returned a permanent failure
      * (KIP-1331). -1 if none. Used to suppress re-soliciting a push at the same epoch.
      */
-    private final TimelineInteger lastFailedTopologyEpoch;
+    private final TimelineInteger failedDescriptionTopologyEpoch;
 
     /**
      * The metadata hash which is computed based on the all subscribed topics.
@@ -258,10 +258,10 @@ public class StreamsGroup implements Group {
         // from a replayed one; otherwise the heartbeat's `validatedTopologyEpoch !=
         // group.validatedTopologyEpoch()` comparison reads 0 here vs. -1 after replay.
         this.validatedTopologyEpoch.set(-1);
-        this.storedTopologyEpoch = new TimelineInteger(snapshotRegistry);
-        this.storedTopologyEpoch.set(-1);
-        this.lastFailedTopologyEpoch = new TimelineInteger(snapshotRegistry);
-        this.lastFailedTopologyEpoch.set(-1);
+        this.storedDescriptionTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        this.storedDescriptionTopologyEpoch.set(-1);
+        this.failedDescriptionTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        this.failedDescriptionTopologyEpoch.set(-1);
         this.metadataHash = new TimelineLong(snapshotRegistry);
         this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -689,45 +689,45 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The topology epoch most recently accepted by the topology description plugin, or -1 if none.
+     * @return The topology epoch most recently successfully stored by the topology description plugin, or -1 if none.
      */
-    public int storedTopologyEpoch() {
-        return storedTopologyEpoch.get();
+    public int storedDescriptionTopologyEpoch() {
+        return storedDescriptionTopologyEpoch.get();
     }
 
     /**
      * @param committedOffset A committed offset corresponding to the desired snapshot.
-     * @return The topology epoch most recently accepted by the topology description plugin at the given
+     * @return The topology epoch most recently successfully stored by the topology description plugin at the given
      *         committed offset, or -1 if none.
      */
-    public int storedTopologyEpoch(long committedOffset) {
-        return storedTopologyEpoch.get(committedOffset);
+    public int storedDescriptionTopologyEpoch(long committedOffset) {
+        return storedDescriptionTopologyEpoch.get(committedOffset);
     }
 
     /**
      * Updates the stored topology epoch.
      *
-     * @param storedTopologyEpoch The epoch most recently accepted by the topology description plugin.
+     * @param storedDescriptionTopologyEpoch The epoch most recently successfully stored by the topology description plugin.
      */
-    public void setStoredTopologyEpoch(int storedTopologyEpoch) {
-        this.storedTopologyEpoch.set(storedTopologyEpoch);
+    public void setStoredDescriptionTopologyEpoch(int storedDescriptionTopologyEpoch) {
+        this.storedDescriptionTopologyEpoch.set(storedDescriptionTopologyEpoch);
     }
 
     /**
      * @return The topology epoch most recently rejected by the topology description plugin with a permanent
      *         failure, or -1 if none.
      */
-    public int lastFailedTopologyEpoch() {
-        return lastFailedTopologyEpoch.get();
+    public int failedDescriptionTopologyEpoch() {
+        return failedDescriptionTopologyEpoch.get();
     }
 
     /**
      * Updates the last-failed topology epoch.
      *
-     * @param lastFailedTopologyEpoch The epoch the plugin most recently rejected with a permanent failure.
+     * @param failedDescriptionTopologyEpoch The epoch the plugin most recently rejected with a permanent failure.
      */
-    public void setLastFailedTopologyEpoch(int lastFailedTopologyEpoch) {
-        this.lastFailedTopologyEpoch.set(lastFailedTopologyEpoch);
+    public void setFailedDescriptionTopologyEpoch(int failedDescriptionTopologyEpoch) {
+        this.failedDescriptionTopologyEpoch.set(failedDescriptionTopologyEpoch);
     }
 
     /**

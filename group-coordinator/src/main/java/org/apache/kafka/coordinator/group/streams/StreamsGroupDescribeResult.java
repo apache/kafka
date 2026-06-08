@@ -24,26 +24,26 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Bundles the per-group describe response data with the persisted topology epoch the plugin has stored
- * for each successfully described group (KIP-1331). The stored epoch lets the service layer decide
- * whether to call the topology description plugin's {@code getTopology} for a group — the plugin is
- * only consulted when {@code storedTopologyEpoch != -1 && storedTopologyEpoch == currentTopologyEpoch}.
- * The {@code != -1} guard handles the brand-new-group case where both epochs are -1 (no member has pushed
- * a topology yet and the plugin has nothing stored): there the equality holds trivially but the plugin
- * has nothing to serve, so the broker reports NOT_STORED without making a call.
+ * Result of a describe operation against a set of streams groups. Pairs each described group with the
+ * topology epoch the broker currently has a stored description for.
  *
- * @param describedGroups      The described groups (one per requested group id, including errored ones).
- * @param storedTopologyEpochs Per-group stored topology epoch, keyed by group id. Only present for groups
- *                             that were resolved successfully (no GROUP_ID_NOT_FOUND). A value of -1 means
- *                             no topology description has ever been accepted by the plugin for the group.
+ * @param describedGroups                  The described groups (one per requested group id, including errored ones).
+ * @param storedDescriptionTopologyEpochs  Per-group stored description topology epoch, keyed by group id. Only
+ *                                         present for groups resolved successfully (no GROUP_ID_NOT_FOUND); a value
+ *                                         of -1 means no description has been stored for the group. KIP-1331 gates
+ *                                         calls to the topology description plugin on
+ *                                         {@code storedDescriptionTopologyEpoch != -1 &&
+ *                                         storedDescriptionTopologyEpoch == currentTopologyEpoch}; the {@code != -1}
+ *                                         guard covers brand-new groups where both sides would be -1 and the plugin
+ *                                         has nothing to serve.
  */
 public record StreamsGroupDescribeResult(
     List<StreamsGroupDescribeResponseData.DescribedGroup> describedGroups,
-    Map<String, Integer> storedTopologyEpochs
+    Map<String, Integer> storedDescriptionTopologyEpochs
 ) {
 
     public StreamsGroupDescribeResult {
         describedGroups = List.copyOf(Objects.requireNonNull(describedGroups));
-        storedTopologyEpochs = Collections.unmodifiableMap(Objects.requireNonNull(storedTopologyEpochs));
+        storedDescriptionTopologyEpochs = Collections.unmodifiableMap(Objects.requireNonNull(storedDescriptionTopologyEpochs));
     }
 }
