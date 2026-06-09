@@ -900,6 +900,7 @@ org.apache.kafka.metadata.storage.FormatterTest:
 - testFormatWithInitialVoters
 - testFormatWithInitialVotersFailsWithOlderKraftVersion
 - testFormatWithInitialVotersWithOlderMetadataVersion
+- testFormatWithInvalidClusterId
 - testFormatWithNoInitialControllers
 - testFormatWithNoInitialControllersWithOlderMetadataVersion
 - testFormatWithOlderReleaseVersion
@@ -908,6 +909,7 @@ org.apache.kafka.metadata.storage.FormatterTest:
 - testFormatWithStaticQuorumFailsWithNewerKraftVersion
 - testFormatWithUnstableReleaseVersion
 - testFormatWithUnstableReleaseVersionFailsWithoutEnableUnstable
+- testFormatWithValidClusterId
 - testFormatterFailsOnAlreadyFormatted
 - testFormatterFailsOnUnwritableDirectory
 - testFormattingCreatesLogDirId
