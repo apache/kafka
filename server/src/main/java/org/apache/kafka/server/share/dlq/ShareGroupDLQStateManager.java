@@ -92,13 +92,13 @@ public class ShareGroupDLQStateManager {
     private final Timer timer;
     private final ShareGroupDLQMetadataCacheHelper cacheHelper;
     private final LogReader logReader;
-    private final int maxFetchBytes;
     private final ShareGroupMetrics shareGroupMetrics;
     public static final long REQUEST_BACKOFF_MS = 1_000L;
     public static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
     private static final int MAX_REQUEST_ATTEMPTS = 5;
     private static final int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
     private static final double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
+    private static final int DLQ_MAX_FETCH_BYTES = 1024 * 1024;
     private static final Logger log = LoggerFactory.getLogger(ShareGroupDLQStateManager.class);
 
     private final Set<Node> inFlight = new HashSet<>();
@@ -111,7 +111,6 @@ public class ShareGroupDLQStateManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
-        int maxFetchBytes,
         LogReader logReader
     ) {
         if (client == null) {
@@ -142,7 +141,6 @@ public class ShareGroupDLQStateManager {
         this.timer = timer;
         this.cacheHelper = cacheHelper;
         this.shareGroupMetrics = shareGroupMetrics;
-        this.maxFetchBytes = maxFetchBytes;
         this.logReader = logReader;
         this.sender = new SendThread(
             "ShareGroupDLQSendThread",
@@ -705,7 +703,7 @@ public class ShareGroupDLQStateManager {
                     -1,                                         // replicaEpoch
                     0L,                                         // maxWaitMs - don't block
                     1,                                          // minBytes
-                    maxFetchBytes,                              // maxBytes
+                    DLQ_MAX_FETCH_BYTES,                        // maxBytes
                     FetchIsolation.HIGH_WATERMARK,              // committed only
                     Optional.empty()                            // clientMetadata
                 );
@@ -717,7 +715,7 @@ public class ShareGroupDLQStateManager {
                 Map<Long, Record> recordMap = new HashMap<>(recordCount);
                 LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
                 LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
-                maxBytesMap.put(tp, maxFetchBytes);
+                maxBytesMap.put(tp, DLQ_MAX_FETCH_BYTES);
 
                 // We are fetching data for one TopicIdPartition only. Hence, there
                 // is no need to keep recreating the maxBytes map, and we can re-use a
@@ -736,7 +734,7 @@ public class ShareGroupDLQStateManager {
                         return;
                     }
 
-                    boolean done = false;
+                    boolean continueFetch = false;
                     for (RecordBatch batch : res.info().records.batches()) {
                         for (Record record : batch) {
                             if (record.offset() < param.firstOffset()) continue;
@@ -748,10 +746,10 @@ public class ShareGroupDLQStateManager {
                             }
                             recordMap.put(record.offset(), record);
                             nextOffset = record.offset() + 1;
-                            done = true;
+                            continueFetch = true;
                         }
                     }
-                    if (!done) break; // no more records available (reached HWM/LEO)
+                    if (!continueFetch) break; // no more records available (reached HWM/LEO)
                 }
                 log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
                     recordCount, param.firstOffset(), this);

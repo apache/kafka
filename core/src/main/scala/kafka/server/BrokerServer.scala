@@ -48,7 +48,7 @@ import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, ShareVersion, TopicIdPartition}
-import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs, ServerConfigs}
+import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics}
@@ -777,15 +777,7 @@ class BrokerServer(
     if (config.shareGroupConfig.shareGroupDLQManagerClassName.nonEmpty) {
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupDLQManagerClassName, classOf[Object]).asInstanceOf[Class[ShareGroupDLQManager]]
       if (klass.getName.equals(classOf[DefaultShareGroupDLQManager].getName)) {
-        DefaultShareGroupDLQManager.instance(
-          NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
-          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
-          Time.SYSTEM,
-          shareGroupTimer,
-          shareGroupMetrics,
-          config.getInt(ServerConfigs.FETCH_MAX_BYTES_CONFIG),
-          shareGroupLogReader
-        )
+        DefaultShareGroupDLQManager.instance(NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")), new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager), Time.SYSTEM, shareGroupTimer, shareGroupMetrics, shareGroupLogReader)
       } else if (klass.getName.equals(classOf[NoOpShareGroupDLQManager].getName)) {
         info("Using no-op share group DLQ manager")
         new NoOpShareGroupDLQManager()

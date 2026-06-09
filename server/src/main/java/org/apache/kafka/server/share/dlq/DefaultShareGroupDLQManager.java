@@ -46,11 +46,10 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         ShareGroupDLQMetadataCacheHelper cacheHelper,
         Time time,
         Timer timer,
-        ShareGroupMetrics metrics,
-        int maxFetchBytes,
+        ShareGroupMetrics shareGroupMetrics,
         LogReader logReader
     ) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, metrics, maxFetchBytes, logReader);
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
         instance.start();
         return instance;
     }
@@ -61,10 +60,9 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         Time time,
         Timer timer,
         ShareGroupMetrics shareGroupMetrics,
-        int maxFetchBytes,
         LogReader logReader
     ) {
-        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, maxFetchBytes, logReader);
+        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
     }
 
     private void start() {
