@@ -93,6 +93,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -789,31 +790,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Ensure every topic is present in the producer's metadata cache.
-     * {@link ProducerMetadata#add(String, long)} refreshes the expiry for known
-     * topics and triggers a fetch for new ones; if any topic is new, blocks the
-     * user thread on {@link ProducerMetadata#awaitUpdate(int, long)} up to
-     * {@code max.block.ms}, mirroring {@link #partitionsFor(String)}. Returns
-     * the elapsed wait time in milliseconds so the caller can subtract it from
-     * its own {@code max.block.ms} budget.
+     * Request a partial metadata refresh for the given topics and await the next
+     * metadata update on a best-effort basis (up to {@code max.block.ms}). Returns
+     * the elapsed wait time so the caller can subtract it from its own
+     * {@code max.block.ms} budget.
      */
     private long awaitTopicMetadata(Set<String> topics) {
-        long nowMs = time.milliseconds();
-        boolean hasNewTopics = false;
-        for (String topic : topics) {
-            hasNewTopics |= metadata.add(topic, nowMs);
-        }
-        if (!hasNewTopics) return 0L;
-        int version = metadata.requestUpdate(true);
-        // Wake the sender so it picks up the metadata request immediately
-        // instead of waiting for its next selector poll to elapse.
+        long startNanos = time.nanoseconds();
+        OptionalInt versionOpt = metadata.add(topics, time.milliseconds());
+        if (versionOpt.isEmpty()) return 0L;
         sender.wakeup();
         try {
-            metadata.awaitUpdate(version, maxBlockTimeMs);
+            metadata.awaitUpdate(versionOpt.getAsInt(), maxBlockTimeMs);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
-        return time.milliseconds() - nowMs;
+        long elapsedNanos = time.nanoseconds() - startNanos;
+        producerMetrics.recordMetadataWait(elapsedNanos);
+        return TimeUnit.NANOSECONDS.toMillis(elapsedNanos);
     }
 
     /**
