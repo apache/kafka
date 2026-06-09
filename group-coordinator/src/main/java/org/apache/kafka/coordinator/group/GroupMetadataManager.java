@@ -1395,34 +1395,14 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates whether a new classic member is allowed to join the consumer group.
-     * If the migration policy is disabled, the join request will be rejected even if
-     * it's a new static member trying to replace an existing member with the same
-     * instance id.
+     * Validates whether a classic member is allowed to join or rejoin the consumer group. When the
+     * migration policy is disabled, no classic member may join or rejoin the consumer group.
      *
      * @param consumerGroup The consumer group the classic member wants to join.
-     * @param memberId      The joining member id (used to identify a dynamic member).
-     * @param instanceId    The joining member instance id, or null for a dynamic member.
      * @throws GroupIdNotFoundException if the classic member cannot join the consumer group.
      */
-    private void throwIfClassicMemberCannotJoinConsumerGroup(
-        ConsumerGroup consumerGroup,
-        String memberId,
-        String instanceId
-    ) {
-        if (config.consumerGroupMigrationPolicy() != ConsumerGroupMigrationPolicy.DISABLED) {
-            return;
-        }
-
-        boolean cannotJoin;
-        if (instanceId == null) {
-            cannotJoin = !consumerGroup.hasMember(memberId);
-        } else {
-            // A new instance id or the replacement of a consumer member is rejected.
-            ConsumerGroupMember existingMember = consumerGroup.staticMember(instanceId);
-            cannotJoin = existingMember == null || !existingMember.useClassicProtocol();
-        }
-        if (cannotJoin) {
+    private void throwIfClassicMemberCannotJoinConsumerGroup(ConsumerGroup consumerGroup) {
+        if (config.consumerGroupMigrationPolicy() == ConsumerGroupMigrationPolicy.DISABLED) {
             log.info("Cannot join the consumer group {} with the classic protocol because the group migration is disabled.",
                 consumerGroup.groupId());
             throw new GroupIdNotFoundException(
@@ -2521,6 +2501,8 @@ public class GroupMetadataManager {
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) throws ApiException {
+        throwIfClassicMemberCannotJoinConsumerGroup(group);
+
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
         final String groupId = request.groupId();
@@ -2534,8 +2516,6 @@ public class GroupMetadataManager {
 
         throwIfConsumerGroupIsFull(group, memberId);
         throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
-
-        throwIfClassicMemberCannotJoinConsumerGroup(group, memberId, instanceId);
 
         if (JoinGroupRequest.requiresKnownMemberId(request, context.requestVersion())) {
             // A dynamic member requiring a member id joins the group. Send back a response to call for another
