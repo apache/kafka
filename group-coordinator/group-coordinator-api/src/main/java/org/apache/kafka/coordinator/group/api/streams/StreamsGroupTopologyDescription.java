@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.api.streams;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -33,6 +35,7 @@ import java.util.Set;
  * relation; plugins that need both directions reconstruct predecessors in a single
  * pass over the nodes.
  */
+@InterfaceStability.Evolving
 public record StreamsGroupTopologyDescription(
     Collection<Subtopology> subtopologies,
     Collection<GlobalStore> globalStores
