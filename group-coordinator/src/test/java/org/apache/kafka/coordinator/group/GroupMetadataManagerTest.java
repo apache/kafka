@@ -14506,7 +14506,6 @@ public class GroupMetadataManagerTest {
         String oldMemberId = "old-member";
         String instanceId = "instance-id";
         String newInstanceId = "new-instance-id";
-
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(oldMemberId)
