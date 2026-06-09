@@ -129,6 +129,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private Cache cache;
     private BloomFilter filter;
     private Statistics statistics;
+    private ColumnFamilyOptions offsetsCfOptions;
 
     private RocksDBConfigSetter configSetter;
     private boolean userSpecifiedStatistics = false;
@@ -230,6 +231,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         fOptions = new FlushOptions();
         fOptions.setWaitForFlush(true);
 
+        // The offsets CF stores only a small number of key-value pairs (one per changelog
+        // partition), so it does not need the heavyweight options used for the data CF;
+        offsetsCfOptions = new ColumnFamilyOptions();
+        offsetsCfOptions.setCompressionType(CompressionType.NO_COMPRESSION);
+        offsetsCfOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
+
         final Class<RocksDBConfigSetter> configSetterClass =
                 (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
@@ -311,19 +318,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     /**
-     * Creates lightweight {@link ColumnFamilyOptions} for the offsets column family. The offsets CF
-     * stores only a small number of key-value pairs (one per changelog partition), so it does not
-     * need the heavyweight options used for the data CF (large write buffers, bloom filters,
-     * aggressive compaction). Sharing the data CF's options causes unnecessary write amplification
-     * and compaction pressure that can contribute to RocksDB write stalls under heavy restore I/O.
+     * Returns the single read-only {@link ColumnFamilyOptions} instance used for the offsets CF.
+     *
+     * <p>The instance is created in {@link #openDB} before the open path runs
+     * {@code ColumnFamilyDescriptor} and is freed once in {@link #close()} /
+     * {@link #closeNativeResources()}.
      */
-    protected static ColumnFamilyOptions createOffsetsCFOptions() {
-        final ColumnFamilyOptions offsetsCFOptions = new ColumnFamilyOptions();
-        offsetsCFOptions.setCompressionType(CompressionType.NO_COMPRESSION);
-        offsetsCFOptions.setCompactionStyle(CompactionStyle.LEVEL);
-        offsetsCFOptions.setWriteBufferSize(1024 * 1024L); // 1MB — sufficient for offset metadata
-        offsetsCFOptions.setMaxWriteBufferNumber(2);
-        return offsetsCFOptions;
+    protected ColumnFamilyOptions offsetsCFOptions() {
+        return offsetsCfOptions;
     }
 
     void openRocksDB(final DBOptions dbOptions,
@@ -331,7 +333,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
                 dbOptions,
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, createOffsetsCFOptions())
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, offsetsCFOptions())
         );
 
         cfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1), columnFamilies.get(0));
@@ -811,6 +813,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         dbAccessor.close();
         db.close();
         userSpecifiedOptions.close();
+        if (offsetsCfOptions != null) {
+            offsetsCfOptions.close();
+        }
         wOptions.close();
         fOptions.close();
         filter.close();
@@ -822,6 +827,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         cfAccessor = null;
         dbAccessor = null;
         userSpecifiedOptions = null;
+        offsetsCfOptions = null;
         wOptions = null;
         fOptions = null;
         db = null;
@@ -865,6 +871,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (userSpecifiedOptions != null) {
             userSpecifiedOptions.close();
             userSpecifiedOptions = null;
+        }
+        if (offsetsCfOptions != null) {
+            offsetsCfOptions.close();
+            offsetsCfOptions = null;
         }
         if (wOptions != null) {
             wOptions.close();
@@ -1165,8 +1175,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
-            super.close(accessor);
-            columnFamily.close();
+            try {
+                super.close(accessor);
+            } finally {
+                columnFamily.close();
+            }
+        }
+
+        // Visible for testing
+        ColumnFamilyHandle columnFamily() {
+            return columnFamily;
         }
     }
 

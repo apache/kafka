@@ -39,6 +39,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
@@ -111,6 +112,8 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_NUM_WARMUP_REPLICAS_CONFIG = "streams.num.warmup.replicas";
 
+    public static final String STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG = "streams.acceptable.recovery.lag";
+
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG = "errors.deadletterqueue.topic.name";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT = "";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC = "The name of the topic to be used as the dead-letter queue (DLQ) topic for this share group. If blank (the default), the group does not have a DLQ topic.";
@@ -160,6 +163,8 @@ public final class GroupConfig extends AbstractConfig {
     private final Optional<Integer> streamsTaskOffsetIntervalMs;
 
     private final Optional<Integer> streamsNumWarmupReplicas;
+
+    private final Optional<Long> streamsAcceptableRecoveryLag;
 
     private final Optional<IsolationLevel> shareIsolationLevel;
 
@@ -303,6 +308,12 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT,
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
+        .define(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG,
+            LONG,
+            GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT,
+            atLeast(0),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC)
 
         // DLQ configurations (KIP-1191)
         .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
@@ -349,6 +360,7 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG)),
         Map.entry(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG)),
         Map.entry(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG)),
+        Map.entry(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG)),
 
         // DLQ configs
         Map.entry(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, Optional.empty()),
@@ -399,6 +411,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsAssignorOffloadEnable = optionalBoolean(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG);
         this.streamsTaskOffsetIntervalMs = optionalInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsNumWarmupReplicas = optionalInt(STREAMS_NUM_WARMUP_REPLICAS_CONFIG);
+        this.streamsAcceptableRecoveryLag = optionalLong(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG);
         this.shareIsolationLevel = optionalString(SHARE_ISOLATION_LEVEL_CONFIG)
             .map(s -> IsolationLevel.valueOf(s.toUpperCase(Locale.ROOT)));
         this.shareRenewAcknowledgeEnable = optionalBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
@@ -408,6 +421,10 @@ public final class GroupConfig extends AbstractConfig {
 
     private Optional<Integer> optionalInt(String key) {
         return originals().containsKey(key) ? Optional.of(getInt(key)) : Optional.empty();
+    }
+
+    private Optional<Long> optionalLong(String key) {
+        return originals().containsKey(key) ? Optional.of(getLong(key)) : Optional.empty();
     }
 
     private Optional<Boolean> optionalBoolean(String key) {
@@ -1164,6 +1181,13 @@ public final class GroupConfig extends AbstractConfig {
      */
     public Optional<List<String>> streamsRackAwareAssignmentTags() {
         return streamsRackAwareAssignmentTags;
+    }
+
+    /**
+     * The acceptable recovery lag for streams groups.
+     */
+    public Optional<Long> streamsAcceptableRecoveryLag() {
+        return streamsAcceptableRecoveryLag;
     }
 
     /**
