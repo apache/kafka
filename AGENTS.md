@@ -31,25 +31,26 @@ build in **Java** and **Scala 2.13**.
 
 ## Repository layout (high level)
 
-| Path | Purpose                                                                              |
-|------|--------------------------------------------------------------------------------------|
-| `clients/` | Producer, consumer, admin client APIs and protocol messages                          |
-| `core/` | Broker runtime, log, replication, request handling                                   |
-| `server/`, `server-common/` | Broker/server components and shared server code                                      |
-| `metadata/`, `raft/` | KRaft metadata layer and Raft implementation                                         |
-| `storage/`, `storage/api/` | Log segments, checkpoints, tiered storage APIs                                       |
-| `group-coordinator/`, `share-coordinator/`, `transaction-coordinator/` | Coordinators                                                                         |
-| `connect/` | Kafka Connect (api, runtime, plugins, transforms)                                    |
-| `streams/` | Kafka Streams (+ Scala, examples, upgrade system tests)                              |
-| `generator/` | RPC/message code generation                                                          |
-| `tools/`, `shell/` | CLI tools and kafka metadata shell                                                   |
-| `examples/` | Kafka producer and consumer examples                                                 |
-| `jmh-benchmarks/` | Kafka benchmarks tests                                                               |
-| `trogdor/` | test framework                                                                       |
-| `tests/` | System test harness (see `tests/README.md`)                                          |
-| `config/` | Sample broker/controller configuration |
-| `checkstyle/` | Checkstyle rules and import-control XML                                              |
-| `docs/` | Documentation sources                                                                |
+| Path                                                                     | Purpose                                                                                            |
+|--------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
+| `clients/`                                                               | Producer, consumer, admin client APIs and protocol messages                                        |
+| `core/`                                                                  | Broker runtime, log, replication, request handling (gradually being removed along with Scala code) |
+| `server/`, `server-common/`                                              | Broker/server components and shared server code                                                    |
+| `metadata/`, `raft/`                                                     | KRaft metadata layer and Raft implementation                                                       |
+| `storage/`, `storage/api/`                                               | Log segments, checkpoints, tiered storage APIs                                                     |
+| `group-coordinator/`, `share-coordinator/`, `transaction-coordinator/`, `coordinator-common` | Coordinators                                                                                       |
+| `connect/`                                                               | Kafka Connect (api, runtime, plugins, transforms)                                                  |
+| `streams/`                                                               | Kafka Streams (+ Scala, examples, upgrade system tests)                                            |
+| `generator/`                                                             | RPC/message code generation                                                                        |
+| `tools/`, `shell/`                                                       | CLI tools and kafka metadata shell                                                                 |
+| `examples/`                                                              | Kafka producer and consumer examples                                                               |
+| `jmh-benchmarks/`                                                        | Kafka benchmarks tests                                                                             |
+| `trogdor/`                                                               | test framework                                                                                     |
+| `tests/`                                                                 | System test harness (see `tests/README.md`)                                                        |
+| `config/`                                                                | Sample broker/controller configuration                                                             |
+| `checkstyle/`                                                            | Checkstyle rules and import-control XML                                                            |
+| `docs/`                                                                  | Documentation sources                                                                              |
+| `docker/`                                                                | Docker images, build/test scripts, and examples for JVM and native Kafka           |
 
 
 ## Build commands
@@ -128,12 +129,12 @@ Checkstyle reports: `<module>/build/reports/checkstyle/`.
 
 - **Commits / PR titles**: Start with `KAFKA-XXXXX`, `MINOR`, or `HOTFIX`. Use `KAFKA-XXXXX` only when there is a valid Jira ticket for the change.
 - **AI-generated contributions**: Follow the [AI-Generated Contributions](CONTRIBUTING.md#ai-generated-contributions) section in `CONTRIBUTING.md` — add a `Co-Authored-By` or `Generated-by` commit trailer for AI-assisted changes.
-- **Public API / KIP**: Changes to public client interfaces, wire protocol, broker configuration, or metrics generally require a [KIP](https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Improvement+Proposals). See the `javadoc` `include` list in [build.gradle](build.gradle) for packages treated as public API.
+- **Public API / KIP**: Changes to public interfaces, wire protocol, configurations, or metrics generally require a [KIP](https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Improvement+Proposals). See the `javadoc` `include` list in [build.gradle](build.gradle) for packages treated as public API.
 - **License header**: New source files need the standard ASF license header (see existing files in the same module).
 - **Checkstyle**: Enforced on main and test sources; rules in `checkstyle/`. Import order is checked via Spotless.
 - **Generated code**: Do not hand-edit generated RPC/message sources. Regenerate with `processMessages` / `processTestMessages`. See [clients/src/main/resources/common/message/README.md](clients/src/main/resources/common/message/README.md).
 - **Scope**: Prefer targeted unit tests in the module you change; integration/system tests for cross-component behavior.
-- **Compatibility**: Client and Streams modules target older Java bytecode; avoid APIs that break those release levels.
+- **Compatibility**: clients, generator, and streams modules support Java 11+; all other modules require Java 17+. Avoid APIs that break those release levels.
 
 ## Security
 
