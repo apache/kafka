@@ -31,7 +31,7 @@ type: docs
 - **Security is off by default.** A freshly-installed Apache Kafka cluster accepts unauthenticated `PLAINTEXT` connections on every listener and applies no authorization. This is appropriate only for closed test environments. Production deployments **must** explicitly configure authentication, authorization, and transport encryption before being exposed to any untrusted network.
 - **Apache Kafka assumes a trusted operator.** Anyone with shell access to a broker, controller, or the underlying disks can read every topic, forge any principal, and rewrite ACLs. The security model protects messages in transit and arbitrates client access — it does not defend brokers from their own administrators.
 - **Apache Kafka assumes a trusted broker fleet.** Brokers and KRaft controllers exchange records, replication state, and metadata over the inter-broker and controller listeners. Any host that can authenticate on those listeners is effectively part of the cluster's trust boundary.
-- **The data plane and the control plane have different exposure.** Producer/consumer traffic, the Admin API, the Kafka Connect REST API, and JMX each have distinct authentication and authorization stories. Operators must configure them independently — securing one does not secure the others.
+- **The data plane and the control plane have different exposure.** Producer/consumer traffic, the Admin API, and JMX each have distinct authentication and authorization stories. Operators must configure them independently — securing one does not secure the others.
 - **Apache Kafka does not encrypt data at rest.** Log segments, index files, and snapshots are written as plain bytes. At-rest confidentiality is the responsibility of the underlying filesystem, block device, or message-level encryption performed by producers.
 - **Reporting vulnerabilities.** Suspected security issues should be reported privately to `security@kafka.apache.org` per the [ASF security process](https://www.apache.org/security/). Do not file public JIRA tickets, GitHub issues, or mailing-list posts for unpatched vulnerabilities.
 
@@ -112,7 +112,7 @@ Apache Kafka does not encrypt log segments, indexes, snapshots, or controller me
 
 ## Audit Logging
 
-Apache Kafka emits authorizer decisions to the `kafka.authorizer.logger` log4j logger. Setting this logger to `INFO` records every denied request; `DEBUG` records every allowed request as well. In regulated environments this log should be shipped to durable, append-only storage off-broker. There is no built-in tamper-evident audit trail; integrate with the host's auditing pipeline.
+Apache Kafka emits authorizer decisions to the `kafka.authorizer.logger` log4j logger. Setting this logger to `INFO` records every denied request; `DEBUG` records every allowed request as well. In regulated environments this log should be shipped to durable, append-only storage off-broker. There is no built-in tamper-evident audit trail.
 
 The request log (`kafka.request.logger`) provides finer detail on individual API calls and is useful for forensic investigation, but it is verbose and not enabled by default.
 
@@ -122,24 +122,40 @@ Broker, client, and Connect properties files contain keystore passwords, SASL cr
 
 ## Component-Specific Notes
 
-- **Kafka Connect.** The REST API is unauthenticated by default; enable the built-in basic auth extension (`BasicAuthSecurityRestExtension`) or front it with a reverse proxy. More importantly, the REST API is a shared, cluster-wide control plane with no per-connector isolation, and this has several consequences operators must plan around:
-  - **Shared REST API.** Any caller that can reach the API can act on *any* connector — including reading another connector's configuration and stopping or deleting it. There is no notion of connector ownership.
-  - **Shared ConfigProviders.** A caller who can guess (or enumerate) a `ConfigProvider` alias can resolve its full configuration through the REST API, so a provider is only as isolated as its alias is secret.
-  - **Client config overrides on by default.** `connector.client.config.override.policy` defaults to `All`, so by default a connector configuration can override the worker's own Kafka client settings (and potentially surface sensitive values). This default is slated to change to `Allowlist` in 5.0; until then, set it explicitly if you do not want it.
-
-  The practical consequences are that you cannot grant Connect REST API access to anyone you would not trust as a cluster administrator, and if multiple distrusting users or teams need Connect you should give each its own Connect cluster rather than sharing one. Connector configurations may also contain credentials for external systems and should be stored via a `ConfigProvider`. Connect workers authenticate to the Kafka cluster as a single principal — partition that principal's ACLs by topic prefix per connector.
-- **Kafka Streams.** A Streams application authenticates as one principal that needs ACLs covering its source topics, internal repartition/changelog topics (typically `<application.id>-*`), and the consumer group `<application.id>`.
-- **MirrorMaker 2.** Replicates across security domains; configure `source.cluster.*` and `target.cluster.*` independently and never tunnel cleartext replication across an untrusted network.
 - **JMX.** Brokers expose operational metrics over JMX. JMX is an administrators/operators-only interface and must never be exposed to actual users. It is unauthenticated by default and should either be disabled, bound to localhost with an exporter alongside, or configured with `com.sun.management.jmxremote.authenticate=true` and TLS.
+
+The components built on top of the brokers and clients have their own security models, covered on separate pages:
+
+- [Kafka Connect](security-model-connect)
+- [Kafka Streams](security-model-streams)
+- [MirrorMaker 2](security-model-mirrormaker)
 
 ## Development and Test Tooling
 
 Not everything shipped in the Apache Kafka source tree is part of the production attack surface. Some components exist only to develop, test, and release Kafka itself, and are explicitly out of scope for the security model — they are expected to run only in trusted development and CI environments, and issues in them are generally not treated as security vulnerabilities.
 
 - **Trogdor.** Trogdor is a test framework that injects faults and runs workloads by design, including arbitrary user-supplied commands. It is intended to run only in development environments; the project does not consider command execution through Trogdor a security issue.
-- **System tests and release tooling.** The `tests/` system-test harness and the scripts under `release/` are operator/developer tooling for building, testing, and publishing Kafka. They are not components of a running cluster and must not be exposed to untrusted users.
+- **System tests and release tooling.** The `tests/` system-test harness and the scripts under `release/` are operator/developer tooling for building, testing, and publishing Kafka. They are not components of a running cluster.
 
-When assessing the attack surface of a deployed cluster, scope it to the brokers, KRaft controllers, the client and inter-broker/controller listeners, the Admin and Connect REST APIs, and JMX — not the development tooling above.
+When assessing the attack surface of a deployed cluster, scope it to the brokers, KRaft controllers, the client and inter-broker/controller listeners, the Admin API, and JMX — not the development tooling above.
+
+## Classifying Reports
+
+To keep triage consistent, a reported issue is treated as exactly one of:
+
+- **A vulnerability** — it breaks one of the security properties above for an adversary that is in scope, such as an unauthenticated or unauthorized network client.
+- **A hardening suggestion** — no stated property is broken, but a safer default or an added guard would reduce the blast radius of misuse.
+- **Out of scope** — it requires capabilities the model already treats as trusted (operator-supplied configuration, keystores, ACL administration), an adversary the model does not cover (a trusted operator, peer broker, or controller), or an unsupported component (see Development and Test Tooling above).
+- **By design** — it concerns a property the model explicitly disclaims, such as at-rest confidentiality or isolation from a trusted operator.
+
+## Known Non-Findings
+
+The following follow directly from the model above and are not, on their own, security vulnerabilities:
+
+- **Unauthenticated or unencrypted access to a default cluster.** Security is off by default; an open `PLAINTEXT` listener with no authorizer is a deployment choice, not a defect.
+- **A trusted principal performing an authorized operation.** Admin and inter-broker actions by a principal that holds the relevant ACLs — or by a `super.users` entry — are expected behaviour.
+- **Findings in development and test tooling.** Issues in `tools`, `bin`, Trogdor, `tests`, and similar are out of scope (see Development and Test Tooling above).
+- **Kafka Streams application-level issues.** Streams runs inside the user's application, so its security boundary is the application's, not the broker's (see the [Kafka Streams security model](security-model-streams)).
 
 ## Reporting Security Issues
 
