@@ -243,13 +243,34 @@ public class Formatter {
         return bootstrapMetadata;
     }
 
+    /**
+     * Validates the correctness of the given cluster id. A valid cluster id is a base64, urlencoded, no padding
+     * representation of a {@link Uuid}. These checks do not validate the absence of <code>-</code> character as
+     * {@link Uuid#randomUuid()} avoids them only for convenience reasons and such a validation would break
+     * compatibility when attempting to format using an old cluster id.
+     */
+    private void validateClusterId(String clusterId) {
+        if (clusterId == null) {
+            throw new FormatterException("You must specify the cluster id.");
+        }
+        if (clusterId.contains("=")) {
+            throw new FormatterException("The specified cluster id, " + clusterId + " is invalid: contains padding");
+        }
+        try {
+            Uuid uuid = Uuid.fromString(clusterId);
+            if (Uuid.RESERVED.contains(uuid)) {
+                throw new FormatterException("The specified cluster id, " + clusterId + " is reserved");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new FormatterException("The specified cluster id, " + clusterId + " is invalid", e);
+        }
+    }
+
     public void run() throws Exception {
         if (nodeId < 0) {
             throw new RuntimeException("You must specify a valid non-negative node ID.");
         }
-        if (clusterId == null) {
-            throw new FormatterException("You must specify the cluster id.");
-        }
+        validateClusterId(clusterId);
         if (directories.isEmpty()) {
             throw new FormatterException("You must specify at least one directory to format");
         }

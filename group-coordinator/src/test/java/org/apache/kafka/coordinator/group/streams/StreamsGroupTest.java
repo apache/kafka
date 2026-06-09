@@ -483,6 +483,39 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testTopologyDescriptionPluginEpochs() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // KIP-1331: both fields default to -1, meaning "no topology description ever stored / failed".
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(7);
+        group.setFailedDescriptionTopologyEpoch(5);
+        assertEquals(7, group.storedDescriptionTopologyEpoch());
+        assertEquals(5, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(-1);
+        group.setFailedDescriptionTopologyEpoch(-1);
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testCurrentTopologyEpochReflectsLatestTopology() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // No topology yet → -1.
+        assertEquals(-1, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(3, Map.of()));
+        assertEquals(3, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(4, Map.of()));
+        assertEquals(4, group.currentTopologyEpoch());
+    }
+
+    @Test
     public void testGroupState() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         assertEquals(StreamsGroupState.EMPTY, streamsGroup.state());
