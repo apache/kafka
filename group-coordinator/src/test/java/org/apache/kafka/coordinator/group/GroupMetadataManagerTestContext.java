@@ -779,6 +779,13 @@ public class GroupMetadataManagerTestContext {
     ) {
         return streamsGroupHeartbeat(request, "client", InetAddress.getLoopbackAddress());
     }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request,
+        short version
+    ) {
+        return streamsGroupHeartbeat(request, "client", InetAddress.getLoopbackAddress(), version);
+    }
     
     public List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> sleep(long ms) {
         time.sleep(ms);

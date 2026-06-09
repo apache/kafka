@@ -293,7 +293,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId, staticMemberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, staticMemberId),
             StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
-                groupId, timeoutGroupEpoch, groupMetadataHash, 0, getDefaultAssignmentConfigs()
+                groupId, timeoutGroupEpoch, groupMetadataHash, 0, getDefaultAssignmentConfigs(), -1, -1
             )
         );
 
@@ -360,7 +360,9 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 joinGroupEpoch,
                 groupMetadataHash,
                 0,
-                getDefaultAssignmentConfigs()
+                getDefaultAssignmentConfigs(),
+                -1,
+                -1
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, newDynamicMemberId, staticTargetAssignment),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, joinGroupEpoch, context.time.milliseconds()),
@@ -613,7 +615,9 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 bumpedGroupEpoch,
                 topic.metadataHash(),
                 0,
-                getDefaultAssignmentConfigs()
+                getDefaultAssignmentConfigs(),
+                -1,
+                -1
             )
         );
 
