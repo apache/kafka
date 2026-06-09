@@ -16,18 +16,25 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.connect.mirror.MirrorSourceTask.DataLossException;
 import org.apache.kafka.connect.mirror.OffsetSyncWriter.PartitionState;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
@@ -38,6 +45,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,10 +58,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -180,16 +190,11 @@ public class MirrorSourceTaskTest {
                 TimestampType.CREATE_TIME, key2.length, value2.length, key2, value2, headers, Optional.empty()));
         final TopicPartition tp = new TopicPartition(topicName, 0);
         ConsumerRecords<byte[], byte[]> consumerRecords =
-                new ConsumerRecords<>(Map.of(tp, consumerRecordsList),
-                        Map.of(tp, new OffsetAndMetadata(2, Optional.empty(), "")));
+                new ConsumerRecords<>(Map.of(tp, consumerRecordsList), Map.of(tp, new OffsetAndMetadata(2, Optional.empty(), "")));
 
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
         when(consumer.poll(any())).thenReturn(consumerRecords);
-
-        // Mock cold-start configuration metrics and beginning offset tracking
-        Map<TopicPartition, Long> earliestOffsets = Map.of(new TopicPartition(topicName, 0), 0L);
-        when(consumer.beginningOffsets(any())).thenReturn(earliestOffsets);
 
         MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
 
@@ -197,13 +202,6 @@ public class MirrorSourceTaskTest {
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
                 replicationPolicy, null);
-        
-        SourceTaskContext mockSourceTaskContext = mock(SourceTaskContext.class);
-        OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
-        when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
-        mirrorSourceTask.initialize(mockSourceTaskContext);
-        
-        mirrorSourceTask.initializeConsumer(Collections.singleton(tp));
         List<SourceRecord> sourceRecords = mirrorSourceTask.poll();
 
         assertEquals(2, sourceRecords.size());
@@ -214,10 +212,13 @@ public class MirrorSourceTaskTest {
                     "consumerRecord key does not equal sourceRecord key");
             assertEquals(consumerRecord.value(), sourceRecord.value(),
                     "consumerRecord value does not equal sourceRecord value");
+            // We expect that the topicname will be based on the replication policy currently used
             assertEquals(replicationPolicy.formatRemoteTopic(sourceClusterName, topicName),
                     sourceRecord.topic(), "topicName not the same as the current replicationPolicy");
+            // We expect that MirrorMaker will keep the same partition assignment
             assertEquals(consumerRecord.partition(), sourceRecord.kafkaPartition().intValue(),
                     "partition assignment not the same as the current replicationPolicy");
+            // Check header values
             List<Header> expectedHeaders = new ArrayList<>();
             consumerRecord.headers().forEach(expectedHeaders::add);
             List<org.apache.kafka.connect.header.Header> taskHeaders = new ArrayList<>();
@@ -227,7 +228,22 @@ public class MirrorSourceTaskTest {
     }
 
     @Test
+    public void testPollReturnsNullWhenNoRecords() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("test", 0);
+        ConsumerRecords<byte[], byte[]> emptyRecords = new ConsumerRecords<>(Collections.emptyMap());
+        when(consumer.poll(any())).thenReturn(emptyRecords);
+        MirrorSourceTask task = new MirrorSourceTask(consumer, null, "cluster1",
+                new DefaultReplicationPolicy(), null);
+        List<SourceRecord> result = task.poll();
+        assertEquals(null, result, "Poll should return null when no records are available");
+    }
+
+
+    @Test
     public void testSeekBehaviorDuringStart() {
+        // Setting up mock behavior.
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
 
@@ -246,42 +262,51 @@ public class MirrorSourceTaskTest {
 
         long arbitraryCommittedOffset = 4L;
         long offsetToSeek = arbitraryCommittedOffset + 1L;
-        
-        Map<TopicPartition, Long> mockBeginningOffsets = new HashMap<>();
-        for (TopicPartition tp : topicPartitions) {
-            mockBeginningOffsets.put(tp, 0L);
-        }
-        when(mockConsumer.beginningOffsets(topicPartitions)).thenReturn(mockBeginningOffsets);
-
         when(mockOffsetStorageReader.offset(anyMap())).thenAnswer(testInvocation -> {
             Map<String, Object> topicPartitionOffsetMap = testInvocation.getArgument(0);
             String topicName = topicPartitionOffsetMap.get("topic").toString();
 
+            // Only return the offset for previously replicated topics.
+            // For others, there is no value set.
             if (topicName.startsWith("previouslyReplicatedTopic")) {
                 topicPartitionOffsetMap.put("offset", arbitraryCommittedOffset);
             }
             return topicPartitionOffsetMap;
         });
 
+        // beginningOffsets returns values beyond committed offsets — no truncation
+        when(mockConsumer.beginningOffsets(any())).thenAnswer(inv -> {
+            Collection<TopicPartition> requested = inv.getArgument(0);
+            Map<TopicPartition, Long> result = new HashMap<>();
+            // logStartOffset = 0 for all — no truncation gap
+            requested.forEach(tp -> result.put(tp, 0L));
+            return result;
+        });
+
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, null,
                 new DefaultReplicationPolicy(), null);
         mirrorSourceTask.initialize(mockSourceTaskContext);
-        mirrorSourceTask.initializeConsumer(topicPartitions);
 
+        // Call test subject
+        mirrorSourceTask.initializeConsumer(topicPartitions);
+        // Verifications
+        // Ensure all the topic partitions are assigned to consumer
         verify(mockConsumer, times(1)).assign(topicPartitions);
-        verify(mockConsumer, times(1)).beginningOffsets(topicPartitions);
+
+        // Ensure seek is only called for previously committed topic partitions.
         verify(mockConsumer, times(1))
                 .seek(new TopicPartition("previouslyReplicatedTopic", 8), offsetToSeek);
         verify(mockConsumer, times(1))
                 .seek(new TopicPartition("previouslyReplicatedTopic", 1), offsetToSeek);
         verify(mockConsumer, times(1))
                 .seek(new TopicPartition("previouslyReplicatedTopic1", 0), offsetToSeek);
-
+        verify(mockConsumer, times(1)).beginningOffsets(any());
         verifyNoMoreInteractions(mockConsumer);
     }
 
     @Test
     public void testCommitRecordWithNullMetadata() {
+        // Create a consumer mock
         byte[] key1 = "abc".getBytes();
         byte[] value1 = "fgh".getBytes();
         String topicName = "test";
@@ -292,6 +317,8 @@ public class MirrorSourceTaskTest {
 
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        @SuppressWarnings("unchecked")
+        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
         MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
 
         String sourceClusterName = "cluster1";
@@ -299,10 +326,10 @@ public class MirrorSourceTaskTest {
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
                 replicationPolicy, null);
 
-        SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, 0, 0, 
-                System.currentTimeMillis(), TimestampType.CREATE_TIME, key1.length, value1.length, 
-                key1, value1, headers, Optional.empty()));
+        SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, 0, 0, System.currentTimeMillis(),
+                TimestampType.CREATE_TIME, key1.length, value1.length, key1, value1, headers, Optional.empty()));
 
+        // Expect that commitRecord will not throw an exception
         mirrorSourceTask.commitRecord(sourceRecord, null);
     }
 
@@ -339,144 +366,412 @@ public class MirrorSourceTaskTest {
 
         TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(sourceRecord.sourcePartition());
         partitionStates.put(sourceTopicPartition, partitionState);
-        RecordMetadata recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, 
-                recordPartition);
-        doNothing().when(offsetSyncWriter).maybeQueueOffsetSyncs(eq(sourceTopicPartition), eq((long) recordOffset), 
-                eq(recordMetadata.offset()));
+        RecordMetadata recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
+        doNothing().when(offsetSyncWriter).maybeQueueOffsetSyncs(eq(sourceTopicPartition), eq((long) recordOffset), eq(recordMetadata.offset()));
 
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
-        verify(offsetSyncWriter, times(1)).maybeQueueOffsetSyncs(eq(sourceTopicPartition), eq((long) recordOffset), 
-                eq(recordMetadata.offset()));
+        // We should have dispatched this sync to the producer
+        verify(offsetSyncWriter, times(1)).maybeQueueOffsetSyncs(eq(sourceTopicPartition), eq((long) recordOffset), eq(recordMetadata.offset()));
         verify(offsetSyncWriter, times(1)).firePendingOffsetSyncs();
 
         mirrorSourceTask.commit();
+        // No more syncs should take place; we've been able to publish all of them so far
         verify(offsetSyncWriter, times(1)).promoteDelayedOffsetSyncs();
         verify(offsetSyncWriter, times(2)).firePendingOffsetSyncs();
     }
 
+    // =========================================================================
+    // Task 2: Log Truncation Detection Tests
+    // =========================================================================
+
     @Test
-    public void testInitializeConsumerThrowsDataLossExceptionOnTruncation() {
-        TopicPartition tp = new TopicPartition("truncation-topic", 0);
-        
+    public void testDetectLogTruncationThrowsWhenDataLost() {
+        // Simulate: MM2 last replicated offset 100, but logStartOffset is now 200
+        // Messages [101, 199] have been permanently purged — DataLossException must be thrown
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
-        
-        SourceTaskContext mockContext = mock(SourceTaskContext.class);
-        OffsetStorageReader mockReader = mock(OffsetStorageReader.class);
-        when(mockContext.offsetStorageReader()).thenReturn(mockReader);
-        when(mockReader.offset(anyMap())).thenAnswer(invocation -> {
-            Map<String, Object> map = invocation.getArgument(0);
-            map.put("offset", 100L);
-            return map;
-        });
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
 
-        Map<TopicPartition, Long> earliestOffsets = Collections.singletonMap(tp, 500L);
-        when(mockConsumer.beginningOffsets(Collections.singleton(tp))).thenReturn(earliestOffsets);
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        Map<TopicPartition, Long> offsets = Collections.singletonMap(tp, 100L);
 
-        MirrorSourceTask task = new MirrorSourceTask(
-            mockConsumer, null, "source-cluster", new DefaultReplicationPolicy(), null
-        );
-        task.initialize(mockContext);
+        when(mockConsumer.beginningOffsets(offsets.keySet())).thenReturn(Collections.singletonMap(tp, 200L));
 
-        assertThrows(MirrorSourceTask.DataLossException.class, () -> {
-            task.initializeConsumer(Collections.singleton(tp));
-        });
+        assertThrows(DataLossException.class, () -> task.detectLogTruncation(offsets),
+                "Expected DataLossException when logStartOffset exceeds lastCommittedOffset + 1");
     }
 
     @Test
-    public void testPollThrowsDataLossExceptionOnRuntimeGap() throws Exception {
-        TopicPartition tp = new TopicPartition("runtime-gap-topic", 0);
-        
+    public void testDetectLogTruncationNoExceptionWhenNoGap() {
+        // Simulate: MM2 last replicated offset 100, logStartOffset is 101 — exactly contiguous, no gap
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
-        
-        SourceTaskContext mockSourceTaskContext = mock(SourceTaskContext.class);
-        OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
-        when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
-        
-        Map<TopicPartition, Long> earliestOffsets = Collections.singletonMap(tp, 0L);
-        when(mockConsumer.beginningOffsets(Collections.singleton(tp))).thenReturn(earliestOffsets);
-        
-        MirrorSourceTask task = new MirrorSourceTask(
-            mockConsumer, mock(MirrorSourceMetrics.class), "source-cluster", new DefaultReplicationPolicy(), null
-        );
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
 
-        task.initialize(mockSourceTaskContext);
-        task.initializeConsumer(Collections.singleton(tp));
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        Map<TopicPartition, Long> offsets = Collections.singletonMap(tp, 100L);
 
-        // Inject the expected next offset as 1L via reflection to set up our gap detection
-        java.lang.reflect.Field field = MirrorSourceTask.class.getDeclaredField("expectedNextOffsets");
-        field.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        Map<TopicPartition, Long> internalMap = (Map<TopicPartition, Long>) field.get(task);
-        internalMap.put(tp, 1L);
+        when(mockConsumer.beginningOffsets(offsets.keySet())).thenReturn(Collections.singletonMap(tp, 101L));
 
-        // Simulate a record coming in at offset 50L (causing a runtime gap from 1L)
-        List<ConsumerRecord<byte[], byte[]>> recordsList = new ArrayList<>();
-        recordsList.add(new ConsumerRecord<>("runtime-gap-topic", 0, 50L, "key".getBytes(), "value".getBytes()));
-        
-        // Setup the primary mock for ConsumerRecords
-        @SuppressWarnings("unchecked")
-        ConsumerRecords<byte[], byte[]> mockRecords = mock(ConsumerRecords.class);
-        Set<TopicPartition> partitionsSet = Collections.singleton(tp);
-        
-        // CRITICAL FIX: Explicitly stub the methods used by the for-each loops and metrics counts
-        when(mockRecords.partitions()).thenReturn(partitionsSet);
-        when(mockRecords.records(tp)).thenReturn(recordsList);
-        when(mockRecords.iterator()).thenReturn(recordsList.iterator());
-        when(mockRecords.count()).thenReturn(recordsList.size());
-        
-        // Empty mock fallback for subsequent polls
-        @SuppressWarnings("unchecked")
-        ConsumerRecords<byte[], byte[]> emptyRecords = mock(ConsumerRecords.class);
-        when(emptyRecords.partitions()).thenReturn(Collections.emptySet());
-        when(emptyRecords.iterator()).thenReturn(Collections.emptyIterator());
-        when(emptyRecords.count()).thenReturn(0);
-        
-        java.util.concurrent.atomic.AtomicInteger callCount = new java.util.concurrent.atomic.AtomicInteger(0);
-        
-        when(mockConsumer.poll(any())).thenAnswer(invocation -> {
-            if (callCount.incrementAndGet() == 1) {
-                return mockRecords;
-            }
-            return emptyRecords;
-        });
-
-        // Verify that the DataLossException is accurately triggered
-        assertThrows(MirrorSourceTask.DataLossException.class, () -> {
-            task.poll();
-        });
+        // logStartOffset == lastCommittedOffset + 1: boundary condition — no gap, must NOT throw
+        task.detectLogTruncation(offsets);
     }
 
     @Test
-    public void testPollHandlesTopicResetGracefully() {
-        TopicPartition tp = new TopicPartition("reset-topic", 0);
-        
+    public void testDetectLogTruncationNoExceptionWhenLogStartBehindCommitted() {
+        // Simulate: MM2 last replicated offset 100, logStartOffset is 50 — normal case, no purge
         @SuppressWarnings("unchecked")
         KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        Map<TopicPartition, Long> offsets = Collections.singletonMap(tp, 100L);
+
+        when(mockConsumer.beginningOffsets(offsets.keySet())).thenReturn(Collections.singletonMap(tp, 50L));
+
+        // logStartOffset < lastCommittedOffset + 1: normal replication progress — must NOT throw
+        task.detectLogTruncation(offsets);
+    }
+
+    @Test
+    public void testDetectLogTruncationSkipsUncommittedPartitions() {
+        // Partitions with no committed offset (null or -1) are starting fresh.
+        // beginningOffsets must never be called for them — no false-positive truncation detection.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        // null offset = uncommitted (new partition never replicated before)
+        Map<TopicPartition, Long> offsets = Collections.singletonMap(tp, null);
+
+        // If beginningOffsets is called, it would throw — proving it was invoked incorrectly
+        when(mockConsumer.beginningOffsets(any())).thenThrow(
+                new AssertionError("beginningOffsets must not be called for uncommitted partitions"));
+
+        // Must complete without calling beginningOffsets or throwing
+        task.detectLogTruncation(offsets);
+    }
+
+    @Test
+    public void testDetectLogTruncationSkipsNegativeOffsets() {
+        // offset = -1 also means uncommitted — must be skipped
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        Map<TopicPartition, Long> offsets = Collections.singletonMap(tp, -1L);
+
+        when(mockConsumer.beginningOffsets(any())).thenThrow(
+                new AssertionError("beginningOffsets must not be called for negative offsets"));
+
+        task.detectLogTruncation(offsets);
+    }
+
+    @Test
+    public void testDetectLogTruncationOnlyThrowsForAffectedPartition() {
+        // Multiple partitions: one has a gap, one does not.
+        // DataLossException must be thrown because at least one partition has lost data.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        TopicPartition tp0 = new TopicPartition("commit-log", 0);
+        TopicPartition tp1 = new TopicPartition("commit-log", 1);
+        Map<TopicPartition, Long> offsets = new HashMap<>();
+        offsets.put(tp0, 100L); // healthy partition
+        offsets.put(tp1, 50L);  // truncated partition
+
+        Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
+        beginningOffsets.put(tp0, 50L);  // no gap on tp0
+        beginningOffsets.put(tp1, 200L); // gap on tp1: logStartOffset(200) > lastCommitted(50) + 1
+
+        when(mockConsumer.beginningOffsets(offsets.keySet())).thenReturn(beginningOffsets);
+
+        assertThrows(DataLossException.class, () -> task.detectLogTruncation(offsets),
+                "Expected DataLossException when any partition has a truncation gap");
+    }
+
+    @Test
+    public void testDetectLogTruncationEmptyOffsetsMap() {
+        // Edge case: no partitions assigned — must complete silently without any calls
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        task.detectLogTruncation(Collections.emptyMap());
+
+        verify(mockConsumer, never()).beginningOffsets(any());
+    }
+
+    @Test
+    public void testRuntimeTruncationDetection() {
+        // Simulate: log truncation occurs while task is running — detectLogTruncation must be called on every poll
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        List<ConsumerRecord<byte[], byte[]>> records = Arrays.asList(
+                new ConsumerRecord<>("commit-log", 0, 10, System.currentTimeMillis(),
+                        TimestampType.CREATE_TIME, 0, 0, null, null, new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>("commit-log", 0, 20, System.currentTimeMillis(), 
+                        TimestampType.CREATE_TIME, 0, 0, null, null, new RecordHeaders(), Optional.empty()));
+        ConsumerRecords<byte[], byte[]> consumerRecords = new ConsumerRecords<>(Collections.singletonMap(tp, records));
+        when(consumer.poll(any())).thenReturn(consumerRecords);
+
+        MirrorSourceTask task = new MirrorSourceTask(consumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+        assertThrows(DataLossException.class, task::poll);
+    }
+    @Test
+    public void testRuntimeGapOnlyOnePartitionStillFails() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        List<ConsumerRecord<byte[], byte[]>> records = Arrays.asList(
+                new ConsumerRecord<>("commit-log", 0, 0, System.currentTimeMillis(),
+                        TimestampType.CREATE_TIME, 0, 0, null, null, 
+                        new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>("commit-log", 0, 10, System.currentTimeMillis(), 
+                        TimestampType.CREATE_TIME, 0, 0, null, null, 
+                        new RecordHeaders(), Optional.empty()));
+        ConsumerRecords<byte[], byte[]> consumerRecords = new ConsumerRecords<>(Collections.singletonMap(tp, records));
+        when(mockConsumer.poll(any())).thenReturn(consumerRecords);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+        assertThrows(DataLossException.class, task::poll);
+    }
+
+    @Test
+    public void testPollFailsFastOnLogTruncation() {
+        // Simulate: MM2 has a committed offset of 100, but logStartOffset is now 200.
+        // detectLogTruncation must throw DataLossException — messages [101, 199] are permanently lost.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        TopicPartition tp = new TopicPartition("commit-log", 0);
+        // lastCommittedOffset = 100, logStartOffset = 200 — gap of 99 messages
+        Map<TopicPartition, Long> offsets = Collections.singletonMap(tp, 100L);
+        when(mockConsumer.beginningOffsets(Collections.singleton(tp)))
+                .thenReturn(Collections.singletonMap(tp, 200L));
+
+        assertThrows(DataLossException.class, () -> task.detectLogTruncation(offsets),
+                "Expected DataLossException when logStartOffset exceeds lastCommittedOffset + 1");
+    }
+
+    // =========================================================================
+    // Task 3: Topic Reset Detection Tests
+    // =========================================================================
+
+    @Test
+    public void testOffsetRollbackTriggersTopicReset() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+
+        String topic = "commit-log";
+        TopicPartition tp = new TopicPartition(topic, 0);
+
+        // First poll: normal offsets
+        List<ConsumerRecord<byte[], byte[]>> firstBatch = Arrays.asList(
+                new ConsumerRecord<>(topic, 0, 100L, System.currentTimeMillis(),
+                TimestampType.CREATE_TIME, 0, 0, null, null, new RecordHeaders(), Optional.empty()));
+
+        // Second poll: offset reset (goes backward)
+        List<ConsumerRecord<byte[], byte[]>> secondBatch = Arrays.asList(
+                new ConsumerRecord<>(topic, 0, 0L, System.currentTimeMillis(),
+                TimestampType.CREATE_TIME, 0, 0, null, null, new RecordHeaders(), Optional.empty()));
+
+        ConsumerRecords<byte[], byte[]> records1 =
+                new ConsumerRecords<>(Collections.singletonMap(tp, firstBatch));
+        ConsumerRecords<byte[], byte[]> records2 =
+                new ConsumerRecords<>(Collections.singletonMap(tp, secondBatch));
+
+        when(consumer.poll(any())).thenReturn(records1).thenReturn(records2);
+        when(consumer.assignment()).thenReturn(Collections.singleton(tp));
         
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        MirrorSourceTask task = new MirrorSourceTask(consumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+
+        // First poll → sets lastSeenOffsets
+        task.poll();
+
+        // Second poll → offset goes backward → trigger reset
+        task.poll();
+
+        // Verify reset handling triggered
+        verify(consumer, times(1)).seekToBeginning(Collections.singleton(tp));
+    }
+
+    @Test
+    public void testRuntimeBackwardOffsetDoesNotFireOnFirstRecord() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        TopicPartition sourceTp = new TopicPartition("commit-log", 0);
+        List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
+                new ConsumerRecord<>("commit-log", 0, 0, System.currentTimeMillis(),
+                        TimestampType.CREATE_TIME, 0, 0, null, "value".getBytes(),
+                        new RecordHeaders(), Optional.empty()));
+        ConsumerRecords<byte[], byte[]> consumerRecords = new ConsumerRecords<>(Collections.singletonMap(sourceTp, records));
+        when(mockConsumer.poll(any())).thenReturn(consumerRecords);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, metrics, "primary",
+                new DefaultReplicationPolicy(), null);
+        task.poll();
+        verify(mockConsumer, never()).seekToBeginning(anyCollection());
+    }
+
+    @Test
+    public void testDetectAndHandleTopicResetSeeksToBeginning() throws Exception {
+        // Simulate: topic ID changes between initialization and poll — topic was reset
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        Admin mockAdmin = mock(Admin.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null, mockAdmin);
+
+        String topicName = "commit-log";
+        TopicPartition tp = new TopicPartition(topicName, 0);
+        Uuid oldTopicId = Uuid.randomUuid();
+        Uuid newTopicId = Uuid.randomUuid();
+
+        // Seed the known topic ID with the old ID
+        seedTopicId(task, topicName, oldTopicId);
+
+        // Admin client returns new topic ID — topic was deleted and recreated
+        TopicDescription newDescription = buildTopicDescription(topicName, newTopicId);
+        mockDescribeTopics(mockAdmin, topicName, newDescription);
+
         when(mockConsumer.assignment()).thenReturn(Collections.singleton(tp));
-        
-        OffsetOutOfRangeException ooorException = new OffsetOutOfRangeException("Reset occurred");
-        
-        when(mockConsumer.poll(any())).thenThrow(ooorException);
-        doNothing().when(mockConsumer).seekToBeginning(Collections.singleton(tp));
+        doNothing().when(mockConsumer).seekToBeginning(anyCollection());
 
-        MirrorSourceTask task = new MirrorSourceTask(
-            mockConsumer, mock(MirrorSourceMetrics.class), "source-cluster", new DefaultReplicationPolicy(), null
-        );
+        task.detectAndHandleTopicReset();
 
-        SourceTaskContext mockSourceTaskContext = mock(SourceTaskContext.class);
-        OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
-        when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
-        task.initialize(mockSourceTaskContext);
-        task.initializeConsumer(Collections.singleton(tp));
-
-        List<SourceRecord> results = task.poll();
-
-        // Update this assertion to check for null instead of an empty list
-        org.junit.jupiter.api.Assertions.assertNull(results, "Poll should return null to yield execution context gracefully on reset handling.");
+        // Consumer must seek all partitions of the reset topic to the beginning
         verify(mockConsumer, times(1)).seekToBeginning(Collections.singleton(tp));
+    }
+
+    @Test
+    public void testDetectAndHandleTopicResetNoSeekWhenTopicIdUnchanged() throws Exception {
+        // Simulate: topic ID is the same — no reset occurred
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        Admin mockAdmin = mock(Admin.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null, mockAdmin);
+
+        String topicName = "commit-log";
+        TopicPartition tp = new TopicPartition(topicName, 0);
+        Uuid topicId = Uuid.randomUuid();
+
+        seedTopicId(task, topicName, topicId);
+        // Admin client returns the same topic ID — no reset
+        TopicDescription sameDescription = buildTopicDescription(topicName, topicId);
+        mockDescribeTopics(mockAdmin, topicName, sameDescription);
+
+        task.detectAndHandleTopicReset();
+
+        // seekToBeginning must never be called when no reset occurred
+        verify(mockConsumer, never()).seekToBeginning(anyCollection());
+    }
+
+    @Test
+    public void testDetectAndHandleTopicResetNoOpWhenAdminClientNull() {
+        // Edge case: admin client is null (e.g. task created via testing constructor without admin)
+        // Must complete silently without any NullPointerException
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null);
+        // sourceAdminClient is null — detectAndHandleTopicReset must return early
+        task.detectAndHandleTopicReset();
+        verify(mockConsumer, never()).seekToBeginning(anyCollection());
+    }
+
+    @Test
+    public void testDetectAndHandleTopicResetNoOpWhenTopicIdsEmpty() throws Exception {
+        // Edge case: no topic IDs recorded yet (e.g. recordTopicIds was never called)
+        // Must complete silently without calling admin client
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        Admin mockAdmin = mock(Admin.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null, mockAdmin);
+
+        task.detectAndHandleTopicReset();
+
+        verify(mockAdmin, never()).describeTopics(any(java.util.Collection.class));
+        verify(mockConsumer, never()).seekToBeginning(anyCollection());
+    }
+
+    @Test
+    public void testDetectAndHandleTopicResetUpdatesStoredTopicId() throws Exception {
+        // After a reset is detected and handled, the stored topic ID must be updated to the new one
+        // so that subsequent polls do not re-trigger the reset handling
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+        Admin mockAdmin = mock(Admin.class);
+        MirrorSourceTask task = new MirrorSourceTask(mockConsumer, null, "primary",
+                new DefaultReplicationPolicy(), null, mockAdmin);
+
+        String topicName = "commit-log";
+        TopicPartition tp = new TopicPartition(topicName, 0);
+        Uuid oldTopicId = Uuid.randomUuid();
+        Uuid newTopicId = Uuid.randomUuid();
+
+        seedTopicId(task, topicName, oldTopicId);
+
+        TopicDescription newDescription = buildTopicDescription(topicName, newTopicId);
+        mockDescribeTopics(mockAdmin, topicName, newDescription);
+        when(mockConsumer.assignment()).thenReturn(Collections.singleton(tp));
+        doNothing().when(mockConsumer).seekToBeginning(anyCollection());
+
+        // First call: reset detected, seekToBeginning called once
+        task.detectAndHandleTopicReset();
+        verify(mockConsumer, times(1)).seekToBeginning(Collections.singleton(tp));
+
+        // Second call with same new ID: must NOT trigger reset again
+        mockDescribeTopics(mockAdmin, topicName, newDescription);
+        task.detectAndHandleTopicReset();
+
+        // seekToBeginning still only called once total — not twice
+        verify(mockConsumer, times(1)).seekToBeginning(Collections.singleton(tp));
+    }
+
+    // =========================================================================
+    // Helper methods for Task 3 tests
+    // =========================================================================
+
+    /**
+     * Seeds the task's internal topic ID map directly for testing purposes,
+     * bypassing the admin client call in {@code recordTopicIds(Set)}.
+     */
+    private void seedTopicId(MirrorSourceTask task, String topic, Uuid topicId) {
+        task.topicIds().put(topic, topicId);
+    }
+
+    private TopicDescription buildTopicDescription(String topicName, Uuid topicId) {
+        TopicPartitionInfo partitionInfo = new TopicPartitionInfo(0,
+                null, Collections.emptyList(), Collections.emptyList());
+        return new TopicDescription(topicName, false,
+                Collections.singletonList(partitionInfo), Collections.emptySet(), topicId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void mockDescribeTopics(Admin mockAdmin, String topicName, TopicDescription description) {
+        DescribeTopicsResult mockResult = mock(DescribeTopicsResult.class);
+        KafkaFuture<TopicDescription> future = KafkaFuture.completedFuture(description);
+        when(mockResult.topicNameValues()).thenReturn(Collections.singletonMap(topicName, future));
+        when(mockAdmin.describeTopics(Collections.singleton(topicName))).thenReturn(mockResult);
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {

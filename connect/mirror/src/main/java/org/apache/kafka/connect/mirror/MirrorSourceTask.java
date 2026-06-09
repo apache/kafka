@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
@@ -30,7 +34,6 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,10 +41,12 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-//import java.util.Collections;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
@@ -58,17 +63,20 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
-
-    private final Map<TopicPartition, Long> expectedNextOffsets =
-        new java.util.concurrent.ConcurrentHashMap<>();
-    private final Set<TopicPartition> resetHandled =
-        java.util.concurrent.ConcurrentHashMap.newKeySet();
+    // Admin client used for topic ID lookups (Task 3: topic reset detection)
+    private Admin sourceAdminClient;
+    // Tracks the last known topic ID per topic name to detect topic reset (deletion + recreation)
+    private final Map<String, Uuid> topicIds = new HashMap<>();
+    private final Map<TopicPartition, Long> lastSeenOffsets = new HashMap<>();
+    private Set<TopicPartition> assignedPartitions;
+    private long lastTopicCheckTime = 0;
+    private static final long TOPIC_CHECK_INTERVAL_MS = 5000;
 
     public MirrorSourceTask() {}
 
     // for testing
-    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics,
-                     String sourceClusterAlias, ReplicationPolicy replicationPolicy,
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
+                     ReplicationPolicy replicationPolicy,
                      OffsetSyncWriter offsetSyncWriter) {
         this.consumer = consumer;
         this.metrics = metrics;
@@ -78,10 +86,18 @@ public class MirrorSourceTask extends SourceTask {
         this.offsetSyncWriter = offsetSyncWriter;
     }
 
+    // for testing — includes admin client for topic reset detection tests
+    MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
+                     ReplicationPolicy replicationPolicy, 
+                     OffsetSyncWriter offsetSyncWriter, Admin sourceAdminClient) {
+        this(consumer, metrics, sourceClusterAlias, replicationPolicy, offsetSyncWriter);
+        this.sourceAdminClient = sourceAdminClient;
+    }
+
     @Override
     public void start(Map<String, String> props) {
         MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
-        consumerAccess = new Semaphore(1);
+        consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
         sourceClusterAlias = config.sourceClusterAlias();
         metrics = config.metrics();
         pollTimeout = config.consumerPollTimeout();
@@ -90,17 +106,24 @@ public class MirrorSourceTask extends SourceTask {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
+        // Create admin client for source cluster topic ID lookups (Task 3: topic reset detection)
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         initializeConsumer(taskTopicPartitions);
-        log.info("{} replicating {} topic-partitions {}->{}: {}.",
-            Thread.currentThread().getName(), taskTopicPartitions.size(),
-            sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
+
+        log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
+            taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
     }
 
     @Override
     public void commit() {
+        // Handle delayed and pending offset syncs only when offsetSyncWriter is available
         if (offsetSyncWriter != null) {
+            // Offset syncs which were not emitted immediately due to their offset spacing should be sent periodically
+            // This ensures that low-volume topics aren't left with persistent lag at the end of the topic
             offsetSyncWriter.promoteDelayedOffsetSyncs();
+            // Publish any offset syncs that we've queued up, but have not yet been able to publish
+            // (likely because we previously reached our limit for number of outstanding syncs)
             offsetSyncWriter.firePendingOffsetSyncs();
         }
     }
@@ -113,15 +136,15 @@ public class MirrorSourceTask extends SourceTask {
         try {
             consumerAccess.acquire();
         } catch (InterruptedException e) {
-            log.warn("Interrupted waiting for access to consumer. Will try closing anyway.");
+            log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
         }
         Utils.closeQuietly(consumer, "source consumer");
+        Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(offsetSyncWriter, "offset sync writer");
         Utils.closeQuietly(metrics, "metrics");
-        log.info("Stopping {} took {} ms.",
-            Thread.currentThread().getName(), System.currentTimeMillis() - start);
+        log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
-
+   
     @Override
     public String version() {
         return new MirrorSourceConnector().version();
@@ -136,141 +159,78 @@ public class MirrorSourceTask extends SourceTask {
             return null;
         }
         try {
-            // Task 2: Check for log truncation that occurred while MM2 is
-            // actively running. Complements the check in initializeConsumer()
-            // which handles truncation that occurred while MM2 was stopped.
-            checkForLogTruncation();
-
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
-            //Task 3: reset detection
-            if (handleTopicReset()) {
-                return null;
+            // Task 3: detect topic reset before each poll by comparing current topic IDs
+            // against the IDs recorded at initialization time
+            long now = System.currentTimeMillis();
+            if (now - lastTopicCheckTime > TOPIC_CHECK_INTERVAL_MS) {
+                detectAndHandleTopicReset();
+                lastTopicCheckTime = now;
             }
-            //Runtime gap detection
-            checkRuntimeGaps(records);
-
+            checkLogTruncationDuringPoll(ConsumerRecords.empty());
+            detectOffsetResetBeforePoll();
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
+            
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
-                SourceRecord converted = convertRecord(record);
-                sourceRecords.add(converted);
-                TopicPartition topicPartition =
-                    new TopicPartition(converted.topic(), converted.kafkaPartition());
-                metrics.recordAge(topicPartition,
-                    System.currentTimeMillis() - record.timestamp());
-                metrics.recordBytes(topicPartition, byteSize(record.value()));
+                handleRecord(record, sourceRecords);
             }
             if (sourceRecords.isEmpty()) {
+                // WorkerSourceTasks expects non-zero batch size
                 return null;
             } else {
-                log.trace("Polled {} records from {}.",
-                    sourceRecords.size(), records.partitions());
+                log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
         } catch (WakeupException e) {
             return null;
-        } catch (OffsetOutOfRangeException e) {
-            Set<TopicPartition> partitions = consumer.assignment();
-            if (partitions != null && !partitions.isEmpty()) {
-                consumer.seekToBeginning(partitions);
-            }
-            return null;
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
-        } catch (Throwable e) {
+        } catch (Throwable e)  {
             log.error("Failure during poll.", e);
+            // allow Connect to deal with the exception
             throw e;
         } finally {
             consumerAccess.release();
         }
     }
-
-    private boolean handleTopicReset() {
-        Set<TopicPartition> partitions = consumer.assignment();
-        if (partitions == null || partitions.isEmpty()) {
-            return false;
-        }
-        Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(partitions);
-        for (TopicPartition tp : partitions) {
-            Long lastOffset = loadOffset(tp);
-            Long beginningOffset = beginningOffsets.get(tp);
-            if (beginningOffset != null 
-                && lastOffset != null 
-                && beginningOffset == 0 
-                && lastOffset > 0 
-                && !resetHandled.contains(tp)) {
-                resetHandled.add(tp);
-                log.warn("[TOPIC RESET DETECTED] topic={} partition={} "
-                        + "previousOffset={} currentBeginningOffset={}",
-                        tp.topic(), tp.partition(), lastOffset, beginningOffset);
-                consumer.seekToBeginning(java.util.Collections.singleton(tp));
-                log.info("[TOPIC RESET RECOVERY] topic={} partition={}", tp.topic(), tp.partition());
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void checkRuntimeGaps(ConsumerRecords<byte[], byte[]> records) {
-        for (TopicPartition tp : records.partitions()) {
-            List<ConsumerRecord<byte[], byte[]>> partitionRecords = records.records(tp);
-            if (partitionRecords.isEmpty()) {
-                continue;
-            }
-            long expected = expectedNextOffsets.getOrDefault(tp, partitionRecords.get(0).offset());
-            for (ConsumerRecord<byte[], byte[]> record : partitionRecords) {
-                long actual = record.offset();
-                if (actual != expected) {
-                    throw new DataLossException("Runtime gap detected for " + tp);
-                }
-                expected++;
-            }
-            expectedNextOffsets.put(tp, expected);
-        }
-    }
-
-
-
+ 
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
             return;
         }
         if (metadata == null) {
-            log.debug("No RecordMetadata (source record was probably filtered out "
-                + "during transformation) -- can't sync offsets for {}.", record.topic());
+            log.debug("No RecordMetadata (source record was probably filtered out during transformation)"
+                        + " -- can't sync offsets for {}.", record.topic());
             return;
         }
         if (!metadata.hasOffset()) {
-            log.error("RecordMetadata has no offset -- can't sync offsets for {}.",
-                record.topic());
+            log.error("RecordMetadata has no offset -- can't sync offsets for {}.", record.topic());
             return;
         }
-        TopicPartition topicPartition =
-            new TopicPartition(record.topic(), record.kafkaPartition());
+        TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
         long latency = System.currentTimeMillis() - record.timestamp();
         metrics.countRecord(topicPartition);
         metrics.replicationLatency(topicPartition, latency);
+        // Queue offset syncs only when offsetWriter is available
         if (offsetSyncWriter != null) {
-            TopicPartition sourceTopicPartition =
-                MirrorUtils.unwrapPartition(record.sourcePartition());
+            TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
             long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
             long downstreamOffset = metadata.offset();
-            offsetSyncWriter.maybeQueueOffsetSyncs(
-                sourceTopicPartition, upstreamOffset, downstreamOffset);
+            offsetSyncWriter.maybeQueueOffsetSyncs(sourceTopicPartition, upstreamOffset, downstreamOffset);
+            // We may be able to immediately publish an offset sync that we've queued up here
             offsetSyncWriter.firePendingOffsetSyncs();
         }
     }
-
+ 
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, this::loadOffset));
     }
 
     private Long loadOffset(TopicPartition topicPartition) {
-        Map<String, Object> wrappedPartition =
-            MirrorUtils.wrapPartition(topicPartition, sourceClusterAlias);
-        Map<String, Object> wrappedOffset =
-            context.offsetStorageReader().offset(wrappedPartition);
+        Map<String, Object> wrappedPartition = MirrorUtils.wrapPartition(topicPartition, sourceClusterAlias);
+        Map<String, Object> wrappedOffset = context.offsetStorageReader().offset(wrappedPartition);
         return MirrorUtils.unwrapOffset(wrappedOffset);
     }
 
@@ -278,140 +238,301 @@ public class MirrorSourceTask extends SourceTask {
     void initializeConsumer(Set<TopicPartition> taskTopicPartitions) {
         Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
         consumer.assign(topicPartitionOffsets.keySet());
-        log.info("Starting with {} previously uncommitted partitions.",
-            topicPartitionOffsets.values().stream().filter(this::isUncommitted).count());
-
-        // Fetch beginning and end offsets once for all assigned partitions.
-        // Used to detect topic reset and log truncation before seeking,
-        // covering failures that occurred while MM2 was stopped.
-        Map<TopicPartition, Long> beginningOffsets =
-            consumer.beginningOffsets(topicPartitionOffsets.keySet());
-
+        log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.values().stream()
+                .filter(this::isUncommitted).count());
+        this.assignedPartitions = taskTopicPartitions;
         topicPartitionOffsets.forEach((topicPartition, offset) -> {
+            // Do not call seek on partitions that don't have an existing offset committed.
             if (isUncommitted(offset)) {
                 log.trace("Skipping seeking offset for topicPartition: {}", topicPartition);
                 return;
             }
-
-            long nextExpectedOffset = offset + 1L;
-            Long beginningOffset = beginningOffsets.get(topicPartition);
-
-            if (beginningOffset == null) {
-                log.warn("Could not retrieve offsets for {}. Proceeding with seek.",
-                    topicPartition);
-                consumer.seek(topicPartition, nextExpectedOffset);
-                return;
-            }
-
-            // Task 3: Topic Reset Detection (checked before truncation).
-            // A topic reset is identified when the beginning offset is 0
-            // (fresh topic) and the end offset is less than or equal to the
-            // last committed offset (topic has fewer messages than MM2 knows).
-            // Checking reset first because reset always starts at 0, while
-            // truncation moves beginning offset forward above 0.
-
-            // Task 2: Log Truncation Detection on cold start.
-            // If the earliest available offset is ahead of the next expected
-            // offset, messages were purged before replication completed.
-            // Fail fast to prevent producing a silently incomplete replica.
-            if (beginningOffset >= nextExpectedOffset) {
-                long messagesLost = beginningOffset - nextExpectedOffset;
-                log.error("[TRUNCATION DETECTED] topic={} partition={} "
-                    + "lastCommittedOffset={} earliestAvailableOffset={} "
-                    + "messagesLost={} timestamp={}. "
-                    + "Source topic was truncated by retention policy before "
-                    + "replication completed. Failing fast to prevent "
-                    + "silent data loss in the replicated stream.",
-                    topicPartition.topic(), topicPartition.partition(),
-                    offset, beginningOffset, messagesLost, Instant.now());
-                throw new DataLossException(String.format(
-                    "Log truncation detected on %s partition %d: "
-                    + "expected offset %d but earliest available is %d. "
-                    + "Messages lost: %d",
-                    topicPartition.topic(), topicPartition.partition(),
-                    nextExpectedOffset, beginningOffset, messagesLost));
-            }
-
-            log.trace("Seeking to offset {} for topicPartition: {}",
-                nextExpectedOffset, topicPartition);
-            consumer.seek(topicPartition, nextExpectedOffset);
+            long nextOffsetToCommittedOffset = offset + 1L;
+            log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
+            consumer.seek(topicPartition, nextOffsetToCommittedOffset);
         });
+        // Task 2: detect log truncation — check if retention has purged data that has not yet been replicated.
+        // This check covers both the continuous-running case and the restart case, because we read the
+        // last committed offset from the Connect offset store on every start/reconfiguration.
+        //boolean hasValidCommittedOffsets = topicPartitionOffsets.values().stream().anyMatch(offset -> offset != null && offset >= 0);
+        detectLogTruncation(topicPartitionOffsets);
+        log.info("No log truncation detected during initialization for {} partitions.", topicPartitionOffsets.size());
+
+        topicPartitionOffsets.forEach((topicPartition, offset) -> {
+            if (!isUncommitted(offset)) {
+                lastSeenOffsets.put(topicPartition, offset);
+            }
+        }); 
+
+        // Task 3: record topic IDs at initialization so that poll() can detect topic reset later
+        if (sourceAdminClient != null) {
+            recordTopicIds(taskTopicPartitions);
+        }
     }
 
     /**
-     * Checks for log truncation during continuous poll operation.
+     * Detects log truncation for all partitions that have a previously committed replication offset.
      *
-     * <p>Handles truncation that occurs while MM2 is actively running.
-     * The check in {@link #initializeConsumer} covers truncation that
-     * occurred while MM2 was stopped.
+     * Log truncation occurs when Kafka's retention policy purges messages from the source topic
+     * before MirrorMaker 2 has had a chance to replicate them. This creates an undetectable gap in
+     * the replicated data stream if left unchecked.
      *
-     * <p>On detection, throws {@link DataLossException} to fail fast
-     * and prevent silent data loss in the replicated stream.
+     * For each partition with a committed offset, this method compares:
+     * 
+     *   The last committed replication offset (what MM2 last successfully replicated)</li>
+     *   The current log start offset (earliest offset still available on the broker)</li>
+     * 
+     *
+     * If {@code logStartOffset > lastCommittedOffset + 1}, messages in the range
+     * {@code [lastCommittedOffset + 1, logStartOffset - 1]} have been purged and are permanently lost.
+     *
+     * @param topicPartitionOffsets map of topic-partition to last committed replication offset
+     * @throws DataLossException if log truncation is detected on any partition
      */
-    private void checkForLogTruncation() {
-        Set<TopicPartition> assignedPartitions = consumer.assignment();
-        if (assignedPartitions.isEmpty()) {
+    void detectLogTruncation(Map<TopicPartition, Long> topicPartitionOffsets) {
+        // Only check partitions that have a committed offset — uncommitted partitions are starting
+        // fresh and there is no gap to detect
+        Set<TopicPartition> committedPartitions = topicPartitionOffsets.entrySet().stream()
+                .filter(e -> !isUncommitted(e.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+
+        if (committedPartitions.isEmpty()) {
             return;
         }
 
-        Map<TopicPartition, Long> beginningOffsets =
-            consumer.beginningOffsets(assignedPartitions);
+        // beginningOffsets() returns the current logStartOffset for each partition —
+        // the earliest offset that is still available on the broker after retention has run
+        Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(committedPartitions);
 
-        for (TopicPartition topicPartition : assignedPartitions) {
-            Long lastCommittedOffset = loadOffset(topicPartition);
-            if (isUncommitted(lastCommittedOffset)) {
-                log.debug("Skipping truncation check for uncommitted partition: {}",
-                    topicPartition);
-                continue;
+        for (Map.Entry<TopicPartition, Long> entry : beginningOffsets.entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
+            long logStartOffset = entry.getValue();
+            long lastCommittedOffset = topicPartitionOffsets.get(topicPartition);
+            // The next offset MM2 would attempt to replicate is lastCommittedOffset + 1.
+            // If the broker's logStartOffset has advanced past that point, the intervening
+            // messages have been permanently purged — this is silent data loss.
+            if (logStartOffset > lastCommittedOffset + 1) {
+                throw new DataLossException(
+                    String.format(
+                        "Log truncation detected for %s: last replicated offset was %d, "
+                        + "but log start offset is now %d. Messages in range [%d, %d] "
+                        + "have been permanently lost due to retention policy. "
+                        + "Source cluster: %s.",
+                        topicPartition,
+                        lastCommittedOffset,
+                        logStartOffset,
+                        lastCommittedOffset + 1,
+                        logStartOffset - 1,
+                        sourceClusterAlias
+                ));
             }
-
-            Long earliestAvailableOffset = beginningOffsets.get(topicPartition);
-            if (earliestAvailableOffset == null) {
-                log.warn("Could not retrieve beginning offset for partition: {}",
-                    topicPartition);
-                continue;
-            }
-
-            long nextExpectedOffset = lastCommittedOffset + 1L;
-            if (earliestAvailableOffset > nextExpectedOffset) {
-                long messagesLost = earliestAvailableOffset - nextExpectedOffset;
-                log.error("[TRUNCATION DETECTED] topic={} partition={} "
-                    + "lastCommittedOffset={} earliestAvailableOffset={} "
-                    + "messagesLost={} timestamp={}. "
-                    + "Source topic was truncated by retention policy before "
-                    + "replication completed. Failing fast to prevent "
-                    + "silent data loss in the replicated stream.",
-                    topicPartition.topic(), topicPartition.partition(),
-                    lastCommittedOffset, earliestAvailableOffset,
-                    messagesLost, Instant.now());
-                throw new DataLossException(String.format(
-                    "Log truncation detected on %s partition %d: "
-                    + "expected offset %d but earliest available is %d. "
-                    + "Messages lost: %d",
-                    topicPartition.topic(), topicPartition.partition(),
-                    nextExpectedOffset, earliestAvailableOffset, messagesLost));
-            }
-
-            log.debug("Truncation check passed: topic={} partition={} "
-                + "lastCommittedOffset={} earliestAvailableOffset={}",
-                topicPartition.topic(), topicPartition.partition(),
-                lastCommittedOffset, earliestAvailableOffset);
         }
     }
 
-    // visible for testing
+    private void detectOffsetResetBeforePoll() {
+        for (TopicPartition tp : consumer.assignment()) {
+            TopicPartition sourceTp = new TopicPartition(tp.topic(), tp.partition());
+            Long previousOffset = lastSeenOffsets.get(sourceTp);
+            if (previousOffset != null) {
+                try {
+                    long currentPosition = consumer.position(tp);
+                    if (currentPosition < previousOffset) {
+                        log.error("Topic reset detected for topic {}: {} -> {}", sourceTp, previousOffset, currentPosition);
+                        consumer.seekToBeginning(Set.of(tp));
+                        lastSeenOffsets.remove(sourceTp);
+                    }
+                } catch (KafkaException e) {
+                    log.warn("Error checking offset for {}", tp);
+                }
+            }
+        }
+    }
+
+    private void handleRecord(ConsumerRecord<byte[], byte[]> record, List<SourceRecord> sourceRecords) {
+        String targetTopic = formatRemoteTopic(record.topic());
+        TopicPartition targetTp = new TopicPartition(targetTopic, record.partition());
+        TopicPartition sourceTp = new TopicPartition(record.topic(), record.partition());
+        Long lastSeenOffset = lastSeenOffsets.get(targetTp);
+        //RUNTIME TRUNCATION DETECTION
+        if (lastSeenOffset != null && record.offset() > lastSeenOffset + 1) {
+            log.error("OFFSET GAP DETECTED for {}: expected {} but found {}",
+                    targetTp, lastSeenOffset + 1, record.offset());
+            throw new DataLossException(
+                String.format(
+                    "Offset gap detected for %s: expected %d but found %d. "
+                        + "This indicates log truncation or missing data.", 
+                        targetTp, lastSeenOffset + 1, record.offset()));
+        }
+        // OFFSET RESET DETECTION
+        if (lastSeenOffset != null && record.offset() < lastSeenOffset) {
+            if (lastSeenOffsets.get(sourceTp) == null) {
+                return;
+            }
+            log.warn("Topic reset detected for topic '{}' due to offset reset. "
+                + "Previous offset: {}, new offset: {}",
+                record.topic(), lastSeenOffset, record.offset());
+            consumer.seekToBeginning(consumer.assignment().stream().filter(p -> 
+                    p.topic().equals(record.topic())).collect(Collectors.toSet()));
+            lastSeenOffsets.remove(targetTp);
+            lastSeenOffsets.remove(sourceTp);
+            return;
+        }
+        lastSeenOffsets.put(sourceTp, record.offset());
+        lastSeenOffsets.put(targetTp, record.offset());
+        SourceRecord converted = convertRecord(record);
+        sourceRecords.add(converted);
+        if (metrics != null) {
+            metrics.recordAge(targetTp, System.currentTimeMillis() - record.timestamp());
+            metrics.recordBytes(targetTp, byteSize(record.value()));
+        }
+    }
+    /**
+     * Records the current topic ID for each unique topic in the given set of topic-partitions.
+     *
+     * <p>Topic IDs are stable UUIDs assigned by Kafka at topic creation time. When a topic is
+     * deleted and recreated, it receives a new UUID. This method seeds the baseline used by
+     * {@link #detectAndHandleTopicReset()} to identify such resets during the poll loop.
+     *
+     * @param taskTopicPartitions the set of topic-partitions assigned to this task
+     */
+    void recordTopicIds(Set<TopicPartition> taskTopicPartitions) {
+        Set<String> topics = taskTopicPartitions.stream()
+                .map(TopicPartition::topic)
+                .collect(Collectors.toSet());
+        try {
+            Map<String, KafkaFuture<TopicDescription>> futures =
+                    sourceAdminClient.describeTopics(topics).topicNameValues();
+            for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : futures.entrySet()) {
+                String topic = entry.getKey();
+                try {
+                    Uuid topicId = entry.getValue().get().topicId();
+                    topicIds.put(topic, topicId);
+                    log.debug("Recorded topic ID {} for topic {} on cluster {}.",
+                            topicId, topic, sourceClusterAlias);
+                } catch (ExecutionException e) {
+                    log.warn("Could not retrieve topic ID for topic {} on cluster {}: {}",
+                            topic, sourceClusterAlias, e.getCause().getMessage());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while recording topic IDs for cluster {}.", sourceClusterAlias);
+        }
+    }
+
+    /**
+     * Detects topic reset (deletion and recreation) by comparing current topic IDs against
+     * the IDs recorded at initialization time.
+     *
+     * <p>When a Kafka topic is deleted and recreated, Kafka assigns it a new UUID (topic ID).
+     * MM2's stored offset refers to the old topic incarnation and is no longer valid for the
+     * new topic. Without detection, MM2 would attempt to seek to a stale offset, causing it
+     * to crash or stall indefinitely.
+     *
+     * <p>Upon detecting a topic ID change this method:
+     * <ol>
+     *   <li>Logs the reset event with timestamp and topic details</li>
+     *   <li>Seeks the consumer to the beginning of all affected partitions</li>
+     *   <li>Updates the stored topic ID to the new value</li>
+     * </ol>
+     *
+     * <p>This allows MM2 to automatically recover and resume replication from the start of the
+     * recreated topic without operator intervention.
+     */
+    void detectAndHandleTopicReset() {
+        if (sourceAdminClient == null || topicIds.isEmpty()) {
+            return;
+        }
+        try {
+            Map<String, KafkaFuture<TopicDescription>> futures =
+                    sourceAdminClient.describeTopics(topicIds.keySet()).topicNameValues();
+            for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : futures.entrySet()) {
+                String topic = entry.getKey();
+                try {
+                    TopicDescription description = entry.getValue().get();
+                    Uuid currentTopicId = description.topicId();
+                    Uuid knownTopicId = topicIds.get(topic);
+                    if (knownTopicId != null && !knownTopicId.equals(currentTopicId)) {
+                        log.warn(
+                                "Topic reset detected for topic '{}' on cluster '{}' at {}. "
+                                + "Previous topic ID: {}, new topic ID: {}. "
+                                + "Resubscribing from the beginning offset.",
+                                topic,
+                                sourceClusterAlias,
+                                Instant.now(),
+                                knownTopicId,
+                                currentTopicId
+                        );
+                        // Seek all assigned partitions belonging to the reset topic back to the beginning
+                        Collection<TopicPartition> assignedPartitions = consumer.assignment().stream()
+                                .filter(tp -> tp.topic().equals(topic))
+                                .collect(Collectors.toSet());
+                        consumer.seekToBeginning(assignedPartitions);
+                        // Update the stored topic ID so we don't trigger this again until the next reset
+                        topicIds.put(topic, currentTopicId);
+                        log.info("Resubscribed {} partition(s) of topic '{}' from offset 0 after topic reset.",
+                                assignedPartitions.size(), topic);
+                    }
+                } catch (ExecutionException e) {
+                    log.warn("Could not retrieve topic ID for topic {} on cluster {} during reset check: {}",
+                            topic, sourceClusterAlias, e.getCause().getMessage());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while checking for topic reset on cluster {}.", sourceClusterAlias);
+        }
+    }
+    
+    Map<String, Uuid> topicIds() {
+        return topicIds;
+    }
+
+    // visible for testing 
     SourceRecord convertRecord(ConsumerRecord<byte[], byte[]> record) {
         String targetTopic = formatRemoteTopic(record.topic());
         Headers headers = convertHeaders(record);
         return new SourceRecord(
-            MirrorUtils.wrapPartition(
-                new TopicPartition(record.topic(), record.partition()),
-                sourceClusterAlias),
-            MirrorUtils.wrapOffset(record.offset()),
-            targetTopic, record.partition(),
-            Schema.OPTIONAL_BYTES_SCHEMA, record.key(),
-            Schema.BYTES_SCHEMA, record.value(),
-            record.timestamp(), headers);
+                MirrorUtils.wrapPartition(new TopicPartition(record.topic(), record.partition()), sourceClusterAlias),
+                MirrorUtils.wrapOffset(record.offset()),
+                targetTopic, record.partition(),
+                Schema.OPTIONAL_BYTES_SCHEMA, record.key(),
+                Schema.BYTES_SCHEMA, record.value(),
+                record.timestamp(), headers);
+    }
+
+    private void checkLogTruncationDuringPoll(ConsumerRecords<byte[], byte[]> records) {
+        Set<TopicPartition> partitions = consumer.assignment();
+        if (partitions.isEmpty()) {
+            partitions = records.partitions();
+        }
+        if (partitions.isEmpty()) {
+            partitions = lastSeenOffsets.keySet();
+        }
+        if (partitions.isEmpty()) {
+            partitions = assignedPartitions;
+        }
+        if (partitions == null || partitions.isEmpty()) {
+            return;
+        }
+        Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(partitions);
+        for (Map.Entry<TopicPartition, Long> entry : beginningOffsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            long logStartOffset = entry.getValue();
+            TopicPartition remoteTp = new TopicPartition(formatRemoteTopic(tp.topic()), tp.partition());
+            Long lastSeen = lastSeenOffsets.get(remoteTp);
+            long compareOffset = (lastSeen != null) ? lastSeen + 1 : 0L;
+            if (logStartOffset > compareOffset) {
+                TopicPartition targetTp = new TopicPartition(formatRemoteTopic(tp.topic()), tp.partition());
+                log.error("LOG TRUNCATION DETECTED during poll for {}: current position {} but log starts at {}",
+                            targetTp, compareOffset, logStartOffset);
+                throw new DataLossException(
+                    String.format(
+                            "Log truncation detected for %s during poll: expected offset %d but log starts at %d.",
+                            targetTp, compareOffset, logStartOffset));
+            }
+        }
     }
 
     private Headers convertHeaders(ConsumerRecord<byte[], byte[]> record) {
@@ -439,19 +560,15 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     /**
-     * Thrown when log truncation is detected during replication.
+     * Thrown when log truncation is detected during replication offset validation.
      *
-     * <p>This is a fail-fast mechanism. When Kafka retention purges messages
-     * before MirrorMaker 2 replicates them, continuing would produce a
-     * silently incomplete replica. This exception stops MM2 immediately so
-     * operators can investigate and take corrective action.
-     *
-     * <p>Defined as a package-private static inner class to keep all
-     * fault-tolerance changes in a single file with minimal disruption
-     * to the existing codebase.
+     * <p>This exception is raised when Kafka's retention policy has purged messages from the
+     * source topic before MirrorMaker 2 has replicated them, creating an irrecoverable gap
+     * in the replicated data stream. MM2 fails fast rather than silently producing an
+     * incomplete replica.
      */
-    static class DataLossException extends RuntimeException {
-        DataLossException(String message) {
+    public static class DataLossException extends RuntimeException {
+        public DataLossException(String message) {
             super(message);
         }
     }
