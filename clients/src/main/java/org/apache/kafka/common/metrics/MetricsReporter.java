@@ -19,7 +19,6 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -56,7 +55,7 @@ public interface MetricsReporter extends Reconfigurable, AutoCloseable {
 
     // default methods for backwards compatibility with reporters that only implement Configurable
     default Set<String> reconfigurableConfigs() {
-        return Collections.emptySet();
+        return Set.of();
     }
 
     default void validateReconfiguration(Map<String, ?> configs) throws ConfigException {
