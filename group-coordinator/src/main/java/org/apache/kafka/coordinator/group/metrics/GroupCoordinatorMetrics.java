@@ -50,45 +50,54 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String METRICS_GROUP = "group-coordinator-metrics";
 
     /**
-     * Old classic group count metric. Deprecated: use kafka.server:type=group-coordinator-metrics,name=group-count,protocol=classic instead.
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=group-count,protocol=classic
+     *             instead. This metric will be removed in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS = getMetricName(
         "GroupMetadataManager", "NumGroups");
     /**
-     * Old offset count metric. Deprecated: use kafka.server:type=group-coordinator-metrics,name=offset-count instead.
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=offset-count instead.
+     *             This metric will be removed in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_OFFSETS = getMetricName(
         "GroupMetadataManager", "NumOffsets");
     /**
-     * Old classic group preparing rebalance count metric. Deprecated: use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=PreparingRebalance instead.
+     * @deprecated Since 4.4. Use
+     *             kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=PreparingRebalance
+     *             instead. This metric will be removed in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_PREPARING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsPreparingRebalance");
     /**
-     * Old classic group completing rebalance count metric. Deprecated: use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=CompletingRebalance instead.
+     * @deprecated Since 4.4. Use
+     *             kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=CompletingRebalance
+     *             instead. This metric will be removed in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsCompletingRebalance");
     /**
-     * Old classic group stable count metric. Deprecated: use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Stable instead.
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Stable
+     *             instead. This metric will be removed in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_STABLE = getMetricName(
         "GroupMetadataManager", "NumGroupsStable");
     /**
-     * Old classic group dead count metric. Deprecated: use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Dead instead.
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Dead
+     *             instead. This metric will be removed in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_DEAD = getMetricName(
         "GroupMetadataManager", "NumGroupsDead");
     /**
-     * Old classic group empty count metric. Deprecated: use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Empty instead.
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Empty
+     *             instead. This metric will be removed in Kafka 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_EMPTY = getMetricName(
         "GroupMetadataManager", "NumGroupsEmpty");
 
