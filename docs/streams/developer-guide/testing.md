@@ -39,7 +39,7 @@ To test a Kafka Streams application, Kafka provides a test-utils artifact that c
     <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-streams-test-utils</artifactId>
-        <version>4.3.0</version>
+        <version>4.4.0</version>
         <scope>test</scope>
     </dependency>
 

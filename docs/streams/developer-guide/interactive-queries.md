@@ -33,7 +33,7 @@ Interactive queries allow you to leverage the state of your application from out
 
 The full state of your application is typically [split across many distributed instances of your application](../architecture.html#streams_architecture_state), and across many state stores that are managed locally by these application instances.
 
-![](/43/images/streams-interactive-queries-03.png)
+![](/44/images/streams-interactive-queries-03.png)
 
 There are local and remote components to interactively querying the state of your application.
 
@@ -129,7 +129,7 @@ A Kafka Streams application typically runs on multiple instances. The state that
 
 The method `KafkaStreams#store(...)` finds an application instance's local state stores by name and type. Note that interactive queries are not supported for [versioned state stores](/{version}/streams/developer-guide/processor-api/#versioned-key-value-state-stores) at this time.
 
-![](/43/images/streams-interactive-queries-api-01.png)
+![](/44/images/streams-interactive-queries-api-01.png)
 
 Every application instance can directly query any of its local state stores.
 
@@ -386,7 +386,7 @@ For example, you have a Kafka Streams application that processes user events in 
 
 
 
-![](/43/images/streams-interactive-queries-api-02.png)
+![](/44/images/streams-interactive-queries-api-02.png)
 
 Discover any running instances of the same application as well as the respective RPC endpoints they expose for interactive queries
 
