@@ -422,6 +422,7 @@ public class SharePartition {
      * @return The method returns a future which is completed when the share partition is initialized
      *         or completes with an exception if the share partition is in non-initializable state.
      */
+    @SuppressWarnings("MethodLength")
     public CompletableFuture<Void> maybeInitialize() {
         log.trace("Maybe initialize share partition: {}-{}", groupId, topicIdPartition);
         // Check if the share partition is already initialized.
@@ -454,7 +455,7 @@ public class SharePartition {
         ).whenComplete((result, exception) -> {
             Throwable throwable = null;
             // Batches read from the persister in the ARCHIVING state whose DLQ flow (phase 2) must be resumed.
-            List<DlqBatch> dlqBatches = new ArrayList<>();
+            List<DlqBatch> dlqBatches = null;
             lock.writeLock().lock();
             try {
                 if (exception != null) {
@@ -538,6 +539,9 @@ public class SharePartition {
                     // it so the flow can be resumed once the partition is active. ARCHIVING is non-terminal, so
                     // it is not counted in deliveryCompleteCount here (phase 2 does that when it reaches ARCHIVED).
                     if (recordState == RecordState.ARCHIVING) {
+                        if (dlqBatches == null) {
+                            dlqBatches = new ArrayList<>();
+                        }
                         dlqBatches.add(new DlqBatch(inFlightBatch::archiveBatch,
                             stateBatch.firstOffset(), stateBatch.lastOffset(), stateBatch.deliveryCount()));
                     }
@@ -3361,6 +3365,9 @@ public class SharePartition {
      * current DLQ-enabled config) since ARCHIVING is non-terminal and would otherwise stall the start offset.
      */
     private void maybeResumeDlqArchiving(List<DlqBatch> dlqBatches) {
+        if (dlqBatches == null || dlqBatches.isEmpty()) {
+            return;
+        }
         dlqBatches.forEach(dlqBatch -> {
             Throwable dlqCause = dlqBatch.deliveryCount() >= maxDeliveryCount()
                 ? ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED
