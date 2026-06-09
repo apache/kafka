@@ -9045,7 +9045,9 @@ public class GroupMetadataManager {
             .orElse(config.streamsGroupRackAwareAssignmentTags());
         Map<String, String> configs = new TreeMap<>();
         configs.put("num.standby.replicas", numStandbyReplicas.toString());
-        configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+        if (!rackAwareAssignmentTags.isEmpty()) {
+            configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+        }
         return configs;
     }
 

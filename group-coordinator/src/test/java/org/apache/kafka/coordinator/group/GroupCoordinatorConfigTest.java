@@ -612,6 +612,11 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
         GroupCoordinatorConfig nonEmptyTagsConfig = createConfig(configs);
         assertEquals(List.of("zone", "cluster"), nonEmptyTagsConfig.streamsGroupRackAwareAssignmentTags());
+
+        // rejects empty entries in the list
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone, ");
+        assertThrows(ConfigException.class, () -> createConfig(configs));
     }
 
     @Test

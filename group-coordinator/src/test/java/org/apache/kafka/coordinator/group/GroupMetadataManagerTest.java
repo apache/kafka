@@ -21964,11 +21964,8 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId, 50000);
 
         // Verify that the new number of standby replicas is used
-        Map<String, String> expectedConfigs = new TreeMap<>();
-        expectedConfigs.put("num.standby.replicas", "2");
-        expectedConfigs.put("rack.aware.assignment.tags", "");
         assertEquals(
-            expectedConfigs,
+            Map.of("num.standby.replicas", "2"),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -22355,11 +22352,8 @@ public class GroupMetadataManagerTest {
 
         // Verify that the number of standby replicas is evaluated to max,
         // and task offset interval is evaluated to min
-        Map<String, String> expectedEvaluatedConfigs = new TreeMap<>();
-        expectedEvaluatedConfigs.put("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT));
-        expectedEvaluatedConfigs.put("rack.aware.assignment.tags", "");
         assertEquals(
-            expectedEvaluatedConfigs,
+            Map.of("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)),
             assignor.lastPassedAssignmentConfigs());
         assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT,
             result.response().data().taskOffsetIntervalMs());
@@ -28509,7 +28503,6 @@ public class GroupMetadataManagerTest {
     private Map<String, String> getDefaultAssignmentConfigs() {
         Map<String, String> configs = new TreeMap<>();
         configs.put("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
-        configs.put("rack.aware.assignment.tags", String.join(",", GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT));
         return configs;
     }
 }
