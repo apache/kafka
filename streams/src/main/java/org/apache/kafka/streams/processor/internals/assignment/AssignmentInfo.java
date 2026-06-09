@@ -389,7 +389,7 @@ public class AssignmentInfo {
                                           final DataInputStream in,
                                           final int length) throws IOException {
         final int count = in.readInt();
-        if (count < 0 || count > length) {
+        if (count < 0 || count > length / (2 * Integer.BYTES)) { // task-id is <subtopologyId[INTEGER]><partition[INTEGER]>
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         assignmentInfo.activeTasks = new ArrayList<>(count);
@@ -402,7 +402,7 @@ public class AssignmentInfo {
                                            final DataInputStream in,
                                            final int length) throws IOException {
         final int count = in.readInt();
-        if (count < 0 || count > length) {
+        if (count < 0 || count > length / (3 * Integer.BYTES)) { // task-id is <subtopologyId[INTEGER]><partition[INTEGER]> plus numPartitions[INTEGER]
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         assignmentInfo.standbyTasks = new HashMap<>(count);
@@ -455,8 +455,10 @@ public class AssignmentInfo {
     private static Map<HostInfo, Set<TopicPartition>> decodeHostPartitionMapUsingDictionary(final DataInputStream in,
                                                                                             final Map<Integer, String> topicIndexDict,
                                                                                             final int length) throws IOException {
+        final int minEntryBytes = Short.BYTES + Integer.BYTES + Integer.BYTES; // host UTF length + port + numPartitions
+
         final int numEntries = in.readInt();
-        if (numEntries < 0 || numEntries > length) {
+        if (numEntries < 0 || numEntries > length / minEntryBytes) {
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         final Map<HostInfo, Set<TopicPartition>> hostPartitionMap = new HashMap<>(numEntries);
@@ -486,7 +488,7 @@ public class AssignmentInfo {
                                                            final Map<Integer, String> topicIndexDict,
                                                            final int length) throws IOException {
         final int numPartitions = in.readInt();
-        if (numPartitions < 0 || numPartitions > length) {
+        if (numPartitions < 0 || numPartitions > length / (2 * Integer.BYTES)) { // we read two INTEGERS per entry
             throw new TaskAssignmentException("Corrupted user data byte[].");
         }
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
