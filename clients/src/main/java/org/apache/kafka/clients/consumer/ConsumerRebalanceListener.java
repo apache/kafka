@@ -107,7 +107,7 @@ import java.util.Collection;
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
  * {@code
- *   consumer.setConsumerRebalanceListener(new ConsumerRebalanceListener() {
+ *   consumer.setRebalanceListener(new ConsumerRebalanceListener() {
  *       @Override
  *       public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // save the offsets in an external store using some custom code not described here
@@ -131,19 +131,9 @@ import java.util.Collection;
  * }
  * </pre>
  *
- * TODO(adikou): re-enable as a real {@code @deprecated} javadoc tag once internal call sites have
- *               migrated off ConsumerRebalanceListener; left for now to avoid -Werror.
- * &#64;deprecated Since 4.4, replaced by {@link RebalanceListener}. New code should implement
- *             {@link RebalanceListener} directly and register it via
- *             {@code Consumer.setRebalanceListener(RebalanceListener)}. This interface remains for
- *             source compatibility with pre-existing one-argument callback implementations and will
- *             continue to be supported for the foreseeable future to give users time to migrate.
- *
  * @see RebalanceListener
  * @see RebalanceConsumer
  */
-// TODO(adikou): re-enable @Deprecated once internal call sites have migrated; left commented for now to avoid -Werror.
-// @Deprecated
 public interface ConsumerRebalanceListener extends RebalanceListener {
 
     /**
@@ -167,11 +157,11 @@ public interface ConsumerRebalanceListener extends RebalanceListener {
      *     </li>
      *     <li>
      *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions to revoke,
-     *         iff the set is non-empty.
+     *         if and only if the set is non-empty.
      *     </li>
      * </ul>
      * If the consumer is using the {@link GroupProtocol#CONSUMER} rebalance protocol, this callback will be called
-     * with the set of partitions to revoke iff the set is non-empty
+     * with the set of partitions to revoke if and only if the set is non-empty
      * (same behavior as the {@link GroupProtocol#CLASSIC} rebalance protocol with Cooperative mode).
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.

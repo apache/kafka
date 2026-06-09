@@ -162,11 +162,11 @@ public interface RebalanceListener {
      *     </li>
      *     <li>
      *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions to revoke,
-     *         iff the set is non-empty.
+     *         if and only if the set is non-empty.
      *     </li>
      * </ul>
      * If the consumer is using the {@link GroupProtocol#CONSUMER} rebalance protocol, this callback will be called
-     * with the set of partitions to revoke iff the set is non-empty
+     * with the set of partitions to revoke if and only if the set is non-empty
      * (same behavior as the {@link GroupProtocol#CLASSIC} rebalance protocol with Cooperative mode).
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.
