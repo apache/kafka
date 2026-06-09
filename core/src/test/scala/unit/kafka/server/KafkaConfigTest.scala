@@ -2016,15 +2016,30 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testWarnWhenDynamicOnlyBrokerQuotaConfigsInServerProperties(): Unit = {
-    val props = createDefaultConfig()
-    props.setProperty(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, "1000000")
-    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
-      appender.setClassLogger(KafkaConfig.getClass, Level.WARN)
-      KafkaConfig.fromProps(props)
-      assertTrue(appender.getMessages.asScala.exists(_.contains(
-        s"${QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG} is set in server.properties but is ignored at runtime")))
-    }
+  def testWarnIfDynamicQuotasInStaticConfig(): Unit = {
+    val quotaConfigs = Seq(
+      QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
+      QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
+      QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG
+    )
+
+    quotaConfigs.foreach { config =>
+      Using.resource(LogCaptureAppender.createAndRegister) { appender =>
+        appender.setClassLogger(KafkaConfig.getClass, Level.WARN)
+
+        val props = createDefaultConfig()
+        props.setProperty(config, "1000000")
+
+        KafkaConfig.fromProps(props)
+        
+        val expectedMessage = s"$config is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect."
+        
+        assertTrue(
+          appender.getMessages.asScala.exists(_.contains(expectedMessage)),
+          s"Expected warning message not found for config: $config"
+        )
+      }
+    }    
   }
 
   @Test

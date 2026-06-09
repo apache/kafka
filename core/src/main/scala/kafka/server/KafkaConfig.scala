@@ -486,10 +486,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role. $extraMessage")
       }
     }
-    def warnIfDynamicQuotasInServerProps(): Unit = {
+    def warnIfDynamicQuotasInStaticConfig(): Unit = {
       QuotaConfig.DYNAMIC_ONLY_BROKER_QUOTA_CONFIGS.asScala.foreach { configName =>
         if (originals.containsKey(configName)) {
-          warn(s"$configName is set in server.properties but is ignored at runtime; configure this property dynamically to take effect.")
+          warn(s"$configName is set in the static configuration file but is ignored at runtime; configure this property dynamically to take effect.")
         }
       }
     }
@@ -600,7 +600,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
       s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must implement KafkaPrincipalSerde")
 
-    warnIfDynamicQuotasInServerProps()
+    warnIfDynamicQuotasInStaticConfig()
   }
 
   /**
