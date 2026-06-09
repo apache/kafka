@@ -734,6 +734,9 @@ public class ShareGroupDLQStateManager {
                         return;
                     }
 
+                    res.info().delayedRemoteStorageFetch.ifPresent(data -> log.info(
+                        "Some offset data in is in remote storage. Skipping it."));
+
                     boolean continueFetch = false;
                     for (RecordBatch batch : res.info().records.batches()) {
                         for (Record record : batch) {
