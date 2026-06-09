@@ -879,9 +879,6 @@ class BrokerServer(
       if (shareCoordinator != null)
         Utils.swallow(this.logger.underlying, () => shareCoordinator.shutdown())
 
-      if (autoTopicCreationManager != null)
-        Utils.swallow(this.logger.underlying, () => autoTopicCreationManager.close())
-
       if (assignmentsManager != null)
         Utils.swallow(this.logger.underlying, () => assignmentsManager.close())
 

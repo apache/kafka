@@ -75,9 +75,4 @@ public interface AutoTopicCreationManager {
      *         cached errors and are not yet expired. Empty map if no cached errors exist for the topics.
      */
     Map<String, String> getStreamsInternalTopicCreationErrors(Set<String> topicNames, long currentTimeMs);
-
-    /**
-     * Close the AutoTopicCreationManager and clean up any resources.
-     */
-    void close();
 }

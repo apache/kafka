@@ -334,11 +334,8 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                 var errorMessage = Optional.ofNullable(topicResult.errorMessage())
                     .filter(s -> !s.isEmpty())
                     .orElse(Errors.forCode(topicResult.errorCode()).message());
-                LOGGER.debug("Create topic creation error for {}: {}", topicResult.name(), errorMessage);
+                LOGGER.debug("Cached topic creation error for {}: {}", topicResult.name(), errorMessage);
                 return errorMessage;
             })), ttlMs);
     }
-
-    @Override
-    public void close() { }
 }
