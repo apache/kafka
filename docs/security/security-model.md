@@ -100,7 +100,7 @@ TLS is configured per-listener via the standard `ssl.*` properties (`ssl.keystor
 - Set `ssl.endpoint.identification.algorithm=https` on clients (the default since 2.0) so that the broker's certificate must match its hostname.
 - Rotate keystores using the dynamic broker configuration mechanism (`kafka-configs.sh --entity-type brokers --alter --add-config ...`) to avoid restarts.
 
-Kafka Connect, MirrorMaker 2, Kafka Streams, and the Schema Registry-style ecosystem tools all consume the same `ssl.*` and `sasl.*` client configs — securing the broker is necessary but not sufficient.
+Kafka Connect, MirrorMaker 2, and Kafka Streams all consume the same `ssl.*` and `sasl.*` client configs — securing the broker is necessary but not sufficient.
 
 ## Encryption at Rest
 
@@ -118,14 +118,28 @@ The request log (`kafka.request.logger`) provides finer detail on individual API
 
 ## Secrets in Configuration
 
-Broker, client, and Connect properties files contain keystore passwords, SASL credentials, and similar secrets. Apache Kafka supports indirect references through `ConfigProvider` implementations (`FileConfigProvider`, `DirectoryConfigProvider`, or custom providers). Use them rather than embedding cleartext secrets in version-controlled configuration. Sensitive dynamic broker configurations are encrypted at rest in the metadata log using `password.encoder.secret`; rotating that secret requires `password.encoder.old.secret` and a rolling restart.
+Broker, client, and Connect properties files contain keystore passwords, SASL credentials, and similar secrets. Apache Kafka supports indirect references through `ConfigProvider` implementations (`FileConfigProvider`, `DirectoryConfigProvider`, or custom providers). Use them rather than embedding cleartext secrets in version-controlled configuration. For the file-based providers, set `allowed.paths` to the specific directories that hold those secrets so that a malicious or mistaken configuration cannot coerce the provider into reading arbitrary files elsewhere on the host. Sensitive dynamic broker configurations are encrypted at rest in the metadata log using `password.encoder.secret`; rotating that secret requires `password.encoder.old.secret` and a rolling restart.
 
 ## Component-Specific Notes
 
-- **Kafka Connect.** The REST API is unauthenticated by default; enable the built-in basic auth extension or front it with a reverse proxy. Connector configurations may contain credentials for external systems and should be stored via a `ConfigProvider`. Connect workers authenticate to the Kafka cluster as a single principal — partition that principal's ACLs by topic prefix per connector.
+- **Kafka Connect.** The REST API is unauthenticated by default; enable the built-in basic auth extension (`BasicAuthSecurityRestExtension`) or front it with a reverse proxy. More importantly, the REST API is a shared, cluster-wide control plane with no per-connector isolation, and this has several consequences operators must plan around:
+  - **Shared REST API.** Any caller that can reach the API can act on *any* connector — including reading another connector's configuration and stopping or deleting it. There is no notion of connector ownership.
+  - **Shared ConfigProviders.** A caller who can guess (or enumerate) a `ConfigProvider` alias can resolve its full configuration through the REST API, so a provider is only as isolated as its alias is secret.
+  - **Client config overrides on by default.** `connector.client.config.override.policy` defaults to `All`, so by default a connector configuration can override the worker's own Kafka client settings (and potentially surface sensitive values). This default is slated to change to `Allowlist` in 5.0; until then, set it explicitly if you do not want it.
+
+  The practical consequences are that you cannot grant Connect REST API access to anyone you would not trust as a cluster administrator, and if multiple distrusting users or teams need Connect you should give each its own Connect cluster rather than sharing one. Connector configurations may also contain credentials for external systems and should be stored via a `ConfigProvider`. Connect workers authenticate to the Kafka cluster as a single principal — partition that principal's ACLs by topic prefix per connector.
 - **Kafka Streams.** A Streams application authenticates as one principal that needs ACLs covering its source topics, internal repartition/changelog topics (typically `<application.id>-*`), and the consumer group `<application.id>`.
 - **MirrorMaker 2.** Replicates across security domains; configure `source.cluster.*` and `target.cluster.*` independently and never tunnel cleartext replication across an untrusted network.
-- **JMX.** Brokers expose operational metrics over JMX. JMX is unauthenticated by default and should either be disabled, bound to localhost with an exporter alongside, or configured with `com.sun.management.jmxremote.authenticate=true` and TLS.
+- **JMX.** Brokers expose operational metrics over JMX. JMX is an administrators/operators-only interface and must never be exposed to actual users. It is unauthenticated by default and should either be disabled, bound to localhost with an exporter alongside, or configured with `com.sun.management.jmxremote.authenticate=true` and TLS.
+
+## Development and Test Tooling
+
+Not everything shipped in the Apache Kafka source tree is part of the production attack surface. Some components exist only to develop, test, and release Kafka itself, and are explicitly out of scope for the security model — they are expected to run only in trusted development and CI environments, and issues in them are generally not treated as security vulnerabilities.
+
+- **Trogdor.** Trogdor is a test framework that injects faults and runs workloads by design, including arbitrary user-supplied commands. It is intended to run only in development environments; the project does not consider command execution through Trogdor a security issue.
+- **System tests and release tooling.** The `tests/` system-test harness and the scripts under `release/` are operator/developer tooling for building, testing, and publishing Kafka. They are not components of a running cluster and must not be exposed to untrusted users.
+
+When assessing the attack surface of a deployed cluster, scope it to the brokers, KRaft controllers, the client and inter-broker/controller listeners, the Admin and Connect REST APIs, and JMX — not the development tooling above.
 
 ## Reporting Security Issues
 
