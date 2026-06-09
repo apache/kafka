@@ -4259,16 +4259,27 @@ public class GroupMetadataManager {
         ConsumerGroup group,
         ConsumerGroupMember member
     ) {
+        ConsumerGroupMember reconciledMember = member;
+        if (member.state() == MemberState.UNREVOKED_PARTITIONS) {
+            reconciledMember = new CurrentAssignmentBuilder(member)
+                .withMetadataImage(metadataImage)
+                .withTargetAssignment(
+                    group.assignmentEpoch(),
+                    group.targetAssignment(member.memberId())
+                )
+                .withResolvedRegularExpressions(group.resolvedRegularExpressions())
+                .withCurrentPartitionEpoch(group::currentPartitionEpoch)
+                .withOwnedTopicPartitions(List.of())
+                .build();
+        }
+
         // We will write a member epoch of -2 for this departing static member.
         // Assignment epochs are reset to 0 so when the static member rejoins, partitions
         // are considered assigned from epoch 0 to the new member ID.
-        MemberState nextState = member.state() == MemberState.UNREVOKED_PARTITIONS ?
-            MemberState.STABLE :
-            member.state();
-
         ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-            .setState(nextState)
+            .setState(reconciledMember.state())
+            .setAssignedPartitions(reconciledMember.assignedPartitions())
             .setPartitionsPendingRevocation(Map.of())
             .resetAssignedPartitionsEpochsToZero()
             .build();

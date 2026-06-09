@@ -2809,13 +2809,15 @@ public class GroupMetadataManagerTest {
     @Test
     public void testStaticMemberInUnrevokedPartitionsTemporarilyLeavesAsStable() {
         String groupId = "fooup";
-        String instnaceId = "instance-id";
+        String instanceId = "instance-id";
         String memberId = Uuid.randomUuid().toString();
         Uuid topicId = Uuid.randomUuid();
+        String topicName = "foo";
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
-            .setInstanceId(instnaceId)
+            .setInstanceId(instanceId)
             .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setSubscribedTopicNames(List.of(topicName))
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
@@ -2824,7 +2826,12 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(topicId, 1)), 10))
             .build();
 
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, 2)
+            .buildCoordinatorMetadataImage();
+        
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(member)
                 .withAssignment(memberId, mkAssignment(mkTopicAssignment(topicId, 0)))
@@ -2835,7 +2842,7 @@ public class GroupMetadataManagerTest {
             context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-                .setInstanceId("instance-id")
+                .setInstanceId(instanceId)
                 .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH));
 
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(member)
@@ -2857,6 +2864,78 @@ public class GroupMetadataManagerTest {
             result.records().get(0)
         );
     }
+
+    @Test
+    public void testStaticMemberInUnrevokedPartitionsTemporarilyLeavesAsUnreleased() {
+        String groupId = "fooup";
+        String instanceId = "instance-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "foo";
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setInstanceId(instanceId)
+            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setSubscribedTopicNames(List.of(topicName))
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 0)), 10))
+            .setPartitionsPendingRevocation(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 1)), 10))
+            .build();
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.STABLE)
+            .setSubscribedTopicNames(List.of(topicName))
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                mkTopicAssignment(topicId, 2)), 10))
+            .build();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, 3)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withAssignment(memberId1, mkAssignment(mkTopicAssignment(topicId, 0, 2)))
+                .withAssignment(memberId2, mkAssignment(mkTopicAssignment(topicId, 1)))
+                .withAssignmentEpoch(10))
+            .build();
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result =
+            context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setInstanceId(instanceId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH));
+
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(member1)
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setState(MemberState.UNRELEASED_PARTITIONS)
+            .setPartitionsPendingRevocation(Map.of())
+            .resetAssignedPartitionsEpochsToZero()
+            .build();
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(memberId1)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH),
+            result.response()
+        );
+        assertEquals(1, result.records().size());
+        assertRecordEquals(
+            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, expectedMember),
+            result.records().get(0)
+        );
+    }
+
 
 
     @Test
