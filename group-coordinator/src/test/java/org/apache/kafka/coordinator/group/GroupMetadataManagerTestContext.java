@@ -1381,7 +1381,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public List<StreamsGroupDescribeResponseData.DescribedGroup> sendStreamsGroupDescribe(List<String> groupIds) {
-        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset);
+        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset).describedGroups();
     }
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {

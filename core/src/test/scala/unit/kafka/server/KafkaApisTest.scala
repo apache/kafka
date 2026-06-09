@@ -766,7 +766,7 @@ class KafkaApisTest extends Logging {
         case CoordinatorType.TRANSACTION =>
           topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
           topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
-          when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
+          when(txnCoordinator.transactionStateTopicConfigs).thenReturn(new Properties)
           authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TRANSACTIONAL_ID,
             groupId, AuthorizationResult.ALLOWED)
           Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -938,7 +938,7 @@ class KafkaApisTest extends Logging {
         case Topic.TRANSACTION_STATE_TOPIC_NAME =>
           topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
           topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
-          when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
+          when(txnCoordinator.transactionStateTopicConfigs).thenReturn(new Properties)
           true
         case _ =>
           topicConfigOverride.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numBrokersNeeded.toString)
@@ -1032,8 +1032,7 @@ class KafkaApisTest extends Logging {
           kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
           verify(requestChannel).sendResponse(
             ArgumentMatchers.eq(request),
-            capturedResponse.capture(),
-            any()
+            capturedResponse.capture()
           )
           val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
           assertEquals(1, response.topicMetadata.size)
@@ -1749,8 +1748,7 @@ class KafkaApisTest extends Logging {
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
     val response = capturedResponse.getValue
 
@@ -1820,8 +1818,7 @@ class KafkaApisTest extends Logging {
 
         verify(requestChannel).sendResponse(
           ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          ArgumentMatchers.eq(None)
+          capturedResponse.capture()
         )
         val response = capturedResponse.getValue
 
@@ -1883,8 +1880,7 @@ class KafkaApisTest extends Logging {
 
         verify(requestChannel).sendResponse(
           ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          ArgumentMatchers.eq(None)
+          capturedResponse.capture()
         )
         val response = capturedResponse.getValue
 
@@ -1942,8 +1938,7 @@ class KafkaApisTest extends Logging {
 
         verify(requestChannel).sendResponse(
           ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          ArgumentMatchers.eq(None)
+          capturedResponse.capture()
         )
         val response = capturedResponse.getValue
 
@@ -2004,8 +1999,7 @@ class KafkaApisTest extends Logging {
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
 
     assertEquals(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code, capturedResponse.getValue.data.errorCode)
@@ -2079,8 +2073,7 @@ class KafkaApisTest extends Logging {
     val capturedResponse = ArgumentCaptor.forClass(classOf[InitProducerIdResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
 
     assertEquals(Errors.NONE.code, capturedResponse.getValue.data.errorCode)
@@ -2335,8 +2328,7 @@ class KafkaApisTest extends Logging {
 
         verify(requestChannel).sendResponse(
           ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          ArgumentMatchers.eq(None)
+          capturedResponse.capture()
         )
         val response = capturedResponse.getValue
 
@@ -3140,8 +3132,7 @@ class KafkaApisTest extends Logging {
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
     val markersResponse = capturedResponse.getValue
     assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
@@ -3176,8 +3167,7 @@ class KafkaApisTest extends Logging {
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
     val markersResponse = capturedResponse.getValue
     assertEquals(2, markersResponse.errorsByProducerId.size())
@@ -3215,8 +3205,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
 
     val markersResponse = capturedResponse.getValue
@@ -8660,7 +8649,7 @@ class KafkaApisTest extends Logging {
     )).thenReturn(future)
 
     var response: JoinGroupResponse = null
-    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+    when(requestChannel.sendResponse(any(), any())).thenAnswer { _ =>
       throw new Exception("Something went wrong")
     }.thenAnswer { invocation =>
       response = invocation.getArgument(1, classOf[JoinGroupResponse])
@@ -10328,8 +10317,7 @@ class KafkaApisTest extends Logging {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      any()
+      capturedResponse.capture()
     )
     val response = capturedResponse.getValue
     val readable = MessageUtil.toByteBufferAccessor(
@@ -10349,8 +10337,7 @@ class KafkaApisTest extends Logging {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      any()
+      capturedResponse.capture()
     )
     val response = capturedResponse.getValue
     val readable = MessageUtil.toByteBufferAccessor(
@@ -10362,8 +10349,7 @@ class KafkaApisTest extends Logging {
     val sendResponse = new RequestChannel.SendResponse(
       request,
       request.buildResponseSend(response),
-      request.responseNode(response).toScala,
-      None
+      request.responseNode(response).toScala
     )
     request.updateRequestMetrics(time.milliseconds(), sendResponse.responseLog.toJava)
 
@@ -11063,7 +11049,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, util.Map.of()))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, util.Map.of(), -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsGroupHeartbeatResponse, response.data)
   }
@@ -11133,7 +11119,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, util.Map.of()))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, util.Map.of(), -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsGroupHeartbeatResponse, response.data)
   }
@@ -11365,7 +11351,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics, -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsGroupHeartbeatResponse, response.data)
     verify(autoTopicCreationManager).createStreamsInternalTopics(any(), any(), anyLong())
@@ -11414,7 +11400,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics, -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.NONE.code, response.data.errorCode())
     assertEquals(null, response.data.errorMessage())
@@ -11465,7 +11451,7 @@ class KafkaApisTest extends Logging {
           .setStatusDetail("Internal topics are missing: [test-topic]")
       ))
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics, -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     
     assertEquals(Errors.NONE.code, response.data.errorCode())
