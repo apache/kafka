@@ -396,6 +396,7 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 - testListOffsetsNonRetriableErrors
 - testListOffsetsPartialResponse
 - testListOffsetsRetriableErrors
+- testListOffsetsRetriesLookupWhenCachedLeaderLeavesCluster
 - testListOffsetsUnsupportedNonMaxTimestamp
 - testListOffsetsWithLeaderChange
 - testListOffsetsWithMultiplePartitionsLeaderChange
@@ -536,6 +537,7 @@ org.apache.kafka.clients.admin.internals.AdminApiDriverTest:
 - testRecoalescedLookup
 - testRetryLookupAfterDisconnect
 - testRetryLookupAndDisableBatchAfterNoBatchedFindCoordinatorsException
+- testRetryLookupIsNoOpForFixedBrokerStrategy
 - testStaticMapping
 org.apache.kafka.clients.admin.internals.AdminBootstrapAddressesTest:
 - testFromConfig
@@ -688,6 +690,7 @@ org.apache.kafka.clients.admin.internals.PartitionLeaderStrategyIntegrationTest:
 - testFatalLookupError
 - testNotLeaderFulfillmentError
 - testRetryLookupAfterDisconnect
+- testRetryLookupForStaleCachedLeader
 org.apache.kafka.clients.admin.internals.PartitionLeaderStrategyTest:
 - testBuildLookupRequest
 - testIgnoreUnrequestedPartitions
@@ -750,6 +753,9 @@ org.apache.kafka.clients.consumer.ConsumerRecordTest:
 - testShortConstructor
 org.apache.kafka.clients.consumer.ConsumerRecordsTest:
 - testIterator
+- testNextOffsetsDoesNotLogErrorForEmptyRecords
+- testNextOffsetsDoesNotLogErrorWhenConstructedWithNextOffsets
+- testNextOffsetsLogsErrorPeriodicallyWhenConstructedWithDeprecatedConstructor
 - testRecordsAreImmutable
 - testRecordsByNullTopic
 - testRecordsByPartition
@@ -2908,6 +2914,8 @@ org.apache.kafka.clients.producer.KafkaProducerTest:
 - testRetriesAndIdempotenceForIdempotentProducers
 - testSendNotAllowedInPreparedTransactionState
 - testSendOffsetsNotAllowedInPreparedTransactionState
+- testSendOffsetsToTransactionNegotiatesV6WhenMetadataKnowsTopicId
+- testSendOffsetsToTransactionTriggersMetadataRefreshThenNegotiatesV6
 - testSendToInvalidTopic
 - testSendTxnOffsetsWithGroupId
 - testSendTxnOffsetsWithGroupIdTransactionV2
