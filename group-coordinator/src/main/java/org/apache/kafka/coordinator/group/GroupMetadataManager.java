@@ -4513,20 +4513,9 @@ public class GroupMetadataManager {
         StreamsGroup group,
         StreamsGroupMember member
     ) {
-        // A static member leaving with epoch -2 may later be replaced with a new
-        // member id for the same instance id. Since we clear the pending revocations
-        // and reset the assigned task epochs for that replacement, keeping the member
-        // in UNREVOKED_TASKS would leave an inconsistent state: there are no pending
-        // revocations left to acknowledge, but reconciliation would still treat the
-        // member as waiting for revocation acknowledgement. Move it back to STABLE so
-        // the rejoining static member can be reconciled from the reset assignment.
-        org.apache.kafka.coordinator.group.streams.MemberState nextState = 
-            member.state() == org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS ?
-                org.apache.kafka.coordinator.group.streams.MemberState.STABLE :
-                member.state();
+        // TODO: https://issues.apache.org/jira/browse/KAFKA-20680
         StreamsGroupMember leavingStaticMember = new StreamsGroupMember.Builder(member)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-            .setState(nextState)
             .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .resetAssignedTasksEpochsToZero()
             .build();

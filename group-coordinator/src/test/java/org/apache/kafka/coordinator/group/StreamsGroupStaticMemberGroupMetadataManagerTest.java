@@ -987,6 +987,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
 
         StreamsGroupMember expectedMember = streamsGroupMemberBuilderWithDefaults(memberId, instanceId)
             .setMemberEpoch(leaveEpoch)
+            .setState(MemberState.UNREVOKED_TASKS)
             .setPreviousMemberEpoch(memberEpoch - 1)
             .setAssignedTasks(resetAssignedTasksEpochsToZero(assignedTasks))
             .build();
@@ -1005,7 +1006,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             List.of(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember)),
             result.records()
         );
-        assertEquals(MemberState.STABLE, context.streamsGroupMemberState(groupId, memberId));
+        assertEquals(MemberState.UNREVOKED_TASKS, context.streamsGroupMemberState(groupId, memberId));
         assertEquals(groupEpoch, context.groupMetadataManager.streamsGroup(groupId).groupEpoch());
     }
 
@@ -1269,11 +1270,12 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId,
                 streamsGroupMemberBuilderWithDefaults(leavingMemberId, instanceId)
                     .setMemberEpoch(leaveEpoch)
+                    .setState(MemberState.UNREVOKED_TASKS)
                     .setPreviousMemberEpoch(memberEpoch - 1)
                     .setAssignedTasks(resetAssignedTasksEpochsToZero(assignedTasks))
                     .build()));
         assertRecordsEquals(expectedRecordsTriggeredByLeave, leaveResult.records());
-        assertEquals(MemberState.STABLE, context.streamsGroupMemberState(groupId, leavingMemberId));
+        assertEquals(MemberState.UNREVOKED_TASKS, context.streamsGroupMemberState(groupId, leavingMemberId));
 
         // Waiting member send a heartbeat expecting get unreleased tasks.
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> waitingMemberResult = context.streamsGroupHeartbeat(
