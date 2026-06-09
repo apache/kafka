@@ -110,6 +110,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
@@ -216,6 +217,202 @@ public class SharePartitionTest {
         assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
         assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
         assertEquals(6, sharePartitionMetrics.inFlightBatchMessageCount().max());
+    }
+
+    @Test
+    public void testMaybeInitializeArchivingStateWithDlqEnabled() {
+        // Records read from the persister in the ARCHIVING state indicate a DLQ flow that persisted phase 1
+        // but did not complete phase 2 before re-initialization. With DLQ enabled, init should resume the
+        // flow: enqueue to the DLQ and transition the records ARCHIVING -> ARCHIVED.
+        Persister persister = Mockito.mock(Persister.class);
+        // startOffset 5, an AVAILABLE batch pins the start offset, followed by an ARCHIVING batch.
+        mockPersisterReadStateWithBatches(persister, 5L, 3, List.of(
+            new PersisterStateBatch(5L, 9L, RecordState.AVAILABLE.id, (short) 2),
+            new PersisterStateBatch(10L, 14L, RecordState.ARCHIVING.id, (short) DEFAULT_MAX_DELIVERY_COUNT)));
+        mockPersisterWriteStateSuccess(persister);
+
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+
+        // The ARCHIVING batch is drained to ARCHIVED via the DLQ flow. It remains in the cache because the
+        // leading AVAILABLE batch pins the start offset.
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(DEFAULT_MAX_DELIVERY_COUNT, sharePartition.cachedState().get(10L).batchDeliveryCount());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(14, sharePartition.endOffset());
+        // deliveryCompleteCount accounts for the 5 records (10-14) that reached ARCHIVED in phase 2.
+        assertEquals(5, sharePartition.deliveryCompleteCount());
+
+        // The DLQ enqueue happened exactly once with the inferred cause (delivery count >= max).
+        ArgumentCaptor<ShareGroupDLQRecordParameter> dlqCaptor = ArgumentCaptor.forClass(ShareGroupDLQRecordParameter.class);
+        Mockito.verify(dlqManager, Mockito.times(1)).enqueue(dlqCaptor.capture());
+        ShareGroupDLQRecordParameter dlqParam = dlqCaptor.getValue();
+        assertEquals(10L, dlqParam.firstOffset());
+        assertEquals(14L, dlqParam.lastOffset());
+        assertEquals(Optional.of((short) DEFAULT_MAX_DELIVERY_COUNT), dlqParam.deliveryCount());
+        assertEquals(Optional.of(ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED), dlqParam.cause());
+
+        // Phase 2 persisted the ARCHIVED state exactly once.
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testMaybeInitializeArchivingStateWithDlqDisabled() {
+        // ARCHIVING records persisted from a prior epoch (when DLQ was enabled) must still be drained to
+        // ARCHIVED even if DLQ is now disabled — otherwise ARCHIVING (non-terminal) would permanently stall
+        // the start offset. The drain is unconditional, so the DLQ enqueue is still attempted (best-effort).
+        Persister persister = Mockito.mock(Persister.class);
+        // A single ARCHIVING batch at the start offset; delivery count below max -> inferred CLIENT_REJECT.
+        mockPersisterReadStateWithBatches(persister, 0L, 3, List.of(
+            new PersisterStateBatch(0L, 4L, RecordState.ARCHIVING.id, (short) 2)));
+        mockPersisterWriteStateSuccess(persister);
+
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withShareGroupDlqEnableSupplier(() -> false)
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+
+        // The batch reached ARCHIVED and, being the only batch at the start offset, was evicted as the start
+        // offset advanced past it.
+        assertTrue(sharePartition.cachedState().isEmpty());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(5, sharePartition.endOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        // Enqueue is still attempted with the inferred cause (delivery count < max -> client reject).
+        ArgumentCaptor<ShareGroupDLQRecordParameter> dlqCaptor = ArgumentCaptor.forClass(ShareGroupDLQRecordParameter.class);
+        Mockito.verify(dlqManager, Mockito.times(1)).enqueue(dlqCaptor.capture());
+        assertEquals(Optional.of(ShareGroupDLQManager.CLIENT_REJECT), dlqCaptor.getValue().cause());
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testMaybeInitializeArchivingStateDlqEnqueueFailure() {
+        // If the DLQ enqueue fails, the records must still proceed to ARCHIVED (best-effort) so the partition
+        // does not stall on the non-terminal ARCHIVING state.
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateWithBatches(persister, 0L, 3, List.of(
+            new PersisterStateBatch(0L, 4L, RecordState.ARCHIVING.id, (short) DEFAULT_MAX_DELIVERY_COUNT)));
+        mockPersisterWriteStateSuccess(persister);
+
+        ShareGroupDLQManager dlqManager = Mockito.mock(ShareGroupDLQManager.class);
+        Mockito.when(dlqManager.enqueue(Mockito.any()))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("DLQ enqueue failed")));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        // Initialization itself succeeds regardless of the DLQ outcome.
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+
+        // Despite the enqueue failure, the records reached ARCHIVED and the start offset advanced.
+        assertTrue(sharePartition.cachedState().isEmpty());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(0, sharePartition.deliveryCompleteCount());
+
+        Mockito.verify(dlqManager, Mockito.times(1)).enqueue(Mockito.any());
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testMaybeInitializeMultipleArchivingStates() {
+        // Multiple ARCHIVING batches in a single read are each drained via the DLQ flow. A leading AVAILABLE
+        // batch pins the start offset so the archived batches remain observable in the cache. The two
+        // ARCHIVING batches exercise both inferred causes (delivery count < max -> client reject,
+        // delivery count >= max -> delivery count exceeded).
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateWithBatches(persister, 0L, 3, List.of(
+            new PersisterStateBatch(0L, 4L, RecordState.AVAILABLE.id, (short) 1),
+            new PersisterStateBatch(5L, 9L, RecordState.ARCHIVING.id, (short) 2),
+            new PersisterStateBatch(10L, 14L, RecordState.ARCHIVING.id, (short) DEFAULT_MAX_DELIVERY_COUNT)));
+        mockPersisterWriteStateSuccess(persister);
+
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+
+        // Both ARCHIVING batches reached ARCHIVED and remain in the cache (start offset pinned at 0).
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(0, sharePartition.startOffset());
+        assertEquals(14, sharePartition.endOffset());
+        // 10 records (5-9 and 10-14) reached ARCHIVED in phase 2.
+        assertEquals(10, sharePartition.deliveryCompleteCount());
+
+        // Each ARCHIVING batch was enqueued exactly once, with the cause inferred from its delivery count.
+        ArgumentCaptor<ShareGroupDLQRecordParameter> dlqCaptor = ArgumentCaptor.forClass(ShareGroupDLQRecordParameter.class);
+        Mockito.verify(dlqManager, Mockito.times(2)).enqueue(dlqCaptor.capture());
+        Map<Long, ShareGroupDLQRecordParameter> byFirstOffset = dlqCaptor.getAllValues().stream()
+            .collect(Collectors.toMap(ShareGroupDLQRecordParameter::firstOffset, p -> p));
+        assertEquals(Optional.of(ShareGroupDLQManager.CLIENT_REJECT), byFirstOffset.get(5L).cause());
+        assertEquals(Optional.of(ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED), byFirstOffset.get(10L).cause());
+
+        // Phase 2 persisted ARCHIVED once per batch.
+        Mockito.verify(persister, Mockito.times(2)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testMaybeInitializeArchivingDlqSkippedWhenInitFails() {
+        // If initialization fails after an ARCHIVING batch has been collected, the DLQ flow must not run:
+        // enqueuing/archiving on a FAILED partition would corrupt state. Here a second batch with a first
+        // offset below the start offset (simulating a corrupt persister response) fails initialization.
+        Persister persister = Mockito.mock(Persister.class);
+        mockPersisterReadStateWithBatches(persister, 5L, 3, List.of(
+            new PersisterStateBatch(5L, 9L, RecordState.ARCHIVING.id, (short) DEFAULT_MAX_DELIVERY_COUNT),
+            new PersisterStateBatch(3L, 4L, RecordState.AVAILABLE.id, (short) 1)));
+        mockPersisterWriteStateSuccess(persister);
+
+        ShareGroupDLQManager dlqManager = mockDlqManager();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .withConfigProvider(configProviderWithDlqTopic())
+            .withShareGroupDlqManager(dlqManager)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertEquals(SharePartitionState.FAILED, sharePartition.partitionState());
+
+        // The DLQ flow was skipped: no enqueue and no phase-2 persist.
+        Mockito.verify(dlqManager, Mockito.never()).enqueue(Mockito.any());
+        Mockito.verify(persister, Mockito.never()).writeState(Mockito.any());
     }
 
     @Test
@@ -13424,7 +13621,7 @@ public class SharePartitionTest {
 
         InFlightState state = new InFlightState(RecordState.ARCHIVING, deliveryCount, EMPTY_MEMBER_ID);
 
-        sharePartition.initiateDLQAndArchive(state, firstOffset, lastOffset, deliveryCount, dlqCause);
+        sharePartition.initiateDLQAndArchive(state::archive, firstOffset, lastOffset, deliveryCount, dlqCause);
 
         assertEquals(expectedState, state.state());
         assertFalse(state.hasOngoingStateTransition());
@@ -13468,6 +13665,24 @@ public class SharePartitionTest {
         ShareGroupDLQManager dlqManager = Mockito.mock(ShareGroupDLQManager.class);
         Mockito.when(dlqManager.enqueue(Mockito.any())).thenReturn(CompletableFuture.completedFuture(null));
         return dlqManager;
+    }
+
+    private static void mockPersisterReadStateWithBatches(Persister persister, long startOffset, int stateEpoch,
+                                                          List<PersisterStateBatch> batches) {
+        ReadShareGroupStateResult readResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionAllData(0, stateEpoch, startOffset, Errors.NONE.code(),
+                    Errors.NONE.message(), batches)))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readResult));
+    }
+
+    private static void mockPersisterWriteStateSuccess(Persister persister) {
+        WriteShareGroupStateResult writeResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeResult));
     }
 
     private static ShareGroupConfigProvider configProviderWithDlqTopic() {

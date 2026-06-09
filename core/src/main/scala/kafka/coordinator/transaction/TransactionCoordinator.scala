@@ -19,6 +19,7 @@ package kafka.coordinator.transaction
 import kafka.server.{KafkaConfig, ReplicaManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
 import org.apache.kafka.common.message.{DescribeTransactionsResponseData, ListTransactionsResponseData}
@@ -31,6 +32,7 @@ import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionConfig, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
+import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 
 import java.util
@@ -39,6 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import scala.jdk.OptionConverters._
 
 object TransactionCoordinator {
+  val EnforcedRequiredAcks: Short = -1.toShort
 
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
@@ -1004,7 +1007,20 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     }
   }
 
-  def transactionTopicConfigs: Properties = txnManager.transactionTopicConfigs
+  /**
+   * Return the configuration properties of the transaction state topic.
+   *
+   * @return Properties of the transaction state topic.
+   */
+  def transactionStateTopicConfigs: Properties = {
+    val props = new Properties
+    props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
+    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, txnConfig.transactionLogMinInsyncReplicas.toString)
+    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, txnConfig.transactionLogSegmentBytes.toString)
+    props
+  }
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
