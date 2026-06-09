@@ -319,12 +319,9 @@ object TestUtils extends Logging {
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
     topicConfig: util.Map[String, String] = util.Map.of(),
   ): Uuid = {
-    val configsMap = new util.HashMap[String, String]()
-    topicConfig.asScala.foreach { case (k, v) => configsMap.put(k, v) }
-
     val result = if (replicaAssignment.isEmpty) {
       admin.createTopics(util.List.of(new NewTopic(
-        topic, numPartitions, replicationFactor.toShort).configs(configsMap)))
+        topic, numPartitions, replicationFactor.toShort).configs(topicConfig)))
     } else {
       val assignment = new util.HashMap[Integer, util.List[Integer]]()
       replicaAssignment.foreachEntry { case (k, v) =>
@@ -333,7 +330,7 @@ object TestUtils extends Logging {
         assignment.put(k.asInstanceOf[Integer], replicas)
       }
       admin.createTopics(util.List.of(new NewTopic(
-        topic, assignment).configs(configsMap)))
+        topic, assignment).configs(topicConfig)))
     }
 
     result.topicId(topic).get()

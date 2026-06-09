@@ -282,7 +282,6 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                                 .setName(entry.getKey())
                                 .setValue(entry.getValue()))
                         .toList()
-                        .iterator()
         );
     }
 
