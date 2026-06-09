@@ -99,6 +99,7 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -607,7 +608,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return CompletableFuture.completedFuture(
                 new StreamsGroupHeartbeatResult(
                     new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
-                    Map.of()
+                    Map.of(),
+                    -1
                 )
             );
         }
@@ -622,7 +624,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(apiError.error().code())
                         .setErrorMessage(apiError.message()),
-                    Map.of()
+                    Map.of(),
+                    -1
                 )
             );
         }
@@ -640,7 +643,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(error.code())
                         .setErrorMessage(message),
-                    Map.of()
+                    Map.of(),
+                    -1
                 ),
             log
         ));
@@ -1227,7 +1231,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "streams-group-describe",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset)
-                ).exceptionally(exception -> handleOperationException(
+                ).thenApply(StreamsGroupDescribeResult::describedGroups)
+                .exceptionally(exception -> handleOperationException(
                     "streams-group-describe",
                     groupList,
                     exception,

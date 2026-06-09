@@ -191,6 +191,7 @@ public class SharePartitionManager implements AutoCloseable {
         long remoteFetchMaxWaitMs,
         Persister persister,
         ShareGroupConfigProvider configProvider,
+        ShareGroupMetrics shareGroupMetrics,
         BrokerTopicStats brokerTopicStats,
         Supplier<Boolean> shareGroupDlqEnableSupplier,
         ShareGroupDLQManager shareGroupDLQManager
@@ -208,7 +209,7 @@ public class SharePartitionManager implements AutoCloseable {
             remoteFetchMaxWaitMs,
             persister,
             configProvider,
-            new ShareGroupMetrics(time),
+            shareGroupMetrics,
             brokerTopicStats,
             shareGroupDlqEnableSupplier,
             shareGroupDLQManager
@@ -670,7 +671,6 @@ public class SharePartitionManager implements AutoCloseable {
     @Override
     public void close() throws Exception {
         this.timer.close();
-        this.shareGroupMetrics.close();
     }
 
     private ShareSessionKey shareSessionKey(String groupId, String memberId) {

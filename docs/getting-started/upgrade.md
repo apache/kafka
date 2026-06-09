@@ -33,7 +33,8 @@ type: docs
 ### Notable changes in 4.4.0
 
   * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
-  * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.   
+  * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.
+  * Storage directories formatted by the `kafka-storage` tool are no longer forward-compatible. A Kafka broker must be the same version as, or newer than, the `kafka-storage` tool that formatted its directory, regardless of the `--release-version` chosen at format time. For further details, please refer to [KIP-1170](https://cwiki.apache.org/confluence/x/ZYoEFQ).
 
 ## Upgrading to 4.3.0
 

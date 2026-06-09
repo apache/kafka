@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.server.ReplicaManager
 import kafka.utils.Logging
-import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
@@ -37,7 +37,6 @@ import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition
 import org.apache.kafka.coordinator.transaction.{CoordinatorEpochAndTxnMetadata, TransactionConfig, TransactionLog, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionPartitionAndLeaderEpoch, TransactionalIdAndProducerIdEpoch, TransactionalIdCoordinatorEpochAndMetadata, TransactionalIdCoordinatorEpochAndTransitMetadata, TxnMetadataCacheEntry, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
-import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
@@ -182,7 +181,7 @@ class TransactionStateManager(brokerId: Int,
                 if (recordsBuilder == null) {
                   recordsBuilder = MemoryRecords.builder(
                     ByteBuffer.allocate(math.min(16384, maxBatchSize)),
-                    TransactionLog.ENFORCED_COMPRESSION,
+                    Compression.NONE,
                     TimestampType.CREATE_TIME,
                     0L,
                     maxBatchSize
@@ -289,7 +288,7 @@ class TransactionStateManager(brokerId: Int,
     inReadLock[Exception](stateLock, () => {
       replicaManager.appendRecords(
         timeout = config.requestTimeoutMs,
-        requiredAcks = TransactionLog.ENFORCED_REQUIRED_ACKS,
+        requiredAcks = TransactionCoordinator.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(replicaManager.topicIdPartition(transactionPartition) -> tombstoneRecords),
@@ -435,17 +434,6 @@ class TransactionStateManager(brokerId: Int,
    */
   def validateTransactionTimeoutMs(enableTwoPC: Boolean, txnTimeoutMs: Int): Boolean = {
     enableTwoPC || (txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0)
-  }
-
-  def transactionTopicConfigs: util.Map[String, String] = {
-    // enforce disabled unclean leader election, no compression types, and compact cleanup policy
-    util.Map.of(
-      TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false",
-      TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name,
-      TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT,
-      TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.transactionLogMinInsyncReplicas.toString,
-      TopicConfig.SEGMENT_BYTES_CONFIG, config.transactionLogSegmentBytes.toString
-    )
   }
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
@@ -669,7 +657,7 @@ class TransactionStateManager(brokerId: Int,
     val valueBytes = TransactionLog.valueToBytes(newMetadata, transactionVersionLevel())
     val timestamp = time.milliseconds()
 
-    val records = MemoryRecords.withRecords(TransactionLog.ENFORCED_COMPRESSION, new SimpleRecord(timestamp, keyBytes, valueBytes))
+    val records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(timestamp, keyBytes, valueBytes))
     val transactionStateTopicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val transactionStateTopicIdPartition = replicaManager.topicIdPartition(transactionStateTopicPartition)
     val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
@@ -812,7 +800,7 @@ class TransactionStateManager(brokerId: Int,
           if (append) {
             replicaManager.appendRecords(
               timeout = newMetadata.txnTimeoutMs.toLong,
-              requiredAcks = TransactionLog.ENFORCED_REQUIRED_ACKS,
+              requiredAcks = TransactionCoordinator.EnforcedRequiredAcks,
               internalTopicsAllowed = true,
               origin = AppendOrigin.COORDINATOR,
               entriesPerPartition = recordsPerPartition,

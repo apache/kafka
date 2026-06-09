@@ -27,7 +27,11 @@
     { "name": "ValidatedTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 0, "default": -1, "type": "int32",
       "about": "The topology epoch whose topics are validated to be present in a valid configuration in the metadata." },
     { "name": "LastAssignmentConfigs","taggedVersions": "0+", "nullableVersions": "0+","tag": 1, "default": null,
-      "type": "[]LastAssignmentConfig", "about": "The last used configuration parameters as key-value pairs." }
+      "type": "[]LastAssignmentConfig", "about": "The last used configuration parameters as key-value pairs." },
+    { "name": "StoredDescriptionTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 2, "default": -1, "type": "int32",
+      "about": "The topology epoch whose description is currently stored in the topology description plugin, or -1 if none is stored." },
+    { "name": "FailedDescriptionTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 3, "default": -1, "type": "int32",
+      "about": "The topology epoch whose description push the plugin permanently rejected (signalled by StreamsTopologyDescriptionPermanentFailureException), or -1 if none. Heartbeat-path solicitation is suppressed while this equals the current topology epoch, to avoid hot-looping." }
   ],
   "commonStructs": [
     { "name": "LastAssignmentConfig", "versions": "0+", "fields": [

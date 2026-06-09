@@ -608,4 +608,28 @@ public class FormatterTest {
             assertNotNull(logDirProps1);
         }
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"unrvTtQISjar0JUWGU/8Pg", "igNUVIdeSPO5JCZYFhOh7Q==", "AAAAAAAAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAQ"})
+    public void testFormatWithInvalidClusterId(String clusterId) throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setClusterId(clusterId);
+            String expectedPrefix = "The specified cluster id, " + clusterId;
+            assertEquals(expectedPrefix,
+                    assertThrows(FormatterException.class,
+                            formatter1.formatter::run).
+                            getMessage().substring(0, expectedPrefix.length()));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"iIygKoNNSpGzNeAEr_QW7w", "-w_KF-snTmuEnKPqZ0RDzA", "dZMgZA7nTLqZTdzb0zbvSQ", "hxqHyN2OSSmPajVhm_DR-Q"})
+    public void testFormatWithValidClusterId(String clusterId) throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setClusterId(clusterId);
+            formatter1.formatter.run();
+        }
+    }
 }
