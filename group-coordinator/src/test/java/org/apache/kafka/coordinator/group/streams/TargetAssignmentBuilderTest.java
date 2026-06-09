@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
@@ -106,7 +107,8 @@ public class TargetAssignmentBuilderTest {
 
         AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
             member,
-            assignment
+            assignment,
+            MemberTaskOffsets.EMPTY
         );
 
         assertEquals(new AssignmentMemberSpec(
@@ -120,6 +122,30 @@ public class TargetAssignmentBuilderTest {
             Map.of(),
             Map.of()
         ), assignmentMemberSpec);
+    }
+
+    @Test
+    public void testCreateAssignmentMemberSpecPopulatesTaskOffsets() {
+        String fooSubtopologyId = Uuid.randomUuid().toString();
+
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
+            .setRackId("rackId")
+            .setInstanceId("instanceId")
+            .setProcessId("processId")
+            .setClientTags(Map.of())
+            .build();
+
+        Map<TaskId, Long> taskOffsets = Map.of(new TaskId(fooSubtopologyId, 0), 10L);
+        Map<TaskId, Long> taskEndOffsets = Map.of(new TaskId(fooSubtopologyId, 0), 20L);
+
+        AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
+            member,
+            TasksTuple.EMPTY,
+            new MemberTaskOffsets(taskOffsets, taskEndOffsets)
+        );
+
+        assertEquals(taskOffsets, assignmentMemberSpec.taskOffsets());
+        assertEquals(taskEndOffsets, assignmentMemberSpec.taskEndOffsets());
     }
 
     @Test
@@ -407,7 +433,8 @@ public class TargetAssignmentBuilderTest {
             members.forEach((memberId, member) ->
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                         member,
-                        targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY)
+                        targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY),
+                        MemberTaskOffsets.EMPTY
                     )
                 ));
 
