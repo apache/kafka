@@ -501,7 +501,7 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
         .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC)
-        .define(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, LIST, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, MEDIUM, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
+        .define(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, LIST, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), MEDIUM, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC)
         .define(STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG, LONG, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT, atLeast(0L), MEDIUM, STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DOC);
 
     /**
@@ -648,7 +648,12 @@ public class GroupCoordinatorConfig {
     }
 
     private void checkConstraints() {
-        // New group coordinator configs validation.
+        verifyConsumerGroupConfigs();
+        verifyShareGroupConfigs();
+        verifyStreamsGroupConfigs();
+    }
+
+    private void verifyConsumerGroupConfigs() {
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
                 String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
         require(consumerGroupHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -671,9 +676,9 @@ public class GroupCoordinatorConfig {
                 String.format("%s must be greater than or equal to %s", CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG));
         require(consumerGroupAssignmentIntervalMs() <= consumerGroupMaxAssignmentIntervalMs,
                 String.format("%s must be less than or equal to %s", CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
+    }
 
-
-        // Share group configs validation.
+    private void verifyShareGroupConfigs() {
         require(shareGroupMaxHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
             String.format("%s must be greater than or equal to %s",
                 SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));
@@ -709,8 +714,9 @@ public class GroupCoordinatorConfig {
         require(shareGroupAssignmentIntervalMs() <= shareGroupMaxAssignmentIntervalMs,
             String.format("%s must be less than or equal to %s",
                 SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG));
+    }
 
-        // Streams group configs validation.
+    private void verifyStreamsGroupConfigs() {
         require(streamsGroupMaxHeartbeatIntervalMs >= streamsGroupMinHeartbeatIntervalMs,
             String.format("%s must be greater than or equal to %s",
                 STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG));

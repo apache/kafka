@@ -581,20 +581,19 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         if (statuses != null) {
             streamsRebalanceData.setStatuses(statuses);
             if (!statuses.isEmpty()) {
+                List<String> statusesToLog = new ArrayList<>();
                 for (StreamsGroupHeartbeatResponseData.Status status : statuses) {
                     if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code()) {
                         if (!status.statusDetail().equals(lastMissingClientTagsDetail)) {
-                            logger.warn("{}",  status.statusDetail());
                             lastMissingClientTagsDetail = status.statusDetail();
+                            statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
                         }
+                    } else {
+                        statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
                     }
                 }
-                String statusDetails = statuses.stream()
-                    .filter(status -> status.statusCode() != StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
-                    .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
-                    .collect(Collectors.joining(", "));
-                if (!statusDetails.isEmpty()) {
-                    logger.warn("Membership is in the following statuses: {}", statusDetails);
+                if (!statusesToLog.isEmpty()) {
+                    logger.warn("Membership is in the following statuses: {}", String.join(", ", statusesToLog));
                 }
             }
         }
