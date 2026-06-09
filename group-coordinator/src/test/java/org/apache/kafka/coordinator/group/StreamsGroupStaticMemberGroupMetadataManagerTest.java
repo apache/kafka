@@ -388,6 +388,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
@@ -409,6 +410,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0, 1))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
@@ -433,6 +435,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setStatus(List.of()),
             revokeAckResult.response().data()
         );
@@ -448,6 +451,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(2, 3))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()), 
@@ -482,6 +486,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(11)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(2, 3))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
@@ -865,6 +870,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(memberEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(null)
                 .setWarmupTasks(null)
                 .setStandbyTasks(null),
@@ -904,6 +910,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(memberEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0, 1, 2, 3))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()), 
@@ -1047,6 +1054,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(memberEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0, 1))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()), 
@@ -1187,6 +1195,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(memberEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0, 1))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()), 
@@ -1276,6 +1285,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
             .setMemberEpoch(memberEpoch)
             .setHeartbeatIntervalMs(5000)
             .setTaskOffsetIntervalMs(60000)
+            .setAcceptableRecoveryLag(10000)
             .setActiveTasks(topic.responseTasks(2))
             .setWarmupTasks(List.of())
             .setStandbyTasks(List.of());
@@ -1343,6 +1353,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(memberEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(null)
                 .setWarmupTasks(null)
                 .setStandbyTasks(null), 
@@ -1388,6 +1399,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(bumpedMemberEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0, 1, 2, 3))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()), 
@@ -1782,6 +1794,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(bumpedEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0, 1, 2))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of())
@@ -1814,6 +1827,7 @@ class StreamsGroupStaticMemberGroupMetadataManagerTest {
                 .setMemberEpoch(bumpedEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0, 1, 2))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of())

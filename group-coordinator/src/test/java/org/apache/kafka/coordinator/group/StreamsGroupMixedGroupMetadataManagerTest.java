@@ -168,6 +168,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setMemberEpoch(groupEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(mkResponseTasks(subtopologyId, 0, 1))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
@@ -278,6 +279,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setMemberEpoch(groupEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(null)
                 .setWarmupTasks(null)
                 .setStandbyTasks(null),
@@ -328,6 +330,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setMemberEpoch(joinGroupEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(mkResponseTasks(subtopologyId, 0, 1))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
@@ -463,6 +466,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setMemberEpoch(groupEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(null)
                 .setWarmupTasks(null)
                 .setStandbyTasks(null),
@@ -554,6 +558,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setMemberEpoch(bumpedGroupEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
@@ -658,6 +663,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setMemberEpoch(bumpedGroupEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(1, 2, 3))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
@@ -753,6 +759,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setMemberEpoch(groupEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(topic.responseTasks(0, 1))
                 .setWarmupTasks(List.of())
                 .setStandbyTasks(List.of()),
@@ -809,6 +816,7 @@ class StreamsGroupMixedGroupMetadataManagerTest {
                 .setMemberEpoch(groupEpoch)
                 .setHeartbeatIntervalMs(5000)
                 .setTaskOffsetIntervalMs(60000)
+                .setAcceptableRecoveryLag(10000)
                 .setActiveTasks(null)
                 .setWarmupTasks(null)
                 .setStandbyTasks(null),
