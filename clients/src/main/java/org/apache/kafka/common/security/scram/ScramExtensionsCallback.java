@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.scram;
 
-import java.util.Collections;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
@@ -27,7 +26,7 @@ import javax.security.auth.callback.Callback;
  * in the SASL/SCRAM exchange.
  */
 public class ScramExtensionsCallback implements Callback {
-    private Map<String, String> extensions = Collections.emptyMap();
+    private Map<String, String> extensions = Map.of();
 
     /**
      * Returns map of the extension names and values that are sent by the client to

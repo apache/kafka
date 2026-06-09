@@ -100,6 +100,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
@@ -373,7 +374,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
-        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean processingThreadsEnabled;
@@ -1892,10 +1893,21 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            final GroupMembershipOperation membershipOperation =
-                leaveGroupRequested.get() == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP ? LEAVE_GROUP : REMAIN_IN_GROUP;
-            if (membershipOperation == REMAIN_IN_GROUP && streamsRebalanceData.isPresent()) {
-                log.info("The consumer will leave the group since the streams group protocol is used");
+            final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation streamsOperation = leaveGroupRequested.get();
+            final GroupMembershipOperation membershipOperation;
+            if (streamsOperation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP) {
+                membershipOperation = LEAVE_GROUP;
+            } else if (streamsOperation == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP) {
+                membershipOperation = REMAIN_IN_GROUP;
+            } else {
+                // DEFAULT: adapt to the active protocol
+                if (streamsRebalanceData.isPresent()) {
+                    // Streams protocol: delegate to the consumer, which adapts to static vs dynamic
+                    membershipOperation = DEFAULT;
+                } else {
+                    // Classic protocol: remain in the group (preserves existing behavior)
+                    membershipOperation = REMAIN_IN_GROUP;
+                }
             }
             mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {

@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
+import org.apache.kafka.common.utils.internals.AppInfoParser
 import org.apache.kafka.server.IntegrationTestUtils
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
@@ -93,5 +94,29 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
     val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), 3.asInstanceOf[Short])
     val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.brokerBoundPorts().get(0))
     assertEquals(Errors.INVALID_REQUEST.code(), apiVersionsResponse.data.errorCode())
+  }
+
+  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT))
+  def testApiVersionsRequestMetadataClusterCheckPass(): Unit = {
+    val requestData = new ApiVersionsRequestData()
+    requestData.setClientSoftwareName("apache-kafka-java")
+    requestData.setClientSoftwareVersion(AppInfoParser.getVersion)
+    requestData.setClusterId(cluster.clusterId())
+    requestData.setNodeId(0)
+    val apiVersionsRequest = new ApiVersionsRequest(requestData, ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION)
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.brokerBoundPorts().get(0))
+    validateApiVersionsResponse(apiVersionsResponse, enableUnstableLastVersion = true)
+  }
+
+  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT))
+  def testApiVersionsRequestMetadataClusterCheckFail(): Unit = {
+    val requestData = new ApiVersionsRequestData()
+    requestData.setClientSoftwareName("apache-kafka-java")
+    requestData.setClientSoftwareVersion(AppInfoParser.getVersion)
+    requestData.setClusterId(cluster.clusterId())
+    requestData.setNodeId(1) // wrong node ID
+    val apiVersionsRequest = new ApiVersionsRequest(requestData, ApiVersionsRequestData.HIGHEST_SUPPORTED_VERSION)
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.brokerBoundPorts().get(0))
+    assertEquals(Errors.REBOOTSTRAP_REQUIRED.code(), apiVersionsResponse.data.errorCode())
   }
 }

@@ -20,14 +20,12 @@ package org.apache.kafka.metadata.storage;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataRecordSerde;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.KafkaRaftClient;
-import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
@@ -103,6 +101,11 @@ public class Formatter {
     private BootstrapMetadata bootstrapMetadata;
 
     /**
+     * Additional bootstrap records to include beyond feature levels and SCRAM.
+     */
+    private List<ApiMessageAndVersion> additionalBootstrapRecords = List.of();
+
+    /**
      * True if we should enable unstable feature versions.
      */
     private boolean unstableFeatureVersionsEnabled = false;
@@ -132,6 +135,7 @@ public class Formatter {
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
     private boolean hasDynamicQuorum = false;
+    private boolean writeBootstrapSnapshot = true;
 
     public Formatter setPrintStream(PrintStream printStream) {
         this.printStream = printStream;
@@ -182,6 +186,11 @@ public class Formatter {
         return this;
     }
 
+    public Formatter setAdditionalBootstrapRecords(List<ApiMessageAndVersion> additionalBootstrapRecords) {
+        this.additionalBootstrapRecords = additionalBootstrapRecords;
+        return this;
+    }
+
     public Formatter setUnstableFeatureVersionsEnabled(boolean unstableFeatureVersionsEnabled) {
         this.unstableFeatureVersionsEnabled = unstableFeatureVersionsEnabled;
         return this;
@@ -217,6 +226,11 @@ public class Formatter {
         return this;
     }
 
+    public Formatter setWriteBootstrapSnapshot(boolean writeBootstrapSnapshot) {
+        this.writeBootstrapSnapshot = writeBootstrapSnapshot;
+        return this;
+    }
+
     public Optional<DynamicVoters> initialVoters() {
         return initialControllers;
     }
@@ -229,13 +243,34 @@ public class Formatter {
         return bootstrapMetadata;
     }
 
+    /**
+     * Validates the correctness of the given cluster id. A valid cluster id is a base64, urlencoded, no padding
+     * representation of a {@link Uuid}. These checks do not validate the absence of <code>-</code> character as
+     * {@link Uuid#randomUuid()} avoids them only for convenience reasons and such a validation would break
+     * compatibility when attempting to format using an old cluster id.
+     */
+    private void validateClusterId(String clusterId) {
+        if (clusterId == null) {
+            throw new FormatterException("You must specify the cluster id.");
+        }
+        if (clusterId.contains("=")) {
+            throw new FormatterException("The specified cluster id, " + clusterId + " is invalid: contains padding");
+        }
+        try {
+            Uuid uuid = Uuid.fromString(clusterId);
+            if (Uuid.RESERVED.contains(uuid)) {
+                throw new FormatterException("The specified cluster id, " + clusterId + " is reserved");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new FormatterException("The specified cluster id, " + clusterId + " is invalid", e);
+        }
+    }
+
     public void run() throws Exception {
         if (nodeId < 0) {
             throw new RuntimeException("You must specify a valid non-negative node ID.");
         }
-        if (clusterId == null) {
-            throw new FormatterException("You must specify the cluster id.");
-        }
+        validateClusterId(clusterId);
         if (directories.isEmpty()) {
             throw new FormatterException("You must specify at least one directory to format");
         }
@@ -378,6 +413,9 @@ public class Formatter {
             }
             bootstrapRecords.addAll(ScramParser.parse(scramArguments));
         }
+        if (!additionalBootstrapRecords.isEmpty()) {
+            bootstrapRecords.addAll(additionalBootstrapRecords);
+        }
         return BootstrapMetadata.fromRecords(bootstrapRecords, "format command");
     }
 
@@ -428,15 +466,15 @@ public class Formatter {
                     build());
             }
             copier.setPreWriteHandler((writeLogDir, __, ____) -> {
+                DirectoryType directoryType = directoryTypes.get(writeLogDir);
                 printStream.printf("Formatting %s %s with %s %s.%n",
-                    directoryTypes.get(writeLogDir).description(), writeLogDir,
+                    directoryType.description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir);
-                bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
-                if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
-                    writeDynamicQuorumSnapshot(writeLogDir,
-                        initialControllers.get(),
+                if (writeBootstrapSnapshot && directoryType.isMetadataDirectory()) {
+                    writeBoostrapSnapshot(writeLogDir,
+                        bootstrapMetadata,
+                        initialControllers,
                         featureLevels.get(KRaftVersion.FEATURE_NAME),
                         controllerListenerName);
                 }
@@ -464,9 +502,8 @@ public class Formatter {
             };
         }
 
-        boolean isDynamicMetadataDirectory() {
-            return this == DYNAMIC_METADATA_NON_VOTER_DIRECTORY ||
-                this == DYNAMIC_METADATA_VOTER_DIRECTORY;
+        boolean isMetadataDirectory() {
+            return this != LOG_DIRECTORY;
         }
 
         static DirectoryType calculate(
@@ -487,9 +524,10 @@ public class Formatter {
         }
     }
 
-    static void writeDynamicQuorumSnapshot(
+    public static void writeBoostrapSnapshot(
         String writeLogDir,
-        DynamicVoters initialControllers,
+        BootstrapMetadata bootstrapMetadata,
+        Optional<DynamicVoters> initialControllers,
         short kraftVersion,
         String controllerListenerName
     ) {
@@ -497,7 +535,6 @@ public class Formatter {
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
                 CLUSTER_METADATA_TOPIC_PARTITION.topic(),
                 CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
             setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
@@ -505,8 +542,10 @@ public class Formatter {
                 clusterMetadataDirectory.toPath(),
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
-            setVoterSet(Optional.of(voterSet));
+            setVoterSet(initialControllers.map(controllers -> controllers.toVoterSet(controllerListenerName)));
+
         try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(MetadataRecordSerde.INSTANCE)) {
+            writer.append(bootstrapMetadata.records());
             writer.freeze();
         }
     }

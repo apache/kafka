@@ -209,7 +209,7 @@ public class KRaftMetadataRequestBenchmark {
                 setApiVersionManager(new SimpleApiVersionManager(
                         ApiMessageType.ListenerType.BROKER,
                         false,
-                        () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
+                        () -> FinalizedFeatures.fromMetadataVersion(MetadataVersion.latestTesting()))).
                 setGroupConfigManager(groupConfigManager).
                 build();
     }

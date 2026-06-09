@@ -36,7 +36,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -122,7 +121,7 @@ public class ClientTelemetryUtils {
 
     public static List<CompressionType> getCompressionTypesFromAcceptedList(List<Byte> acceptedCompressionTypes) {
         if (acceptedCompressionTypes == null || acceptedCompressionTypes.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         List<CompressionType> result = new ArrayList<>();

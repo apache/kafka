@@ -129,6 +129,17 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * <p>
      * The count is not guaranteed to be exact in order to accommodate stores
      * where an exact count is expensive to calculate.
+     * <p>
+     * The accuracy of the estimate depends on the backing store. In particular,
+     * stores backed by an LSM-tree (such as the default RocksDB-based stores) may
+     * report a count that includes duplicate writes and tombstones produced when
+     * the store is restored from its changelog topic, until the backing store
+     * compacts those records away. As a result, this method can return a value
+     * substantially larger than the number of live, unique keys, especially
+     * shortly after task initialization (for example, when called from
+     * {@link org.apache.kafka.streams.processor.api.Processor#init}).
+     * Callers that need an exact live-key count should iterate the store via
+     * {@link #all()} (or its variants) and count entries.
      *
      * @return an approximate count of key-value mappings in the store.
      * @throws InvalidStateStoreException if the store is not initialized

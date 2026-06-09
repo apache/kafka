@@ -33,7 +33,8 @@ type: docs
 ### Notable changes in 4.4.0
 
   * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
-  * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.   
+  * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.
+  * Storage directories formatted by the `kafka-storage` tool are no longer forward-compatible. A Kafka broker must be the same version as, or newer than, the `kafka-storage` tool that formatted its directory, regardless of the `--release-version` chosen at format time. For further details, please refer to [KIP-1170](https://cwiki.apache.org/confluence/x/ZYoEFQ).
 
 ## Upgrading to 4.3.0
 
@@ -55,6 +56,7 @@ Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been remove
   * The new config have been introduced: `remote.log.metadata.topic.min.isr` with 2 as default value. You can correct the min.insync.replicas for the existed __remote_log_metadata topic via kafka-configs.sh if needed. For further details, please refer to [KIP-1235](https://cwiki.apache.org/confluence/x/yommFw).
   * The new config prefix `remote.log.metadata.admin.` has been introduced. It allows independent configuration of the admin client used by `TopicBasedRemoteLogMetadataManager`. For further details, please refer to [KIP-1208](https://cwiki.apache.org/confluence/x/vYqhFg).
   * The `kafka-streams-scala` library is deprecated as of Kafka 4.3 and will be removed in Kafka 5.0. For further details, please refer to the [migration guide](/{version}/streams/developer-guide/scala-migration).
+  * Kafka Streams now supports opt-in headers-aware state stores for DSL operators via the new `dsl.store.format` config. The config accepts `DEFAULT` or `HEADERS`. Store-supplier APIs use the `DslStoreFormat` enum, whose values are `PLAIN`, `TIMESTAMPED`, and `HEADERS`; `DslStoreFormat.DEFAULT` does not exist. This builds on the headers-aware state store implementations introduced in [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G). For further details and current DSL result-header limitations, please refer to [KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G).
   * Support for cordoning log directories: For further details, please refer to [KIP-1066](https://cwiki.apache.org/confluence/x/Lg_TEg).
   * The `group.coordinator.rebalance.protocols` configuration is deprecated and will be removed in Kafka 5.0. In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions (`group.version`, `streams.version`, `share.version`) via `kafka-features.sh`. For further details, please refer to [KIP-1237](https://cwiki.apache.org/confluence/x/jIqmFw).
   * New group configs have been introduced: `share.delivery.count.limit`, `share.partition.max.record.locks` and `share.renew.acknowledge.enable`, along with equivalent broker configs for specifying minimum and maximum values. In addition, the validation of group configs has been improved. For further details, please refer to [KIP-1240](https://cwiki.apache.org/confluence/x/tIHMFw).
@@ -62,6 +64,13 @@ Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been remove
   * New `group.consumer.assignment.interval.ms`, `group.share.assignment.interval.ms` and `group.streams.assignment.interval.ms` configs have been added to set the interval between assignment updates for consumer, share and streams groups, along with broker configs for specifying minimum and maximum values and group configs. These default to an interval of 1 second and previously had an effective value of 0. For further details, please refer to [KIP-1263](https://cwiki.apache.org/confluence/x/DIE8G).
   * A new dynamic broker configuration `follower.fetch.last.tiered.offset.enable` (default: `false`) has been added. When enabled on a cluster with tiered storage, a newly added follower replica that has no local data will skip directly to the earliest pending upload offset on the leader, avoiding re-fetching data that is already stored in remote storage. This reduces bootstrap time significantly for large tiered-storage topics. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
   * The `ListOffsets` API has been extended to version 11, adding support for the `EARLIEST_PENDING_UPLOAD_TIMESTAMP` (-6) timestamp type. This allows clients to query the earliest offset on the leader that has not yet been uploaded to tiered storage. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
+
+## Upgrading to 4.2.1
+
+### Notable changes in 4.2.1
+
+  * Includes a fix for a critical deadlock in the [KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw) Share Group path ([KAFKA-20505](https://issues.apache.org/jira/browse/KAFKA-20505)).
+  * Includes a fix for a rolling upgrade issue ([KAFKA-20322](https://issues.apache.org/jira/browse/KAFKA-20322)) that could cause `UnsupportedVersionException` for clusters using transactional producers.
 
 ## Upgrading to 4.2.0
 

@@ -252,3 +252,7 @@ LATEST_4_1 = V_4_1_2
 # 4.2.x version
 V_4_2_0 = KafkaVersion("4.2.0")
 LATEST_4_2 = V_4_2_0
+
+# 4.3.x version
+V_4_3_0 = KafkaVersion("4.3.0")
+LATEST_4_3 = V_4_3_0

@@ -59,7 +59,7 @@ public final class Cluster {
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, null, Collections.emptyMap());
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, Set.of(), internalTopics, null, Map.of());
     }
 
     /**
@@ -73,7 +73,7 @@ public final class Cluster {
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics,
                    Node controller) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, controller, Collections.emptyMap());
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, Set.of(), internalTopics, controller, Map.of());
     }
 
     /**
@@ -88,7 +88,7 @@ public final class Cluster {
                    Set<String> invalidTopics,
                    Set<String> internalTopics,
                    Node controller) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, Collections.emptyMap());
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, Map.of());
     }
 
     /**
@@ -199,8 +199,8 @@ public final class Cluster {
      * Create an empty cluster instance with no nodes and no topic-partitions.
      */
     public static Cluster empty() {
-        return new Cluster(null, new ArrayList<>(0), new ArrayList<>(0), Collections.emptySet(),
-            Collections.emptySet(), null);
+        return new Cluster(null, new ArrayList<>(0), new ArrayList<>(0), Set.of(),
+            Set.of(), null);
     }
 
     /**
@@ -214,7 +214,7 @@ public final class Cluster {
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
         return new Cluster(null, true, nodes, new ArrayList<>(0),
-            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+            Set.of(), Set.of(), Set.of(), null, Map.of());
     }
 
     /**
@@ -292,7 +292,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
-        return partitionsByTopic.getOrDefault(topic, Collections.emptyList());
+        return partitionsByTopic.getOrDefault(topic, List.of());
     }
 
     /**
@@ -311,7 +311,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> availablePartitionsForTopic(String topic) {
-        return availablePartitionsByTopic.getOrDefault(topic, Collections.emptyList());
+        return availablePartitionsByTopic.getOrDefault(topic, List.of());
     }
 
     /**
@@ -320,7 +320,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
-        return partitionsByNode.getOrDefault(nodeId, Collections.emptyList());
+        return partitionsByNode.getOrDefault(nodeId, List.of());
     }
 
     /**
