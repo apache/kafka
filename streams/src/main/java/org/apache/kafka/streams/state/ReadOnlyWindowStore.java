@@ -183,7 +183,7 @@ public interface ReadOnlyWindowStore<K, V> {
     }
 
     /**
-     * Gets all the key-value pairs that belong to the windows within in the given time range.
+     * Gets all the key-value pairs that belong to the windows within the given time range.
      *
      * @param timeFrom the beginning of the time slot from which to search (inclusive), where iteration starts.
      * @param timeTo   the end of the time slot from which to search (inclusive), where iteration ends.
@@ -195,7 +195,7 @@ public interface ReadOnlyWindowStore<K, V> {
     KeyValueIterator<Windowed<K>, V> fetchAll(Instant timeFrom, Instant timeTo) throws IllegalArgumentException;
 
     /**
-     * Gets all the key-value pairs that belong to the windows within in the given time range in backward order
+     * Gets all the key-value pairs that belong to the windows within the given time range in backward order
      * with respect to time (from end to beginning of time).
      *
      * @param timeFrom the beginning of the time slot from which to search (inclusive), where iteration ends.

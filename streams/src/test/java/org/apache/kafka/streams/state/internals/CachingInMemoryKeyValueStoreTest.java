@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -31,6 +33,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -55,6 +58,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -627,6 +631,152 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
             store.close();
             store.delete(bytesKey("key"));
         });
+    }
+
+    // readOnly(IsolationLevel) tests
+
+    @Test
+    public void shouldReadCommittedBypassCacheForGet() {
+        // cache-only entry should be invisible under READ_COMMITTED
+        store.put(bytesKey("cache-only"), bytesValue("v"));
+        assertEquals(0, underlyingStore.approximateNumEntries());
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_COMMITTED);
+        assertNull(view.get(bytesKey("cache-only")));
+
+        // after flush the entry is in the underlying store and visible
+        store.commit(Map.of());
+        assertNotNull(view.get(bytesKey("cache-only")));
+    }
+
+    @Test
+    public void shouldReadUncommittedViewGetFromCacheOnly() {
+        store.put(bytesKey("c"), bytesValue("cache-val"));
+        assertEquals(0, underlyingStore.approximateNumEntries());
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertThat(view.get(bytesKey("c")), equalTo(bytesValue("cache-val")));
+    }
+
+    @Test
+    public void shouldReadUncommittedViewGetFromStoreOnly() {
+        underlyingStore.put(bytesKey("s"), bytesValue("store-val"));
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertThat(view.get(bytesKey("s")), equalTo(bytesValue("store-val")));
+    }
+
+    @Test
+    public void shouldReadUncommittedViewGetCacheShadowsStore() {
+        underlyingStore.put(bytesKey("k"), bytesValue("store-val"));
+        store.put(bytesKey("k"), bytesValue("cache-val"));
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertThat(view.get(bytesKey("k")), equalTo(bytesValue("cache-val")));
+    }
+
+    @Test
+    public void shouldReadUncommittedViewRange() {
+        underlyingStore.put(bytesKey("a"), bytesValue("1"));
+        store.put(bytesKey("b"), bytesValue("2"));
+        underlyingStore.put(bytesKey("c"), bytesValue("3"));
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<Bytes> keys = new ArrayList<>();
+        try (final KeyValueIterator<Bytes, byte[]> it = view.range(bytesKey("a"), bytesKey("c"))) {
+            while (it.hasNext()) {
+                keys.add(it.next().key);
+            }
+        }
+        assertEquals(Arrays.asList(bytesKey("a"), bytesKey("b"), bytesKey("c")), keys);
+    }
+
+    @Test
+    public void shouldReadUncommittedViewReverseRange() {
+        underlyingStore.put(bytesKey("a"), bytesValue("1"));
+        store.put(bytesKey("b"), bytesValue("2"));
+        underlyingStore.put(bytesKey("c"), bytesValue("3"));
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<Bytes> keys = new ArrayList<>();
+        try (final KeyValueIterator<Bytes, byte[]> it = view.reverseRange(bytesKey("a"), bytesKey("c"))) {
+            while (it.hasNext()) {
+                keys.add(it.next().key);
+            }
+        }
+        assertEquals(Arrays.asList(bytesKey("c"), bytesKey("b"), bytesKey("a")), keys);
+    }
+
+    @Test
+    public void shouldReadUncommittedViewAll() {
+        underlyingStore.put(bytesKey("a"), bytesValue("1"));
+        store.put(bytesKey("b"), bytesValue("2"));
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<Bytes> keys = new ArrayList<>();
+        try (final KeyValueIterator<Bytes, byte[]> it = view.all()) {
+            while (it.hasNext()) {
+                keys.add(it.next().key);
+            }
+        }
+        assertEquals(Arrays.asList(bytesKey("a"), bytesKey("b")), keys);
+    }
+
+    @Test
+    public void shouldReadUncommittedViewReverseAll() {
+        underlyingStore.put(bytesKey("a"), bytesValue("1"));
+        store.put(bytesKey("b"), bytesValue("2"));
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<Bytes> keys = new ArrayList<>();
+        try (final KeyValueIterator<Bytes, byte[]> it = view.reverseAll()) {
+            while (it.hasNext()) {
+                keys.add(it.next().key);
+            }
+        }
+        assertEquals(Arrays.asList(bytesKey("b"), bytesKey("a")), keys);
+    }
+
+    @Test
+    public void shouldReadUncommittedViewPrefixScan() {
+        underlyingStore.put(bytesKey("foo1"), bytesValue("1"));
+        store.put(bytesKey("foo2"), bytesValue("2"));
+        underlyingStore.put(bytesKey("bar1"), bytesValue("3"));
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<Bytes> keys = new ArrayList<>();
+        try (final KeyValueIterator<Bytes, byte[]> it = view.prefixScan("foo", new StringSerializer())) {
+            while (it.hasNext()) {
+                keys.add(it.next().key);
+            }
+        }
+        assertEquals(Arrays.asList(bytesKey("foo1"), bytesKey("foo2")), keys);
+    }
+
+    @Test
+    public void shouldReadUncommittedViewApproximateNumEntriesDelegatesToUnderlying() {
+        underlyingStore.put(bytesKey("a"), bytesValue("1"));
+        store.put(bytesKey("b"), bytesValue("2")); // cache only, not in underlying
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertEquals(underlyingStore.approximateNumEntries(), view.approximateNumEntries());
+    }
+
+    @Test
+    public void shouldReturnEmptyAndWarnOnInvertedRangeOnOuter() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingKeyValueStore.class);
+             final KeyValueIterator<Bytes, byte[]> it = store.range(bytesKey("z"), bytesKey("a"))) {
+            assertFalse(it.hasNext());
+            assertThat(appender.getMessages(), hasItem(
+                "Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers"));
+        }
+    }
+
+    @Test
+    public void shouldReturnEmptyAndWarnOnInvertedRangeViaView() {
+        final ReadOnlyKeyValueStore<Bytes, byte[]> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingKeyValueStore.class);
+             final KeyValueIterator<Bytes, byte[]> it = view.range(bytesKey("z"), bytesKey("a"))) {
+            assertFalse(it.hasNext());
+            assertThat(appender.getMessages(), hasItem(
+                "Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers"));
+        }
     }
 
     private int addItemsToCache() {

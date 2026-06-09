@@ -736,10 +736,17 @@ public class GroupMetadataManagerTestContext {
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
         StreamsGroupHeartbeatRequestData request
     ) {
+        return streamsGroupHeartbeat(request, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
+    }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request,
+        short version
+    ) {
         RequestContext context = new RequestContext(
             new RequestHeader(
                 ApiKeys.STREAMS_GROUP_HEARTBEAT,
-                ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(),
+                version,
                 "client",
                 0
             ),
@@ -1374,7 +1381,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public List<StreamsGroupDescribeResponseData.DescribedGroup> sendStreamsGroupDescribe(List<String> groupIds) {
-        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset);
+        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset).describedGroups();
     }
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {

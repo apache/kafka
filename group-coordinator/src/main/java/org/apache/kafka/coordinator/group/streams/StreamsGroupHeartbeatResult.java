@@ -26,14 +26,20 @@ import java.util.Objects;
 /**
  * A simple record to hold the result of a StreamsGroupHeartbeat request.
  *
- * @param data            The data to be returned to the client.
- * @param creatableTopics The internal topics to be created.
+ * @param data                  The data to be returned to the client.
+ * @param creatableTopics       The internal topics to be created.
+ * @param currentTopologyEpoch  The topology epoch the group is operating at after this heartbeat, or -1 if the
+ *                              group has no topology yet. The service layer uses this to decide whether to set
+ *                              TopologyDescriptionRequired on the response (KIP-1331).
  */
-public record StreamsGroupHeartbeatResult(StreamsGroupHeartbeatResponseData data, Map<String, CreatableTopic> creatableTopics) {
+public record StreamsGroupHeartbeatResult(
+    StreamsGroupHeartbeatResponseData data,
+    Map<String, CreatableTopic> creatableTopics,
+    int currentTopologyEpoch
+) {
 
     public StreamsGroupHeartbeatResult {
         Objects.requireNonNull(data);
         creatableTopics = Collections.unmodifiableMap(Objects.requireNonNull(creatableTopics));
     }
-
 }

@@ -79,7 +79,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Utils}
 import org.apache.kafka.common.utils.internals.SecurityUtils
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection
-import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_ISOLATION_LEVEL_CONFIG, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_NUM_WARMUP_REPLICAS_CONFIG, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG}
+import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_ISOLATION_LEVEL_CONFIG, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_NUM_WARMUP_REPLICAS_CONFIG, STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
@@ -92,7 +92,7 @@ import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.FetchContext.FullFetchContext
-import org.apache.kafka.server.{ClientMetricsManager, FetchManager, FetchSessionCacheShard, SimpleApiVersionManager}
+import org.apache.kafka.server.{AutoTopicCreationManager, ClientMetricsManager, FetchManager, FetchSessionCacheShard, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -190,7 +190,7 @@ class KafkaApisTest extends Logging {
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.BROKER,
       true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
+      () => FinalizedFeatures.of(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
 
     setupFeatures(featureVersions)
 
@@ -224,7 +224,7 @@ class KafkaApisTest extends Logging {
     if (featureVersions.isEmpty) return
 
     when(metadataCache.features()).thenReturn {
-      new FinalizedFeatures(
+      FinalizedFeatures.of(
         MetadataVersion.latestTesting,
         featureVersions.map { featureVersion =>
           featureVersion.featureName -> featureVersion.featureLevel.asInstanceOf[java.lang.Short]
@@ -364,7 +364,7 @@ class KafkaApisTest extends Logging {
     cgConfigs.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000")
-    cgConfigs.put(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+    cgConfigs.put(CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
     cgConfigs.put(SHARE_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(SHARE_RECORD_LOCK_DURATION_MS_CONFIG, ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT.toString)
@@ -374,15 +374,16 @@ class KafkaApisTest extends Logging {
     cgConfigs.put(SHARE_ISOLATION_LEVEL_CONFIG, GroupConfig.SHARE_ISOLATION_LEVEL_DEFAULT)
     cgConfigs.put(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT.toString)
     cgConfigs.put(SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000")
-    cgConfigs.put(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+    cgConfigs.put(SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
     cgConfigs.put(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT.toString)
     cgConfigs.put(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000")
-    cgConfigs.put(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+    cgConfigs.put(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
     cgConfigs.put(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT.toString)
+    cgConfigs.put(STREAMS_ACCEPTABLE_RECOVERY_LAG_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_DEFAULT.toString)
     cgConfigs.put(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "")
     cgConfigs.put(ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "false")
     when(configRepository.groupConfig(consumerGroupId)).thenReturn(cgConfigs)
@@ -765,7 +766,7 @@ class KafkaApisTest extends Logging {
         case CoordinatorType.TRANSACTION =>
           topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
           topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
-          when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
+          when(txnCoordinator.transactionStateTopicConfigs).thenReturn(new Properties)
           authorizeResource(authorizer, AclOperation.DESCRIBE, ResourceType.TRANSACTIONAL_ID,
             groupId, AuthorizationResult.ALLOWED)
           Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -806,10 +807,10 @@ class KafkaApisTest extends Logging {
       assertEquals(key, response.data.coordinators.get(0).key)
     } else {
       assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.code, response.data.errorCode)
-      assertTrue(capturedRequest.getValue.isEmpty)
+      assertNull(capturedRequest.getValue)
     }
     if (checkAutoCreateTopic) {
-      assertTrue(capturedRequest.getValue.isEmpty)
+      assertNull(capturedRequest.getValue)
     }
   }
 
@@ -937,7 +938,7 @@ class KafkaApisTest extends Logging {
         case Topic.TRANSACTION_STATE_TOPIC_NAME =>
           topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, numBrokersNeeded.toString)
           topicConfigOverride.put(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, numBrokersNeeded.toString)
-          when(txnCoordinator.transactionTopicConfigs).thenReturn(new Properties)
+          when(txnCoordinator.transactionStateTopicConfigs).thenReturn(new Properties)
           true
         case _ =>
           topicConfigOverride.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numBrokersNeeded.toString)
@@ -968,16 +969,16 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedMetadataResponse, response.topicMetadata())
 
     if (enableAutoTopicCreation) {
-      assertTrue(capturedRequest.getValue.isDefined)
-      assertEquals(request.context, capturedRequest.getValue.get)
+      assertNotNull(capturedRequest.getValue)
+      assertEquals(request.context, capturedRequest.getValue)
     }
   }
 
   private def verifyTopicCreation(topicName: String,
                                   enableAutoTopicCreation: Boolean,
                                   isInternal: Boolean,
-                                  request: Request): ArgumentCaptor[Option[RequestContext]] = {
-    val capturedRequest: ArgumentCaptor[Option[RequestContext]] = ArgumentCaptor.forClass(classOf[Option[RequestContext]])
+                                  request: Request): ArgumentCaptor[RequestContext] = {
+    val capturedRequest: ArgumentCaptor[RequestContext] = ArgumentCaptor.forClass(classOf[RequestContext])
     if (enableAutoTopicCreation) {
 
       when(clientControllerQuotaManager.newPermissiveQuotaFor(
@@ -986,10 +987,15 @@ class KafkaApisTest extends Logging {
       )).thenReturn(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
 
       when(autoTopicCreationManager.createTopics(
-        ArgumentMatchers.eq(Set(topicName)),
+        ArgumentMatchers.eq(util.Set.of(topicName)),
+        ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA)
+      )).thenCallRealMethod()
+
+      when(autoTopicCreationManager.createTopics(
+        ArgumentMatchers.eq(util.Set.of(topicName)),
         ArgumentMatchers.eq(ControllerMutationQuota.UNBOUNDED_CONTROLLER_MUTATION_QUOTA),
         capturedRequest.capture())).thenReturn(
-        Seq(new MetadataResponseTopic()
+        util.List.of(new MetadataResponseTopic()
         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
         .setIsInternal(isInternal)
         .setName(topicName))
@@ -1026,8 +1032,7 @@ class KafkaApisTest extends Logging {
           kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
           verify(requestChannel).sendResponse(
             ArgumentMatchers.eq(request),
-            capturedResponse.capture(),
-            any()
+            capturedResponse.capture()
           )
           val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
           assertEquals(1, response.topicMetadata.size)
@@ -1355,7 +1360,10 @@ class KafkaApisTest extends Logging {
         kafkaApis.handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
         val response = verifyNoThrottling[TxnOffsetCommitResponse](request)
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.data.topics.asScala
+          .find(_.name == invalidTopicPartition.topic)
+          .flatMap(_.partitions.asScala.find(_.partitionIndex == invalidTopicPartition.partition).map(p => Errors.forCode(p.errorCode)))
+          .orNull)
       } finally {
         kafkaApis.close()
       }
@@ -1740,8 +1748,7 @@ class KafkaApisTest extends Logging {
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
     val response = capturedResponse.getValue
 
@@ -1811,8 +1818,7 @@ class KafkaApisTest extends Logging {
 
         verify(requestChannel).sendResponse(
           ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          ArgumentMatchers.eq(None)
+          capturedResponse.capture()
         )
         val response = capturedResponse.getValue
 
@@ -1874,8 +1880,7 @@ class KafkaApisTest extends Logging {
 
         verify(requestChannel).sendResponse(
           ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          ArgumentMatchers.eq(None)
+          capturedResponse.capture()
         )
         val response = capturedResponse.getValue
 
@@ -1933,8 +1938,7 @@ class KafkaApisTest extends Logging {
 
         verify(requestChannel).sendResponse(
           ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          ArgumentMatchers.eq(None)
+          capturedResponse.capture()
         )
         val response = capturedResponse.getValue
 
@@ -1995,8 +1999,7 @@ class KafkaApisTest extends Logging {
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
 
     assertEquals(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code, capturedResponse.getValue.data.errorCode)
@@ -2070,8 +2073,7 @@ class KafkaApisTest extends Logging {
     val capturedResponse = ArgumentCaptor.forClass(classOf[InitProducerIdResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
 
     assertEquals(Errors.NONE.code, capturedResponse.getValue.data.errorCode)
@@ -2326,8 +2328,7 @@ class KafkaApisTest extends Logging {
 
         verify(requestChannel).sendResponse(
           ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          ArgumentMatchers.eq(None)
+          capturedResponse.capture()
         )
         val response = capturedResponse.getValue
 
@@ -3131,8 +3132,7 @@ class KafkaApisTest extends Logging {
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
     val markersResponse = capturedResponse.getValue
     assertEquals(expectedErrors, markersResponse.errorsByProducerId.get(1L))
@@ -3167,8 +3167,7 @@ class KafkaApisTest extends Logging {
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
     val markersResponse = capturedResponse.getValue
     assertEquals(2, markersResponse.errorsByProducerId.size())
@@ -3206,8 +3205,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      ArgumentMatchers.eq(None)
+      capturedResponse.capture()
     )
 
     val markersResponse = capturedResponse.getValue
@@ -8651,7 +8649,7 @@ class KafkaApisTest extends Logging {
     )).thenReturn(future)
 
     var response: JoinGroupResponse = null
-    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+    when(requestChannel.sendResponse(any(), any())).thenAnswer { _ =>
       throw new Exception("Something went wrong")
     }.thenAnswer { invocation =>
       response = invocation.getArgument(1, classOf[JoinGroupResponse])
@@ -10319,8 +10317,7 @@ class KafkaApisTest extends Logging {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      any()
+      capturedResponse.capture()
     )
     val response = capturedResponse.getValue
     val readable = MessageUtil.toByteBufferAccessor(
@@ -10340,8 +10337,7 @@ class KafkaApisTest extends Logging {
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
-      capturedResponse.capture(),
-      any()
+      capturedResponse.capture()
     )
     val response = capturedResponse.getValue
     val readable = MessageUtil.toByteBufferAccessor(
@@ -10353,8 +10349,7 @@ class KafkaApisTest extends Logging {
     val sendResponse = new RequestChannel.SendResponse(
       request,
       request.buildResponseSend(response),
-      request.responseNode(response).toScala,
-      None
+      request.responseNode(response).toScala
     )
     request.updateRequestMetrics(time.milliseconds(), sendResponse.responseLog.toJava)
 
@@ -11054,7 +11049,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, util.Map.of()))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, util.Map.of(), -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsGroupHeartbeatResponse, response.data)
   }
@@ -11124,7 +11119,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, util.Map.of()))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, util.Map.of(), -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsGroupHeartbeatResponse, response.data)
   }
@@ -11352,11 +11347,11 @@ class KafkaApisTest extends Logging {
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
-    val missingTopics = Map("test" -> new CreatableTopic())
+    val missingTopics = util.Map.of("test", new CreatableTopic())
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics.asJava))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics, -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(streamsGroupHeartbeatResponse, response.data)
     verify(autoTopicCreationManager).createStreamsInternalTopics(any(), any(), anyLong())
@@ -11405,7 +11400,7 @@ class KafkaApisTest extends Logging {
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
       .setMemberId("member")
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics, -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.NONE.code, response.data.errorCode())
     assertEquals(null, response.data.errorMessage())
@@ -11438,8 +11433,8 @@ class KafkaApisTest extends Logging {
 
     // Mock AutoTopicCreationManager to return cached errors
     val mockAutoTopicCreationManager = mock(classOf[AutoTopicCreationManager])
-    when(mockAutoTopicCreationManager.getStreamsInternalTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any()))
-      .thenReturn(Map("test-topic" -> "INVALID_REPLICATION_FACTOR"))
+    when(mockAutoTopicCreationManager.getStreamsInternalTopicCreationErrors(ArgumentMatchers.eq(util.Set.of("test-topic")), any()))
+      .thenReturn(util.Map.of("test-topic", "INVALID_REPLICATION_FACTOR"))
     // Mock the createStreamsInternalTopics method to do nothing (simulate topic creation attempt)
     doNothing().when(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any(), anyLong())
 
@@ -11456,7 +11451,7 @@ class KafkaApisTest extends Logging {
           .setStatusDetail("Internal topics are missing: [test-topic]")
       ))
 
-    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics))
+    future.complete(new StreamsGroupHeartbeatResult(streamsGroupHeartbeatResponse, missingTopics, -1))
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     
     assertEquals(Errors.NONE.code, response.data.errorCode())
@@ -11471,7 +11466,7 @@ class KafkaApisTest extends Logging {
     
     // Verify that createStreamsInternalTopics was called
     verify(mockAutoTopicCreationManager).createStreamsInternalTopics(any(), any(), anyLong())
-    verify(mockAutoTopicCreationManager).getStreamsInternalTopicCreationErrors(ArgumentMatchers.eq(Set("test-topic")), any())
+    verify(mockAutoTopicCreationManager).getStreamsInternalTopicCreationErrors(ArgumentMatchers.eq(util.Set.of("test-topic")), any())
   }
 
   @ParameterizedTest

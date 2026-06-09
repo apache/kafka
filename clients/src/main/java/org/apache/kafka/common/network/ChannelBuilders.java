@@ -37,7 +37,6 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -163,7 +162,7 @@ public class ChannelBuilders {
                     // Use server context for inter-broker client connections and client context for other clients
                     JaasContext jaasContext = contextType == JaasContext.Type.CLIENT ? JaasContext.loadClientContext(configs) :
                             JaasContext.loadServerContext(listenerName, clientSaslMechanism, configs);
-                    jaasContexts = Collections.singletonMap(clientSaslMechanism, jaasContext);
+                    jaasContexts = Map.of(clientSaslMechanism, jaasContext);
                 }
                 channelBuilder = new SaslChannelBuilder(connectionMode,
                         jaasContexts,
