@@ -4459,7 +4459,7 @@ public class GroupMetadataManager {
             } else {
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} left the streams group.",
                     group.groupId(), memberId, memberId, instanceId);
-                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of()));
+                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch()));
             }
         }
     }
@@ -4539,7 +4539,7 @@ public class GroupMetadataManager {
 
         return new CoordinatorResult<>(
             List.of(record),
-            new StreamsGroupHeartbeatResult(response, Map.of())
+            new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch())
         );
     }
 
