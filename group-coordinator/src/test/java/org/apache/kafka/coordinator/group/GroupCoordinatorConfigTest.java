@@ -45,8 +45,9 @@ import java.util.concurrent.CompletableFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupCoordinatorConfigTest {
 
@@ -826,9 +827,9 @@ public class GroupCoordinatorConfigTest {
     }
 
     @Test
-    public void testStreamsGroupTopologyDescriptionPluginDefaultIsEmpty() {
+    public void testStreamsGroupTopologyDescriptionPluginDefaultIsNull() {
         GroupCoordinatorConfig config = createConfig(new HashMap<>());
-        assertTrue(config.streamsGroupTopologyDescriptionPlugin().isEmpty());
+        assertNull(config.streamsGroupTopologyDescriptionPlugin(Map.of()));
     }
 
     @Test
@@ -838,10 +839,10 @@ public class GroupCoordinatorConfigTest {
             TestTopologyDescriptionPlugin.class.getName());
         GroupCoordinatorConfig config = createConfig(configs);
 
-        var plugin = config.streamsGroupTopologyDescriptionPlugin();
-        assertTrue(plugin.isPresent());
-        assertInstanceOf(TestTopologyDescriptionPlugin.class, plugin.get());
-        assertNotNull(((TestTopologyDescriptionPlugin) plugin.get()).configs);
+        StreamsGroupTopologyDescriptionPlugin plugin =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        assertInstanceOf(TestTopologyDescriptionPlugin.class, plugin);
+        assertNotNull(((TestTopologyDescriptionPlugin) plugin).configs);
     }
 
     @Test
@@ -852,7 +853,34 @@ public class GroupCoordinatorConfigTest {
         GroupCoordinatorConfig config = createConfig(configs);
 
         assertInstanceOf(TestTopologyDescriptionPlugin.class,
-            config.streamsGroupTopologyDescriptionPlugin().orElseThrow());
+            config.streamsGroupTopologyDescriptionPlugin(Map.of()));
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginReceivesAdditionalConfigs() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        try (TestTopologyDescriptionPlugin plugin = (TestTopologyDescriptionPlugin)
+            config.streamsGroupTopologyDescriptionPlugin(Map.of("injected.handle", "value"))) {
+            assertEquals("value", plugin.configs.get("injected.handle"));
+        }
+    }
+
+    @Test
+    public void testStreamsGroupTopologyDescriptionPluginReturnsFreshInstancePerCall() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            TestTopologyDescriptionPlugin.class);
+        GroupCoordinatorConfig config = createConfig(configs);
+
+        StreamsGroupTopologyDescriptionPlugin first =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        StreamsGroupTopologyDescriptionPlugin second =
+            config.streamsGroupTopologyDescriptionPlugin(Map.of());
+        assertNotSame(first, second);
     }
 
     public static class TestTopologyDescriptionPlugin implements StreamsGroupTopologyDescriptionPlugin {

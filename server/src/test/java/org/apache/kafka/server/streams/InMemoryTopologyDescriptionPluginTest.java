@@ -46,7 +46,6 @@ public class InMemoryTopologyDescriptionPluginTest {
             StreamsGroupTopologyDescription got = plugin.getTopology("g1", 7).get();
             assertEquals(desc, got);
         }
-
     }
 
     @Test

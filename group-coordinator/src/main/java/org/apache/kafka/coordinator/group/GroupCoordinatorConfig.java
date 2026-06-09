@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -572,7 +573,6 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMinTaskOffsetIntervalMs;
     private final int streamsGroupNumWarmupReplicas;
     private final int streamsGroupMaxWarmupReplicas;
-    private final Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin;
     private final long streamsGroupAcceptableRecoveryLag;
 
     private final AbstractConfig config;
@@ -643,7 +643,6 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMinTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsGroupNumWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG);
         this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
-        this.streamsGroupTopologyDescriptionPlugin = streamsGroupTopologyDescriptionPlugin(config);
         this.streamsGroupAcceptableRecoveryLag = config.getLong(GroupCoordinatorConfig.STREAMS_GROUP_ACCEPTABLE_RECOVERY_LAG_CONFIG);
         this.config = config;
 
@@ -906,12 +905,14 @@ public class GroupCoordinatorConfig {
         return assignors;
     }
 
-    protected Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin(
-        AbstractConfig config
+    public StreamsGroupTopologyDescriptionPlugin streamsGroupTopologyDescriptionPlugin(
+        Map<String, ?> additionalConfigs
     ) {
-        return Optional.ofNullable(config.getConfiguredInstance(
-            GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
-            StreamsGroupTopologyDescriptionPlugin.class));
+        Map<String, Object> overrides = new HashMap<>(additionalConfigs);
+        return config.getConfiguredInstance(
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
+            StreamsGroupTopologyDescriptionPlugin.class,
+            overrides);
     }
 
     /**
@@ -1389,13 +1390,6 @@ public class GroupCoordinatorConfig {
      */
     public int streamsGroupMaxWarmupReplicas() {
         return streamsGroupMaxWarmupReplicas;
-    }
-
-    /**
-     * The configured streams group topology description plugin, or empty when none is configured.
-     */
-    public Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin() {
-        return streamsGroupTopologyDescriptionPlugin;
     }
 
     /**
