@@ -153,7 +153,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         if (nullIndexListSize < 0) {
             throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be negative.");
         }
-        if (nullIndexListSize > length / primitiveSize) {
+        if (nullIndexListSize > length / Integer.BYTES) {
             throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be larger than overall number of elements.");
         }
         List<Integer> nullIndexList = new ArrayList<>(nullIndexListSize);

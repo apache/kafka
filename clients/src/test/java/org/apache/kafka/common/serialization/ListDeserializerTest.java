@@ -361,7 +361,7 @@ public class ListDeserializerTest {
             (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF // encodes number of null entries == -1
         };
 
-        final ListDeserializer<String> testDeserializer = new ListDeserializer<>(ArrayList.class, new StringDeserializer());
+        final ListDeserializer<Integer> testDeserializer = new ListDeserializer<>(ArrayList.class, new IntegerDeserializer());
 
         final SerializationException exception = assertThrows(
             SerializationException.class,
