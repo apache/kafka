@@ -85,6 +85,7 @@ public class LogConfigTest {
             case TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG -> new Object[]{"not_a_number", "-1"};
             case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG -> new Object[]{"not_a_number", "-0.1"};
             case TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG -> new Object[]{"not_a_number", "remove", "0"};
+            case TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG -> new Object[]{"not_a_number", "-2"};
             case LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG -> null;
             default -> new Object[]{"not_a_number", "-1"};
         };
@@ -410,7 +411,7 @@ public class LogConfigTest {
         // Topic local retention size inherited from Broker is greater than the topic's complete log retention size
         Map<String, String> logProps = Map.of(
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, String.valueOf(sysRemoteStorageEnabled),
-            TopicConfig.RETENTION_MS_CONFIG, "500"
+            TopicConfig.RETENTION_BYTES_CONFIG, "128"
         );
         if (sysRemoteStorageEnabled) {
             ConfigException message = assertThrows(ConfigException.class,
@@ -454,5 +455,63 @@ public class LogConfigTest {
     public void testValidRemoteLogDeleteOnDisable(boolean deleteOnDisable) {
         Map<String, String> logProps = Map.of(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, String.valueOf(deleteOnDisable));
         LogConfig.validate(logProps);
+    }
+
+    @Test
+    public void testInvalidRemoteCopyLagMsWhenGreaterThanEffectiveLocalRetentionMs() {
+        HashMap<String, String> props = new HashMap<>();
+        props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
+        props.put(TopicConfig.RETENTION_MS_CONFIG, "1000");
+        props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2");
+        props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "1001");
+
+        ConfigException exception = assertThrows(ConfigException.class, () -> validateTopicLogConfig(props));
+        assertTrue(exception.getMessage().contains(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG));
+    }
+
+    @Test
+    public void testInvalidRemoteCopyLagBytesWhenGreaterThanEffectiveLocalRetentionBytes() {
+        HashMap<String, String> props = new HashMap<>();
+        props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
+        props.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000");
+        props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2");
+        props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "1001");
+
+        ConfigException exception = assertThrows(ConfigException.class, () -> validateTopicLogConfig(props));
+        assertTrue(exception.getMessage().contains(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG));
+    }
+
+    @Test
+    public void testValidRemoteCopyLagWhenBothLagChecksAreDisabled() {
+        HashMap<String, String> props = new HashMap<>();
+        props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
+        props.put(TopicConfig.RETENTION_MS_CONFIG, "1000");
+        props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "-2");
+        props.put(TopicConfig.RETENTION_BYTES_CONFIG, "1000");
+        props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "-2");
+        props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "0");
+        props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "0");
+
+        validateTopicLogConfig(props);
+    }
+
+    @Test
+    public void testValidRemoteCopyLagMinusOneResolvesToLocalRetention() {
+        HashMap<String, String> props = new HashMap<>();
+        props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
+        props.put(TopicConfig.RETENTION_MS_CONFIG, "1000");
+        props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, "900");
+        props.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, "-1");
+        props.put(TopicConfig.RETENTION_BYTES_CONFIG, "2000");
+        props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1800");
+        props.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, "-1");
+
+        validateTopicLogConfig(props);
+    }
+
+    private void validateTopicLogConfig(Map<String, String> props) {
+        KafkaConfig kafkaConfig = createKafkaConfig(true);
+        LogConfig.validate(Map.of(), props, kafkaConfig.extractLogConfigMap(),
+                new RemoteLogManagerConfig(kafkaConfig).isRemoteStorageSystemEnabled());
     }
 }
