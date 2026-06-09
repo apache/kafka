@@ -161,8 +161,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         try {
             trySend(currentTimeMs);
         } catch (BootstrapResolutionException e) {
-            // Bootstrap DNS resolution timeout - propagate to app thread
-            backgroundEventHandler.add(new ErrorEvent(e));
+            metadata.fatalError(e);
         }
 
         long pollTimeoutMs = timeoutMs;
@@ -172,7 +171,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         try {
             this.client.poll(pollTimeoutMs, currentTimeMs);
         } catch (BootstrapResolutionException e) {
-            backgroundEventHandler.add(new ErrorEvent(e));
+            metadata.fatalError(e);
         }
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs, onClose);

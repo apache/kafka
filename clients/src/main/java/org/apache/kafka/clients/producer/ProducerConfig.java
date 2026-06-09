@@ -448,7 +448,7 @@ public class ProducerConfig extends AbstractConfig {
                                         Type.LONG,
                                         CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS,
                                         atLeast(0L),
-                                        Importance.MEDIUM,
+                                        Importance.HIGH,
                                         CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_DOC)
                                 .define(ENABLE_METRICS_PUSH_CONFIG,
                                         Type.BOOLEAN,

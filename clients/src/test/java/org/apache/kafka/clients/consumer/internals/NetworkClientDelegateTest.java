@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -260,6 +261,7 @@ public class NetworkClientDelegateTest {
 
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
+        Metadata realMetadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
 
         LogContext logContext = new LogContext();
         Properties properties = new Properties();
@@ -273,7 +275,7 @@ public class NetworkClientDelegateTest {
                 new ConsumerConfig(properties),
                 logContext,
                 mockKafkaClient,
-                this.metadata,
+                realMetadata,
                 this.backgroundEventHandler,
                 true,
                 mock(AsyncConsumerMetrics.class))) {
