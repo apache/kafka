@@ -28,10 +28,12 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
 
 public class ProducerMetadata extends Metadata {
@@ -74,6 +76,25 @@ public class ProducerMetadata extends Metadata {
             newTopics.add(topic);
             requestUpdateForNewTopics();
         }
+    }
+
+    /**
+     * Atomically add a batch of topics to the working set, refreshing the
+     * expiry for those already present. If any of the topics was newly added,
+     * a partial metadata refresh is requested and the current updateVersion is
+     * returned so the caller can pass it to {@link #awaitUpdate(int, long)} to
+     * wait for the next response. Returns an empty {@code OptionalInt} when no
+     * topic was newly added (no refresh requested, nothing to wait for).
+     */
+    public synchronized OptionalInt add(Collection<String> topics, long nowMs) {
+        boolean anyNew = false;
+        for (String topic : topics) {
+            if (this.topics.put(topic, nowMs + metadataIdleMs) == null) {
+                newTopics.add(topic);
+                anyNew = true;
+            }
+        }
+        return anyNew ? OptionalInt.of(requestUpdateForNewTopics()) : OptionalInt.empty();
     }
 
     public synchronized int requestUpdateForTopic(String topic) {
