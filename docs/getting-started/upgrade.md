@@ -36,6 +36,11 @@ type: docs
   * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.
   * Storage directories formatted by the `kafka-storage` tool are no longer forward-compatible. A Kafka broker must be the same version as, or newer than, the `kafka-storage` tool that formatted its directory, regardless of the `--release-version` chosen at format time. For further details, please refer to [KIP-1170](https://cwiki.apache.org/confluence/x/ZYoEFQ).
   * The Linux I/O metrics collector now exposes all 7 fields from /proc/self/io via JMX, adding linux-disk-rchar, linux-disk-wchar, linux-disk-syscr, linux-disk-syscw, and linux-disk-cancelled-write-bytes alongside the existing linux-disk-read-bytes and linux-disk-write-bytes. These additional metrics let operators calculate page-cache hit ratios, detect write amplification from filesystem overhead, identify inefficient syscall patterns, and monitor log-compaction I/O activity. For further details, please refer to [KIP-1291](https://cwiki.apache.org/confluence/x/co48G).
+  * Several Yammer-based group coordinator metrics are deprecated and will be removed in Kafka 5.0 in favor of equivalent Kafka Metrics.
+    Please use `kafka.server:type=group-coordinator-metrics,name=group-count,protocol=classic` instead of `kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups`,
+    `kafka.server:type=group-coordinator-metrics,name=offset-count` instead of `kafka.coordinator.group:type=GroupMetadataManager,name=NumOffsets`, and
+    `kafka.server:type=group-coordinator-metrics,name=classic-group-count,state={PreparingRebalance|CompletingRebalance|Stable|Dead|Empty}` instead of the `kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups{PreparingRebalance|CompletingRebalance|Stable|Dead|Empty}` metrics.
+    For further details, please refer to [KIP-1301](https://cwiki.apache.org/confluence/x/Z5U8G).
 
 ## Upgrading to 4.3.0
 

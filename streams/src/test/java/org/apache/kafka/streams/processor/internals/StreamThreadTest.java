@@ -2788,6 +2788,81 @@ public class StreamThreadTest {
         thread.runLoop();
 
         verify(consumer).subscribe((Collection<String>) any(), any());
+        verify(consumer).enforceRebalance("Active tasks corrupted");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SuppressWarnings("unchecked")
+    public void shouldNotEnforceRebalanceOnTaskCorruptedExceptionUnderStreamsProtocol(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
+        final TaskManager taskManager = mock(TaskManager.class);
+        // The Streams group protocol requires the main consumer to be an AsyncKafkaConsumer (see subscribeConsumer).
+        final Consumer<byte[], byte[]> consumer = mock(AsyncKafkaConsumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+
+        final TaskId taskId1 = new TaskId(0, 0);
+        final Set<TaskId> corruptedTasks = singleton(taskId1);
+        when(taskManager.handleCorruption(corruptedTasks)).thenReturn(true);
+
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(),
+            Optional.empty(),
+            Optional.empty(),
+            Map.of(),
+            Map.of()
+        );
+
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = new StreamThread(
+            mockTime,
+            config,
+            null,
+            consumer,
+            consumer,
+            changelogReader,
+            null,
+            taskManager,
+            null,
+            streamsMetrics,
+            topologyMetadata,
+            PROCESS_ID,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            new LinkedList<>(),
+            null,
+            HANDLER,
+            null,
+            Optional.of(streamsRebalanceData),
+            null,
+            null
+        ) {
+            @Override
+            void runOnceWithProcessingThreads() {
+                setState(State.PENDING_SHUTDOWN);
+                throw new TaskCorruptedException(corruptedTasks);
+            }
+            @Override
+            void runOnceWithoutProcessingThreads() {
+                setState(State.PENDING_SHUTDOWN);
+                throw new TaskCorruptedException(corruptedTasks);
+            }
+        }.updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.runLoop();
+
+        // Under the Streams group protocol the corrupted task is recovered locally and any HA failover
+        // is driven by the broker, so the client must not enforce a rebalance (it is unsupported).
+        verify(taskManager).handleCorruption(corruptedTasks);
+        verify(consumer, never()).enforceRebalance(anyString());
     }
 
     @ParameterizedTest
@@ -3729,6 +3804,105 @@ public class StreamThreadTest {
         ));
         thread.runOnceWithoutProcessingThreads();
         verify(shutdownErrorHook).run();
+    }
+
+    @Test
+    public void shouldNotEnforceRebalanceOnShutdownRequestUnderStreamsProtocol() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(),
+            Optional.empty(),
+            Optional.empty(),
+            Map.of(),
+            Map.of()
+        );
+
+        final Properties props = configProps(false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final StreamsConfig config = new StreamsConfig(props);
+        thread = new StreamThread(
+            new MockTime(1),
+            config,
+            null,
+            mainConsumer,
+            consumer,
+            changelogReader,
+            null,
+            mock(TaskManager.class),
+            null,
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
+            new TopologyMetadata(internalTopologyBuilder, config),
+            PROCESS_ID,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            new LinkedList<>(),
+            mock(Runnable.class),
+            HANDLER,
+            null,
+            Optional.of(streamsRebalanceData),
+            streamsMetadataState,
+            null
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.sendShutdownRequest();
+        thread.maybeSendShutdown();
+
+        // Under the Streams group protocol the shutdown request is propagated through the group
+        // heartbeat, not via a client-enforced rebalance (which the consumer does not support).
+        assertTrue(streamsRebalanceData.shutdownRequested());
+        verify(mainConsumer, never()).enforceRebalance(anyString());
+    }
+
+    @Test
+    public void shouldEnforceRebalanceOnShutdownRequestUnderClassicProtocol() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final Properties props = configProps(false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final StreamsConfig config = new StreamsConfig(props);
+        thread = new StreamThread(
+            new MockTime(1),
+            config,
+            null,
+            mainConsumer,
+            consumer,
+            changelogReader,
+            null,
+            mock(TaskManager.class),
+            null,
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime),
+            new TopologyMetadata(internalTopologyBuilder, config),
+            PROCESS_ID,
+            CLIENT_ID,
+            new LogContext(""),
+            new AtomicInteger(),
+            new AtomicLong(Long.MAX_VALUE),
+            new LinkedList<>(),
+            mock(Runnable.class),
+            HANDLER,
+            null,
+            Optional.empty(),
+            streamsMetadataState,
+            null
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.sendShutdownRequest();
+        thread.maybeSendShutdown();
+
+        verify(mainConsumer).enforceRebalance("Shutdown requested");
     }
 
     @Test

@@ -35,16 +35,14 @@ import java.util.Collection;
  *
  * <h3>Consumer-Aware Callbacks</h3>
  *
- * Each callback method has two variants: a one-argument form that receives only the affected partitions, and a
- * two-argument form (inherited from {@link RebalanceListener}) that additionally receives a
- * {@link RebalanceConsumer} - a restricted view of the {@link Consumer} exposing only operations that are safe
- * during a rebalance. The two-argument variants on this interface default to delegating to their one-argument
- * counterparts, so existing implementations continue to work unchanged.
+ * Each callback method receives a {@link RebalanceConsumer}, a restricted view of the {@link Consumer} that exposes
+ * only operations safe to invoke during a rebalance (e.g. offset commits, seeks, position queries). The
+ * {@code RebalanceConsumer} is valid only for the duration of the callback; storing a reference and using it later
+ * will throw {@link IllegalStateException}.
  * <p>
- * When consumer access is needed during a rebalance (e.g. to commit offsets or seek to external positions),
- * prefer overriding the two-argument variants and using the provided {@link RebalanceConsumer} instead of
- * capturing the full {@code Consumer} reference externally. This avoids accidental use of operations like
- * {@code poll()}, {@code close()}, or {@code subscribe()} that could corrupt consumer state mid-rebalance.
+ * Prefer using the provided {@code RebalanceConsumer} instead of capturing the full {@link Consumer} reference
+ * externally. This avoids accidental use of operations like {@code poll()}, {@code close()}, or {@code subscribe()}
+ * that could corrupt consumer state mid-rebalance.
  *
  * <h3>Common Use Cases</h3>
  *
@@ -102,12 +100,19 @@ import java.util.Collection;
  * Hence throwing an exception from a callback does not affect the assignment in any way,
  * as it will be propagated all the way up to the {@link KafkaConsumer#poll(java.time.Duration)} call.
  * If user captures the exception in the caller, the callback is still assumed successful and no further retries will be attempted.
+ *
+ * <h3>Relation to {@link ConsumerRebalanceListener}</h3>
+ *
+ * {@code RebalanceListener} is the preferred entry point for new code. The legacy {@link ConsumerRebalanceListener}
+ * interface extends this one and adds one-argument variants of each callback for source compatibility with
+ * pre-existing implementations. New code should implement {@code RebalanceListener} directly and register it via
+ * {@code Consumer.setRebalanceListener(RebalanceListener)}.
  * <p>
  *
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
  * {@code
- *   consumer.setRebalanceListener(new ConsumerRebalanceListener() {
+ *   consumer.setRebalanceListener(new RebalanceListener() {
  *       @Override
  *       public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // save the offsets in an external store using some custom code not described here
@@ -131,10 +136,10 @@ import java.util.Collection;
  * }
  * </pre>
  *
- * @see RebalanceListener
  * @see RebalanceConsumer
+ * @see ConsumerRebalanceListener
  */
-public interface ConsumerRebalanceListener extends RebalanceListener {
+public interface RebalanceListener {
 
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store.
@@ -171,26 +176,21 @@ public interface ConsumerRebalanceListener extends RebalanceListener {
      * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
+     * <p>
+     * The {@link RebalanceConsumer} parameter exposes only operations safe during a rebalance (e.g. offset commits,
+     * seeks, position queries). It is valid only for the duration of this callback; storing a reference and using it
+     * later will throw {@link IllegalStateException}.
      *
      * @param partitions The list of partitions that were assigned to the consumer and now need to be revoked. This will
      *                   include the full assignment under the Classic/Eager protocol, given that it revokes all partitions.
      *                   It will only include the subset to revoke under the Classic/Cooperative and Consumer protocols.
-     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
-     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
+     * @param consumer   A restricted view of the {@link Consumer} that is only valid for the duration of this callback.
+     *                   See {@link RebalanceConsumer} for the set of permitted operations.
+     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link RebalanceConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link RebalanceConsumer}
      */
-    void onPartitionsRevoked(Collection<TopicPartition> partitions);
-
-    /**
-     * {@inheritDoc}
-     * <p>
-     * The default implementation in this interface delegates to {@link #onPartitionsRevoked(Collection)},
-     * so existing listeners that only override the one-argument method continue to work unchanged.
-     */
-    @Override
-    default void onPartitionsRevoked(Collection<TopicPartition> partitions,
-                                     RebalanceConsumer consumer) {
-        onPartitionsRevoked(partitions);
-    }
+    void onPartitionsRevoked(Collection<TopicPartition> partitions,
+                             RebalanceConsumer consumer);
 
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
@@ -199,81 +199,90 @@ public interface ConsumerRebalanceListener extends RebalanceListener {
      * and only as the result of a {@link KafkaConsumer#poll(Duration) poll(Duration)} call.
      * <p>
      * It is guaranteed that under normal conditions all the processes in a consumer group will execute their
-     * {@link #onPartitionsRevoked(Collection)} callback before any instance executes this onPartitionsAssigned callback.
-     * During exceptional scenarios, partitions may be migrated
-     * without the old owner being notified (i.e. their {@link #onPartitionsRevoked(Collection)} callback not triggered),
-     * and later when the old owner consumer realized this event, the {@link #onPartitionsLost(Collection)} callback
-     * will be triggered by the consumer then.
+     * {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} callback before any instance executes this
+     * onPartitionsAssigned callback. During exceptional scenarios, partitions may be migrated
+     * without the old owner being notified (i.e. their {@link #onPartitionsRevoked(Collection, RebalanceConsumer)}
+     * callback not triggered), and later when the old owner consumer realized this event, the
+     * {@link #onPartitionsLost(Collection, RebalanceConsumer)} callback will be triggered by the consumer then.
      * <p>
      * It is common for the assignment callback to use the consumer instance in order to query offsets. It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
      * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
+     * <p>
+     * The {@link RebalanceConsumer} parameter exposes only operations safe during a rebalance (e.g. seeking to
+     * externally stored offsets, pausing partitions until caches warm up). It is valid only for the duration of this
+     * callback; storing a reference and using it later will throw {@link IllegalStateException}.
      *
      * @param partitions Partitions that have been added to the assignment as a result of the rebalance.
      *                   Note that partitions that were already owned by this consumer and remain assigned are not
-     *                   included in this list under the Classic/Cooperative or Consumer protocols. THe full assignment
+     *                   included in this list under the Classic/Cooperative or Consumer protocols. The full assignment
      *                   will be received under the Classic/Eager protocol.
-     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link KafkaConsumer}
-     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
+     * @param consumer   A restricted view of the {@link Consumer} that is only valid for the duration of this callback.
+     *                   See {@link RebalanceConsumer} for the set of permitted operations.
+     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link RebalanceConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link RebalanceConsumer}
      */
-    void onPartitionsAssigned(Collection<TopicPartition> partitions);
-
-    /**
-     * {@inheritDoc}
-     * <p>
-     * The default implementation in this interface delegates to {@link #onPartitionsAssigned(Collection)},
-     * so existing listeners that only override the one-argument method continue to work unchanged.
-     */
-    @Override
-    default void onPartitionsAssigned(Collection<TopicPartition> partitions,
-                                      RebalanceConsumer consumer) {
-        onPartitionsAssigned(partitions);
-    }
+    void onPartitionsAssigned(Collection<TopicPartition> partitions,
+                              RebalanceConsumer consumer);
 
     /**
      * A callback method you can implement to provide handling of cleaning up resources for partitions that have already
      * been reassigned to other consumers. This method will not be called during normal execution as the owned partitions would
-     * first be revoked by calling the {@link ConsumerRebalanceListener#onPartitionsRevoked}, before being reassigned
+     * first be revoked by calling {@link #onPartitionsRevoked(Collection, RebalanceConsumer)}, before being reassigned
      * to other consumers during a rebalance event. However, during exceptional scenarios when the consumer realized that it
      * does not own this partition any longer, i.e. not revoked via a normal rebalance event, then this method would be invoked.
      * <p>
      * For example, this function is called if a consumer's session timeout has expired, or if a fatal error has been
      * received indicating the consumer is no longer part of the group.
      * <p>
-     * By default it will just trigger {@link ConsumerRebalanceListener#onPartitionsRevoked}; for users who want to distinguish
-     * the handling logic of revoked partitions v.s. lost partitions, they can override the default implementation.
+     * By default it will just trigger {@link #onPartitionsRevoked(Collection, RebalanceConsumer)}; for users who want
+     * to distinguish the handling logic of revoked partitions v.s. lost partitions, they can override the default
+     * implementation.
      * <p>
      * It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
      * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
+     * <p>
+     * The {@link RebalanceConsumer} parameter is valid only for the duration of this callback; storing a reference
+     * and using it later will throw {@link IllegalStateException}.
+     *
+     * <h4>Important difference from {@code onPartitionsRevoked}</h4>
+     *
+     * Unlike {@link #onPartitionsRevoked(Collection, RebalanceConsumer)}, where the affected
+     * partitions are still part of the consumer's assignment until the callback completes, the
+     * partitions passed to this method have <em>already been removed</em> from the assignment
+     * before this callback fires. This means:
+     *
+     * <ul>
+     *   <li>{@link RebalanceConsumer#commitSync() commitSync()}/{@link RebalanceConsumer#commitAsync() commitAsync()}
+     *       will not commit the current assignment, since the consumer no longer includes the lost partitions.</li>
+     *   <li>{@link RebalanceConsumer#commitSync(java.util.Map) commitSync(offsets)}
+     *       /{@link RebalanceConsumer#commitAsync(java.util.Map, OffsetCommitCallback) commitAsync(offsets)}
+     *       with the lost partitions explicitly will be rejected by the broker since the consumer
+     *       no longer owns them.</li>
+     *   <li>{@link RebalanceConsumer#position(org.apache.kafka.common.TopicPartition) position()} and
+     *       {@link RebalanceConsumer#seek(org.apache.kafka.common.TopicPartition, long) seek()} will
+     *       fail for the lost partitions since they are not in the assignment.</li>
+     * </ul>
+     * <p>
+     * The {@link RebalanceConsumer} does not add guardrails against these operations on lost
+     * partitions. Users should be aware that offset management for lost partitions is not
+     * possible in this callback.
      *
      * @param partitions The list of partitions that were assigned to the consumer and now have been reassigned
-     *                   to other consumers. With both, the Classic and Consumer protocols, this will always include
+     *                   to other consumers. With both the Classic and Consumer protocols, this will always include
      *                   all partitions that were previously assigned to the consumer.
-     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link KafkaConsumer}
-     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
+     * @param consumer   A restricted view of the {@link Consumer} that is only valid for the duration of this callback.
+     *                   See {@link RebalanceConsumer} for the set of permitted operations.
+     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link RebalanceConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link RebalanceConsumer}
      */
-    default void onPartitionsLost(Collection<TopicPartition> partitions) {
-        onPartitionsRevoked(partitions);
-    }
-
-    /**
-     * {@inheritDoc}
-     * <p>
-     * The default implementation in this interface delegates to {@link #onPartitionsLost(Collection)},
-     * which itself defaults to {@link #onPartitionsRevoked(Collection)}. The chain always passes through
-     * the one-argument methods, not the two-argument variants, so listeners overriding either one-argument
-     * method see consistent results regardless of which entry point was used.
-     * <p>
-     * If you need custom behavior for both revocation and loss, override both one-argument methods explicitly.
-     */
-    @Override
     default void onPartitionsLost(Collection<TopicPartition> partitions,
                                   RebalanceConsumer consumer) {
-        onPartitionsLost(partitions);
+        onPartitionsRevoked(partitions, consumer);
     }
 }
