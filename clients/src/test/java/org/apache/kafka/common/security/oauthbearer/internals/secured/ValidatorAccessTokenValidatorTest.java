@@ -18,23 +18,38 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 
+import org.apache.logging.log4j.Level;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.lang.InvalidAlgorithmException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.List;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest {
 
+    private static final String ATTACKER_ISSUER = "https://evil.example/attacker";
+
+    private static final String EXPECTED_ISSUER = "https://idp.legit.example/";
+
     @Override
     protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
+        return createAccessTokenValidator(builder, null);
+    }
+
+    private AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder, String expectedIssuer) {
         return new ValidatorAccessTokenValidator(30,
             Collections.emptySet(),
-            null,
+            expectedIssuer,
             (jws, nestingContext) -> builder.jwk().getKey(),
             builder.scopeClaimName(),
             builder.subjectClaimName());
@@ -70,9 +85,10 @@ public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest 
             .jwk(jwk)
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256)
             .addCustomClaim(subClaimName, subject)
+            .addCustomClaim("iss", EXPECTED_ISSUER)
             .subjectClaimName(subClaimName)
             .subject(null);
-        AccessTokenValidator validator = createAccessTokenValidator(tokenBuilder);
+        AccessTokenValidator validator = createAccessTokenValidator(tokenBuilder, EXPECTED_ISSUER);
 
         // Validation should succeed (e.g. signature verification) even if sub claim is missing
         OAuthBearerToken token = validator.validate(tokenBuilder.build());
@@ -80,9 +96,55 @@ public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest 
         assertEquals(subject, token.principalName());
     }
 
+    @Test
+    public void testExpectedIssuerMismatch() throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+        AccessTokenBuilder builder = new AccessTokenBuilder()
+                .jwk(jwk)
+                .alg(AlgorithmIdentifiers.RSA_USING_SHA256)
+                .addCustomClaim("iss", ATTACKER_ISSUER);
+        String accessToken = builder.build();
+
+        AccessTokenValidator validator = createAccessTokenValidator(builder, EXPECTED_ISSUER);
+
+        ValidateException e = assertThrows(ValidateException.class,
+                () -> validator.validate(accessToken));
+        assertErrorMessageContains(e.getMessage(), ATTACKER_ISSUER);
+    }
+
+    @Test
+    public void testWarnsWhenExpectedIssuerUnset() throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+        CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(ValidatorAccessTokenValidator.class, Level.WARN);
+            new ValidatorAccessTokenValidator(30, Collections.emptySet(), null, resolver, "scope", "sub");
+
+            List<String> warnings = appender.getMessages("WARN");
+            assertTrue(warnings.stream().anyMatch(message -> message.contains(SASL_OAUTHBEARER_EXPECTED_ISSUER)),
+                    "Expected a WARN log mentioning " + SASL_OAUTHBEARER_EXPECTED_ISSUER + ", but got: " + warnings);
+        }
+    }
+
+    @Test
+    public void testWarnsWhenExpectedAudienceUnset() throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+        CloseableVerificationKeyResolver resolver = (jws, nestingContext) -> jwk.getKey();
+
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(ValidatorAccessTokenValidator.class, Level.WARN);
+            new ValidatorAccessTokenValidator(30, null, EXPECTED_ISSUER, resolver, "scope", "sub");
+
+            List<String> warnings = appender.getMessages("WARN");
+            assertTrue(warnings.stream().anyMatch(message -> message.contains(SASL_OAUTHBEARER_EXPECTED_AUDIENCE)),
+                    "Expected a WARN log mentioning " + SASL_OAUTHBEARER_EXPECTED_AUDIENCE + ", but got: " + warnings);
+        }
+    }
+
     private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
-        AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg);
-        AccessTokenValidator validator = createAccessTokenValidator(builder);
+        AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg).addCustomClaim("iss", EXPECTED_ISSUER);
+        AccessTokenValidator validator = createAccessTokenValidator(builder, EXPECTED_ISSUER);
         String accessToken = builder.build();
         OAuthBearerToken token = validator.validate(accessToken);
 

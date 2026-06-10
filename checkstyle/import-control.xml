@@ -140,6 +140,8 @@
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
         <allow pkg="org.jose4j" />
+        <!-- For asserting log output in tests via LogCaptureAppender -->
+        <allow class="org.apache.logging.log4j.Level" />
       </subpackage>
     </subpackage>
 

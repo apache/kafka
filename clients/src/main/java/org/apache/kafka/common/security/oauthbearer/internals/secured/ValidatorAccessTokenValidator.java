@@ -35,6 +35,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
@@ -123,11 +125,23 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         if (clockSkew != null)
             jwtConsumerBuilder.setAllowedClockSkewInSeconds(clockSkew);
 
-        if (expectedAudiences != null && !expectedAudiences.isEmpty())
+        if (expectedAudiences != null && !expectedAudiences.isEmpty()) {
             jwtConsumerBuilder.setExpectedAudience(expectedAudiences.toArray(new String[0]));
+        } else {
+            log.warn("The OAuth broker validator is configured with a JWKS endpoint but without \"{}\", so it will accept" +
+                " a JWT that does not carry an \"aud\" (audience) claim. This is strongly discouraged; set \"{}\" to the" +
+                " audience(s) your brokers expect so that the token audience is verified.",
+                SASL_OAUTHBEARER_EXPECTED_AUDIENCE, SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
+        }
 
-        if (expectedIssuer != null)
+        if (expectedIssuer != null) {
             jwtConsumerBuilder.setExpectedIssuer(expectedIssuer);
+        } else {
+            log.warn("The OAuth broker validator is configured with a JWKS endpoint but without \"{}\", so it will accept" +
+                " a JWT bearing any (or no) \"iss\" (issuer) claim. This is strongly discouraged; set \"{}\" to the issuer" +
+                " URL of your OAuth/OIDC provider so that the token issuer is verified.",
+                SASL_OAUTHBEARER_EXPECTED_ISSUER, SASL_OAUTHBEARER_EXPECTED_ISSUER);
+        }
 
         this.jwtConsumer = jwtConsumerBuilder
             .setJwsAlgorithmConstraints(DISALLOW_NONE)

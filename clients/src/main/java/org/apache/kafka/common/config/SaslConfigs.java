@@ -183,14 +183,14 @@ public class SaslConfigs {
             + " the broker.";
 
     public static final String SASL_OAUTHBEARER_EXPECTED_AUDIENCE = "sasl.oauthbearer.expected.audience";
-    public static final String SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC = "The (optional) comma-delimited setting for the broker to use to verify that the JWT was issued for one of the"
+    public static final String SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC = "The (strongly recommended) comma-delimited setting for the broker to use to verify that the JWT was issued for one of the"
             + " expected audiences. The JWT will be inspected for the standard OAuth \"aud\" claim and if this value is set, the broker will match the value from JWT's \"aud\" claim "
-            + " to see if there is an exact match. If there is no match, the broker will reject the JWT and authentication will fail.";
+            + " to see if there is an exact match. If there is no match, the broker will reject the JWT and authentication will fail. If this value is not set, the broker will accept a token that has no \"aud\" claim, which is strongly discouraged.";
 
     public static final String SASL_OAUTHBEARER_EXPECTED_ISSUER = "sasl.oauthbearer.expected.issuer";
-    public static final String SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC = "The (optional) setting for the broker to use to verify that the JWT was created by the expected issuer. The JWT will"
+    public static final String SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC = "The (strongly recommended) setting for the broker to use to verify that the JWT was created by the expected issuer. The JWT will"
             + " be inspected for the standard OAuth \"iss\" claim and if this value is set, the broker will match it exactly against what is in the JWT's \"iss\" claim. If there is no"
-            + " match, the broker will reject the JWT and authentication will fail.";
+            + " match, the broker will reject the JWT and authentication will fail. If this value is not set, the broker will accept a JWT bearing any (or no) issuer, which is strongly discouraged.";
 
     public static final String SASL_OAUTHBEARER_HEADER_URLENCODE = "sasl.oauthbearer.header.urlencode";
     public static final boolean DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE = false;
@@ -223,8 +223,8 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, ConfigDef.Type.LONG, DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, ConfigDef.Type.LONG, DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, ConfigDef.Type.INT, DEFAULT_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, ConfigDef.Type.LIST, null, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, ConfigDef.Type.LIST, null, ConfigDef.Importance.HIGH, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE, ConfigDef.Type.BOOLEAN, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_HEADER_URLENCODE_DOC);
     }
 }
