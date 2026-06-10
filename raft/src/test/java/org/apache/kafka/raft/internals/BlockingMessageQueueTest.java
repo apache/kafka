@@ -17,7 +17,6 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.raft.RaftMessage;
-import org.apache.kafka.raft.RaftMessageQueue;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -37,19 +36,25 @@ class BlockingMessageQueueTest {
         assertTrue(queue.isEmpty());
         assertEquals(Optional.empty(), queue.poll(0));
 
-        var message1 = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
-        queue.add(message1);
+        var mockMessage1 = Mockito.mock(RaftMessage.class);
+        queue.add(mockMessage1);
         assertFalse(queue.isEmpty());
-        assertEquals(Optional.of(message1), queue.poll(0));
+        var entry1 = queue.poll(0);
+        assertTrue(entry1.isPresent());
+        assertEquals(mockMessage1, entry1.get().message());
         assertTrue(queue.isEmpty());
 
-        var message2 = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
-        var message3 = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
-        queue.add(message2);
-        queue.add(message3);
+        var mockMessage2 = Mockito.mock(RaftMessage.class);
+        var mockMessage3 = Mockito.mock(RaftMessage.class);
+        queue.add(mockMessage2);
+        queue.add(mockMessage3);
         assertFalse(queue.isEmpty());
-        assertEquals(Optional.of(message2), queue.poll(0));
-        assertEquals(Optional.of(message3), queue.poll(0));
+        var entry2 = queue.poll(0);
+        var entry3 = queue.poll(0);
+        assertTrue(entry2.isPresent());
+        assertTrue(entry3.isPresent());
+        assertEquals(mockMessage2, entry2.get().message());
+        assertEquals(mockMessage3, entry3.get().message());
 
     }
 
@@ -70,40 +75,36 @@ class BlockingMessageQueueTest {
         assertTrue(queue.isEmpty());
 
         // Adding a real message makes the queue non-empty
-        var message = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
-        queue.add(message);
+        var mockMessage = Mockito.mock(RaftMessage.class);
+        queue.add(mockMessage);
         assertFalse(queue.isEmpty());
 
         // Poll should drain all wakeups and return the message in one call
-        assertEquals(Optional.of(message), queue.poll(0));
+        var entry = queue.poll(0);
+        assertTrue(entry.isPresent());
+        assertEquals(mockMessage, entry.get().message());
         assertTrue(queue.isEmpty());
     }
 
     @Test
-    public void testAddRejectsNullEntryOrMessage() {
+    public void testAddRejectsNullMessage() {
         var queue = new BlockingMessageQueue();
 
-        // Null entry should be rejected
+        // Null message should be rejected
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
             () -> queue.add(null)
         );
-        assertTrue(exception.getMessage().contains("Either entry or entry.message is null"));
+        assertTrue(exception.getMessage().contains("message cannot be null"));
         assertTrue(queue.isEmpty());
 
-        // Entry with null message should be rejected
-        exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> queue.add(new RaftMessageQueue.QueueEntry(null))
-        );
-        assertTrue(exception.getMessage().contains("Either entry or entry.message is null"));
-        assertTrue(queue.isEmpty());
-
-        // Valid entry should succeed
-        var validMessage = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
+        // Valid message should succeed
+        var validMessage = Mockito.mock(RaftMessage.class);
         queue.add(validMessage);
         assertFalse(queue.isEmpty());
-        assertEquals(Optional.of(validMessage), queue.poll(0));
+        var entry = queue.poll(0);
+        assertTrue(entry.isPresent());
+        assertEquals(validMessage, entry.get().message());
         assertTrue(queue.isEmpty());
     }
 }

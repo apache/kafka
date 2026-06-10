@@ -17,47 +17,82 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.raft.RaftMessage;
 import org.apache.kafka.raft.RaftMessageQueue;
 
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BlockingMessageQueue implements RaftMessageQueue {
-    private final BlockingQueue<QueueEntry> queue = new LinkedBlockingQueue<>();
+    // Marker object for wakeup events
+    private static final Object WAKEUP = new Object();
+
+    private final BlockingQueue<Object> queue = new LinkedBlockingQueue<>();
     private final AtomicInteger messageCount = new AtomicInteger(0);
+
+    /**
+     * A queue entry that contains a message and its associated future.
+     */
+    private static final class MessageEntry implements QueueEntry {
+        private final CompletableFuture<RaftMessage> future = new CompletableFuture<>();
+        private final RaftMessage message;
+
+        MessageEntry(RaftMessage message) {
+            this.message = message;
+        }
+
+        @Override
+        public RaftMessage message() {
+            return message;
+        }
+
+        @Override
+        public CompletableFuture<RaftMessage> future() {
+            return future;
+        }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "MessageEntry(message=%s, future.isDone=%s)",
+                message,
+                future.isDone()
+            );
+        }
+    }
 
     @Override
     public Optional<QueueEntry> poll(long timeoutMs) {
         try {
             var entry = queue.poll(timeoutMs, TimeUnit.MILLISECONDS);
-            while (entry != null && entry.message() == null) {
-                // Drain the queue of all of the wakeup events
+            // Drain all wakeup markers; only QueueEntry instances are messages
+            while (entry != null && !(entry instanceof QueueEntry)) {
                 entry = queue.poll();
             }
             if (entry != null) {
                 messageCount.decrementAndGet();
+                return Optional.of((QueueEntry) entry);
             }
-            return Optional.ofNullable(entry);
+            return Optional.empty();
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
     }
 
     @Override
-    public void add(QueueEntry entry) {
-        if (entry == null || entry.message() == null) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "Either entry or entry.message is null: %s",
-                    entry
-                )
-            );
+    public CompletionStage<RaftMessage> add(RaftMessage message) {
+        if (message == null) {
+            throw new IllegalArgumentException("message cannot be null");
         }
+        var entry = new MessageEntry(message);
         queue.add(entry);
         messageCount.incrementAndGet();
+        return entry.future();
     }
 
     @Override
@@ -67,7 +102,7 @@ public class BlockingMessageQueue implements RaftMessageQueue {
 
     @Override
     public void wakeup() {
-        queue.add(new QueueEntry(null));
+        queue.add(WAKEUP);
     }
 
 }

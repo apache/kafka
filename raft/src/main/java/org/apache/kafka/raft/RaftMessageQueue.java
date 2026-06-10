@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * This class is used to serialize inbound requests or responses to outbound requests.
@@ -40,10 +41,11 @@ public interface RaftMessageQueue {
     /**
      * Add a new message to the queue.
      *
-     * @param entry the message to deliver
+     * @param message the message to deliver
+     * @return a completion stage that will be completed when the message is processed
      * @throws IllegalStateException if the queue cannot accept the message
      */
-    void add(QueueEntry entry);
+    CompletionStage<RaftMessage> add(RaftMessage message);
 
     /**
      * Check whether there are pending messages awaiting delivery.
@@ -58,29 +60,18 @@ public interface RaftMessageQueue {
      */
     void wakeup();
 
-    public static final class QueueEntry {
-        private final CompletableFuture<RaftMessage> future = new CompletableFuture<>();
-        private final RaftMessage message;
+    /**
+     * Represents an entry in the message queue.
+     */
+    interface QueueEntry {
+        /**
+         * @return the message associated with this entry
+         */
+        RaftMessage message();
 
-        public QueueEntry(RaftMessage message) {
-            this.message = message;
-        }
-
-        public RaftMessage message() {
-            return message;
-        }
-
-        public CompletableFuture<RaftMessage> future() {
-            return future;
-        }
-
-        @Override
-        public String toString() {
-            return String.format(
-                "QueueEntry(message=%s, future.isDone=%s)",
-                message,
-                future.isDone()
-            );
-        }
+        /**
+         * @return the future associated with this entry
+         */
+        CompletableFuture<RaftMessage> future();
     }
 }

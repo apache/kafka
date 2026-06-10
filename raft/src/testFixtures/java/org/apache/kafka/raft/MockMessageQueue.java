@@ -20,6 +20,8 @@ import java.util.ArrayDeque;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -31,6 +33,34 @@ public class MockMessageQueue implements RaftMessageQueue {
     private final AtomicBoolean wakeupRequested = new AtomicBoolean(false);
     private final AtomicLong lastPollTimeout = new AtomicLong(-1);
 
+    private static final class MessageEntry implements QueueEntry {
+        private final CompletableFuture<RaftMessage> future = new CompletableFuture<>();
+        private final RaftMessage message;
+
+        MessageEntry(RaftMessage message) {
+            this.message = message;
+        }
+
+        @Override
+        public RaftMessage message() {
+            return message;
+        }
+
+        @Override
+        public CompletableFuture<RaftMessage> future() {
+            return future;
+        }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "MessageEntry(message=%s, future.isDone=%s)",
+                message,
+                future.isDone()
+            );
+        }
+    }
+
     @Override
     public Optional<QueueEntry> poll(long timeoutMs) {
         wakeupRequested.set(false);
@@ -39,8 +69,10 @@ public class MockMessageQueue implements RaftMessageQueue {
     }
 
     @Override
-    public void add(QueueEntry message) {
-        messages.offer(message);
+    public CompletionStage<RaftMessage> add(RaftMessage message) {
+        MessageEntry entry = new MessageEntry(message);
+        messages.offer(entry);
+        return entry.future();
     }
 
     public OptionalLong lastPollTimeoutMs() {

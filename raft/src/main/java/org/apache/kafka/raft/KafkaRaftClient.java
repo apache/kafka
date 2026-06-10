@@ -2900,7 +2900,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             channel
                 .send(requestMessage)
                 .whenComplete(
-                    (response, exception) -> messageQueue.add(new RaftMessageQueue.QueueEntry(response))
+                    (response, exception) -> messageQueue.add(response)
                 );
             requestSent = true;
             logger.trace("Sent outbound request: {}", requestMessage);
@@ -3657,9 +3657,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * @param request The inbound request
      */
     public CompletionStage<RaftResponse.Outbound> handle(RaftRequest.Inbound request) {
-        var entry = new RaftMessageQueue.QueueEntry(Objects.requireNonNull(request));
-        messageQueue.add(entry);
-        return entry.future().thenApply(message -> {
+        return messageQueue.add(Objects.requireNonNull(request)).thenApply(message -> {
             if (message instanceof RaftResponse.Outbound response) {
                 return response;
             } else {

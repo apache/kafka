@@ -83,7 +83,7 @@ public final class DefaultRequestSender  implements RequestSender {
         channel
             .send(requestMessage)
             .whenComplete(
-                (response, exception) -> messageQueue.add(new RaftMessageQueue.QueueEntry(response))
+                (response, exception) -> messageQueue.add(response)
             );
 
         logger.trace("Sent outbound request: {}", requestMessage);
