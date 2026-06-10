@@ -106,10 +106,11 @@ public final class OffloadAndTxnConsumeFromLeaderTest {
                 .consume(topicA, p0, 0L, 7, 6);
 
         final Map<String, Object> extraConsumerProps = Map.of(
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
                 ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString()
         );
 
-        builder.build().execute(clusterInstance, groupProtocol, extraConsumerProps);
+        builder.build().execute(clusterInstance, extraConsumerProps);
     }
 
     private static RemoteFetchCount getRemoteFetchCount() {

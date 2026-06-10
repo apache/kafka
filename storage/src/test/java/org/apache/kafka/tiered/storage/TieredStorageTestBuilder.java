@@ -338,13 +338,7 @@ public final class TieredStorageTestBuilder {
         }
 
         public void execute(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
-            execute(clusterInstance, groupProtocol, Map.of());
-        }
-
-        public void execute(ClusterInstance clusterInstance,
-                            GroupProtocol groupProtocol,
-                            Map<String, Object> extraConsumerProps) throws Exception {
-            Map<String, Object> consumerProps = new HashMap<>(extraConsumerProps);
+            Map<String, Object> consumerProps = new HashMap<>();
             consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
             execute(clusterInstance, consumerProps);
         }
