@@ -35,6 +35,7 @@ type: docs
   * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
   * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.
   * Storage directories formatted by the `kafka-storage` tool are no longer forward-compatible. A Kafka broker must be the same version as, or newer than, the `kafka-storage` tool that formatted its directory, regardless of the `--release-version` chosen at format time. For further details, please refer to [KIP-1170](https://cwiki.apache.org/confluence/x/ZYoEFQ).
+  * The Linux I/O metrics collector now exposes all 7 fields from /proc/self/io via JMX, adding rchar, wchar, syscr, syscw, and cancelled_write_bytes alongside the existing linux-disk-read-bytes and linux-disk-write-bytes. These additional metrics let operators calculate page-cache hit ratios, detect write amplification from filesystem overhead, identify inefficient syscall patterns, and monitor log-compaction I/O activity. For further details, please refer to [KIP-1291](https://cwiki.apache.org/confluence/x/co48G).
 
 ## Upgrading to 4.3.0
 
