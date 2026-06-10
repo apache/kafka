@@ -1440,8 +1440,8 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
     }
 
     @ClusterTest(serverProperties = {
-        @ClusterConfigProperty(key = "group.share.min.record.lock.duration.ms", value = "1000"),
-        @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "1000")
+        @ClusterConfigProperty(key = "group.share.min.record.lock.duration.ms", value = "5000"),
+        @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "5000")
     })
     public void testAcquisitionLockTimeoutOnConsumer() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
@@ -1486,7 +1486,7 @@ public class ShareConsumerTest extends ShareConsumerTestBase {
             assertEquals(1, consumerRecords.count());
 
             // Allow the acquisition lock to time out.
-            Thread.sleep(3000);
+            Thread.sleep(8000);
 
             consumerRecords = shareConsumer.poll(Duration.ofMillis(5000));
             consumerRecord = consumerRecords.records(tp).get(0);
