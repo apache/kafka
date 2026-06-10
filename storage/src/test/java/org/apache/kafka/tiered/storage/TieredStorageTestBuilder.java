@@ -17,9 +17,12 @@
 package org.apache.kafka.tiered.storage;
 
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.tiered.storage.actions.AlterLogDirAction;
@@ -58,6 +61,7 @@ import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -323,6 +327,39 @@ public final class TieredStorageTestBuilder {
      */
     public TieredStorageTestPlan build() {
         return new TieredStorageTestPlan(complete());
+    }
+
+    public static final class TieredStorageTestPlan {
+
+        private final List<TieredStorageTestAction> actions;
+
+        private TieredStorageTestPlan(List<TieredStorageTestAction> actions) {
+            this.actions = List.copyOf(actions);
+        }
+
+        public void execute(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
+            execute(clusterInstance, groupProtocol, Map.of());
+        }
+
+        public void execute(ClusterInstance clusterInstance,
+                            GroupProtocol groupProtocol,
+                            Map<String, Object> extraConsumerProps) throws Exception {
+            Map<String, Object> consumerProps = new HashMap<>(extraConsumerProps);
+            consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+            execute(clusterInstance, consumerProps);
+        }
+
+        public void execute(ClusterInstance clusterInstance, Map<String, Object> extraConsumerProps) throws Exception {
+            try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, Map.copyOf(extraConsumerProps))) {
+                try {
+                    for (TieredStorageTestAction action : actions) {
+                        action.execute(context);
+                    }
+                } finally {
+                    context.printReport(System.out);
+                }
+            }
+        }
     }
 
     private void createProduceAction() {
