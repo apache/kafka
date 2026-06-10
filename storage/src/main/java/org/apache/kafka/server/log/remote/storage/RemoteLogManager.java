@@ -562,7 +562,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         // We want to remote topicId map and stopPartition on RLMM for deleteLocalLog or stopRLMM partitions because
         // in both case, they all mean the topic will not be held in this broker anymore.
-        // NOTE: In ZK mode, this#stopPartitions method is called when Replica state changes to Offline and ReplicaDeletionStarted
         Set<TopicIdPartition> pendingActionsPartitions = stopPartitions.stream()
                 .filter(sp -> (sp.stopRemoteLogMetadataManager || sp.deleteLocalLog) && topicIdByPartitionMap.containsKey(sp.topicPartition))
                 .map(sp -> new TopicIdPartition(topicIdByPartitionMap.get(sp.topicPartition), sp.topicPartition))
