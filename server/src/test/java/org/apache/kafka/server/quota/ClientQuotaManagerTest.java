@@ -27,11 +27,12 @@ import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -41,10 +42,21 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     private final ClientQuotaManagerConfig config = new ClientQuotaManagerConfig();
 
-    private void testQuotaParsing(ClientQuotaManagerConfig config, UserClient client1, UserClient client2, UserClient randomClient, UserClient defaultConfigClient) {
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "");
-
+    private void withQuotaManager(QuotaType quotaType, ClientQuotaManagerConfig config, Consumer<ClientQuotaManager> f) {
+        ClientQuotaManager quotaManager = new ClientQuotaManager(config, metrics, quotaType, time, "");
         try {
+            f.accept(quotaManager);
+        } finally {
+            quotaManager.shutdown();
+        }
+    }
+
+    private void withQuotaManager(QuotaType quotaType, Consumer<ClientQuotaManager> f) {
+        withQuotaManager(quotaType, config, f);
+    }
+
+    private void testQuotaParsing(ClientQuotaManagerConfig config, UserClient client1, UserClient client2, UserClient randomClient, UserClient defaultConfigClient) {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
             // Case 1: Update the quota. Assert that the new quota value is returned
             clientQuotaManager.updateQuota(
                     client1.configUser,
@@ -107,9 +119,7 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
             throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 1000 * config.numQuotaSamples());
             assertEquals(0, throttleTimeMs, "throttleTimeMs should be 0. was " + throttleTimeMs);
 
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     /**
@@ -124,9 +134,9 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
         testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient);
     }
 
-    private void checkQuota(ClientQuotaManager quotaManager, String user, String clientId, long expectedBound, int value, boolean expectThrottle) throws UnknownHostException {
+    private void checkQuota(ClientQuotaManager quotaManager, String user, String clientId, long expectedBound, int value, boolean expectThrottle) {
         assertEquals(expectedBound, quotaManager.quota(user, clientId).bound(), 0.0);
-        Session session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), InetAddress.getLocalHost());
+        Session session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), assertDoesNotThrow(InetAddress::getLocalHost));
         double expectedMaxValueInQuotaWindow = expectedBound < Long.MAX_VALUE
             ? config.quotaWindowSizeSeconds() * (config.numQuotaSamples() - 1) * expectedBound
             : Double.MAX_VALUE;
@@ -141,13 +151,12 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
 
     @Test
-    public void testMaxValueInQuotaWindowWithNonDefaultQuotaWindow() throws UnknownHostException {
+    public void testMaxValueInQuotaWindowWithNonDefaultQuotaWindow() {
         int numFullQuotaWindows = 3;   // 3 seconds window (vs. 10 seconds default)
         ClientQuotaManagerConfig nonDefaultConfig = new ClientQuotaManagerConfig(numFullQuotaWindows + 1);
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(nonDefaultConfig, metrics, QuotaType.FETCH, time, "");
-        Session userSession = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "userA"), InetAddress.getLocalHost());
+        withQuotaManager(QuotaType.FETCH, nonDefaultConfig, clientQuotaManager -> {
+            Session userSession = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "userA"), assertDoesNotThrow(InetAddress::getLocalHost));
 
-        try {
             // no quota set
             assertEquals(Double.MAX_VALUE, clientQuotaManager.maxValueInQuotaWindow(userSession, "client1"), 0.01);
 
@@ -158,18 +167,13 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
                     Optional.of(new Quota(10, true))
             );
             assertEquals(10 * numFullQuotaWindows, clientQuotaManager.maxValueInQuotaWindow(userSession, "client1"), 0.01);
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
-    public void testSetAndRemoveDefaultUserQuota() throws UnknownHostException {
+    public void testSetAndRemoveDefaultUserQuota() {
         // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
-                metrics, QuotaType.PRODUCE, time, "");
-
-        try {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
             // no quota set yet, should not throttle
             checkQuota(clientQuotaManager, "userA", "client1", Long.MAX_VALUE, 1000, false);
 
@@ -188,17 +192,12 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
                     Optional.empty()
             );
             checkQuota(clientQuotaManager, "userA", "client1", Long.MAX_VALUE, 1000, false);
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
-    public void testSetAndRemoveUserQuota() throws UnknownHostException {
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
-                metrics, QuotaType.PRODUCE, time, "");
-
-        try {
+    public void testSetAndRemoveUserQuota() {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
             // Set <user> quota config
             clientQuotaManager.updateQuota(
                     Optional.of(new ClientQuotaManager.UserEntity("userA")),
@@ -214,18 +213,13 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
                     Optional.empty()
             );
             checkQuota(clientQuotaManager, "userA", "client1", Long.MAX_VALUE, 1000, false);
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
-    public void testSetAndRemoveUserClientQuota() throws UnknownHostException {
+    public void testSetAndRemoveUserClientQuota() {
         // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
-                metrics, QuotaType.PRODUCE, time, "");
-
-        try {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
             // Set <user, client-id> quota config
             clientQuotaManager.updateQuota(
                     Optional.of(new ClientQuotaManager.UserEntity("userA")),
@@ -241,17 +235,12 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
                     Optional.empty()
             );
             checkQuota(clientQuotaManager, "userA", "client1", Long.MAX_VALUE, 1000, false);
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
-    public void testQuotaConfigPrecedence() throws UnknownHostException {
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
-                metrics, QuotaType.PRODUCE, time, "");
-
-        try {
+    public void testQuotaConfigPrecedence() {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
             clientQuotaManager.updateQuota(
                     Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
                     Optional.empty(),
@@ -377,16 +366,13 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
             );
             checkQuota(clientQuotaManager, "userA", "client6", 12000, 4000, true); // Throttled due to sum of new and earlier values
 
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
     public void testQuotaViolation() {
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "");
-        KafkaMetric queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""));
-        try {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
+            KafkaMetric queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""));
             clientQuotaManager.updateQuota(
                     Optional.empty(),
                     Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
@@ -429,15 +415,12 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
             assertEquals(0, maybeRecord(clientQuotaManager, "ANONYMOUS", "unknown", 0),
                     "Should be unthrottled since bursty sample has rolled over");
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
     public void testExpireThrottleTimeSensor() {
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "");
-        try {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
             clientQuotaManager.updateQuota(
                     Optional.empty(),
                     Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
@@ -453,15 +436,12 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
             // the sensor should get recreated
             Sensor throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-:client1");
             assertNotNull(throttleTimeSensor, "Throttle time sensor should exist");
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
     public void testExpireQuotaSensors() {
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "");
-        try {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
             clientQuotaManager.updateQuota(
                     Optional.empty(),
                     Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
@@ -482,16 +462,13 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
             Sensor byteRateSensor = metrics.getSensor("Produce-:client1");
             assertNotNull(byteRateSensor, "Byte rate sensor should exist");
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
     public void testClientIdNotSanitized() {
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "");
-        String clientId = "client@#$%";
-        try {
+        withQuotaManager(QuotaType.PRODUCE, clientQuotaManager -> {
+            String clientId = "client@#$%";
             clientQuotaManager.updateQuota(
                     Optional.empty(),
                     Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
@@ -506,15 +483,12 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
             Sensor byteRateSensor = metrics.getSensor("Produce-:" + clientId);
             assertNotNull(byteRateSensor, "Byte rate sensor should exist");
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test
     public void testQuotaTypesEnabledUpdatesWithDefaultCallback() {
-        ClientQuotaManager clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.CONTROLLER_MUTATION, time, "");
-        try {
+        withQuotaManager(QuotaType.CONTROLLER_MUTATION, clientQuotaManager -> {
             assertEquals(ClientQuotaManager.NO_QUOTAS, clientQuotaManager.quotaTypesEnabled());
             assertFalse(clientQuotaManager.quotasEnabled());
 
@@ -565,9 +539,7 @@ public class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
             clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty());
             assertEquals(ClientQuotaManager.NO_QUOTAS, clientQuotaManager.quotaTypesEnabled());
             assertFalse(clientQuotaManager.quotasEnabled());
-        } finally {
-            clientQuotaManager.shutdown();
-        }
+        });
     }
 
     @Test

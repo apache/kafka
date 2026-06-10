@@ -60,7 +60,7 @@ public class BaseClientQuotaManagerTest {
         metrics.close();
     }
 
-    protected ThrottleCallback callback = new ThrottleCallback() {
+    protected final ThrottleCallback callback = new ThrottleCallback() {
         @Override
         public void startThrottling() {}
 
@@ -88,12 +88,10 @@ public class BaseClientQuotaManagerTest {
 
         // read the header from the buffer first so that the body can be read next from the Request constructor
         RequestHeader header = RequestHeader.parse(buffer);
-        assertDoesNotThrow(() -> {
-            RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-                    ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
-            Request request = new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
-            quotaManager.throttle(request.header().clientId(), request.session(), channelThrottlingCallback, throttleTimeMs);
-        });
+        RequestContext context = new RequestContext(header, "1", assertDoesNotThrow(InetAddress::getLocalHost), KafkaPrincipal.ANONYMOUS,
+                ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+        Request request = new Request(1, context, 0, MemoryPool.NONE, buffer, requestChannelMetrics);
+        quotaManager.throttle(request.header().clientId(), request.session(), channelThrottlingCallback, throttleTimeMs);
     }
 
 }
