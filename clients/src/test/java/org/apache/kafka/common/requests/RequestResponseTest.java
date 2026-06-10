@@ -2876,7 +2876,7 @@ public class RequestResponseTest {
         }
 
         if (version >= 6) {
-            return TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build(version);
+            return TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true).build(version);
         } else {
             return TxnOffsetCommitRequest.Builder.forTopicNames(data, version >= 5).build(version);
         }

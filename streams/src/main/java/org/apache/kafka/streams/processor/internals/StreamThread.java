@@ -972,7 +972,13 @@ public class StreamThread extends Thread implements ProcessingThread {
                     // check if any active task got corrupted. We will trigger a rebalance in that case.
                     // once the task corruptions have been handled
                     final boolean enforceRebalance = taskManager.handleCorruption(e.corruptedTasks());
-                    if (enforceRebalance && eosEnabled) {
+                    // The corrupted tasks have already been recovered locally (closed dirty, revived and
+                    // scheduled for re-initialization with their input offsets reset). Under the classic
+                    // protocol we additionally enforce a rebalance so the assignor can temporarily move the
+                    // task to a standby while this client restores its state from scratch (KAFKA-12486).
+                    // Under the Streams group protocol (KIP-1071) assignment and warmup are driven by the
+                    // broker, so the client-side enforceRebalance is unsupported (it would only log a warning).
+                    if (enforceRebalance && eosEnabled && streamsRebalanceData.isEmpty()) {
                         log.info("Active task(s) got corrupted. Triggering a rebalance.");
                         mainConsumer.enforceRebalance("Active tasks corrupted");
                     }
@@ -1077,7 +1083,14 @@ public class StreamThread extends Thread implements ProcessingThread {
                             "All clients in this app will now begin to shutdown");
                 }
             }
-            mainConsumer.enforceRebalance("Shutdown requested");
+            // Under the classic protocol the shutdown request is propagated to the rest of the group
+            // by the assignor during a rebalance, so we need to enforce one. Under the Streams group
+            // protocol (KIP-1071) the request is propagated through the group heartbeat (see
+            // sendShutdownRequest), and enforceRebalance is not supported by the consumer (it would
+            // only log a warning), so we skip it.
+            if (streamsRebalanceData.isEmpty()) {
+                mainConsumer.enforceRebalance("Shutdown requested");
+            }
         }
     }
 
