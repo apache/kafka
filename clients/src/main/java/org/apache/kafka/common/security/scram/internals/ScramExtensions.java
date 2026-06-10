@@ -20,13 +20,12 @@ import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.Collections;
 import java.util.Map;
 
 public class ScramExtensions extends SaslExtensions {
 
     public ScramExtensions() {
-        this(Collections.emptyMap());
+        this(Map.of());
     }
 
     public ScramExtensions(String extensions) {

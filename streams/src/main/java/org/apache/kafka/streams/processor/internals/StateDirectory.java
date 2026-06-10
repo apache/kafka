@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -230,6 +231,7 @@ public class StateDirectory implements AutoCloseable {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
+            final boolean transactionalStateStoresEnabled = new TopologyConfig(config).transactionalStateStoresEnabled;
 
             // Initialize thread-specific resources needed to open stores in the state directory
             final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
@@ -271,7 +273,11 @@ public class StateDirectory implements AutoCloseable {
                     } finally {
                         // Make sure the state manager writes the local checkpoint file before closing the stores
                         // This will be replaced in the future when removing the checkpoint file dependency.
-                        temporaryStateManager.close();
+                        StateManagerUtil.closeStateManager(
+                            log, threadLogPrefix, true, eosEnabled,
+                            transactionalStateStoresEnabled,
+                            temporaryStateManager, this, Task.TaskType.ACTIVE
+                        );
                     }
                     tasksInLocalState.add(task);
                 }

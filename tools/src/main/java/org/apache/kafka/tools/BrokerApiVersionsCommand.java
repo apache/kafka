@@ -206,7 +206,8 @@ public class BrokerApiVersionsCommand {
                     true,
                     new ApiVersions(),
                     logContext,
-                    MetadataRecoveryStrategy.NONE);
+                    MetadataRecoveryStrategy.NONE,
+                    false);
             ConsumerNetworkClient highLevelClient = new ConsumerNetworkClient(
                     logContext,
                     networkClient,
