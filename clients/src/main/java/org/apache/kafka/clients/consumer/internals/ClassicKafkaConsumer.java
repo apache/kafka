@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Cluster;
@@ -456,7 +457,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    @SuppressWarnings("removal")
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         if (listener == null)
@@ -507,7 +507,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 throwIfNoAssignorsConfigured();
 
-                subscriptions.setConsumerRebalanceListener(listener, this);
+                subscriptions.setRebalanceListener(listener, this);
 
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
@@ -585,7 +585,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
-            subscriptions.setConsumerRebalanceListener(listener, this);
+            subscriptions.setRebalanceListener(listener, this);
             subscriptions.subscribe(pattern);
             coordinator.updatePatternSubscription(metadata.fetch());
             metadata.requestUpdateForNewTopics();
@@ -610,9 +610,9 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
-    public void setConsumerRebalanceListener(ConsumerRebalanceListener callback) {
+    public void setRebalanceListener(RebalanceListener callback) {
         acquireAndEnsureOpen();
-        subscriptions.setConsumerRebalanceListener(callback, this);
+        subscriptions.setRebalanceListener(callback, this);
     }
 
     @Override

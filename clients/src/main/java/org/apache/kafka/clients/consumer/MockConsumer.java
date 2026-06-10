@@ -226,21 +226,21 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         ensureNotClosed();
         committed.clear();
-        subscriptions.setConsumerRebalanceListener(listener, this);
+        subscriptions.setRebalanceListener(listener, this);
         subscriptions.subscribe(pattern);
     }
 
     private synchronized void subscribeInternal(Collection<String> topics, ConsumerRebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
-        subscriptions.setConsumerRebalanceListener(listener, this);
+        subscriptions.setRebalanceListener(listener, this);
         subscriptions.subscribe(new HashSet<>(topics));
     }
 
     private synchronized void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
         ensureNotClosed();
         committed.clear();
-        subscriptions.setConsumerRebalanceListener(listener, this);
+        subscriptions.setRebalanceListener(listener, this);
         subscriptions.subscribe(pattern);
         Set<String> topicsToSubscribe = new HashSet<>();
         for (String topic: partitions.keySet()) {
@@ -285,9 +285,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public synchronized void setConsumerRebalanceListener(ConsumerRebalanceListener callback) {
+    public synchronized void setRebalanceListener(RebalanceListener callback) {
         ensureNotClosed();
-        subscriptions.setConsumerRebalanceListener(callback, this);
+        subscriptions.setRebalanceListener(callback, this);
     }
 
     @Override

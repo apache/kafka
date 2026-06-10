@@ -89,9 +89,9 @@ public interface Consumer<K, V> extends Closeable {
     void unsubscribe();
 
     /**
-     * @see KafkaConsumer#setConsumerRebalanceListener(ConsumerRebalanceListener)
+     * @see KafkaConsumer#setRebalanceListener(RebalanceListener)
      */
-    void setConsumerRebalanceListener(ConsumerRebalanceListener callback);
+    void setRebalanceListener(RebalanceListener callback);
 
     /**
      * @see KafkaConsumer#poll(Duration)

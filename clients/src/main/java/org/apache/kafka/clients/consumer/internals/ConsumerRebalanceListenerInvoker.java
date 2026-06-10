@@ -55,7 +55,7 @@ public class ConsumerRebalanceListenerInvoker {
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", assignedPartitions);
 
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+        Optional<InternalRebalanceListener> listener = subscriptions.rebalanceListener();
 
         if (listener.isPresent()) {
             try {
@@ -84,7 +84,7 @@ public class ConsumerRebalanceListenerInvoker {
         if (!revokePausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
 
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+        Optional<InternalRebalanceListener> listener = subscriptions.rebalanceListener();
 
         if (listener.isPresent()) {
             try {
@@ -113,7 +113,7 @@ public class ConsumerRebalanceListenerInvoker {
         if (!lostPausedPartitions.isEmpty())
             log.info("The pause flag in partitions {} will be removed due to partition lost.", lostPartitions);
 
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
+        Optional<InternalRebalanceListener> listener = subscriptions.rebalanceListener();
 
         if (listener.isPresent()) {
             try {

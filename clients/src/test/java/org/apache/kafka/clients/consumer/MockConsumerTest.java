@@ -342,7 +342,7 @@ public class MockConsumerTest {
         List<RebalanceConsumer> capturedOnAssign = new ArrayList<>();
         List<RebalanceConsumer> capturedOnRevoke = new ArrayList<>();
 
-        consumer.setConsumerRebalanceListener(new ConsumerRebalanceListener() {
+        consumer.setRebalanceListener(new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
             @Override

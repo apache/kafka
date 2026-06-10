@@ -17,31 +17,22 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
 
 /**
- * Internal wrapper around a user-provided {@link ConsumerRebalanceListener} that manages the
+ * Internal wrapper around a user-provided {@link RebalanceListener} that manages the
  * lifecycle of {@link DelegatingRebalanceConsumer} views. Each callback invocation creates a
  * fresh view that is automatically closed when the callback returns.
- *
- * <p>This class implements {@link ConsumerRebalanceListener} so that it can be stored and
- * returned in place of the user's listener without changing the type of
- * {@link SubscriptionState#rebalanceListener()}. The 1-arg methods create a
- * {@link DelegatingRebalanceConsumer} view and delegate to the user listener's 2-arg methods.
- *
- * <p>This class exists so that the {@link Consumer} reference does not need to be passed through
- * constructors (avoiding this-escape warnings). Instead, it is provided at the point where the
- * listener is registered, after the consumer is fully constructed.
  */
-public class ConsumerAwareRebalanceListener implements ConsumerRebalanceListener {
+class ConsumerAwareRebalanceListener extends InternalRebalanceListener {
 
-    private final ConsumerRebalanceListener delegate;
+    private final RebalanceListener delegate;
     private final Consumer<?, ?> consumer;
 
-    public ConsumerAwareRebalanceListener(ConsumerRebalanceListener delegate, Consumer<?, ?> consumer) {
+    ConsumerAwareRebalanceListener(RebalanceListener delegate, Consumer<?, ?> consumer) {
         this.delegate = delegate;
         this.consumer = consumer;
     }

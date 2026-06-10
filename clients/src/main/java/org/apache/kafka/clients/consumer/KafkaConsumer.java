@@ -122,7 +122,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * have its own consumer group, so each process would subscribe to all the records published to the topic.
  * <p>
  * In addition, when group reassignment happens automatically, consumers can be notified through a {@link ConsumerRebalanceListener}
- * registered via {@link #setConsumerRebalanceListener(ConsumerRebalanceListener)},
+ * registered via {@link Consumer#setRebalanceListener(RebalanceListener)},
  * which allows them to finish necessary application-level logic such as state cleanup, manual offset
  * commits, etc. See <a href="#rebalancecallback">Storing Offsets Outside Kafka</a> for more details.
  * <p>
@@ -359,7 +359,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * This type of usage is simplest when the partition assignment is also done manually (this would be likely in the
  * search index use case described above). If the partition assignment is done automatically special care is
  * needed to handle the case where partition assignments change. This can be done by providing a
- * {@link ConsumerRebalanceListener} instance via {@link #setConsumerRebalanceListener(ConsumerRebalanceListener)}.
+ * {@link ConsumerRebalanceListener} instance via {@link Consumer#setRebalanceListener(RebalanceListener)}.
  * For example, when partitions are taken from a consumer the consumer will want to commit its offset for those partitions by
  * implementing {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)}. When partitions are assigned to a
  * consumer, the consumer will want to look up the offset for those new partitions and correctly initialize the consumer
@@ -698,7 +698,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * subscribed in this call. See {@link ConsumerRebalanceListener} for more details.
      *
      * <p>deprecated Use {@link #subscribe(Collection)} to subscribe and
-     *             {@link #setConsumerRebalanceListener(ConsumerRebalanceListener)} to register a rebalance listener
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)} to register a rebalance listener
      *             separately.
      * @param topics The list of topics to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
@@ -708,7 +708,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
      */
-    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         delegate.subscribe(topics, listener);
@@ -725,7 +724,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * <p>
      * If you need the ability to seek to particular offsets or commit offsets during a rebalance, register a
-     * {@link ConsumerRebalanceListener} via {@link #setConsumerRebalanceListener(ConsumerRebalanceListener)}.
+     * {@link RebalanceListener} via {@link Consumer#setRebalanceListener(RebalanceListener)}.
      * Group rebalances will cause partition offsets to be reset, so providing your own listener gives you an
      * opportunity to commit offsets before a rebalance finishes.
      *
@@ -752,7 +751,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
      * <p>deprecated Use {@link #subscribe(Pattern)} to subscribe and
-     *             {@link #setConsumerRebalanceListener(ConsumerRebalanceListener)} to register a rebalance listener
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)} to register a rebalance listener
      *             separately.
      * @param pattern Pattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
@@ -762,7 +761,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
      */
-    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         delegate.subscribe(pattern, listener);
@@ -773,7 +771,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * The pattern matching will be done periodically against topics existing at the time of check.
      * <p>
      * If you need the ability to seek to particular offsets or commit offsets during a rebalance, register a
-     * {@link ConsumerRebalanceListener} via {@link #setConsumerRebalanceListener(ConsumerRebalanceListener)}.
+     * {@link RebalanceListener} via {@link Consumer#setRebalanceListener(RebalanceListener)}.
      * Group rebalances will cause partition offsets to be reset, so providing your own listener gives you an
      * opportunity to commit offsets before a rebalance finishes.
      *
@@ -803,7 +801,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
      * <p>deprecated Use {@link #subscribe(SubscriptionPattern)} to subscribe and
-     *             {@link #setConsumerRebalanceListener(ConsumerRebalanceListener)} to register a rebalance listener
+     *             {@link Consumer#setRebalanceListener(RebalanceListener)} to register a rebalance listener
      *             separately.
      * @param pattern  Pattern to subscribe to, that must be compatible with Google RE2/J.
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
@@ -812,7 +810,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalStateException    If {@code subscribe()} is called previously with topics, or assign is called
      *                                  previously (without a subsequent call to {@link #unsubscribe()}).
      */
-    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     @Override
     public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
         delegate.subscribe(pattern, listener);
@@ -827,7 +824,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * eventually thrown on a call to {@link #poll(Duration)} following this call to subscribe.
      * <p>
      * If you need the ability to seek to particular offsets or commit offsets during a rebalance, register a
-     * {@link ConsumerRebalanceListener} via {@link #setConsumerRebalanceListener(ConsumerRebalanceListener)}.
+     * {@link RebalanceListener} via {@link Consumer#setRebalanceListener(RebalanceListener)}.
      * Group rebalances will cause partition offsets to be reset, so providing your own listener gives you an
      * opportunity to commit offsets before a rebalance finishes.
      *
@@ -857,7 +854,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Register a {@link ConsumerRebalanceListener} to be invoked when the consumer's partition assignment
+     * Register a {@link RebalanceListener} to be invoked when the consumer's partition assignment
      * changes during a rebalance. This is the preferred way to register a rebalance listener, replacing
      * the previous pattern of passing a listener to the {@code subscribe()} methods (which are now deprecated).
      *
@@ -880,8 +877,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @see RebalanceConsumer
      */
     @Override
-    public void setConsumerRebalanceListener(ConsumerRebalanceListener callback) {
-        delegate.setConsumerRebalanceListener(callback);
+    public void setRebalanceListener(RebalanceListener callback) {
+        delegate.setRebalanceListener(callback);
     }
 
     /**
@@ -892,7 +889,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Manual topic assignment through this method does not use the consumer's group management
      * functionality. As such, there will be no rebalance operation triggered when group membership or cluster and topic
-     * metadata change. Note that it is not possible to use both manual partition assignment with {@link #assign(Collection)}
+     * metadata change. Note that it is not possible to use both manual partition assignment with {@code assign}
      * and group assignment with {@link #subscribe(Collection)}.
      * <p>
      * If auto-commit is enabled, an async commit (based on the old assignment) will be triggered before the new

@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
@@ -112,7 +114,7 @@ public class SubscriptionState {
     private final AutoOffsetResetStrategy defaultResetStrategy;
 
     /* User-provided listener to be invoked when assignment changes */
-    private ConsumerRebalanceListener rebalanceListener = null;
+    private InternalRebalanceListener rebalanceListener = null;
 
     private int assignmentId = 0;
 
@@ -191,33 +193,33 @@ public class SubscriptionState {
 
     /**
      * @deprecated Visible for testing only. Will be removed in a follow-on cleanup PR.
-     *             Use {@link #subscribe(Set)} and {@link #setConsumerRebalanceListener} instead.
+     *             Use {@link #subscribe(Set)} and {@link #setRebalanceListener} instead.
      */
     @Deprecated
     public synchronized boolean subscribe(Set<String> topics, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(l -> this.rebalanceListener = l);
+        listener.ifPresent(l -> this.rebalanceListener = new SimpleRebalanceListener(l));
         setSubscriptionType(SubscriptionType.AUTO_TOPICS);
         return changeSubscription(topics);
     }
 
     /**
      * @deprecated Visible for testing only. Will be removed in a follow-on cleanup PR.
-     *             Use {@link #subscribe(Pattern)} and {@link #setConsumerRebalanceListener} instead.
+     *             Use {@link #subscribe(Pattern)} and {@link #setRebalanceListener} instead.
      */
     @Deprecated
     public synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(l -> this.rebalanceListener = l);
+        listener.ifPresent(l -> this.rebalanceListener = new SimpleRebalanceListener(l));
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
         this.subscribedPattern = pattern;
     }
 
     /**
      * @deprecated Visible for testing only. Will be removed in a follow-on cleanup PR.
-     *             Use {@link #subscribe(SubscriptionPattern)} and {@link #setConsumerRebalanceListener} instead.
+     *             Use {@link #subscribe(SubscriptionPattern)} and {@link #setRebalanceListener} instead.
      */
     @Deprecated
     public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(l -> this.rebalanceListener = l);
+        listener.ifPresent(l -> this.rebalanceListener = new SimpleRebalanceListener(l));
         setSubscriptionType(SubscriptionType.AUTO_PATTERN_RE2J);
         this.subscribedRe2JPattern = pattern;
     }
@@ -361,11 +363,11 @@ public class SubscriptionState {
     /**
      * Sets the current rebalance listener for this subscription.
      * @param listener the listener
-     * @param consumer the consumer instance to expose via {@link org.apache.kafka.clients.consumer.RebalanceConsumer}
+     * @param consumer the consumer instance to orchestrate callbacks in {@link org.apache.kafka.clients.consumer.RebalanceConsumer}. must not be null
      */
-    public void setConsumerRebalanceListener(ConsumerRebalanceListener listener, Consumer<?, ?> consumer) {
+    public void setRebalanceListener(RebalanceListener listener, Consumer<?, ?> consumer) {
         if (listener != null) {
-            Objects.requireNonNull(consumer, "Consumer must not be null when listener is provided");
+            Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
             this.rebalanceListener = new ConsumerAwareRebalanceListener(listener, consumer);
         } else {
             this.rebalanceListener = null;
@@ -1045,7 +1047,7 @@ public class SubscriptionState {
         assignment.moveToEnd(tp);
     }
 
-    public synchronized Optional<ConsumerRebalanceListener> rebalanceListener() {
+    public synchronized Optional<InternalRebalanceListener> rebalanceListener() {
         return Optional.ofNullable(rebalanceListener);
     }
 
@@ -1496,6 +1498,37 @@ public class SubscriptionState {
 
             return bldr.append(")").toString();
 
+        }
+    }
+
+    /**
+     * Temporary implementation of an internal rebalance listener for test-only implementations
+     * that have not migrated to using {@link #setRebalanceListener(RebalanceListener, Consumer)} and
+     * instead invoke one of the {@code subscribe(..., ConsumerRebalanceListener)} variants.
+     *
+     * <p>The intention is pass an intentional null reference for the {@link RebalanceConsumer} param so
+     * any tests will fail and nudge the assertions towards the new {@link RebalanceListener} method.
+     */
+    private static class SimpleRebalanceListener extends InternalRebalanceListener {
+        private final RebalanceListener delegate;
+
+        private SimpleRebalanceListener(RebalanceListener delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            delegate.onPartitionsRevoked(partitions, null);
+        }
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            delegate.onPartitionsAssigned(partitions, null);
+        }
+
+        @Override
+        public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            delegate.onPartitionsLost(partitions, null);
         }
     }
 }

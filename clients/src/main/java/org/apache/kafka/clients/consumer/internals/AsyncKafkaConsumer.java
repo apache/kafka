@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.AllTopicsMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
@@ -2194,9 +2195,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
 
     @Override
-    public void setConsumerRebalanceListener(ConsumerRebalanceListener callback) {
+    public void setRebalanceListener(RebalanceListener callback) {
         acquireAndEnsureOpen();
-        subscriptions.setConsumerRebalanceListener(callback, this);
+        subscriptions.setRebalanceListener(callback, this);
     }
 
     /**
@@ -2240,7 +2241,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void subscribeInternal(Pattern pattern, ConsumerRebalanceListener listener) {
         acquireAndEnsureOpen();
-        subscriptions.setConsumerRebalanceListener(listener, this);
+        subscriptions.setRebalanceListener(listener, this);
         try {
             throwIfGroupIdNotDefined();
             if (pattern == null || pattern.toString().isEmpty())
@@ -2266,7 +2267,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             throwIfGroupIdNotDefined();
             throwIfSubscriptionPatternIsInvalid(pattern);
-            subscriptions.setConsumerRebalanceListener(listener, this);
+            subscriptions.setRebalanceListener(listener, this);
             log.info("Subscribing to regular expression {}", pattern);
             applicationEventHandler.addAndGet(new TopicRe2JPatternSubscriptionChangeEvent(
                 pattern,
@@ -2303,7 +2304,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
 
-                subscriptions.setConsumerRebalanceListener(listener, this);
+                subscriptions.setRebalanceListener(listener, this);
                 for (TopicPartition tp : subscriptions.assignedPartitions()) {
                     if (topics.contains(tp.topic()))
                         currentTopicPartitions.add(tp);
