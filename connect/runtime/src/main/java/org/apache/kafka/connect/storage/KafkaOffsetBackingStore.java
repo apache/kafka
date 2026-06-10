@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -288,7 +289,13 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
             ByteBuffer key = entry.getKey();
             ByteBuffer value = entry.getValue();
-            offsetLog.send(key == null ? null : key.array(), value == null ? null : value.array(), producerCallback);
+            // Honor position/limit/arrayOffset and support direct buffers;
+            // ByteBuffer.array() exposes the entire backing array, so a sliced
+            // buffer would send bytes outside the logical offset key/value.
+            offsetLog.send(
+                    key == null ? null : Utils.toArray(key),
+                    value == null ? null : Utils.toArray(value),
+                    producerCallback);
         }
 
         return producerCallback;
