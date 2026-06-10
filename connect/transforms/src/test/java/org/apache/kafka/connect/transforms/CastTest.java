@@ -574,6 +574,23 @@ public class CastTest {
         assertEquals(Timestamp.SCHEMA.type(), transformedSchema.field("timestamp").schema().type());
     }
 
+    @Test
+    public void castSlicedByteBufferFieldToStringUsesRemainingBytes() {
+        xformValue.configure(Map.of(Cast.SPEC_CONFIG, "bytes:string"));
+
+        Schema schema = SchemaBuilder.struct()
+                .field("bytes", Schema.BYTES_SCHEMA)
+                .build();
+        ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[] {1, 2, 3, 4});
+        byteBuffer.position(1);
+        byteBuffer.limit(3);
+
+        Struct value = new Struct(schema).put("bytes", byteBuffer);
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0, schema, value));
+
+        assertEquals("AgM=", ((Struct) transformed.value()).get("bytes"));
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void castFieldsSchemaless() {
