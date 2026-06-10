@@ -318,15 +318,11 @@ public final class TieredStorageTestBuilder {
         return this;
     }
 
-    public List<TieredStorageTestAction> complete() {
-        return actions;
-    }
-
     /**
      * Builds an executable test plan from the actions described so far.
      */
     public TieredStorageTestPlan build() {
-        return new TieredStorageTestPlan(complete());
+        return new TieredStorageTestPlan(actions);
     }
 
     public static final class TieredStorageTestPlan {
