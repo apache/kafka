@@ -45,6 +45,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Base test class for {@link AbstractHeartbeatRequestManager}. Tests defined here exercise
+ * behavior implemented in the abstract manager and must produce the same outcome for every
+ * concrete subclass.
+ */
 abstract class AbstractHeartbeatRequestManagerTest {
 
     protected static final String DEFAULT_GROUP_ID = "groupId";
@@ -67,11 +72,6 @@ abstract class AbstractHeartbeatRequestManagerTest {
 
     protected abstract ClientResponse createHeartbeatResponse(
         NetworkClientDelegate.UnsentRequest request, Errors error);
-
-    // ---------------------------------------------------------------------------------------
-    // Inherited tests - these exercise behavior implemented in AbstractHeartbeatRequestManager
-    // and therefore must produce the same outcome for every concrete subclass.
-    // ---------------------------------------------------------------------------------------
 
     @Test
     public void testTimerNotDue() {
@@ -224,10 +224,6 @@ abstract class AbstractHeartbeatRequestManagerTest {
 
         assertHeartbeatErrorHandling(error, isFatal, mockResponse);
     }
-
-    // ---------------------------------------------------------------------------------------
-    // Shared assertion helpers reused by inherited tests above.
-    // ---------------------------------------------------------------------------------------
 
     protected void assertHeartbeatErrorHandling(final Errors error,
                                                 final boolean isFatal,
