@@ -56,7 +56,6 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#subscribe(Collection, ConsumerRebalanceListener)
      */
-    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
 
     /**
@@ -67,7 +66,6 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
      */
-    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
 
     /**
@@ -78,7 +76,6 @@ public interface Consumer<K, V> extends Closeable {
     /**
      * @see KafkaConsumer#subscribe(SubscriptionPattern, ConsumerRebalanceListener)
      */
-    // TODO(adikou): deprecate after migrating all internal callers (KIP-1306 follow-on)
     void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback);
 
     /**
