@@ -422,6 +422,7 @@ public class SharePartition {
      * @return The method returns a future which is completed when the share partition is initialized
      *         or completes with an exception if the share partition is in non-initializable state.
      */
+    @SuppressWarnings("MethodLength")
     public CompletableFuture<Void> maybeInitialize() {
         log.trace("Maybe initialize share partition: {}-{}", groupId, topicIdPartition);
         // Check if the share partition is already initialized.
@@ -453,6 +454,8 @@ public class SharePartition {
             .build()
         ).whenComplete((result, exception) -> {
             Throwable throwable = null;
+            // Batches read from the persister in the ARCHIVING state whose DLQ flow (phase 2) must be resumed.
+            List<DlqBatch> dlqBatches = null;
             lock.writeLock().lock();
             try {
                 if (exception != null) {
@@ -522,14 +525,25 @@ public class SharePartition {
                         gapStartOffset = previousBatchLastOffset + 1;
                     }
                     previousBatchLastOffset = stateBatch.lastOffset();
+                    RecordState recordState = RecordState.forId(stateBatch.deliveryState());
                     InFlightBatch inFlightBatch = new InFlightBatch(timer, time, EMPTY_MEMBER_ID, stateBatch.firstOffset(),
-                        stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(),
+                        stateBatch.lastOffset(), recordState, stateBatch.deliveryCount(),
                         null, timeoutHandler, sharePartitionMetrics);
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
                     // During initialization, deliveryCompleteCount is updated with the number of records that are in the
                     // ACKNOWLEDGED or ARCHIVED state.
-                    if (isStateTerminal(RecordState.forId(stateBatch.deliveryState()))) {
+                    if (isStateTerminal(recordState)) {
                         deliveryCompleteCount.addAndGet((int) (stateBatch.lastOffset() - stateBatch.firstOffset() + 1));
+                    }
+                    // A batch persisted in ARCHIVING means a previous DLQ flow did not complete phase 2; collect
+                    // it so the flow can be resumed once the partition is active. ARCHIVING is non-terminal, so
+                    // it is not counted in deliveryCompleteCount here (phase 2 does that when it reaches ARCHIVED).
+                    if (recordState == RecordState.ARCHIVING) {
+                        if (dlqBatches == null) {
+                            dlqBatches = new ArrayList<>();
+                        }
+                        dlqBatches.add(new DlqBatch(inFlightBatch::archiveBatch,
+                            stateBatch.firstOffset(), stateBatch.lastOffset(), stateBatch.deliveryCount()));
                     }
                     sharePartitionMetrics.recordInFlightBatchMessageCount(stateBatch.lastOffset() - stateBatch.firstOffset() + 1);
                 }
@@ -571,6 +585,11 @@ public class SharePartition {
                 } else {
                     future.complete(null);
                 }
+            }
+            // Resume the DLQ flow for any records left in the ARCHIVING state by a previously interrupted
+            // flow. Runs only on successful init, after the future completed and outside the write lock.
+            if (throwable == null) {
+                maybeResumeDlqArchiving(dlqBatches);
             }
         });
 
@@ -2603,7 +2622,7 @@ public class SharePartition {
                 // Persister batch state has been moved to ARCHIVING, we must now start the DLQ flow and transition to ARCHIVED.
                 dlqBatches.forEach(persisterBatch -> {
                     initiateDLQAndArchive(
-                        persisterBatch.updatedState,
+                        persisterBatch.updatedState()::archive,
                         persisterBatch.stateBatch.firstOffset(),
                         persisterBatch.stateBatch.lastOffset(),
                         persisterBatch.stateBatch.deliveryCount(),
@@ -2997,7 +3016,7 @@ public class SharePartition {
 
                     // Persister batch state has been moved to ARCHIVING, we must now start the DLQ flow and transition to ARCHIVED.
                     dlqBatches.forEach(dlqBatch -> initiateDLQAndArchive(
-                        dlqBatch.updatedState(),
+                        dlqBatch.archiveAction(),
                         dlqBatch.firstOffset(),
                         dlqBatch.lastOffset(),
                         dlqBatch.deliveryCount(),
@@ -3038,7 +3057,7 @@ public class SharePartition {
             if (updateResult.state() == RecordState.ARCHIVING) {
                 // Don't increment deliveryCompleteCount here — deferred to phase 2
                 // Don't updateFindNextFetchOffset — ARCHIVING is not fetchable
-                dlqBatches.add(new DlqBatch(updateResult,
+                dlqBatches.add(new DlqBatch(updateResult::archive,
                     inFlightBatch.firstOffset(), inFlightBatch.lastOffset(),
                     (short) updateResult.deliveryCount()));
                 return;
@@ -3105,7 +3124,7 @@ public class SharePartition {
             if (updateResult.state() == RecordState.ARCHIVING) {
                 // Don't increment deliveryCompleteCount here — deferred to phase 2
                 // Don't updateFindNextFetchOffset — ARCHIVING is not fetchable
-                dlqBatches.add(new DlqBatch(updateResult, offsetState.getKey(),
+                dlqBatches.add(new DlqBatch(updateResult::archive, offsetState.getKey(),
                     offsetState.getKey(), (short) updateResult.deliveryCount()));
                 continue;
             }
@@ -3338,6 +3357,30 @@ public class SharePartition {
         return shareGroupDlqEnableSupplier.get() && configProvider.errorsDLQTopicName(groupId).isPresent();
     }
 
+    /**
+     * Resume the DLQ flow (phase 2) for records that the persister returned in the ARCHIVING state. This
+     * happens when a previous flow persisted phase 1 (ARCHIVING) but the broker re-initialized this share
+     * partition before completing phase 2 (DLQ enqueue + transition to ARCHIVED). The DLQ cause is not
+     * persisted, hence it is inferred from the delivery count. Draining is unconditional (not gated on the
+     * current DLQ-enabled config) since ARCHIVING is non-terminal and would otherwise stall the start offset.
+     */
+    private void maybeResumeDlqArchiving(List<DlqBatch> dlqBatches) {
+        if (dlqBatches == null || dlqBatches.isEmpty()) {
+            return;
+        }
+        dlqBatches.forEach(dlqBatch -> {
+            Throwable dlqCause = dlqBatch.deliveryCount() >= maxDeliveryCount()
+                ? ShareGroupDLQManager.DELIVERY_COUNT_EXCEEDED
+                : ShareGroupDLQManager.CLIENT_REJECT;
+            initiateDLQAndArchive(
+                dlqBatch.archiveAction(),
+                dlqBatch.firstOffset(),
+                dlqBatch.lastOffset(),
+                dlqBatch.deliveryCount(),
+                dlqCause);
+        });
+    }
+
     // Visible for testing.
 
     /**
@@ -3346,7 +3389,7 @@ public class SharePartition {
      * Phase 2: Enqueues to DLQ, then transitions ARCHIVING → ARCHIVED and persists ARCHIVED to the persister
      * This method handles the complete phase 2 flow.
      */
-    void initiateDLQAndArchive(InFlightState updatedState, long firstOffset,
+    void initiateDLQAndArchive(Runnable archiveAction, long firstOffset,
                                long lastOffset, short deliveryCount, Throwable dlqCause) {
         // Step 1: Enqueue to DLQ
         shareGroupDLQManager.enqueue(new ShareGroupDLQRecordParameter(
@@ -3363,7 +3406,7 @@ public class SharePartition {
             try {
                 // At this point ARCHIVED is imminent. If we rollback here or tryUpdateState fails,
                 // we risk stalling. So just move to ARCHIVED.
-                updatedState.archive();
+                archiveAction.run();
                 stateBatch = new PersisterStateBatch(firstOffset, lastOffset, RecordState.ARCHIVED.id, deliveryCount);
                 deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(firstOffset, lastOffset));
             } finally {
@@ -3585,10 +3628,11 @@ public class SharePartition {
     ) { }
 
     /**
-     * Record comprising state as well as offset information for processing by DLQ logic.
+     * Record comprising the archive action as well as offset information for processing by DLQ logic.
+     * The archive action transitions the underlying batch/offset state to ARCHIVED when run.
      */
     private record DlqBatch(
-        InFlightState updatedState,
+        Runnable archiveAction,
         long firstOffset, long lastOffset,
         short deliveryCount
     ) {
