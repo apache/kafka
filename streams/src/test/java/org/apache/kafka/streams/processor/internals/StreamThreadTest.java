@@ -725,6 +725,7 @@ public class StreamThreadTest {
         // runOnce 1: 2_000, 2_000 → pause; runOnce 2: 100, 100 → resume.
         when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L);
         when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(pausedByBytes));
+        when(mainConsumer.assignment()).thenReturn(Set.of(pausedByBytes));
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -737,6 +738,37 @@ public class StreamThreadTest {
         Mockito.verify(mainConsumer).pause(Set.of(pausedByBytes));
         runOnce(false);
         Mockito.verify(mainConsumer).resume(Set.of(pausedByBytes));
+    }
+
+    @Test
+    public void shouldNotResumeUnassignedPartitionsAfterRebalance() {
+        final Properties props = configProps(false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final TaskManager taskManager = Mockito.mock(TaskManager.class);
+        final TopicPartition stillOwned = new TopicPartition("topic", 0);
+        final TopicPartition revoked = new TopicPartition("topic", 1);
+        // runOnce 1: pause both. runOnce 2: drain below cap, but `revoked` was rebalanced away.
+        when(taskManager.getInputBufferSizeInBytes()).thenReturn(2_000L, 2_000L, 100L, 100L);
+        when(taskManager.nonEmptyPartitions()).thenReturn(Set.of(stillOwned, revoked));
+        // assignment() is only consulted during the resume path in runOnce 2; by then `revoked`
+        // has been rebalanced away, so only `stillOwned` should remain.
+        when(mainConsumer.assignment()).thenReturn(Set.of(stillOwned));
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThreadWithBufferCap(mainConsumer, taskManager, config, topologyMetadata, 1_000L);
+        thread.updateThreadMetadata("admin");
+        thread.setState(State.STARTING);
+        thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.setState(State.RUNNING);
+        runOnce(false);
+        Mockito.verify(mainConsumer).pause(Set.of(stillOwned, revoked));
+        runOnce(false);
+        Mockito.verify(mainConsumer).resume(Set.of(stillOwned));
     }
 
     @Test

@@ -1232,6 +1232,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (taskManager.getInputBufferSizeInBytes() <= maxBufferSizeInBytes.get()) {
             // defensive copy — we clear the tracking set right after.
             final Set<TopicPartition> toResume = new HashSet<>(partitionsPausedForBufferOverflow);
+            toResume.retainAll(mainConsumer.assignment());
             log.info("Buffered records size is at or below {}. Resuming partitions paused by buffer overflow {}",
                 maxBufferSizeInBytes.get(), toResume);
             mainConsumer.resume(toResume);
