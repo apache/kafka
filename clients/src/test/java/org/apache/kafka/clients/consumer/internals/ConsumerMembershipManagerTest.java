@@ -44,6 +44,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -281,9 +282,9 @@ public class ConsumerMembershipManagerTest {
         Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
 
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        subscriptionState.setRebalanceListener(listener);
         when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
 
         membershipManager.transitionToFenced();
 
@@ -301,9 +302,9 @@ public class ConsumerMembershipManagerTest {
         Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
 
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        subscriptionState.setRebalanceListener(listener);
         when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
 
         membershipManager.transitionToFatal();
 
@@ -321,15 +322,14 @@ public class ConsumerMembershipManagerTest {
         Set<TopicPartition> ownedPartitions = Collections.singleton(ownedPartition);
 
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        subscriptionState.setRebalanceListener(listener);
         when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
 
         // First transition to LEAVING (required before transitioning to STALE)
         membershipManager.transitionToSendingLeaveGroup(true);
         clearInvocations(subscriptionState, backgroundEventHandler);
         when(subscriptionState.assignedPartitions()).thenReturn(ownedPartitions);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
 
         membershipManager.transitionToStale();
 
@@ -1401,7 +1401,7 @@ public class ConsumerMembershipManagerTest {
         // Fatal error received in response for the last heartbeat. Member should remain in FATAL
         // state but no callbacks should be triggered because the member already left the group.
         MockRebalanceListener rebalanceListener = new MockRebalanceListener();
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
+        subscriptionState.setRebalanceListener(rebalanceListener);
         membershipManager.onHeartbeatFailure(false);
         membershipManager.transitionToFatal();
         assertEquals(0, rebalanceListener.lostCount);
@@ -1920,7 +1920,7 @@ public class ConsumerMembershipManagerTest {
 
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
 
@@ -2018,7 +2018,7 @@ public class ConsumerMembershipManagerTest {
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
 
         // Step 2: put the state machine into the appropriate... state
@@ -2077,7 +2077,7 @@ public class ConsumerMembershipManagerTest {
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
 
         // Step 2: put the state machine into the appropriate... state
@@ -2273,7 +2273,7 @@ public class ConsumerMembershipManagerTest {
             Collections.singletonList(new TopicIdPartition(topicId, tp)));
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
 
         membershipManager.transitionToSendingLeaveGroup(true);
         membershipManager.onHeartbeatRequestGenerated();
@@ -2324,7 +2324,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.updateAssignment(Collections.singletonMap(topicId, mkSortedSet(partitionOwned)));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.ofNullable(listener));
+        subscriptionState.setRebalanceListener(listener);
 
         // Receive assignment adding a new partition
         receiveAssignment(topicId, Arrays.asList(partitionOwned, partitionAdded), membershipManager);
@@ -2343,7 +2343,7 @@ public class ConsumerMembershipManagerTest {
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
 
         // Step 2: put the state machine into the appropriate... state
@@ -2538,7 +2538,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         receiveEmptyAssignment(membershipManager);
@@ -2622,7 +2622,7 @@ public class ConsumerMembershipManagerTest {
         SleepyRebalanceListener listener = new SleepyRebalanceListener(1453, time);
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
 
@@ -2788,7 +2788,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
@@ -2813,7 +2813,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
@@ -3125,7 +3125,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
     }
@@ -3140,7 +3140,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        subscriptionState.setRebalanceListener(listener);
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
         membershipManager.transitionToFenced();
         return performCallback(

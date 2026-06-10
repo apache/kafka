@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -85,6 +86,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -772,8 +774,9 @@ public abstract class ConsumerCoordinatorTest {
     public void testRevokeExceptionThrownFirstNonBlockingSubCallbacks() {
         MockRebalanceListener throwOnRevokeListener = new MockRebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                super.onPartitionsRevoked(partitions);
+            public void onPartitionsRevoked(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                super.onPartitionsRevoked(partitions, rebalanceConsumer);
                 throw new KafkaException("Kaboom on revoke!");
             }
         };
@@ -792,8 +795,9 @@ public abstract class ConsumerCoordinatorTest {
     public void testOnAssignmentExceptionThrownFirstNonBlockingSubCallbacks() {
         MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                super.onPartitionsAssigned(partitions);
+            public void onPartitionsAssigned(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                super.onPartitionsAssigned(partitions, rebalanceConsumer);
                 throw new KafkaException("Kaboom on partition assign!");
             }
         };
@@ -806,8 +810,9 @@ public abstract class ConsumerCoordinatorTest {
     public void testOnPartitionsAssignExceptionThrownWhenNoPreviousThrownCallbacks() {
         MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                super.onPartitionsAssigned(partitions);
+            public void onPartitionsAssigned(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                super.onPartitionsAssigned(partitions, rebalanceConsumer);
                 throw new KafkaException("Kaboom on partition assign!");
             }
         };
@@ -820,8 +825,9 @@ public abstract class ConsumerCoordinatorTest {
     public void testOnRevokeExceptionShouldBeRenderedIfNotKafkaException() {
         MockRebalanceListener throwOnRevokeListener = new MockRebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                super.onPartitionsRevoked(partitions);
+            public void onPartitionsRevoked(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                super.onPartitionsRevoked(partitions, rebalanceConsumer);
                 throw new IllegalStateException("Illegal state on partition revoke!");
             }
         };
@@ -841,8 +847,9 @@ public abstract class ConsumerCoordinatorTest {
     public void testOnAssignmentExceptionShouldBeRenderedIfNotKafkaException() {
         MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                super.onPartitionsAssigned(partitions);
+            public void onPartitionsAssigned(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                super.onPartitionsAssigned(partitions, rebalanceConsumer);
                 throw new KafkaException("Kaboom on partition assign!");
             }
         };
@@ -855,9 +862,10 @@ public abstract class ConsumerCoordinatorTest {
     public void testOnPartitionsAssignExceptionShouldBeRenderedIfNotKafkaException() {
         MockRebalanceListener throwOnAssignListener = new MockRebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                super.onPartitionsAssigned(partitions);
-                throw new IllegalStateException("Illegal state on partition assign!");
+            public void onPartitionsAssigned(
+                    Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
+                super.onPartitionsAssigned(partitions, rebalanceConsumer);
+                throw new KafkaException("Kaboom on partition assign!");
             }
         };
 
@@ -1269,7 +1277,8 @@ public abstract class ConsumerCoordinatorTest {
     public void testForceMetadataRefreshForPatternSubscriptionDuringRebalance() {
         // Set up a non-leader consumer with pattern subscription and a cluster containing one topic matching the
         // pattern.
-        subscriptions.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
+        subscriptions.setRebalanceListener(rebalanceListener);
+        subscriptions.subscribe(Pattern.compile(".*"));
         client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1)));
         coordinator.maybeUpdateSubscriptionMetadata();
         assertEquals(singleton(topic1), subscriptions.subscription());
@@ -2153,9 +2162,9 @@ public abstract class ConsumerCoordinatorTest {
         Set<String> topics = Collections.singleton(topic);
         MockRebalanceListener rebalanceListener = new MockRebalanceListener() {
             @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
                 boolean raiseWakeup = this.assignedCount == 0;
-                super.onPartitionsAssigned(partitions);
+                super.onPartitionsAssigned(partitions, consumer);
 
                 if (raiseWakeup)
                     throw new WakeupException();
@@ -3552,7 +3561,7 @@ public abstract class ConsumerCoordinatorTest {
     public void shouldUpdateConsumerGroupMetadataBeforeCallbacks() {
         final MockRebalanceListener rebalanceListener = new MockRebalanceListener() {
             @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
                 assertEquals(2, coordinator.groupMetadata().generationId());
             }
         };

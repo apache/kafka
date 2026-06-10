@@ -93,6 +93,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -1598,7 +1599,8 @@ public class AsyncKafkaConsumerTest {
         );
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
+        consumer.setRebalanceListener(consumerRebalanceListener);
+        consumer.subscribe(Collections.singletonList("topic"));
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
@@ -2549,8 +2551,9 @@ public class AsyncKafkaConsumerTest {
 
         consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
         completeTopicSubscriptionChangeEventSuccessfully();
-        consumer.subscribe(singletonList("topic"), new CounterConsumerRebalanceListener(
-            Optional.empty(), Optional.empty(), Optional.empty()));
+        consumer.setRebalanceListener(new CounterConsumerRebalanceListener(
+                Optional.empty(), Optional.empty(), Optional.empty()));
+        consumer.subscribe(singletonList("topic"));
 
         // Make ApplyAssignmentEvent fail
         when(applicationEventHandler.addAndGet(any(ApplyAssignmentEvent.class)))
