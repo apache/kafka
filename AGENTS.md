@@ -31,26 +31,26 @@ build in **Java** and **Scala 2.13**.
 
 ## Repository layout (high level)
 
-| Path                                                                     | Purpose                                                                                            |
-|--------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
-| `clients/`                                                               | Producer, consumer, admin client APIs and protocol messages                                        |
-| `core/`                                                                  | Broker runtime, log, replication, request handling (gradually being removed along with Scala code) |
-| `server/`, `server-common/`                                              | Broker/server components and shared server code                                                    |
-| `metadata/`, `raft/`                                                     | KRaft metadata layer and Raft implementation                                                       |
-| `storage/`, `storage/api/`                                               | Log segments, checkpoints, tiered storage APIs                                                     |
-| `group-coordinator/`, `share-coordinator/`, `transaction-coordinator/`, `coordinator-common` | Coordinators                                                                                       |
-| `connect/`                                                               | Kafka Connect (api, runtime, plugins, transforms)                                                  |
-| `streams/`                                                               | Kafka Streams (+ Scala, examples, upgrade system tests)                                            |
-| `generator/`                                                             | RPC/message code generation                                                                        |
-| `tools/`, `shell/`                                                       | CLI tools and kafka metadata shell                                                                 |
-| `examples/`                                                              | Kafka producer and consumer examples                                                               |
-| `jmh-benchmarks/`                                                        | Kafka benchmarks tests                                                                             |
-| `trogdor/`                                                               | test framework                                                                                     |
-| `tests/`                                                                 | System test harness (see `tests/README.md`)                                                        |
-| `config/`                                                                | Sample broker/controller configuration                                                             |
-| `checkstyle/`                                                            | Checkstyle rules and import-control XML                                                            |
-| `docs/`                                                                  | Documentation sources                                                                              |
-| `docker/`                                                                | Docker images, build/test scripts, and examples for JVM and native Kafka           |
+| Path                                                                                          | Purpose                                                                                            |
+|-----------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
+| `clients/`                                                                                    | Producer, consumer, admin client APIs and protocol messages                                        |
+| `core/`                                                                                       | Broker runtime, log, replication, request handling (gradually being removed along with Scala code) |
+| `server/`, `server-common/`                                                                   | Broker/server components and shared server code                                                    |
+| `metadata/`, `raft/`                                                                          | KRaft metadata layer and Raft implementation                                                       |
+| `storage/`, `storage/api/`                                                                    | Log segments, checkpoints, tiered storage APIs                                                     |
+| `group-coordinator/`, `share-coordinator/`, `transaction-coordinator/`, `coordinator-common/` | Coordinators                                                                                       |
+| `connect/`                                                                                    | Kafka Connect (api, runtime, plugins, transforms)                                                  |
+| `streams/`                                                                                    | Kafka Streams (+ Scala, examples, upgrade system tests)                                            |
+| `generator/`                                                                                  | RPC/message code generation                                                                        |
+| `tools/`, `shell/`                                                                            | CLI tools and kafka metadata shell                                                                 |
+| `examples/`                                                                                   | Kafka producer and consumer examples                                                               |
+| `jmh-benchmarks/`                                                                             | Kafka benchmarks tests                                                                             |
+| `trogdor/`                                                                                    | test framework                                                                                     |
+| `tests/`                                                                                      | System test harness (see `tests/README.md`)                                                        |
+| `config/`                                                                                     | Sample broker/controller configuration                                                             |
+| `checkstyle/`                                                                                 | Checkstyle rules and import-control XML                                                            |
+| `docs/`                                                                                       | Documentation sources                                                                              |
+| `docker/`                                                                                     | Docker images, build/test scripts, and examples for JVM and native Kafka           |
 
 
 ## Build commands
