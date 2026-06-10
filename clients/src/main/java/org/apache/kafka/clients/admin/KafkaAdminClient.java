@@ -5166,6 +5166,15 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             boolean handleNodeUnavailable(long currentTimeMs) {
+                // Don't intervene while the client is shutting down. Re-running the lookup enqueues
+                // new calls via runnable.call(), which are rejected during close ("Cannot accept new
+                // calls when AdminClient is closing"). Leaving the call in pendingCalls preserves the
+                // normal close(timeout) handling, so it can still be retried (or assigned, should the
+                // broker reappear) within the shutdown grace period instead of failing immediately.
+                if (hardShutdownTimeMs.get() != INVALID_SHUTDOWN_TIME) {
+                    return false;
+                }
+
                 OptionalInt brokerId = spec.scope.destinationBrokerId();
                 // The fulfillment target broker is no longer present in the cluster metadata. This
                 // happens when a stale entry in the partition leader cache points at a broker that
