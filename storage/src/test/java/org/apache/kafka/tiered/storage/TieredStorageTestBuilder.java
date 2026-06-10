@@ -345,7 +345,7 @@ public final class TieredStorageTestBuilder {
         }
 
         public void execute(ClusterInstance clusterInstance, Map<String, Object> extraConsumerProps) throws Exception {
-            try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, Map.copyOf(extraConsumerProps))) {
+            try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
                 try {
                     for (TieredStorageTestAction action : actions) {
                         action.execute(context);
