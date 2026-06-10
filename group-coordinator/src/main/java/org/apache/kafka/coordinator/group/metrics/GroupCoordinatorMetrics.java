@@ -123,7 +123,13 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String SHARE_GROUP_REBALANCES_SENSOR_NAME = "ShareGroupRebalances";
     public static final String STREAMS_GROUP_REBALANCES_SENSOR_NAME = "StreamsGroupRebalances";
 
+    private final MetricName offsetCountMetricName;
     private final MetricName classicGroupCountMetricName;
+    private final MetricName classicGroupCountPreparingRebalanceMetricName;
+    private final MetricName classicGroupCountCompletingRebalanceMetricName;
+    private final MetricName classicGroupCountStableMetricName;
+    private final MetricName classicGroupCountDeadMetricName;
+    private final MetricName classicGroupCountEmptyMetricName;
     private final MetricName consumerGroupCountMetricName;
     private final MetricName consumerGroupCountEmptyMetricName;
     private final MetricName consumerGroupCountAssigningMetricName;
@@ -141,13 +147,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     private final MetricName streamsGroupCountStableMetricName;
     private final MetricName streamsGroupCountDeadMetricName;
     private final MetricName streamsGroupCountNotReadyMetricName;
-
-    private final MetricName offsetCountMetricName;
-    private final MetricName classicGroupCountPreparingRebalanceMetricName;
-    private final MetricName classicGroupCountCompletingRebalanceMetricName;
-    private final MetricName classicGroupCountStableMetricName;
-    private final MetricName classicGroupCountDeadMetricName;
-    private final MetricName classicGroupCountEmptyMetricName;
 
     private final MetricsRegistry registry;
     private final Metrics metrics;
@@ -167,11 +166,52 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         this.registry = Objects.requireNonNull(registry);
         this.metrics = Objects.requireNonNull(metrics);
 
+        offsetCountMetricName = metrics.metricName(
+            OFFSET_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of offsets currently retained for Classic, Consumer, and Streams Groups."
+        );
+
         classicGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the classic rebalance protocol.",
             Map.of(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CLASSIC.toString())
+        );
+
+        classicGroupCountPreparingRebalanceMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in preparing rebalance state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.PREPARING_REBALANCE.toString())
+        );
+
+        classicGroupCountCompletingRebalanceMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in completing rebalance state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.COMPLETING_REBALANCE.toString())
+        );
+
+        classicGroupCountStableMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in stable state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.STABLE.toString())
+        );
+
+        classicGroupCountDeadMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in dead state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.DEAD.toString())
+        );
+
+        classicGroupCountEmptyMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in empty state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.EMPTY.toString())
         );
 
         consumerGroupCountMetricName = metrics.metricName(
@@ -291,47 +331,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             METRICS_GROUP,
             "The number of streams groups in not ready state.",
             Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.NOT_READY.toString())
-        );
-
-        offsetCountMetricName = metrics.metricName(
-            OFFSET_COUNT_METRIC_NAME,
-            METRICS_GROUP,
-            "The number of offsets currently retained for Classic, Consumer, and Streams Groups."
-        );
-
-        classicGroupCountPreparingRebalanceMetricName = metrics.metricName(
-            CLASSIC_GROUP_COUNT_METRIC_NAME,
-            METRICS_GROUP,
-            "The number of classic groups in preparing rebalance state.",
-            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.PREPARING_REBALANCE.toString())
-        );
-
-        classicGroupCountCompletingRebalanceMetricName = metrics.metricName(
-            CLASSIC_GROUP_COUNT_METRIC_NAME,
-            METRICS_GROUP,
-            "The number of classic groups in completing rebalance state.",
-            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.COMPLETING_REBALANCE.toString())
-        );
-
-        classicGroupCountStableMetricName = metrics.metricName(
-            CLASSIC_GROUP_COUNT_METRIC_NAME,
-            METRICS_GROUP,
-            "The number of classic groups in stable state.",
-            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.STABLE.toString())
-        );
-
-        classicGroupCountDeadMetricName = metrics.metricName(
-            CLASSIC_GROUP_COUNT_METRIC_NAME,
-            METRICS_GROUP,
-            "The number of classic groups in dead state.",
-            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.DEAD.toString())
-        );
-
-        classicGroupCountEmptyMetricName = metrics.metricName(
-            CLASSIC_GROUP_COUNT_METRIC_NAME,
-            METRICS_GROUP,
-            "The number of classic groups in empty state.",
-            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.EMPTY.toString())
         );
 
         registerGauges();
@@ -459,7 +458,13 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         ).forEach(registry::removeMetric);
 
         Arrays.asList(
+            offsetCountMetricName,
             classicGroupCountMetricName,
+            classicGroupCountPreparingRebalanceMetricName,
+            classicGroupCountCompletingRebalanceMetricName,
+            classicGroupCountStableMetricName,
+            classicGroupCountDeadMetricName,
+            classicGroupCountEmptyMetricName,
             consumerGroupCountMetricName,
             consumerGroupCountEmptyMetricName,
             consumerGroupCountAssigningMetricName,
@@ -476,13 +481,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             streamsGroupCountReconcilingMetricName,
             streamsGroupCountStableMetricName,
             streamsGroupCountDeadMetricName,
-            streamsGroupCountNotReadyMetricName,
-            offsetCountMetricName,
-            classicGroupCountPreparingRebalanceMetricName,
-            classicGroupCountCompletingRebalanceMetricName,
-            classicGroupCountStableMetricName,
-            classicGroupCountDeadMetricName,
-            classicGroupCountEmptyMetricName
+            streamsGroupCountNotReadyMetricName
         ).forEach(metrics::removeMetric);
 
         Arrays.asList(
@@ -577,8 +576,38 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         });
 
         metrics.addMetric(
+            offsetCountMetricName,
+            (Gauge<Long>) (config, now) -> numOffsets()
+        );
+
+        metrics.addMetric(
             classicGroupCountMetricName,
             (Gauge<Long>) (config, now) -> numClassicGroups()
+        );
+
+        metrics.addMetric(
+            classicGroupCountPreparingRebalanceMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.PREPARING_REBALANCE)
+        );
+
+        metrics.addMetric(
+            classicGroupCountCompletingRebalanceMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE)
+        );
+
+        metrics.addMetric(
+            classicGroupCountStableMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.STABLE)
+        );
+
+        metrics.addMetric(
+            classicGroupCountDeadMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.DEAD)
+        );
+
+        metrics.addMetric(
+            classicGroupCountEmptyMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.EMPTY)
         );
 
         metrics.addMetric(
@@ -664,36 +693,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         metrics.addMetric(
             streamsGroupCountNotReadyMetricName,
             (Gauge<Long>) (config, now) -> numStreamsGroups(StreamsGroupState.NOT_READY)
-        );
-
-        metrics.addMetric(
-            offsetCountMetricName,
-            (Gauge<Long>) (config, now) -> numOffsets()
-        );
-
-        metrics.addMetric(
-            classicGroupCountPreparingRebalanceMetricName,
-            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.PREPARING_REBALANCE)
-        );
-
-        metrics.addMetric(
-            classicGroupCountCompletingRebalanceMetricName,
-            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE)
-        );
-
-        metrics.addMetric(
-            classicGroupCountStableMetricName,
-            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.STABLE)
-        );
-
-        metrics.addMetric(
-            classicGroupCountDeadMetricName,
-            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.DEAD)
-        );
-
-        metrics.addMetric(
-            classicGroupCountEmptyMetricName,
-            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.EMPTY)
         );
     }
 }

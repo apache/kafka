@@ -73,9 +73,32 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName("consumer-group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("consumer-group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName(
+                GroupCoordinatorMetrics.OFFSET_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP),
+            metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Map.of("protocol", "classic")),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.PREPARING_REBALANCE.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.COMPLETING_REBALANCE.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.STABLE.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.DEAD.toString())),
+            metrics.metricName(
+                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
+                GroupCoordinatorMetrics.METRICS_GROUP,
+                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.EMPTY.toString())),
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
@@ -150,30 +173,7 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of("state", StreamsGroupState.NOT_READY.toString())),
-            metrics.metricName(
-                GroupCoordinatorMetrics.OFFSET_COUNT_METRIC_NAME,
-                GroupCoordinatorMetrics.METRICS_GROUP),
-            metrics.metricName(
-                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
-                GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.PREPARING_REBALANCE.toString())),
-            metrics.metricName(
-                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
-                GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.COMPLETING_REBALANCE.toString())),
-            metrics.metricName(
-                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
-                GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.STABLE.toString())),
-            metrics.metricName(
-                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
-                GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.DEAD.toString())),
-            metrics.metricName(
-                GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_METRIC_NAME,
-                GroupCoordinatorMetrics.METRICS_GROUP,
-                Map.of(GroupCoordinatorMetrics.CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.EMPTY.toString()))
+                Map.of("state", StreamsGroupState.NOT_READY.toString()))
         );
 
         try {
