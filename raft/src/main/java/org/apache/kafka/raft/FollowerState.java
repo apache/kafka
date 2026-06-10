@@ -30,7 +30,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
-public class FollowerState implements EpochState {
+public final class FollowerState implements EpochState {
     private final Logger log;
 
     private final int fetchTimeoutMs;
