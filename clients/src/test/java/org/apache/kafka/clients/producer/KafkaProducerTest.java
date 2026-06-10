@@ -2074,6 +2074,161 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testSendOffsetsToTransactionNegotiatesV6WhenMetadataKnowsTopicId() {
+        var topic = "topic";
+        var topicId = Uuid.randomUuid();
+        var tp = new TopicPartition(topic, 0);
+        var groupId = "group";
+
+        var properties = new Properties();
+        properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        var time = new MockTime(1);
+        var metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        var client = new MockClient(time, metadata);
+        // Seed the metadata cache with a known topic id so the producer can
+        // negotiate v6 of TxnOffsetCommit (KIP-1319).
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(
+            1,
+            Map.of(topic, 1),
+            Map.of(topic, topicId)
+        ));
+
+        var nodeApiVersions = new NodeApiVersions(
+            NodeApiVersions.create().allSupportedApiVersions().values(),
+            List.of(new ApiVersionsResponseData.SupportedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersion((short) 2)
+                .setMinVersion((short) 0)),
+            List.of(new ApiVersionsResponseData.FinalizedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersionLevel((short) 2)
+                .setMinVersionLevel((short) 2)),
+            0
+        );
+        client.setNodeApiVersions(nodeApiVersions);
+        var apiVersions = new ApiVersions();
+        apiVersions.update(NODE.idString(), nodeApiVersions);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(request -> {
+            var txnRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(groupId, txnRequest.data().groupId());
+            assertTrue(txnRequest.version() >= 6, "Expected TxnOffsetCommit at v6+, got " + txnRequest.version());
+            assertEquals(1, txnRequest.data().topics().size());
+            assertEquals(topicId, txnRequest.data().topics().get(0).topicId());
+            return true;
+        }, txnOffsetsCommitResponse(Map.of(tp, Errors.NONE)));
+        client.prepareResponse(endTxnResponse(Errors.NONE));
+
+        try (var producer = new KafkaProducer<String, String>(
+            new ProducerConfig(properties),
+            new StringSerializer(),
+            new StringSerializer(),
+            metadata,
+            client,
+            new ProducerInterceptors<>(List.of(), null),
+            apiVersions,
+            time
+        )) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            producer.sendOffsetsToTransaction(
+                Map.of(tp, new OffsetAndMetadata(5L)),
+                new ConsumerGroupMetadata(groupId)
+            );
+            producer.commitTransaction();
+        }
+    }
+
+    @Test
+    public void testSendOffsetsToTransactionTriggersMetadataRefreshThenNegotiatesV6() {
+        var topic = "topic";
+        var topicId = Uuid.randomUuid();
+        var tp = new TopicPartition(topic, 0);
+        var groupId = "group";
+
+        var properties = new Properties();
+        properties.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
+        properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        var time = new MockTime(1);
+        var metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        var client = new MockClient(time, metadata);
+        // The initial metadata snapshot contains the topic so the producer can
+        // discover the coordinator, but has no topic-id mapping yet -- the
+        // topic-id is only populated by the refresh triggered from
+        // `sendOffsetsToTransaction`.
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of(topic, 1)));
+        client.prepareMetadataUpdate(RequestTestUtils.metadataUpdateWithIds(
+            1,
+            Map.of(topic, 1),
+            Map.of(topic, topicId)
+        ));
+
+        var nodeApiVersions = new NodeApiVersions(
+            NodeApiVersions.create().allSupportedApiVersions().values(),
+            List.of(new ApiVersionsResponseData.SupportedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersion((short) 2)
+                .setMinVersion((short) 0)),
+            List.of(new ApiVersionsResponseData.FinalizedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersionLevel((short) 2)
+                .setMinVersionLevel((short) 2)),
+            0
+        );
+        client.setNodeApiVersions(nodeApiVersions);
+        var apiVersions = new ApiVersions();
+        apiVersions.update(NODE.idString(), nodeApiVersions);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some.id", NODE));
+        client.prepareResponse(request -> {
+            var txnRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(groupId, txnRequest.data().groupId());
+            assertTrue(txnRequest.version() >= 6, "Expected TxnOffsetCommit at v6+ after metadata refresh, got " + txnRequest.version());
+            assertEquals(1, txnRequest.data().topics().size());
+            assertEquals(topicId, txnRequest.data().topics().get(0).topicId());
+            return true;
+        }, txnOffsetsCommitResponse(Map.of(tp, Errors.NONE)));
+        client.prepareResponse(endTxnResponse(Errors.NONE));
+
+        try (var producer = new KafkaProducer<String, String>(
+            new ProducerConfig(properties),
+            new StringSerializer(),
+            new StringSerializer(),
+            metadata,
+            client,
+            new ProducerInterceptors<>(List.of(), null),
+            apiVersions,
+            time
+        )) {
+            producer.initTransactions();
+            producer.beginTransaction();
+            // The topic is not yet user-tracked in the producer's metadata, so
+            // awaitTopicMetadata adds it, requests an update, and waits. The
+            // queued metadata refresh above supplies the topic id, and the
+            // subsequent TxnOffsetCommit negotiates v6+.
+            producer.sendOffsetsToTransaction(
+                Map.of(tp, new OffsetAndMetadata(5L)),
+                new ConsumerGroupMetadata(groupId)
+            );
+            producer.commitTransaction();
+        }
+    }
+
+    @Test
     public void testTransactionV2Produce() throws Exception {
         StringSerializer serializer = new StringSerializer();
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
@@ -2153,6 +2308,10 @@ public class KafkaProducerTest {
         Time time = new MockTime(tick.toMillis());
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
         ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        // Pre-track the topic so sendOffsetsToTransaction does not trigger a
+        // metadata refresh (which would tick the mock clock and exhaust
+        // max.block.ms via auto-tick).
+        metadata.add("topic", time.milliseconds());
 
         MockClient client = new MockClient(time, metadata);
         client.updateMetadata(initialUpdateResponse);
