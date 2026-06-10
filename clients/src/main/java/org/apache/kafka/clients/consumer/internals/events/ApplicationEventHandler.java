@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
@@ -175,10 +176,15 @@ public class ApplicationEventHandler implements Closeable {
      */
     private void ensureNetworkThreadAlive() {
         if (networkThread == null || !networkThread.isAlive()) {
-            throw new KafkaException(
-                "The async consumer background thread is not running and cannot process requests. " +
-                "This may be due to a previous fatal error in the background thread. " +
-                "Check earlier logs for details.");
+            String message = "The consumer background thread is not running and cannot process requests.";
+            Optional<Throwable> terminationError = networkThread != null
+                ? networkThread.terminationError()
+                : Optional.empty();
+            if (terminationError.isPresent()) {
+                Throwable cause = terminationError.get();
+                throw new KafkaException(message + " Cause: " + cause.getMessage(), cause);
+            }
+            throw new KafkaException(message);
         }
     }
 }

@@ -42,7 +42,6 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Supplier;
 
@@ -321,7 +320,7 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    public void testProcessEventFailureCompletesFutureExceptionally() throws ExecutionException, InterruptedException {
+    public void testProcessEventFailureCompletesFutureExceptionally() {
         RuntimeException processingError = new RuntimeException("Simulated processing failure");
         doThrow(processingError).when(applicationEventProcessor).process(any(ApplicationEvent.class));
 
@@ -334,13 +333,7 @@ public class ConsumerNetworkThreadTest {
         assertTrue(event.future().isDone(), "Event future should be completed after processing failure");
         assertTrue(event.future().isCompletedExceptionally(), "Event future should be completed exceptionally");
 
-        KafkaException thrown = assertThrows(KafkaException.class, () -> {
-            try {
-                event.future().get();
-            } catch (ExecutionException e) {
-                throw e.getCause();
-            }
-        });
+        KafkaException thrown = assertThrows(KafkaException.class, () -> ConsumerUtils.getResult(event.future()));
         assertEquals(processingError, thrown.getCause());
     }
 

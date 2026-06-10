@@ -81,6 +81,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private final IdempotentCloser closer = new IdempotentCloser();
     private final CountDownLatch initializationLatch = new CountDownLatch(1);
     private final AtomicReference<KafkaException> initializationError = new AtomicReference<>();
+    private final AtomicReference<Throwable> fatalError = new AtomicReference<>();
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
     private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
     private long lastPollTimeMs = 0L;
@@ -166,6 +167,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 }
             }
         } catch (Throwable t) {
+            maybeSetFatalError(t);
             log.error("Unexpected failure in consumer network thread", t);
         } finally {
             cleanup();
@@ -177,6 +179,31 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             return;
 
         log.error("Consumer network thread resource initialization error ({}) will be suppressed as an error was already set", error.getMessage(), error);
+    }
+
+    private void maybeSetFatalError(Throwable error) {
+        if (fatalError.compareAndSet(null, error))
+            return;
+
+        log.error("Consumer network thread fatal error ({}) will be suppressed as an error was already set", error.getMessage(), error);
+    }
+
+    /**
+     * Returns the error that caused the network thread to terminate, if any. This may be a runtime
+     * failure ({@link #fatalError}) or an initialization failure ({@link #initializationError}).
+     * The thread object remains accessible after the thread has exited, so the application thread
+     * can retrieve this when subsequent API calls detect the thread is no longer alive.
+     */
+    public Optional<Throwable> terminationError() {
+        Throwable error = fatalError.get();
+        if (error != null)
+            return Optional.of(error);
+
+        KafkaException initializationFailure = initializationError.get();
+        if (initializationFailure != null)
+            return Optional.of(initializationFailure);
+
+        return Optional.empty();
     }
 
     void initializeResources() {
@@ -267,10 +294,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 }
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
-                log.warn("Error processing event {}", t.getMessage(), t);
+                log.error("Error processing event {}", t.getMessage(), t);
                 if (event instanceof CompletableEvent) {
-                    ((CompletableEvent<?>) event).future().completeExceptionally(
-                        ConsumerUtils.maybeWrapAsKafkaException(t));
+                    ((CompletableEvent<?>) event).future().completeExceptionally(t);
                 }
             }
         }
