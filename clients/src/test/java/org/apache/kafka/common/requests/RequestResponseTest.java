@@ -234,6 +234,8 @@ import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -704,6 +706,17 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testDeleteGroupsResponseV3PreservesErrorMessage() {
+        DeleteGroupsResponse response = createDeleteGroupsResponse();
+        short version = ApiKeys.DELETE_GROUPS.latestVersion();
+        DeleteGroupsResponse parsed = DeleteGroupsResponse.parse(response.serialize(version), version);
+        DeletableGroupResult failed = parsed.data().results().find("failed-group");
+        assertNotNull(failed);
+        assertEquals(Errors.GROUP_DELETION_FAILED.code(), failed.errorCode());
+        assertEquals("plugin offline", failed.errorMessage());
+    }
+
+    @Test
     public void testFetchRequestIsolationLevel() {
         FetchRequest request = createFetchRequest((short) 4, IsolationLevel.READ_COMMITTED);
         FetchRequest deserialized = (FetchRequest) AbstractRequest.parseRequest(request.apiKey(), request.version(),
@@ -1076,6 +1089,7 @@ public class RequestResponseTest {
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1166,11 +1180,12 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateResponse();
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateResponse();
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryResponse();
-            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
-            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
+            case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse(version);
+            case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse(version);
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
+            case STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE: return createStreamsGroupTopologyDescriptionUpdateResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -2286,6 +2301,10 @@ public class RequestResponseTest {
         result.add(new DeletableGroupResult()
                        .setGroupId("test-group")
                        .setErrorCode(Errors.NONE.code()));
+        result.add(new DeletableGroupResult()
+                       .setGroupId("failed-group")
+                       .setErrorCode(Errors.GROUP_DELETION_FAILED.code())
+                       .setErrorMessage("plugin offline"));
         return new DeleteGroupsResponse(
             new DeleteGroupsResponseData()
                 .setResults(result)
@@ -3857,20 +3876,42 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createStreamsGroupDescribeRequest(final short version) {
-        return new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData()
+        StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
             .setGroupIds(Collections.singletonList("group"))
-            .setIncludeAuthorizedOperations(false)).build(version);
+            .setIncludeAuthorizedOperations(false);
+        if (version >= 1) {
+            data.setIncludeTopologyDescription(true);
+        }
+        return new StreamsGroupDescribeRequest.Builder(data).build(version);
     }
 
     private AbstractRequest createStreamsGroupHeartbeatRequest(final short version) {
         return new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData()).build(version);
     }
 
-    private AbstractResponse createStreamsGroupDescribeResponse() {
-        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
-            .setGroups(Collections.singletonList(
+    private AbstractResponse createStreamsGroupDescribeResponse(final short version) {
+        StreamsGroupDescribeResponseData.DescribedGroup group =
+            new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId("group")
+                .setErrorCode((short) 0)
+                .setErrorMessage(Errors.forCode((short) 0).message())
+                .setGroupState("EMPTY")
+                .setGroupEpoch(0)
+                .setAssignmentEpoch(0)
+                .setMembers(new ArrayList<>(0))
+                .setTopology(null);
+        if (version >= 1) {
+            group.setTopologyDescription(new StreamsGroupDescribeResponseData.TopologyDescription()
+                .setSubtopologies(new ArrayList<>(0))
+                .setGlobalStores(new ArrayList<>(0)));
+            group.setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
+        }
+        List<StreamsGroupDescribeResponseData.DescribedGroup> groups = new ArrayList<>();
+        groups.add(group);
+        if (version >= 1) {
+            StreamsGroupDescribeResponseData.DescribedGroup notStoredGroup =
                 new StreamsGroupDescribeResponseData.DescribedGroup()
-                    .setGroupId("group")
+                    .setGroupId("group-without-description")
                     .setErrorCode((short) 0)
                     .setErrorMessage(Errors.forCode((short) 0).message())
                     .setGroupState("EMPTY")
@@ -3878,13 +3919,82 @@ public class RequestResponseTest {
                     .setAssignmentEpoch(0)
                     .setMembers(new ArrayList<>(0))
                     .setTopology(null)
-            ))
+                    .setTopologyDescription(null)
+                    .setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
+            groups.add(notStoredGroup);
+        }
+        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
+            .setGroups(groups)
             .setThrottleTimeMs(1000);
         return new StreamsGroupDescribeResponse(data);
     }
 
-    private AbstractResponse createStreamsGroupHeartbeatResponse() {
-        return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData());
+    private AbstractResponse createStreamsGroupHeartbeatResponse(final short version) {
+        StreamsGroupHeartbeatResponseData data = new StreamsGroupHeartbeatResponseData();
+        if (version >= 1) {
+            data.setTopologyDescriptionRequired(true);
+        }
+        return new StreamsGroupHeartbeatResponse(data);
+    }
+
+    private AbstractRequest createStreamsGroupTopologyDescriptionUpdateRequest(final short version) {
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode sourceNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SOURCE-0000000000")
+                .setNodeType((byte) 1)
+                .setSourceTopics(List.of("input-topic"))
+                .setSuccessors(List.of("KSTREAM-PROCESSOR-0000000001"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode processorNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-PROCESSOR-0000000001")
+                .setNodeType((byte) 2)
+                .setStores(List.of("store-1"))
+                .setSuccessors(List.of("KSTREAM-SINK-0000000002"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode sinkNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SINK-0000000002")
+                .setNodeType((byte) 3)
+                .setSinkTopic("output-topic");
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode dynamicSinkNode =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-SINK-0000000005")
+                .setNodeType((byte) 3)
+                .setSinkTopic(null);
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology subtopology =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology()
+                .setSubtopologyId("0")
+                .setNodes(List.of(sourceNode, processorNode, sinkNode, dynamicSinkNode));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode globalSource =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KSTREAM-GLOBAL-SOURCE-0000000003")
+                .setNodeType((byte) 1)
+                .setSourceTopics(List.of("global-topic"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode globalProcessor =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
+                .setName("KTABLE-SOURCE-0000000004")
+                .setNodeType((byte) 2)
+                .setStores(List.of("global-store"));
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore globalStore =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore()
+                .setSource(globalSource)
+                .setProcessor(globalProcessor);
+        StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription topology =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription()
+                .setSubtopologies(List.of(subtopology))
+                .setGlobalStores(List.of(globalStore));
+        return new StreamsGroupTopologyDescriptionUpdateRequest.Builder(
+            new StreamsGroupTopologyDescriptionUpdateRequestData()
+                .setGroupId("test-group")
+                .setMemberId("test-member")
+                .setTopologyEpoch(1)
+                .setTopologyDescription(topology)
+        ).build(version);
+    }
+
+    private AbstractResponse createStreamsGroupTopologyDescriptionUpdateResponse() {
+        return new StreamsGroupTopologyDescriptionUpdateResponse(
+            new StreamsGroupTopologyDescriptionUpdateResponseData()
+        );
     }
 
     @Test
@@ -4017,5 +4127,25 @@ public class RequestResponseTest {
                     .setResourceTypes(List.of(t.id(), ConfigResource.Type.CLIENT_METRICS.id()));
                 assertThrows(UnsupportedVersionException.class, () -> new ListConfigResourcesRequest.Builder(data).build((short) 0));
             });
+    }
+
+    @Test
+    public void testStreamsGroupDescribeRequestV0RejectsIncludeTopologyDescription() {
+        StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
+            .setGroupIds(List.of("g1"))
+            .setIncludeTopologyDescription(true);
+        StreamsGroupDescribeRequest request = new StreamsGroupDescribeRequest.Builder(data).build((short) 0);
+        assertThrows(UnsupportedVersionException.class, () -> request.serialize());
+    }
+
+    @Test
+    public void testStreamsGroupDescribeResponseV0RejectsTopologyDescriptionFields() {
+        StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData()
+            .setGroups(List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId("g1")
+                .setTopologyDescription(new StreamsGroupDescribeResponseData.TopologyDescription())
+                .setTopologyDescriptionStatus(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE)));
+        StreamsGroupDescribeResponse response = new StreamsGroupDescribeResponse(data);
+        assertThrows(UnsupportedVersionException.class, () -> response.serialize((short) 0));
     }
 }

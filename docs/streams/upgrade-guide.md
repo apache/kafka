@@ -67,6 +67,8 @@ Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires Ma
 
 ## Streams API changes in 4.3.0
 
+**Note:** Kafka Streams 4.3.0 contains a critical native memory leak in the RocksDB state store layer ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616)). The `ColumnFamilyOptions` for the offsets column family is not closed, and column family handles can leak on close-path exceptions, which under cascading task closes (e.g., rebalances or error-triggered recoveries) leads to unbounded off-heap memory growth and eventual OOM. Users running Kafka Streams should consider upgrading directly to 4.3.1, which includes the fix for it.
+
 Kafka Streams now supports `ProcessingExceptionHandler` for global store/KTable processing via [KIP-1270](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1270%3A+Extend+ProcessExceptionalHandler+for+GlobalThread). Previously, the `ProcessingExceptionHandler` only applied to regular stream tasks. With this release, you can now configure exception handling for global store/KTables by setting the new config `processing.exception.handler.global.enabled` to `true` (recommended). When enabled, the configured `ProcessingExceptionHandler` will be invoked for exceptions occurring during global store/KTable processing. Note that Dead Letter Queue (DLQ) support is not yet available for global store/KTable and will be added in an upcoming release. More details can be found in [KIP-1270](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1270%3A+Extend+ProcessExceptionalHandler+for+GlobalThread).
 
 The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, and `poll-ratio`, along with streams state updater metrics `active-restore-ratio`, `standby-restore-ratio`, `idle-ratio`, and `checkpoint-ratio` have been updated. Each metric now reports, over a rolling measurement window, the ratio of time this thread spends performing the given action (`{action}`) to the total elapsed time in that window. The effective window duration is determined by the metrics configuration: `metrics.sample.window.ms` (per-sample window length) and `metrics.num.samples` (number of rolling windows).
@@ -74,6 +76,53 @@ The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, a
 Kafka Streams now allows to purge local state directories and checkpoint files during application startup if they have not been modified for a certain period of time. This can be configured via the new `state.cleanup.dir.max.age.ms` config. More details can be found in [KIP-1259](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1259%3A+Add+configuration+to+wipe+Kafka+Streams+local+state+on+startup)
 
 Kafka Streams now persists state store changelog offsets inside each state store rather than in a single per-task `.checkpoint` file ([KIP-1035](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1035%3A+StateStore+managed+changelog+offsets)). This is an internal infrastructure change and is transparent to most users — existing per-task `.checkpoint` files are migrated automatically on first startup, and no application or operator action is required. EOS crash behavior is unchanged in 4.3: state stores are still wiped and fully restored from the changelog. KIP-1035 is a prerequisite for [KIP-892: Transactional Semantics for StateStores](https://cwiki.apache.org/confluence/display/KAFKA/KIP-892%3A+Transactional+Semantics+for+StateStores), which will use these per-store offsets to make EOS state writes transactional and skip the full restore. Authors of custom `StateStore` implementations may opt-in to managing their own offsets via `managesOffsets()`, `commit(Map<TopicPartition, Long>)`, and `committedOffset(TopicPartition)`; see KIP-1035 for the API. For downgrade implications, see [Notable compatibility changes in past releases](#notable-compatibility-changes-in-past-releases).
+
+### Header-aware state stores for the Processor API (KIP-1271) {#kip-1271-headers-aware-stores}
+
+Kafka Streams adds **header-aware** state stores. Opt in with the new `Stores` suppliers whose names end with `WithHeaders` and the matching `StoreBuilder` factories. For example:
+
+- `persistentTimestampedKeyValueStoreWithHeaders` with `timestampedKeyValueStoreWithHeadersBuilder`
+- `persistentTimestampedWindowStoreWithHeaders` with `timestampedWindowStoreWithHeadersBuilder`
+- `persistentSessionStoreWithHeaders` with `sessionStoreWithHeadersBuilder`
+
+See the [Processor API state store documentation](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores).
+
+Existing applications that keep using the same headerless `Stores` suppliers and builders are unaffected: storage format, changelogs, and performance stay as before.
+
+For stores that adopt the header-aware format, KIP-1271 defines a single rolling-bounce upgrade: the changelog topic format is unchanged, legacy rows are read with empty header sets until rewritten, and RocksDB-backed stores migrate data lazily on access. Downgrading in place after migration is not supported except by clearing local store data and restoring from the changelog.
+
+Storing headers increases disk and serialization cost versus headerless stores; the KIP discusses lazy header parsing and other performance considerations.
+
+`TopologyTestDriver` and Interactive Queries support the new store types. The existing `store()` facades continue to return values (or `ValueAndTimestamp`) without exposing record headers. See the [interactive queries guide](/{version}/streams/developer-guide/interactive-queries/#header-aware-stores-interactive-queries).
+
+### Headers-Aware State Stores for DSL Operators (KIP-1285)
+
+[KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G) lets DSL operators use the headers-aware state stores introduced by [KIP-1271](#kip-1271-headers-aware-stores). Set [`dsl.store.format=HEADERS`](/{version}/streams/developer-guide/config-streams.html#dsl-store-format) to use headers-aware stores for supported DSL operators. These stores can keep record headers together with the value and timestamp.
+
+The config only chooses the state store format. It does not define how DSL operators create headers for output records; see [Current limitations](#current-limitations) below.
+
+```java
+// Enable headers-aware stores globally for all DSL operators
+Properties props = new Properties();
+props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HEADERS");
+```
+
+Per-operator customization is possible by providing a custom `DslStoreSuppliers` via `Materialized.withStoreType(...)`, or by supplying explicit headers-aware store suppliers. The pre-existing `boolean isTimestamped` constructors and `isTimestamped()` methods on `DslKeyValueParams` and `DslWindowParams`, and the 3-argument constructor on `DslSessionParams`, are deprecated in favor of `DslStoreFormat`-based constructors. Existing applications are not affected by default.
+
+#### Current limitations {#current-limitations}
+
+Today, DSL result headers behave as follows:
+
+* Aggregations (`count`, `reduce`, `aggregate`, including their windowed and session-windowed variants), KTable-KTable joins (inner / left / outer), materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores.
+* KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers. They may carry the headers from the record that triggered the result.
+* `suppress()` and left/outer stream-stream joins use non-headers-aware buffer stores. Records that pass through those buffers lose their headers.
+
+A follow-up KIP will give users explicit control over how DSL result headers are computed. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) for more details.
+
+#### Changelog, migration, and performance
+
+KIP-1285 does not change the changelog wire format, the migration procedure, or the per-store overhead — those are properties of the underlying KIP-1271 stores. See the [KIP-1271 section](#kip-1271-headers-aware-stores) above for the full description of changelog compatibility, the lazy per-key RocksDB migration on `DEFAULT`→`HEADERS`, the restore behavior, and the per-record size impact. The DSL config `dsl.store.format` only controls which operators participate; once an operator is using a headers-aware store, the store runtime behavior is identical to the Processor API case.
+
 
 ### Deprecation of streams-scala module (KIP-1244)
 
@@ -90,7 +139,7 @@ This release marks the General Availability for the core functionality detailed 
 For more information about the feature set, design, usage and migration, 
 please refer to the [developer guide](/{version}/streams/developer-guide/streams-rebalance-protocol).
 
-**Note:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix will be targeted for a future release.
+**Note:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix is available in 4.2.1.
 
 ### Other changes
 
@@ -505,90 +554,29 @@ For Streams API changes in version older than 2.4.x, please check [3.9 upgrade d
 
 The following table shows which versions of the Kafka Streams API are compatible with various Kafka broker versions. For Kafka Stream version older than 2.4.x, please check [3.9 upgrade document](/39/documentation/streams/upgrade-guide).  
   
-<table>  
-<tr>  
-<th>
-
-
-</th>  
-<th>
-
-Kafka Broker (columns)
-</th> </tr>  
-<tr>  
-<td>
-
-Kafka Streams API (rows)
-</td>  
-<td>
-
-2.4.x and  
-2.5.x and  
-2.6.x and  
-2.7.x and  
-2.8.x and  
-3.0.x and  
-3.1.x and  
-3.2.x and  
-3.3.x and  
-3.4.x and  
-3.5.x and  
-3.6.x and  
-3.7.x and  
-3.8.x and  
-3.9.x and  
-4.0.x
-</td>  
-<td>
-
-4.1.x and
-4.2.x
-</td> </tr>  
-<tr>  
-<td>
-
-2.4.x and  
-2.5.x
-</td>  
-<td>
-
-compatible
-</td>  
-<td>
-
-compatible
-</td> </tr>  
-<tr>  
-<td>
-
-2.6.x and  
-2.7.x and  
-2.8.x and  
-3.0.x and  
-3.1.x and  
-3.2.x and  
-3.3.x and  
-3.4.x and  
-3.5.x and  
-3.6.x and  
-3.7.x and  
-3.8.x and  
-3.9.x and  
-4.0.x and  
-4.1.x and  
-4.2.x
-</td>  
-<td>
-
-compatible; enabling exactly-once v2 requires broker version 2.5.x or higher
-</td>  
-<td>
-
-compatible
-</td> </tr> </table>
+<table>
+<tr>
+<th></th>
+<th colspan="2">Kafka Broker (columns)</th>
+</tr>
+<tr>
+<th>Kafka Streams API (rows)</th>
+<th>2.4.x - 4.0.x</th>
+<th>4.1.x - 4.3.x</th>
+</tr>
+<tr>
+<th>2.4.x - 2.5.x</th>
+<td>compatible</td>
+<td>compatible</td>
+</tr>
+<tr>
+<th>2.6.x - 4.3.x</th>
+<td>compatible; enabling exactly-once v2 requires broker version 2.5.x or higher</td>
+<td>compatible</td>
+</tr>
+</table>
 
 [Previous](/43/documentation/streams/developer-guide/app-reset-tool) Next
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
-

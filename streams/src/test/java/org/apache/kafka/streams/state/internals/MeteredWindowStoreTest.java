@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -41,6 +42,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -581,6 +583,176 @@ public class MeteredWindowStoreTest {
         }
 
         assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewFetchPointInTimeApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.fetch(KEY_BYTES, TIMESTAMP)).thenReturn(VALUE_BYTES);
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertThat(view.fetch(KEY, TIMESTAMP), equalTo(VALUE));
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewFetchSingleKeyApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.fetch(KEY_BYTES, ofEpochMilli(1), ofEpochMilli(1)))
+            .thenReturn(KeyValueIterators.emptyWindowStoreIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.fetch(KEY, ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewBackwardFetchSingleKeyApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.backwardFetch(KEY_BYTES, ofEpochMilli(1), ofEpochMilli(1)))
+            .thenReturn(KeyValueIterators.emptyWindowStoreIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.backwardFetch(KEY, ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewFetchRangeApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.fetch(KEY_BYTES, KEY_BYTES, ofEpochMilli(1), ofEpochMilli(1)))
+            .thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.fetch(KEY, KEY, ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewBackwardFetchRangeApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.backwardFetch(KEY_BYTES, KEY_BYTES, ofEpochMilli(1), ofEpochMilli(1)))
+            .thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.backwardFetch(KEY, KEY, ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewAllApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.all()).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.all().close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewBackwardAllApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.backwardAll()).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.backwardAll().close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewFetchAllApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.fetchAll(ofEpochMilli(1), ofEpochMilli(1))).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.fetchAll(ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewBackwardFetchAllApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.backwardFetchAll(ofEpochMilli(1), ofEpochMilli(1))).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.backwardFetchAll(ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings({"unchecked", "unused"})
+    @Test
+    public void shouldRecordOpenIteratorMetricsOnReadOnlyViewIterators() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.all()).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final KeyValueIterator<Windowed<String>, String> unused = view.all()) {
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        }
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPassReadCommittedThroughToInner() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
+
+        store.init(context, store);
+
+        store.readOnly(IsolationLevel.READ_COMMITTED);
+
+        verify(innerStoreMock).readOnly(IsolationLevel.READ_COMMITTED);
+    }
+
+    @Test
+    public void shouldThrowNpeOnNullIsolationLevel() {
+        store.init(context, store);
+
+        assertThrows(NullPointerException.class, () -> store.readOnly(null));
     }
 
     private KafkaMetric metric(final String name) {

@@ -55,7 +55,7 @@ import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply,
 import org.apache.kafka.network.Request
 import org.apache.kafka.raft.RaftManager
 import org.apache.kafka.security.DelegationTokenManager
-import org.apache.kafka.server.{ApiVersionManager, ProcessRole}
+import org.apache.kafka.server.{ApiVersionManager, EnvelopeUtils, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
 import org.apache.kafka.server.quota.ControllerMutationQuota
@@ -1060,7 +1060,10 @@ class ControllerApis(
   def handleDescribeCluster(request: Request): CompletableFuture[Unit] = {
     // Nearly all RPCs should check MetadataVersion inside the QuorumController. However, this
     // RPC is consulting a cache which lives outside the QC. So we check MetadataVersion here.
-    if (!apiVersionManager.features.metadataVersion().isControllerRegistrationSupported) {
+    if (apiVersionManager.features.isUnknown) {
+      throw new UnsupportedVersionException("There is no finalized MetadataVersion, so " +
+        "direct-to-controller communication is not supported.")
+    } else if (!apiVersionManager.features.metadataVersionOrThrow.isControllerRegistrationSupported) {
       throw new UnsupportedVersionException("Direct-to-controller communication is not " +
         "supported with the current MetadataVersion.")
     }
