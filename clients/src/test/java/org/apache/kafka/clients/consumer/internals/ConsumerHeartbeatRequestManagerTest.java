@@ -476,9 +476,9 @@ public class ConsumerHeartbeatRequestManagerTest {
         ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_ID_NOT_FOUND);
         result.unsentRequests.get(0).handler().onComplete(response);
 
-        // Verify: no fatal error, heartbeat skipped (benign)
+        // Verify no fatal error, the member was already out of the group (benign)
         verify(membershipManager, never()).transitionToFatal();
-        verify(membershipManager).onHeartbeatRequestSkipped();
+        verify(membershipManager).onHeartbeatFailure(false);
         verify(backgroundEventHandler, never()).add(any());
     }
 
