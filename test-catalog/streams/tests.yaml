@@ -2826,6 +2826,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldConstructAdminMetrics
 - shouldCreateMetricsAtStartup
 - shouldCreateStandbyTask
+- shouldEnforceRebalanceOnShutdownRequestUnderClassicProtocol
 - shouldEnforceRebalanceWhenScheduledAndNotCurrentlyRebalancing
 - shouldEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnActiveTask
 - shouldGetMainAndRestoreConsumerInstanceId
@@ -2845,6 +2846,8 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldNotCommitNonRunningNonRestoringTasks
 - shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled
 - shouldNotCreateStandbyTaskWithoutStateStores
+- shouldNotEnforceRebalanceOnShutdownRequestUnderStreamsProtocol
+- shouldNotEnforceRebalanceOnTaskCorruptedExceptionUnderStreamsProtocol
 - shouldNotEnforceRebalanceWhenCurrentlyRebalancing
 - shouldNotEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnInactiveTask
 - shouldNotProcessWhenPartitionRevoked

@@ -748,6 +748,18 @@ org.apache.kafka.clients.consumer.ConsumerPartitionAssignorTest:
 - shouldThrowKafkaExceptionOnAssignorsWithSameName
 - shouldThrowKafkaExceptionOnListWithNonAssignorClassType
 - shouldThrowKafkaExceptionOnNonAssignor
+org.apache.kafka.clients.consumer.ConsumerRebalanceListenerTest:
+- testExceptionInOneArgPropagatesThroughTwoArg
+- testFullCallbackLifecycle
+- testMinimalListenerUsesDefaults
+- testOnPartitionsAssignedTwoArgDelegatesToOneArg
+- testOnPartitionsLostOneArgDelegatesToRevokedOneArg
+- testOnPartitionsLostTwoArgDelegatesToLostOneArgThenRevokedOneArg
+- testOnPartitionsRevokedTwoArgDelegatesToOneArg
+- testOverridingTwoArgAssignedBypassesOneArg
+- testOverridingTwoArgLostBypassesDefaultDelegation
+- testOverridingTwoArgRevokedBypassesOneArg
+- testRebalanceConsumerIsPassedThroughToCallback
 org.apache.kafka.clients.consumer.ConsumerRecordTest:
 - testLongConstructor
 - testShortConstructor
@@ -999,6 +1011,12 @@ org.apache.kafka.clients.consumer.RangeAssignorTest:
 - testTwoConsumersOneTopicTwoPartitions
 - testTwoConsumersTwoTopicsSixPartitions
 - testTwoStaticConsumersTwoTopicsSixPartitions
+org.apache.kafka.clients.consumer.RebalanceListenerTest:
+- testRebalanceListenerExceptionInOnPartitionsRevokedPropagatesThroughOnPartitionsLost
+- testRebalanceListenerOnPartitionsLostDefaultsToOnPartitionsRevoked
+- testRebalanceListenerOnPartitionsLostPassesConsumerThroughToOnPartitionsRevoked
+- testRebalanceListenerOverriddenOnPartitionsLostExceptionWinsOverRevokedException
+- testRebalanceListenerOverridingOnPartitionsLostBypassesDefault
 org.apache.kafka.clients.consumer.RoundRobinAssignorTest:
 - testMultipleConsumersMixedTopics
 - testOneConsumerMultipleTopics
@@ -1329,6 +1347,17 @@ org.apache.kafka.clients.consumer.internals.CompletedFetchTest:
 - testNegativeFetchCount
 - testNoRecordsInFetch
 - testSimple
+org.apache.kafka.clients.consumer.internals.ConsumerAwareRebalanceListenerTest:
+- testDefaultDelegationFromTwoArgToOneArg
+- testEachCallbackGetsFreshView
+- testExceptionFromCallbackPropagates
+- testOnPartitionsAssignedCreatesViewAndDelegates
+- testOnPartitionsLostCreatesViewAndDelegates
+- testOnPartitionsRevokedCreatesViewAndDelegates
+- testViewIsClosedAfterAssignedCallback
+- testViewIsClosedAfterLostCallback
+- testViewIsClosedAfterRevokedCallback
+- testViewIsClosedEvenWhenCallbackThrows
 org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManagerTest:
 - testConsumerAcksReconciledAssignmentAfterAckLost
 - testDisconnect
@@ -1684,6 +1713,10 @@ org.apache.kafka.clients.consumer.internals.CoordinatorRequestManagerTest:
 - testNetworkTimeout
 - testNullGroupIdShouldThrow
 - testSuccessfulResponse
+org.apache.kafka.clients.consumer.internals.DelegatingRebalanceConsumerTest:
+- testAllMethodsThrowAfterClose
+- testPermittedOperationsDelegateToUnderlyingConsumer
+- testUnsupportedConsumerOperationsNeverInvokedOnDelegate
 org.apache.kafka.clients.consumer.internals.EagerConsumerCoordinatorTest:
 - shouldLoseAllOwnedPartitionsBeforeRejoiningAfterDroppingOutOfTheGroup
 - shouldLoseAllOwnedPartitionsBeforeRejoiningAfterResettingGenerationId
