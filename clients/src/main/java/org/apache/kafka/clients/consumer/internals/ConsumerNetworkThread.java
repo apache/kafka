@@ -40,17 +40,18 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import javax.security.auth.spi.LoginModule;
 
@@ -437,10 +438,13 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * If there is a metadata error, complete all uncompleted events that require subscription metadata.
      */
     private boolean maybeFailOnMetadataError(List<?> events) {
-        List<MetadataErrorNotifiableEvent> filteredEvents = events.stream()
-                .filter(MetadataErrorNotifiableEvent.class::isInstance)
-                .map(e -> (MetadataErrorNotifiableEvent) e)
-                .collect(Collectors.toList());
+        List<MetadataErrorNotifiableEvent> filteredEvents = new ArrayList<>();
+
+        for (Object obj : events) {
+            if (obj instanceof MetadataErrorNotifiableEvent) {
+                filteredEvents.add((MetadataErrorNotifiableEvent) obj);
+            }
+        }
 
         // Don't get-and-clear the metadata error if there are no events that will be notified.
         if (filteredEvents.isEmpty())
@@ -450,8 +454,12 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         if (metadataError.isEmpty())
             return false;
 
-        if (isErrorProvablyUnrelated(metadataError.get(), applicationEventProcessor.subscribedAndAssignedTopics()))
+        Set<String> relevantTopics = applicationEventProcessor.subscribedAssignedAndTransientTopics();
+        if (isErrorProvablyUnrelated(metadataError.get(), relevantTopics)) {
+            log.debug("Dropping metadata error deemed unrelated to currently relevant topics {}",
+                    relevantTopics, metadataError.get());
             return false;
+        }
 
         filteredEvents.forEach(e -> e.onMetadataError(metadataError.get()));
         return true;

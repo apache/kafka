@@ -468,6 +468,19 @@ public class SubscriptionState {
     }
 
     /**
+     * @return a modifiable set of the topic names the consumer is subscribed to or was assigned:
+     * the subscription covers the {@code subscribe()} flows, while the assigned partitions cover
+     * manual {@code assign()} and broker-side regex subscriptions (where topic names are only
+     * known from the assignment). Note both sources may be non-empty at once, e.g. right after a
+     * subscription change while partitions from the previous subscription are not revoked yet.
+     */
+    public synchronized Set<String> subscribedOrAssignedTopics() {
+        Set<String> topics = new HashSet<>(subscription());
+        this.assignment.partitionSet().forEach(tp -> topics.add(tp.topic()));
+        return topics;
+    }
+
+    /**
      * @return a modifiable copy of the currently assigned partitions as a list
      */
     public synchronized List<TopicPartition> assignedPartitionsList() {

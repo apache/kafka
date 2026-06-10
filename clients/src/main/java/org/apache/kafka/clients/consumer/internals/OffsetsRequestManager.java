@@ -57,7 +57,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.isErrorProvablyUnrelated;
@@ -271,11 +270,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             return false;
         }
 
-        Set<String> topics = Stream.concat(
-                subscriptionState.subscription().stream(),
-                subscriptionState.assignedPartitions().stream().map(TopicPartition::topic)
-        ).collect(Collectors.toUnmodifiableSet());
-
+        Set<String> topics = metadata.subscribedAssignedAndTransientTopics();
         if (isErrorProvablyUnrelated(cachedException, topics)) {
             log.debug("Dropping cached update-positions exception deemed unrelated to current topics {}",
                     topics, cachedException);
