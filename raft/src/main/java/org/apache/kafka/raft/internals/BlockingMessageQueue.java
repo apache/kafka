@@ -48,10 +48,16 @@ public class BlockingMessageQueue implements RaftMessageQueue {
 
     @Override
     public void add(QueueEntry entry) {
-        queue.add(entry);
-        if (entry.message() != null) {
-            messageCount.incrementAndGet();
+        if (entry == null || entry.message() == null) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Either entry or entry.message is null: %s",
+                    entry
+                )
+            );
         }
+        queue.add(entry);
+        messageCount.incrementAndGet();
     }
 
     @Override

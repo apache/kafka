@@ -73,5 +73,14 @@ public interface RaftMessageQueue {
         public CompletableFuture<RaftMessage> future() {
             return future;
         }
+
+        @Override
+        public String toString() {
+            return String.format(
+                "QueueEntry(message=%s, future.isDone=%s)",
+                message,
+                future.isDone()
+            );
+        }
     }
 }

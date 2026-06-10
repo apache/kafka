@@ -26,6 +26,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BlockingMessageQueueTest {
@@ -75,6 +76,34 @@ class BlockingMessageQueueTest {
 
         // Poll should drain all wakeups and return the message in one call
         assertEquals(Optional.of(message), queue.poll(0));
+        assertTrue(queue.isEmpty());
+    }
+
+    @Test
+    public void testAddRejectsNullEntryOrMessage() {
+        var queue = new BlockingMessageQueue();
+
+        // Null entry should be rejected
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> queue.add(null)
+        );
+        assertTrue(exception.getMessage().contains("Either entry or entry.message is null"));
+        assertTrue(queue.isEmpty());
+
+        // Entry with null message should be rejected
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> queue.add(new RaftMessageQueue.QueueEntry(null))
+        );
+        assertTrue(exception.getMessage().contains("Either entry or entry.message is null"));
+        assertTrue(queue.isEmpty());
+
+        // Valid entry should succeed
+        var validMessage = new RaftMessageQueue.QueueEntry(Mockito.mock(RaftMessage.class));
+        queue.add(validMessage);
+        assertFalse(queue.isEmpty());
+        assertEquals(Optional.of(validMessage), queue.poll(0));
         assertTrue(queue.isEmpty());
     }
 }
