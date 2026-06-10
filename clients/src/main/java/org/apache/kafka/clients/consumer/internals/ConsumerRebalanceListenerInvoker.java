@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.Optional;
