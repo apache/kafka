@@ -561,6 +561,19 @@ org.apache.kafka.server.share.session.ShareSessionKeyTest:
 org.apache.kafka.server.share.session.ShareSessionTest:
 - testPartitionsToLogString
 - testPartitionsToLogStringEmpty
+org.apache.kafka.server.streams.InMemoryTopologyDescriptionPluginTest:
+- testCloseClearsAllState
+- testConcurrentWritesAreSafe
+- testConfigureIsNoOp
+- testDeleteIsIdempotentForUnknownGroup
+- testDeleteIsScopedToGroup
+- testDeleteTopologyRemovesEntry
+- testEpochAdvanceOverwritesPreviousDescription
+- testFuturesCompleteSynchronously
+- testGetReturnsNullForMissingGroup
+- testGetReturnsNullWhenEpochDoesNotMatch
+- testSetIsIdempotentAtSameEpoch
+- testSetThenGetRoundTrip
 org.apache.kafka.server.transaction.AddPartitionsToTxnManagerTest:
 - testAddPartitionsToTxnHandlerErrorHandling
 - testAddPartitionsToTxnManagerMetrics

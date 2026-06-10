@@ -58,6 +58,11 @@ org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testStreamsGroupNumWarmupReplicasDefaultValue
 - testStreamsGroupTaskOffsetIntervalCustomValue
 - testStreamsGroupTaskOffsetIntervalDefaultValue
+- testStreamsGroupTopologyDescriptionPluginAcceptsClassObject
+- testStreamsGroupTopologyDescriptionPluginDefaultIsNull
+- testStreamsGroupTopologyDescriptionPluginLoadedAndConfigured
+- testStreamsGroupTopologyDescriptionPluginReceivesAdditionalConfigs
+- testStreamsGroupTopologyDescriptionPluginReturnsFreshInstancePerCall
 org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpersTest:
 - testEmptyGroupMetadataRecord
 - testNewConsumerGroupCurrentAssignmentRecord
@@ -824,6 +829,14 @@ org.apache.kafka.coordinator.group.UtilsTest:
 - testComputeTopicHashWithDifferentRackOrder
 - testComputeTopicHashWithLeastSignificantBitsFirst
 - testNonExistingTopicName
+org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionTest:
+- testCollectionsAreDefensivelyCopied
+- testNodeIsSealedToSourceProcessorSink
+- testNullArgumentsRejected
+- testProcessorEqualsAndHashCode
+- testSinkEqualsAndHashCode
+- testSourceEqualsAndHashCode
+- testTopologyEqualsAndHashCode
 org.apache.kafka.coordinator.group.assignor.GroupSpecImplTest:
 - testIsPartitionAssignable
 - testIsPartitionAssigned
