@@ -41,11 +41,11 @@ import static org.apache.kafka.server.common.MetadataVersion.LATEST_PRODUCTION;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetadataVersionTest {
+    private static final Pattern ENUM_NAME_PATTERN = Pattern.compile("IBP_(\\d+)_(\\d+)_IV(\\d+)");
 
     @Test
     public void testFeatureLevels() {
@@ -67,7 +67,6 @@ class MetadataVersionTest {
     public void testFromShortVersionString(MetadataVersion metadataVersion) {
         if (metadataVersion.isProduction()) {
             MetadataVersion resolved = MetadataVersion.fromVersionString(metadataVersion.shortVersion(), true);
-            assertNotNull(resolved, "Short version string '" + metadataVersion.shortVersion() + "' should resolve");
             assertEquals(metadataVersion.shortVersion(), resolved.shortVersion());
             assertTrue(resolved.compareTo(metadataVersion) >= 0,
                 "Short version '" + metadataVersion.shortVersion() + "' should resolve to the latest version in that release line");
@@ -94,18 +93,15 @@ class MetadataVersionTest {
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testShortVersion(MetadataVersion metadataVersion) {
-        String expectedShortVersion = deriveShortVersion(metadataVersion);
-        assertEquals(expectedShortVersion, metadataVersion.shortVersion());
+        assertEquals(deriveShortVersion(metadataVersion), metadataVersion.shortVersion());
     }
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testVersion(MetadataVersion metadataVersion) {
-        String expectedVersion = deriveVersion(metadataVersion);
-        assertEquals(expectedVersion, metadataVersion.version());
+        assertEquals(deriveVersion(metadataVersion), metadataVersion.version());
     }
 
-    private static final Pattern ENUM_NAME_PATTERN = Pattern.compile("IBP_(\\d+)_(\\d+)_IV(\\d+)");
 
     private static String deriveShortVersion(MetadataVersion metadataVersion) {
         Matcher matcher = ENUM_NAME_PATTERN.matcher(metadataVersion.name());
