@@ -3499,76 +3499,97 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testWriteTxnMarkersAppliesShareMarkerAfterShareStateAppendSucceeds(): Unit = {
+  def testWriteTxnMarkersRoutesShareStateMarkerToShareCoordinator(): Unit = {
     val shareStatePartition = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, 0)
     val (_, request) = createWriteTxnMarkersRequest(util.List.of(shareStatePartition))
-    val responseCallback: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
-    val shareStateTopicIdPartition = new TopicIdPartition(Uuid.randomUuid, shareStatePartition)
 
     when(replicaManager.onlinePartition(shareStatePartition))
       .thenReturn(Some(mock(classOf[Partition])))
-    when(replicaManager.topicIdPartition(shareStatePartition))
-      .thenReturn(shareStateTopicIdPartition)
-    when(replicaManager.appendRecords(
+    when(shareCoordinator.completeTransaction(
+      ArgumentMatchers.eq(shareStatePartition),
+      ArgumentMatchers.eq(1L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    verify(shareCoordinator).completeTransaction(
+      ArgumentMatchers.eq(shareStatePartition),
+      ArgumentMatchers.eq(1L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
+    )
+    verify(replicaManager, never()).appendRecords(
       anyLong,
       anyShort,
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
-      responseCallback.capture(),
+      any(),
       any(),
       any(),
       any(),
       any()
-    )).thenAnswer { _ =>
-      verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
-      responseCallback.getValue.apply(util.Map.of(shareStateTopicIdPartition, new PartitionResponse(Errors.NONE)))
-    }
+    )
+    verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
 
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
-
-    verify(sharePartitionManager).applyTxnMarker(1L, 1.toShort, TransactionResult.COMMIT)
-    verifyNoThrottling[WriteTxnMarkersResponse](request)
+    val response = verifyNoThrottling[WriteTxnMarkersResponse](request)
+    assertEquals(Errors.NONE, response.errorsByProducerId.get(1L).get(shareStatePartition))
   }
 
-  @Test
-  def testWriteTxnMarkersDoesNotApplyShareMarkerWhenShareStateAppendFails(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array(
+    "COORDINATOR_NOT_AVAILABLE",
+    "COORDINATOR_LOAD_IN_PROGRESS",
+    "NOT_COORDINATOR",
+    "REQUEST_TIMED_OUT"
+  ))
+  def testWriteTxnMarkersShareCoordinatorErrorTranslation(error: Errors): Unit = {
     val shareStatePartition = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, 0)
     val (_, request) = createWriteTxnMarkersRequest(util.List.of(shareStatePartition))
-    val responseCallback: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
-    val shareStateTopicIdPartition = new TopicIdPartition(Uuid.randomUuid, shareStatePartition)
 
     when(replicaManager.onlinePartition(shareStatePartition))
       .thenReturn(Some(mock(classOf[Partition])))
-    when(replicaManager.topicIdPartition(shareStatePartition))
-      .thenReturn(shareStateTopicIdPartition)
-    when(replicaManager.appendRecords(
+    when(shareCoordinator.completeTransaction(
+      ArgumentMatchers.eq(shareStatePartition),
+      ArgumentMatchers.eq(1L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
+    )).thenReturn(CompletableFuture.failedFuture[Void](error.exception()))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    val expectedError = error match {
+      case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
+        Errors.NOT_LEADER_OR_FOLLOWER
+      case error =>
+        error
+    }
+
+    verify(replicaManager, never()).appendRecords(
       anyLong,
       anyShort,
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any(),
-      responseCallback.capture(),
+      any(),
       any(),
       any(),
       any(),
       any()
-    )).thenAnswer(_ => responseCallback.getValue.apply(util.Map.of(
-      shareStateTopicIdPartition,
-      new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER)
-    )))
-
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
-
+    )
     verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
     val response = verifyNoThrottling[WriteTxnMarkersResponse](request)
-    assertEquals(
-      Errors.NOT_LEADER_OR_FOLLOWER,
-      response.errorsByProducerId.get(1L).get(shareStatePartition))
+    assertEquals(expectedError, response.errorsByProducerId.get(1L).get(shareStatePartition))
   }
 
   @Test
