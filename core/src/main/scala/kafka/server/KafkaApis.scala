@@ -3714,22 +3714,63 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
+    def sendPartitionResponse(partitions: Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]): Unit = {
+      val responseData = new TxnShareAcknowledgeResponseData()
+      val topicsByUuid = mutable.Map[Uuid, TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse]()
+      partitions.foreach { case (tip, pd) =>
+        val topicResp = topicsByUuid.getOrElseUpdate(tip.topicId,
+          new TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse().setTopicId(tip.topicId))
+        topicResp.partitions.add(new TxnShareAcknowledgeResponseData.TxnShareAcknowledgePartitionResponse()
+          .setPartitionIndex(tip.partition).setErrorCode(pd.errorCode).setErrorMessage(pd.errorMessage))
+      }
+      topicsByUuid.values.foreach(responseData.responses.add)
+      requestHelper.sendMaybeThrottle(request, new TxnShareAcknowledgeResponse(responseData))
+    }
+
     val topicIdNames = metadataCache.topicIdsToNames()
     val acknowledgeBatchesMap = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
+    val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
     data.topics.forEach { topic =>
       val topicName = topicIdNames.get(topic.topicId)
       topic.partitions.forEach { partition =>
         val tip = new TopicIdPartition(topic.topicId, new TopicPartition(topicName, partition.partitionIndex))
-        val batches = new util.ArrayList[ShareAcknowledgementBatch]()
-        partition.acknowledgementBatches.forEach { b =>
-          batches.add(new ShareAcknowledgementBatch(b.firstOffset, b.lastOffset, b.acknowledgeTypes))
+        if (topicName == null) {
+          erroneous += tip -> ShareAcknowledgeResponse.partitionResponse(tip, Errors.UNKNOWN_TOPIC_ID)
+        } else {
+          val batches = new util.ArrayList[ShareAcknowledgementBatch]()
+          partition.acknowledgementBatches.forEach { b =>
+            batches.add(new ShareAcknowledgementBatch(b.firstOffset, b.lastOffset, b.acknowledgeTypes))
+          }
+          acknowledgeBatchesMap += tip -> batches
         }
-        acknowledgeBatchesMap += tip -> batches
       }
     }
 
+    val authorizedTopics = authHelper.filterByAuthorized(
+      request.context,
+      READ,
+      TOPIC,
+      acknowledgeBatchesMap.keys
+    )(_.topicPartition.topic)
+
+    val validAcknowledgeBatches = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
+    acknowledgeBatchesMap.foreach { case (tip, batches) =>
+      if (!authorizedTopics.contains(tip.topicPartition.topic)) {
+        erroneous += tip -> ShareAcknowledgeResponse.partitionResponse(tip, Errors.TOPIC_AUTHORIZATION_FAILED)
+      } else if (!metadataCache.contains(tip.topicPartition)) {
+        erroneous += tip -> ShareAcknowledgeResponse.partitionResponse(tip, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+      } else {
+        validAcknowledgeBatches += tip -> batches
+      }
+    }
+
+    if (validAcknowledgeBatches.isEmpty) {
+      sendPartitionResponse(erroneous.toMap)
+      return CompletableFuture.completedFuture[Unit](())
+    }
+
     val shareStatePartitions = new util.HashSet[TopicPartition]()
-    acknowledgeBatchesMap.keys.foreach { tip =>
+    validAcknowledgeBatches.keys.foreach { tip =>
       shareStatePartitions.add(new TopicPartition(
         SHARE_GROUP_STATE_TOPIC_NAME,
         shareCoordinator.partitionFor(SharePartitionKey.getInstance(groupId, tip))))
@@ -3750,21 +3791,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, error.exception))
         CompletableFuture.completedFuture[Unit](())
       } else {
-        sharePartitionManager.acknowledgeTransactional(memberId, groupId, producerId, producerEpoch, acknowledgeBatchesMap.toMap.asJava)
+        sharePartitionManager.acknowledgeTransactional(memberId, groupId, producerId, producerEpoch, validAcknowledgeBatches.toMap.asJava)
           .handle[Unit] { (result, exception) =>
             if (exception != null) {
               requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
             } else {
-              val responseData = new TxnShareAcknowledgeResponseData()
-              val topicsByUuid = mutable.Map[Uuid, TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse]()
-              result.asScala.foreach { case (tip, pd) =>
-                val topicResp = topicsByUuid.getOrElseUpdate(tip.topicId,
-                  new TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse().setTopicId(tip.topicId))
-                topicResp.partitions.add(new TxnShareAcknowledgeResponseData.TxnShareAcknowledgePartitionResponse()
-                  .setPartitionIndex(tip.partition).setErrorCode(pd.errorCode).setErrorMessage(pd.errorMessage))
-              }
-              topicsByUuid.values.foreach(responseData.responses.add)
-              requestHelper.sendMaybeThrottle(request, new TxnShareAcknowledgeResponse(responseData))
+              sendPartitionResponse(result.asScala.toMap ++ erroneous)
             }
           }
       }
