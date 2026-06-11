@@ -18,9 +18,8 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
 import org.apache.kafka.clients.consumer.ShareGroupMetadata;
-import org.apache.kafka.clients.consumer.internals.AcknowledgementBatch;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.Cluster;
@@ -214,7 +213,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void sendShareAcknowledgementsToTransaction(
-            Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
+            ShareAcknowledgements acknowledgements,
             ShareGroupMetadata groupMetadata) throws ProducerFencedException {
         verifyNotClosed();
         verifyNotFenced();

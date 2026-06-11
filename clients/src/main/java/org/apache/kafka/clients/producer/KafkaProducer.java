@@ -26,9 +26,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
 import org.apache.kafka.clients.consumer.ShareGroupMetadata;
-import org.apache.kafka.clients.consumer.internals.AcknowledgementBatch;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
@@ -785,8 +784,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void sendShareAcknowledgementsToTransaction(
-            Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
+            ShareAcknowledgements acknowledgements,
             ShareGroupMetadata groupMetadata) throws ProducerFencedException {
+        Objects.requireNonNull(acknowledgements, "acknowledgements cannot be null");
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         throwIfInPreparedState();

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
 import org.apache.kafka.clients.consumer.ShareGroupMetadata;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -1126,6 +1127,22 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             return processBackgroundEvents(event.future(),
                 time.timer(defaultApiTimeoutMs),
                 e -> false);
+        } finally {
+            release();
+        }
+    }
+
+    @Override
+    public ShareAcknowledgements acknowledgementsForTransaction() {
+        acquireAndEnsureOpen();
+        try {
+            handleCompletedAcknowledgements();
+            ensureExplicitAcknowledgement();
+            ensureInFlightAcknowledgedIfExplicitAcknowledgement();
+            if (currentFetch.hasRenewals()) {
+                throw new IllegalStateException("Renew acknowledgements cannot be sent to a transaction.");
+            }
+            return currentFetch.takeAcknowledgementsForTransaction();
         } finally {
             release();
         }

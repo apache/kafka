@@ -23,8 +23,9 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ShareAcknowledgementBatch;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
 import org.apache.kafka.clients.consumer.ShareGroupMetadata;
-import org.apache.kafka.clients.consumer.internals.AcknowledgementBatch;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -114,7 +115,7 @@ public class TransactionManager {
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
 
     // Pending transactional share-group acks staged awaiting commit/abort marker (KIP-1289).
-    private final Map<TopicIdPartition, List<AcknowledgementBatch>> pendingTxnShareAcks;
+    private final Map<TopicIdPartition, List<ShareAcknowledgementBatch>> pendingTxnShareAcks;
 
     // If a batch bound for a partition expired locally after being sent at least once, the partition is considered
     // to have an unresolved state. We keep track of such partitions here, and cannot assign any more sequence numbers
@@ -470,7 +471,7 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult sendShareAcknowledgementsToTransaction(
-            final Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
+            final ShareAcknowledgements acknowledgements,
             final ShareGroupMetadata groupMetadata) {
         ensureTransactional();
         throwIfPendingState(TransactionOperation.SEND_SHARE_ACKNOWLEDGEMENTS_TO_TRANSACTION);
@@ -482,7 +483,7 @@ public class TransactionManager {
         }
 
         log.debug("Begin staging share acks {} for share group {} to transaction", acknowledgements, groupMetadata);
-        TxnShareAcknowledgeHandler handler = txnShareAcknowledgeHandler(null, acknowledgements, groupMetadata);
+        TxnShareAcknowledgeHandler handler = txnShareAcknowledgeHandler(null, acknowledgements.acknowledgements(), groupMetadata);
         transactionStarted = true;
         enqueueRequest(handler);
         return handler.result;
@@ -2012,14 +2013,14 @@ public class TransactionManager {
 
     private TxnShareAcknowledgeHandler txnShareAcknowledgeHandler(
             TransactionalRequestResult result,
-            Map<TopicIdPartition, List<AcknowledgementBatch>> acknowledgements,
+            Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgements,
             ShareGroupMetadata groupMetadata) {
         pendingTxnShareAcks.putAll(acknowledgements);
 
         List<TxnShareAcknowledgeTopic> topics = new ArrayList<>();
         Map<String, TxnShareAcknowledgeTopic> topicMap = new HashMap<>();
 
-        for (Map.Entry<TopicIdPartition, List<AcknowledgementBatch>> entry : acknowledgements.entrySet()) {
+        for (Map.Entry<TopicIdPartition, List<ShareAcknowledgementBatch>> entry : acknowledgements.entrySet()) {
             TopicIdPartition tip = entry.getKey();
             String topicId = tip.topicId().toString();
 
@@ -2030,7 +2031,7 @@ public class TransactionManager {
             });
 
             List<TxnShareAcknowledgeBatch> batches = new ArrayList<>();
-            for (AcknowledgementBatch b : entry.getValue()) {
+            for (ShareAcknowledgementBatch b : entry.getValue()) {
                 batches.add(new TxnShareAcknowledgeBatch()
                     .setFirstOffset(b.firstOffset())
                     .setLastOffset(b.lastOffset())

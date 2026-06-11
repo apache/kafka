@@ -847,6 +847,15 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
         return delegate.shareGroupMetadata();
     }
 
+    /**
+     * Returns and clears acknowledgements prepared for a producer transaction.
+     * <p>This method can only be used with explicit acknowledgement mode.
+     */
+    @Override
+    public ShareAcknowledgements acknowledgementsForTransaction() {
+        return delegate.acknowledgementsForTransaction();
+    }
+
     // Functions below are for testing only
     String clientId() {
         return delegate.clientId();
