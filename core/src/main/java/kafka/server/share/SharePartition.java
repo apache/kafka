@@ -1160,8 +1160,15 @@ public class SharePartition {
                 if (memberCheck.isPresent()) return memberCheck.get();
 
                 byte ackType = ackTypeMap.get(batch.firstOffset());
+                RecordState stagedDeliveryState = recordStateWithDlq(ackType);
+                if (inFlightBatch.batchState() == RecordState.TX_PENDING) {
+                    if (matchesStagedTxnAcknowledge(inFlightBatch, producerId, producerEpoch, ackType, stagedDeliveryState)) {
+                        continue;
+                    }
+                    return new InvalidRecordStateException("A different transactional acknowledgement is already pending");
+                }
                 InFlightState staged = inFlightBatch.stageBatchTxnAcknowledge(
-                    producerId, producerEpoch, AcknowledgeType.forId(ackType), recordStateWithDlq(ackType));
+                    producerId, producerEpoch, AcknowledgeType.forId(ackType), stagedDeliveryState);
                 if (staged == null) {
                     return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
                 }
@@ -1180,8 +1187,15 @@ public class SharePartition {
                         return new InvalidRecordStateException("Member is not the owner of offset");
                     }
                     byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(os.getKey()) : batch.acknowledgeTypes().get(0);
+                    RecordState stagedDeliveryState = recordStateWithDlq(ackType);
+                    if (os.getValue().state() == RecordState.TX_PENDING) {
+                        if (matchesStagedTxnAcknowledge(os.getValue(), producerId, producerEpoch, ackType, stagedDeliveryState)) {
+                            continue;
+                        }
+                        return new InvalidRecordStateException("A different transactional acknowledgement is already pending");
+                    }
                     InFlightState staged = os.getValue().stageTxnAcknowledge(
-                        producerId, producerEpoch, AcknowledgeType.forId(ackType), recordStateWithDlq(ackType));
+                        producerId, producerEpoch, AcknowledgeType.forId(ackType), stagedDeliveryState);
                     if (staged == null) {
                         return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
                     }
@@ -1307,6 +1321,34 @@ public class SharePartition {
         return batch.batchState() == RecordState.TX_PENDING &&
             batch.batchStagedProducerId() == producerId &&
             batch.batchStagedProducerEpoch() == producerEpoch;
+    }
+
+    private boolean matchesStagedTxnAcknowledge(
+        InFlightState state,
+        long producerId,
+        short producerEpoch,
+        byte ackType,
+        RecordState stagedDeliveryState
+    ) {
+        return state.state() == RecordState.TX_PENDING &&
+            state.stagedProducerId() == producerId &&
+            state.stagedProducerEpoch() == producerEpoch &&
+            state.stagedAckType() == ackType &&
+            state.stagedDeliveryState() == stagedDeliveryState.id();
+    }
+
+    private boolean matchesStagedTxnAcknowledge(
+        InFlightBatch batch,
+        long producerId,
+        short producerEpoch,
+        byte ackType,
+        RecordState stagedDeliveryState
+    ) {
+        return batch.batchState() == RecordState.TX_PENDING &&
+            batch.batchStagedProducerId() == producerId &&
+            batch.batchStagedProducerEpoch() == producerEpoch &&
+            batch.batchStagedAckType() == ackType &&
+            batch.batchStagedDeliveryState() == stagedDeliveryState.id();
     }
 
     private RecordState finalStateForTxnMarker(InFlightState state, TransactionResult result) {

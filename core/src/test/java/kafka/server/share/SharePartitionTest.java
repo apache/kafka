@@ -13399,6 +13399,49 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testStageTxnAcknowledgeRetryWithSameAckIsIdempotent() {
+        Persister persister = Mockito.mock(Persister.class);
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)));
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(AcknowledgeType.ACCEPT.id, sharePartition.cachedState().get(10L).batchStagedAckType());
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+    }
+
+    @Test
+    public void testStageTxnAcknowledgeRetryWithDifferentAckFailsWithoutRollback() {
+        Persister persister = Mockito.mock(Persister.class);
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)));
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+        CompletableFuture<Void> conflictingRetry = sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.REJECT.id))));
+
+        assertFutureThrows(InvalidRecordStateException.class, conflictingRetry);
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(AcknowledgeType.ACCEPT.id, sharePartition.cachedState().get(10L).batchStagedAckType());
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
+    }
+
+    @Test
     public void testStageTxnAcknowledgeRevertsPendingAckOnPersistFailure() {
         Persister persister = Mockito.mock(Persister.class);
         Mockito.when(persister.writeState(Mockito.any()))

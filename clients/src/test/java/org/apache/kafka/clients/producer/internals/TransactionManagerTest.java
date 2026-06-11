@@ -36,6 +36,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -1334,6 +1335,28 @@ public class TransactionManagerTest {
         assertFalse(sendAcksResult.isSuccessful());
         assertInstanceOf(CommitFailedException.class, sendAcksResult.error());
         assertAbortableError(CommitFailedException.class);
+    }
+
+    @Test
+    public void testInvalidRecordStateInTxnShareAcknowledgePartitionResponseIsAbortable() {
+        TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
+            shareAcknowledgements(tip),
+            new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.INVALID_RECORD_STATE);
+
+        runUntil(transactionManager::hasError);
+        assertInstanceOf(InvalidRecordStateException.class, transactionManager.lastError());
+        assertTrue(sendAcksResult.isCompleted());
+        assertFalse(sendAcksResult.isSuccessful());
+        assertInstanceOf(InvalidRecordStateException.class, sendAcksResult.error());
+        assertAbortableError(InvalidRecordStateException.class);
     }
 
     @Test
