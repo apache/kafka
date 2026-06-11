@@ -69,8 +69,7 @@ public final class RecordsKeyValueAssert {
                                                                 TopicPartition topicPartition,
                                                                 Serde<K> keySerde,
                                                                 Serde<V> valueSerde) {
-        assertEquals(expectedRecords.size(), actualRecords.size(),
-                "Number of records differ. Expected: " + expectedRecords.size() + ", Actual: " + actualRecords.size());
+        assertEquals(expectedRecords.size(), actualRecords.size());
 
         Deserializer<K> keyDeserializer = keySerde.deserializer();
         Deserializer<V> valueDeserializer = valueSerde.deserializer();
