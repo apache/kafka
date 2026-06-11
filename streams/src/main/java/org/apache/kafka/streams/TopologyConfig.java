@@ -311,9 +311,17 @@ public final class TopologyConfig extends AbstractConfig {
                 .getOrDefault(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "false")));
     }
 
+    // local sentinel mirroring StreamTask.UNDEFINED_MAX_BUFFERED_SIZE; -1 disables the legacy
+    // per-partition pause and lets the bytes guard own buffering.
+    private static final int UNDEFINED_MAX_BUFFERED_SIZE = -1;
+
     private int configureMaxBufferedSize() {
         final boolean bufferedRecordsPerPartitionOverridden = isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides);
-        final boolean inputBufferMaxBytesOverridden = isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides);
+        // a global input.buffer.max.bytes setting also locks out the legacy per-topology override,
+        // since the user has explicitly opted into the bytes path app-wide.
+        final boolean inputBufferMaxBytesOverridden =
+            isTopologyOverride(INPUT_BUFFER_MAX_BYTES_CONFIG, topologyOverrides)
+                || globalAppConfigs.originals().containsKey(INPUT_BUFFER_MAX_BYTES_CONFIG);
 
         if (!bufferedRecordsPerPartitionOverridden && !inputBufferMaxBytesOverridden) {
             return getBufferedRecordsPerPartition(globalAppConfigs);
@@ -324,7 +332,6 @@ public final class TopologyConfig extends AbstractConfig {
     @SuppressWarnings("deprecation")
     private int setMaxBufferedRecordsPerPartition(final boolean bufferedRecordsPerPartitionOverridden,
                                                   final boolean inputBufferMaxBytesOverridden) {
-        int resolvedMaxBufferedSize = -1;
         if (bufferedRecordsPerPartitionOverridden && inputBufferMaxBytesOverridden) {
             log.info("Topology {} is using both deprecated config {} and new config {}, hence {} is ignored and the new config {} is used to keep memory usage under control.",
                 topologyName,
@@ -332,15 +339,17 @@ public final class TopologyConfig extends AbstractConfig {
                 INPUT_BUFFER_MAX_BYTES_CONFIG,
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 INPUT_BUFFER_MAX_BYTES_CONFIG);
-        } else if (bufferedRecordsPerPartitionOverridden) {
+            return UNDEFINED_MAX_BUFFERED_SIZE;
+        }
+        if (bufferedRecordsPerPartitionOverridden) {
             log.warn("Topology {} is using deprecated config {}, and will be used to set max buffered size; we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
                 topologyName,
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 INPUT_BUFFER_MAX_BYTES_CONFIG,
                 BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-            resolvedMaxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+            return getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         }
-        return resolvedMaxBufferedSize;
+        return UNDEFINED_MAX_BUFFERED_SIZE;
     }
 
     @Deprecated
