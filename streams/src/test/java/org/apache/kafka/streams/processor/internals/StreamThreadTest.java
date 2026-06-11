@@ -1409,7 +1409,7 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.LATEST.name());
         final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
 
-        consumer.subscribe(Collections.singletonList(topic1), new MockRebalanceListener());
+        consumer.subscribe(Collections.singletonList(topic1));
         consumer.rebalance(Collections.singletonList(t1p1));
         consumer.updateEndOffsets(Collections.singletonMap(t1p1, 10L));
         consumer.seekToEnd(Collections.singletonList(t1p1));
