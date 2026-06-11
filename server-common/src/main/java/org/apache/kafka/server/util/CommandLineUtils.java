@@ -128,11 +128,6 @@ public class CommandLineUtils {
         }
     }
 
-    public static void printErrorAndExit(String message) {
-        System.err.println(message);
-        Exit.exit(1, message);
-    }
-
     /**
      * Check that exactly one of a set of mutually exclusive arguments is present.
      */
