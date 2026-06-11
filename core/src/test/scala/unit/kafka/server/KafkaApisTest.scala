@@ -3427,6 +3427,113 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testWriteTxnMarkersDoesNotApplyShareMarkerForNonShareStatePartition(): Unit = {
+    val topicPartition = new TopicPartition("t", 0)
+    val (_, request) = createWriteTxnMarkersRequest(util.List.of(topicPartition))
+    val responseCallback: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
+
+    when(replicaManager.onlinePartition(topicPartition))
+      .thenReturn(Some(mock(classOf[Partition])))
+    when(replicaManager.topicIdPartition(topicPartition))
+      .thenReturn(new TopicIdPartition(Uuid.randomUuid, topicPartition))
+    when(replicaManager.appendRecords(
+      anyLong,
+      anyShort,
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any(),
+      responseCallback.capture(),
+      any(),
+      any(),
+      any(),
+      any()
+    )).thenAnswer(_ => responseCallback.getValue.apply(util.Map.of(
+      new TopicIdPartition(Uuid.randomUuid, topicPartition),
+      new PartitionResponse(Errors.NONE)
+    )))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
+    verifyNoThrottling[WriteTxnMarkersResponse](request)
+  }
+
+  @Test
+  def testWriteTxnMarkersAppliesShareMarkerAfterShareStateAppendSucceeds(): Unit = {
+    val shareStatePartition = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, 0)
+    val (_, request) = createWriteTxnMarkersRequest(util.List.of(shareStatePartition))
+    val responseCallback: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
+    val shareStateTopicIdPartition = new TopicIdPartition(Uuid.randomUuid, shareStatePartition)
+
+    when(replicaManager.onlinePartition(shareStatePartition))
+      .thenReturn(Some(mock(classOf[Partition])))
+    when(replicaManager.topicIdPartition(shareStatePartition))
+      .thenReturn(shareStateTopicIdPartition)
+    when(replicaManager.appendRecords(
+      anyLong,
+      anyShort,
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any(),
+      responseCallback.capture(),
+      any(),
+      any(),
+      any(),
+      any()
+    )).thenAnswer { _ =>
+      verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
+      responseCallback.getValue.apply(util.Map.of(shareStateTopicIdPartition, new PartitionResponse(Errors.NONE)))
+    }
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    verify(sharePartitionManager).applyTxnMarker(1L, 1.toShort, TransactionResult.COMMIT)
+    verifyNoThrottling[WriteTxnMarkersResponse](request)
+  }
+
+  @Test
+  def testWriteTxnMarkersDoesNotApplyShareMarkerWhenShareStateAppendFails(): Unit = {
+    val shareStatePartition = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, 0)
+    val (_, request) = createWriteTxnMarkersRequest(util.List.of(shareStatePartition))
+    val responseCallback: ArgumentCaptor[util.Map[TopicIdPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, PartitionResponse] => Unit])
+    val shareStateTopicIdPartition = new TopicIdPartition(Uuid.randomUuid, shareStatePartition)
+
+    when(replicaManager.onlinePartition(shareStatePartition))
+      .thenReturn(Some(mock(classOf[Partition])))
+    when(replicaManager.topicIdPartition(shareStatePartition))
+      .thenReturn(shareStateTopicIdPartition)
+    when(replicaManager.appendRecords(
+      anyLong,
+      anyShort,
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any(),
+      responseCallback.capture(),
+      any(),
+      any(),
+      any(),
+      any()
+    )).thenAnswer(_ => responseCallback.getValue.apply(util.Map.of(
+      shareStateTopicIdPartition,
+      new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER)
+    )))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
+    val response = verifyNoThrottling[WriteTxnMarkersResponse](request)
+    assertEquals(
+      Errors.NOT_LEADER_OR_FOLLOWER,
+      response.errorsByProducerId.get(1L).get(shareStatePartition))
+  }
+
+  @Test
   def testHandleWriteTxnMarkersRequest(): Unit = {
     val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
     val offset1 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)
