@@ -1638,7 +1638,8 @@ public class PersisterStateManager {
                                     .setDeliveryCount(batch.deliveryCount())
                                     .setStagedProducerId(batch.stagedProducerId())
                                     .setStagedProducerEpoch(batch.stagedProducerEpoch())
-                                    .setStagedAckType(batch.stagedAckType()))
+                                    .setStagedAckType(batch.stagedAckType())
+                                    .setStagedDeliveryState(batch.stagedDeliveryState()))
                                 .collect(Collectors.toList()))
                     );
             });

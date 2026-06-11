@@ -50,7 +50,9 @@
       { "name": "StagedProducerEpoch", "type": "int16", "versions": "0+", "taggedVersions": "0+", "tag": 1, "default": "-1",
         "about": "The producer epoch for a pending transactional share acknowledgement, or -1 if none." },
       { "name": "StagedAckType", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 2, "default": "-1",
-        "about": "The acknowledgement type staged by the pending transaction, or -1 if none." }
+        "about": "The acknowledgement type staged by the pending transaction, or -1 if none." },
+      { "name": "StagedDeliveryState", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 3, "default": "-1",
+        "about": "The delivery state to apply if the pending transaction commits, or -1 if none." }
     ]}
   ]
 }

@@ -76,7 +76,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, RecordValidationSta
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.stream.Collectors
 import java.util.{Collections, Optional}
@@ -1760,7 +1760,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     for (marker <- markers.asScala) {
       val producerId = marker.producerId
       val partitionsWithCompatibleMessageFormat = new mutable.ArrayBuffer[TopicPartition]
-      val shareMarkerApplied = new AtomicBoolean(false)
 
       val currentErrors = new ConcurrentHashMap[TopicPartition, Errors]()
       marker.partitions.forEach { partition =>
@@ -1822,6 +1821,27 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
               addResultAndMaybeComplete(partition, error)
             }
+          } else if (partition.topic == SHARE_GROUP_STATE_TOPIC_NAME) {
+            shareCoordinator.completeTransaction(
+              partition,
+              marker.producerId,
+              marker.producerEpoch,
+              marker.coordinatorEpoch,
+              marker.transactionResult,
+              markerTransactionVersion
+            ).whenComplete { (_, exception) =>
+              val error = if (exception == null) {
+                Errors.NONE
+              } else {
+                Errors.forException(exception) match {
+                  case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
+                    Errors.NOT_LEADER_OR_FOLLOWER
+                  case error =>
+                    error
+                }
+              }
+              addResultAndMaybeComplete(partition, error)
+            }
           } else {
             // Otherwise, the regular appendRecords path is used for all the non __consumer_offsets
             // partitions or for all partitions when the new group coordinator is disabled.
@@ -1844,17 +1864,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestLocal = requestLocal,
             responseCallback = errors => {
               errors.forEach { (topicIdPartition, partitionResponse) =>
-                if (topicIdPartition.topic == SHARE_GROUP_STATE_TOPIC_NAME &&
-                    partitionResponse.error == Errors.NONE &&
-                    shareMarkerApplied.compareAndSet(false, true)) {
-                  sharePartitionManager.applyTxnMarker(producerId, marker.producerEpoch, marker.transactionResult)
-                    .whenComplete { (_, exception) =>
-                      val error = if (exception == null) partitionResponse.error else Errors.forException(exception)
-                      addResultAndMaybeComplete(topicIdPartition.topicPartition(), error)
-                    }
-                } else {
-                  addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
-                }
+                addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
               }
             },
             transactionVersion = markerTransactionVersion

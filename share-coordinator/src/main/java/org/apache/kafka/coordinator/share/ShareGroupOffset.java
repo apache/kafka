@@ -107,7 +107,8 @@ public class ShareGroupOffset {
             stateBatch.deliveryCount(),
             stateBatch.stagedProducerId(),
             stateBatch.stagedProducerEpoch(),
-            stateBatch.stagedAckType()
+            stateBatch.stagedAckType(),
+            stateBatch.stagedDeliveryState()
         );
     }
 
@@ -119,7 +120,8 @@ public class ShareGroupOffset {
             stateBatch.deliveryCount(),
             stateBatch.stagedProducerId(),
             stateBatch.stagedProducerEpoch(),
-            stateBatch.stagedAckType()
+            stateBatch.stagedAckType(),
+            stateBatch.stagedDeliveryState()
         );
     }
 

@@ -51,9 +51,8 @@ public class RecordStateTest {
         assertThrows(IllegalStateException.class, () -> RecordState.AVAILABLE.validateTransition(RecordState.ARCHIVING));
         assertThrows(IllegalStateException.class, () -> RecordState.AVAILABLE.validateTransition(RecordState.TX_PENDING));
 
-        // TX_PENDING can only exit to ACKNOWLEDGED, AVAILABLE, or ARCHIVING.
+        // TX_PENDING can only exit to ACKNOWLEDGED, AVAILABLE, ARCHIVING, or ARCHIVED.
         assertThrows(IllegalStateException.class, () -> RecordState.TX_PENDING.validateTransition(RecordState.ACQUIRED));
-        assertThrows(IllegalStateException.class, () -> RecordState.TX_PENDING.validateTransition(RecordState.ARCHIVED));
 
         // TX_PENDING can only be entered from ACQUIRED.
         assertThrows(IllegalStateException.class, () -> RecordState.ARCHIVING.validateTransition(RecordState.TX_PENDING));
@@ -71,6 +70,7 @@ public class RecordStateTest {
         assertEquals(RecordState.ACKNOWLEDGED, RecordState.TX_PENDING.validateTransition(RecordState.ACKNOWLEDGED));
         assertEquals(RecordState.AVAILABLE, RecordState.TX_PENDING.validateTransition(RecordState.AVAILABLE));
         assertEquals(RecordState.ARCHIVING, RecordState.TX_PENDING.validateTransition(RecordState.ARCHIVING));
+        assertEquals(RecordState.ARCHIVED, RecordState.TX_PENDING.validateTransition(RecordState.ARCHIVED));
     }
 
     @Test

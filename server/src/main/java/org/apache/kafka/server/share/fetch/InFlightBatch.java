@@ -18,6 +18,7 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
+import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.apache.kafka.server.util.timer.Timer;
 
 import java.util.NavigableMap;
@@ -114,7 +115,35 @@ public class InFlightBatch {
             acquisitionLockTimeoutTask,
             stagedProducerId,
             stagedProducerEpoch,
-            stagedAckType
+            stagedAckType,
+            PersisterStateBatch.NO_STAGED_DELIVERY_STATE
+        );
+    }
+
+    public InFlightBatch(
+        Timer timer,
+        Time time,
+        String memberId,
+        PersisterStateBatch stateBatch,
+        AcquisitionLockTimerTask acquisitionLockTimeoutTask,
+        AcquisitionLockTimeoutHandler timeoutHandler,
+        SharePartitionMetrics sharePartitionMetrics
+    ) {
+        this.timer = timer;
+        this.time = time;
+        this.firstOffset = stateBatch.firstOffset();
+        this.lastOffset = stateBatch.lastOffset();
+        this.timeoutHandler = timeoutHandler;
+        this.sharePartitionMetrics = sharePartitionMetrics;
+        this.batchState = new InFlightState(
+            RecordState.forId(stateBatch.deliveryState()),
+            stateBatch.deliveryCount(),
+            memberId,
+            acquisitionLockTimeoutTask,
+            stateBatch.stagedProducerId(),
+            stateBatch.stagedProducerEpoch(),
+            stateBatch.stagedAckType(),
+            stateBatch.stagedDeliveryState()
         );
     }
 
@@ -210,8 +239,13 @@ public class InFlightBatch {
      * @return {@code InFlightState} if update succeeds, null otherwise. Returning state helps update chaining.
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
-    public InFlightState stageBatchTxnAcknowledge(long producerId, short producerEpoch, org.apache.kafka.clients.consumer.AcknowledgeType ackType) {
-        return inFlightState().stageTxnAcknowledge(producerId, producerEpoch, ackType);
+    public InFlightState stageBatchTxnAcknowledge(
+        long producerId,
+        short producerEpoch,
+        org.apache.kafka.clients.consumer.AcknowledgeType ackType,
+        RecordState stagedDeliveryState
+    ) {
+        return inFlightState().stageTxnAcknowledge(producerId, producerEpoch, ackType, stagedDeliveryState);
     }
 
     public InFlightState applyBatchTxnMarker(
@@ -238,6 +272,10 @@ public class InFlightBatch {
 
     public byte batchStagedAckType() {
         return inFlightState().stagedAckType();
+    }
+
+    public byte batchStagedDeliveryState() {
+        return inFlightState().stagedDeliveryState();
     }
 
     public InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId, boolean dlqSupportEnabled) {

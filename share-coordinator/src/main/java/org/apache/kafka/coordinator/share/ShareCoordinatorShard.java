@@ -69,6 +69,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -86,6 +87,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private CoordinatorMetadataImage metadataImage;
     private final ShareCoordinatorOffsetsManager offsetsManager;
     private final Time time;
+
+    private static final byte DELIVERY_STATE_AVAILABLE = 0;
+    private static final byte DELIVERY_STATE_ACKNOWLEDGED = 2;
+    private static final byte DELIVERY_STATE_ARCHIVED = 4;
+    private static final byte DELIVERY_STATE_TX_PENDING = 5;
+    private static final byte ACKNOWLEDGE_TYPE_ACCEPT = 1;
 
     public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
@@ -301,6 +308,81 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         CoordinatorShard.super.replayEndTransactionMarker(producerId, producerEpoch, result);
     }
 
+    public CoordinatorResult<Void, CoordinatorRecord> completeTransaction(
+        long producerId,
+        short producerEpoch,
+        TransactionResult result
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        long timestamp = time.milliseconds();
+
+        for (Map.Entry<SharePartitionKey, ShareGroupOffset> entry : shareStateMap.entrySet()) {
+            SharePartitionKey key = entry.getKey();
+            ShareGroupOffset currentState = entry.getValue();
+            List<PersisterStateBatch> finalizedBatches = new ArrayList<>(currentState.stateBatches().size());
+            int deliveryCompleteCount = currentState.deliveryCompleteCount();
+            boolean hasMatchingPendingBatch = false;
+
+            for (PersisterStateBatch batch : currentState.stateBatches()) {
+                if (isMatchingPendingBatch(batch, producerId, producerEpoch)) {
+                    byte finalState = finalDeliveryState(batch, result);
+                    finalizedBatches.add(new PersisterStateBatch(
+                        batch.firstOffset(),
+                        batch.lastOffset(),
+                        finalState,
+                        batch.deliveryCount()
+                    ));
+                    if (isTerminalDeliveryState(finalState)) {
+                        deliveryCompleteCount += Math.toIntExact(batch.lastOffset() - batch.firstOffset() + 1);
+                    }
+                    hasMatchingPendingBatch = true;
+                } else {
+                    finalizedBatches.add(batch);
+                }
+            }
+
+            if (hasMatchingPendingBatch) {
+                records.add(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+                    key.groupId(),
+                    key.topicId(),
+                    key.partition(),
+                    new ShareGroupOffset.Builder()
+                        .setSnapshotEpoch(currentState.snapshotEpoch() + 1)
+                        .setStateEpoch(currentState.stateEpoch())
+                        .setStartOffset(currentState.startOffset())
+                        .setDeliveryCompleteCount(deliveryCompleteCount)
+                        .setLeaderEpoch(currentState.leaderEpoch())
+                        .setStateBatches(finalizedBatches)
+                        .setCreateTimestamp(currentState.createTimestamp())
+                        .setWriteTimestamp(timestamp)
+                        .build()
+                ));
+            }
+        }
+
+        return new CoordinatorResult<>(records, null);
+    }
+
+    private boolean isMatchingPendingBatch(PersisterStateBatch batch, long producerId, short producerEpoch) {
+        return batch.deliveryState() == DELIVERY_STATE_TX_PENDING
+            && batch.stagedProducerId() == producerId
+            && batch.stagedProducerEpoch() == producerEpoch;
+    }
+
+    private byte finalDeliveryState(PersisterStateBatch batch, TransactionResult result) {
+        if (result == TransactionResult.ABORT) {
+            return DELIVERY_STATE_AVAILABLE;
+        }
+        if (batch.stagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE) {
+            return batch.stagedDeliveryState();
+        }
+        return batch.stagedAckType() == ACKNOWLEDGE_TYPE_ACCEPT ? DELIVERY_STATE_ACKNOWLEDGED : DELIVERY_STATE_ARCHIVED;
+    }
+
+    private boolean isTerminalDeliveryState(byte deliveryState) {
+        return deliveryState == DELIVERY_STATE_ACKNOWLEDGED || deliveryState == DELIVERY_STATE_ARCHIVED;
+    }
+
     /**
      * This method generates the ShareSnapshotValue record corresponding to the requested topic partition information.
      * The generated record is then written to the __share_group_state topic and replayed to the in-memory state
@@ -378,6 +460,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                         .setStagedProducerId(stateBatch.stagedProducerId())
                         .setStagedProducerEpoch(stateBatch.stagedProducerEpoch())
                         .setStagedAckType(stateBatch.stagedAckType())
+                        .setStagedDeliveryState(stateBatch.stagedDeliveryState())
                 ).toList() : List.of();
 
         ReadShareGroupStateResponseData responseData = ReadShareGroupStateResponse.toResponseData(
@@ -1042,7 +1125,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             batch.deliveryCount(),
             batch.stagedProducerId(),
             batch.stagedProducerEpoch(),
-            batch.stagedAckType()
+            batch.stagedAckType(),
+            batch.stagedDeliveryState()
         );
     }
 }

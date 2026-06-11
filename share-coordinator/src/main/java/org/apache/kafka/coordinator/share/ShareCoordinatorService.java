@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1002,6 +1003,32 @@ public class ShareCoordinatorService implements ShareCoordinator {
             return new InitializeShareGroupStateResponseData()
                 .setResults(initializeStateResult);
         });
+    }
+
+    @Override
+    public CompletableFuture<Void> completeTransaction(
+        TopicPartition tp,
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result,
+        short transactionVersion
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+        }
+
+        if (!tp.topic().equals(Topic.SHARE_GROUP_STATE_TOPIC_NAME)) {
+            return CompletableFuture.failedFuture(new IllegalStateException(
+                "Completing a transaction for " + tp + " is not expected"
+            ));
+        }
+
+        return runtime.scheduleWriteOperation(
+            "complete-share-transaction",
+            tp,
+            coordinator -> coordinator.completeTransaction(producerId, producerEpoch, result)
+        );
     }
 
     private ReadShareGroupStateResponseData generateErrorReadStateResponse(

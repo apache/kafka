@@ -61,6 +61,7 @@ public class InFlightState {
     private long stagedProducerId = -1L;
     private short stagedProducerEpoch = -1;
     private byte stagedAckType = -1;
+    private byte stagedDeliveryState = -1;
 
     // Visible for testing.
     public InFlightState(RecordState state, int deliveryCount, String memberId) {
@@ -68,7 +69,7 @@ public class InFlightState {
     }
 
     InFlightState(RecordState state, int deliveryCount, String memberId, AcquisitionLockTimerTask acquisitionLockTimeoutTask) {
-        this(state, deliveryCount, memberId, acquisitionLockTimeoutTask, -1L, (short) -1, (byte) -1);
+        this(state, deliveryCount, memberId, acquisitionLockTimeoutTask, -1L, (short) -1, (byte) -1, (byte) -1);
     }
 
     InFlightState(
@@ -78,7 +79,8 @@ public class InFlightState {
         AcquisitionLockTimerTask acquisitionLockTimeoutTask,
         long stagedProducerId,
         short stagedProducerEpoch,
-        byte stagedAckType
+        byte stagedAckType,
+        byte stagedDeliveryState
     ) {
         this.state = state;
         this.deliveryCount = deliveryCount;
@@ -87,6 +89,7 @@ public class InFlightState {
         this.stagedProducerId = stagedProducerId;
         this.stagedProducerEpoch = stagedProducerEpoch;
         this.stagedAckType = stagedAckType;
+        this.stagedDeliveryState = stagedDeliveryState;
     }
 
     /**
@@ -287,13 +290,21 @@ public class InFlightState {
         return stagedAckType;
     }
 
+    public byte stagedDeliveryState() {
+        return stagedDeliveryState;
+    }
+
+    public InFlightState stageTxnAcknowledge(long producerId, short producerEpoch, AcknowledgeType ackType) {
+        return stageTxnAcknowledge(producerId, producerEpoch, ackType, defaultStagedDeliveryState(ackType));
+    }
+
     /**
      * Stage this record into an open producer transaction. Transitions state from ACQUIRED to TX_PENDING,
      * cancels the acquisition lock timer (transaction timeout governs the hold instead), and records the
      * producer identity and ack type for later resolution by {@link #applyTxnMarker}.
      * Only ACCEPT and REJECT are valid ack types inside a transaction.
      */
-    public InFlightState stageTxnAcknowledge(long producerId, short producerEpoch, AcknowledgeType ackType) {
+    public InFlightState stageTxnAcknowledge(long producerId, short producerEpoch, AcknowledgeType ackType, RecordState stagedDeliveryState) {
         if (ackType != AcknowledgeType.ACCEPT && ackType != AcknowledgeType.REJECT) {
             throw new IllegalArgumentException("Only ACCEPT or REJECT are valid inside a transaction, got: " + ackType);
         }
@@ -302,6 +313,7 @@ public class InFlightState {
             this.stagedProducerId = producerId;
             this.stagedProducerEpoch = producerEpoch;
             this.stagedAckType = ackType.id;
+            this.stagedDeliveryState = stagedDeliveryState.id;
             cancelAndClearAcquisitionLockTimeoutTask();
             return this;
         } catch (IllegalStateException e) {
@@ -321,6 +333,7 @@ public class InFlightState {
         stagedProducerId = -1L;
         stagedProducerEpoch = -1;
         stagedAckType = -1;
+        stagedDeliveryState = -1;
         return true;
     }
 
@@ -339,12 +352,9 @@ public class InFlightState {
         }
         try {
             if (result == TransactionResult.COMMIT) {
-                RecordState nextState;
-                if (stagedAckType == AcknowledgeType.ACCEPT.id) {
-                    nextState = RecordState.ACKNOWLEDGED;
-                } else {
-                    nextState = dlqSupportEnabled ? RecordState.ARCHIVING : RecordState.ARCHIVED;
-                }
+                RecordState nextState = stagedDeliveryState == -1
+                    ? fallbackDeliveryState(dlqSupportEnabled)
+                    : RecordState.forId(stagedDeliveryState);
                 state = state.validateTransition(nextState);
                 memberId = EMPTY_MEMBER_ID;
             } else {
@@ -354,11 +364,27 @@ public class InFlightState {
             stagedProducerId = -1L;
             stagedProducerEpoch = -1;
             stagedAckType = -1;
+            stagedDeliveryState = -1;
             return this;
         } catch (IllegalStateException e) {
             log.error("Failed to apply transaction marker", e);
             return null;
         }
+    }
+
+    public InFlightState applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
+        return applyTxnMarker(producerId, producerEpoch, result, true);
+    }
+
+    private RecordState defaultStagedDeliveryState(AcknowledgeType ackType) {
+        return ackType == AcknowledgeType.ACCEPT ? RecordState.ACKNOWLEDGED : RecordState.ARCHIVING;
+    }
+
+    private RecordState fallbackDeliveryState(boolean dlqSupportEnabled) {
+        if (stagedAckType == AcknowledgeType.ACCEPT.id) {
+            return RecordState.ACKNOWLEDGED;
+        }
+        return dlqSupportEnabled ? RecordState.ARCHIVING : RecordState.ARCHIVED;
     }
 
     private int updatedDeliveryCount(DeliveryCountOps ops) {
@@ -372,7 +398,7 @@ public class InFlightState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(state, deliveryCount, memberId, stagedProducerId, stagedProducerEpoch, stagedAckType);
+        return Objects.hash(state, deliveryCount, memberId, stagedProducerId, stagedProducerEpoch, stagedAckType, stagedDeliveryState);
     }
 
     @Override
@@ -389,7 +415,8 @@ public class InFlightState {
             && memberId.equals(that.memberId)
             && stagedProducerId == that.stagedProducerId
             && stagedProducerEpoch == that.stagedProducerEpoch
-            && stagedAckType == that.stagedAckType;
+            && stagedAckType == that.stagedAckType
+            && stagedDeliveryState == that.stagedDeliveryState;
     }
 
     @Override
@@ -401,6 +428,7 @@ public class InFlightState {
             ", stagedProducerId=" + stagedProducerId +
             ", stagedProducerEpoch=" + stagedProducerEpoch +
             ", stagedAckType=" + stagedAckType +
+            ", stagedDeliveryState=" + stagedDeliveryState +
             ")";
     }
 

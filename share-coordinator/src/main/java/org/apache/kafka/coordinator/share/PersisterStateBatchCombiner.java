@@ -162,7 +162,11 @@ public class PersisterStateBatchCombiner {
                 if (deltaProducerId == 0) {
                     int deltaProducerEpoch = Short.compare(b1.stagedProducerEpoch(), b2.stagedProducerEpoch());
                     if (deltaProducerEpoch == 0) {
-                        return Byte.compare(b1.stagedAckType(), b2.stagedAckType());
+                        int deltaAckType = Byte.compare(b1.stagedAckType(), b2.stagedAckType());
+                        if (deltaAckType == 0) {
+                            return Byte.compare(b1.stagedDeliveryState(), b2.stagedDeliveryState());
+                        }
+                        return deltaAckType;
                     }
                     return deltaProducerEpoch;
                 }
@@ -262,7 +266,8 @@ public class PersisterStateBatchCombiner {
             prev.deliveryCount(),
             prev.stagedProducerId(),
             prev.stagedProducerEpoch(),
-            prev.stagedAckType()
+            prev.stagedAckType(),
+            prev.stagedDeliveryState()
         ));
     }
 
@@ -355,7 +360,8 @@ public class PersisterStateBatchCombiner {
             batch.deliveryCount(),
             batch.stagedProducerId(),
             batch.stagedProducerEpoch(),
-            batch.stagedAckType()
+            batch.stagedAckType(),
+            batch.stagedDeliveryState()
         );
     }
 

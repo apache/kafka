@@ -515,10 +515,15 @@ public class SharePartition {
                         gapStartOffset = previousBatchLastOffset + 1;
                     }
                     previousBatchLastOffset = stateBatch.lastOffset();
-                    InFlightBatch inFlightBatch = new InFlightBatch(timer, time, EMPTY_MEMBER_ID, stateBatch.firstOffset(),
-                        stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(),
-                        null, timeoutHandler, sharePartitionMetrics, stateBatch.stagedProducerId(),
-                        stateBatch.stagedProducerEpoch(), stateBatch.stagedAckType());
+                    InFlightBatch inFlightBatch = new InFlightBatch(
+                        timer,
+                        time,
+                        EMPTY_MEMBER_ID,
+                        stateBatch,
+                        null,
+                        timeoutHandler,
+                        sharePartitionMetrics
+                    );
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
                     // During initialization, deliveryCompleteCount is updated with the number of records that are in the
                     // ACKNOWLEDGED or ARCHIVED state.
@@ -1156,7 +1161,7 @@ public class SharePartition {
 
                 byte ackType = ackTypeMap.get(batch.firstOffset());
                 InFlightState staged = inFlightBatch.stageBatchTxnAcknowledge(
-                    producerId, producerEpoch, AcknowledgeType.forId(ackType));
+                    producerId, producerEpoch, AcknowledgeType.forId(ackType), recordStateWithDlq(ackType));
                 if (staged == null) {
                     return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
                 }
@@ -1176,7 +1181,7 @@ public class SharePartition {
                     }
                     byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(os.getKey()) : batch.acknowledgeTypes().get(0);
                     InFlightState staged = os.getValue().stageTxnAcknowledge(
-                        producerId, producerEpoch, AcknowledgeType.forId(ackType));
+                        producerId, producerEpoch, AcknowledgeType.forId(ackType), recordStateWithDlq(ackType));
                     if (staged == null) {
                         return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
                     }
@@ -1200,7 +1205,8 @@ public class SharePartition {
             (short) state.deliveryCount(),
             state.stagedProducerId(),
             state.stagedProducerEpoch(),
-            state.stagedAckType()
+            state.stagedAckType(),
+            state.stagedDeliveryState()
         );
     }
 
@@ -1307,6 +1313,9 @@ public class SharePartition {
         if (result == TransactionResult.ABORT) {
             return RecordState.AVAILABLE;
         }
+        if (state.stagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE) {
+            return RecordState.forId(state.stagedDeliveryState());
+        }
         if (state.stagedAckType() == AcknowledgeType.ACCEPT.id) {
             return RecordState.ACKNOWLEDGED;
         }
@@ -1316,6 +1325,9 @@ public class SharePartition {
     private RecordState finalStateForTxnMarker(InFlightBatch batch, TransactionResult result) {
         if (result == TransactionResult.ABORT) {
             return RecordState.AVAILABLE;
+        }
+        if (batch.batchStagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE) {
+            return RecordState.forId(batch.batchStagedDeliveryState());
         }
         if (batch.batchStagedAckType() == AcknowledgeType.ACCEPT.id) {
             return RecordState.ACKNOWLEDGED;

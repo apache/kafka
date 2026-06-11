@@ -38,6 +38,7 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -102,6 +103,91 @@ class ShareCoordinatorServiceTest {
         when(image.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort()))
             .thenReturn((short) 1);
         return image;
+    }
+
+    @Test
+    public void testCompleteTransactionSchedulesWriteOperation() throws Exception {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            new MockTimer(),
+            mock(PartitionWriter.class)
+        );
+        TopicPartition topicPartition = new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0);
+        when(runtime.scheduleWriteOperation(
+            eq("complete-share-transaction"),
+            eq(topicPartition),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        service.startup(() -> 1);
+
+        assertEquals(null, service.completeTransaction(
+            topicPartition,
+            100L,
+            (short) 3,
+            1,
+            TransactionResult.COMMIT,
+            (short) 2
+        ).get(5, TimeUnit.SECONDS));
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("complete-share-transaction"),
+            eq(topicPartition),
+            any()
+        );
+    }
+
+    @Test
+    public void testCompleteTransactionReturnsCoordinatorNotAvailableWhenInactive() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            new MockTimer(),
+            mock(PartitionWriter.class)
+        );
+
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> service.completeTransaction(
+            new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0),
+            100L,
+            (short) 3,
+            1,
+            TransactionResult.COMMIT,
+            (short) 2
+        ).get(5, TimeUnit.SECONDS));
+        assertEquals(Errors.COORDINATOR_NOT_AVAILABLE.exception().getClass(), exception.getCause().getClass());
+    }
+
+    @Test
+    public void testCompleteTransactionRejectsUnexpectedTopic() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            new MockTimer(),
+            mock(PartitionWriter.class)
+        );
+        service.startup(() -> 1);
+
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> service.completeTransaction(
+            new TopicPartition("source-topic", 0),
+            100L,
+            (short) 3,
+            1,
+            TransactionResult.COMMIT,
+            (short) 2
+        ).get(5, TimeUnit.SECONDS));
+        assertTrue(exception.getCause() instanceof IllegalStateException);
     }
 
     @Test
