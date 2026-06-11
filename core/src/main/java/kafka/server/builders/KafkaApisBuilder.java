@@ -40,6 +40,7 @@ import org.apache.kafka.server.AutoTopicCreationManager;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.FetchManager;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Map;
@@ -53,6 +54,7 @@ public class KafkaApisBuilder {
     private ReplicaManager replicaManager = null;
     private GroupCoordinator groupCoordinator = null;
     private TransactionCoordinator txnCoordinator = null;
+    private AddPartitionsToTxnManager addPartitionsToTxnManager = null;
     private AutoTopicCreationManager autoTopicCreationManager = null;
     private int brokerId = 0;
     private KafkaConfig config = null;
@@ -94,6 +96,11 @@ public class KafkaApisBuilder {
 
     public KafkaApisBuilder setTxnCoordinator(TransactionCoordinator txnCoordinator) {
         this.txnCoordinator = txnCoordinator;
+        return this;
+    }
+
+    public KafkaApisBuilder setAddPartitionsToTxnManager(AddPartitionsToTxnManager addPartitionsToTxnManager) {
+        this.addPartitionsToTxnManager = addPartitionsToTxnManager;
         return this;
     }
 
@@ -194,6 +201,7 @@ public class KafkaApisBuilder {
         if (replicaManager == null) throw new RuntimeException("You must set replicaManager");
         if (groupCoordinator == null) throw new RuntimeException("You must set groupCoordinator");
         if (txnCoordinator == null) throw new RuntimeException("You must set txnCoordinator");
+        if (addPartitionsToTxnManager == null) throw new RuntimeException("You must set addPartitionsToTxnManager");
         if (shareCoordinator == null) throw new RuntimeException("You must set shareCoordinator");
         if (autoTopicCreationManager == null) throw new RuntimeException("You must set autoTopicCreationManager");
         if (config == null) config = new KafkaConfig(Map.of());
@@ -214,6 +222,7 @@ public class KafkaApisBuilder {
                              groupCoordinator,
                              txnCoordinator,
                              shareCoordinator,
+                             addPartitionsToTxnManager,
                              autoTopicCreationManager,
                              brokerId,
                              config,

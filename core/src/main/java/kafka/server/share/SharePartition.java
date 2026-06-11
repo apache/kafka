@@ -1311,6 +1311,28 @@ public class SharePartition {
         return future;
     }
 
+    boolean hasPendingTransactionalRecords() {
+        lock.readLock().lock();
+        try {
+            for (InFlightBatch batch : cachedState.values()) {
+                if (batch.offsetState() == null) {
+                    if (batch.batchState() == RecordState.TX_PENDING) {
+                        return true;
+                    }
+                } else {
+                    for (InFlightState state : batch.offsetState().values()) {
+                        if (state.state() == RecordState.TX_PENDING) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     private boolean matchesTxnMarker(InFlightState state, long producerId, short producerEpoch) {
         return state.state() == RecordState.TX_PENDING &&
             state.stagedProducerId() == producerId &&

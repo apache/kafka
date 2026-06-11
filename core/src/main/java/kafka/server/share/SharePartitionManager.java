@@ -706,7 +706,13 @@ public class SharePartitionManager implements AutoCloseable {
             delayedShareFetchWatchKeys.add(new DelayedShareFetchPartitionKey(topicIdPartition.topicId(), topicIdPartition.partition()));
 
             CompletableFuture<Void> initializationFuture = sharePartition.maybeInitialize();
+            if (initializationFuture.isDone() && !initializationFuture.isCompletedExceptionally()
+                && sharePartition.hasPendingTransactionalRecords()) {
+                sharePartition = reinitializePendingTransactionalSharePartition(sharePartitionKey);
+                initializationFuture = sharePartition.maybeInitialize();
+            }
             final boolean initialized = initializationFuture.isDone();
+            final SharePartition initializedSharePartition = sharePartition;
             initializationFuture.whenComplete((result, throwable) -> {
                 if (throwable != null) {
                     handleInitializationException(sharePartitionKey, shareFetch, throwable);
@@ -717,11 +723,11 @@ public class SharePartitionManager implements AutoCloseable {
                 // is initialized. Hence, trigger the completion of all pending delayed share fetch requests
                 // for the share partition.
                 if (!initialized) {
-                    shareGroupMetrics.partitionLoadTime(sharePartition.loadStartTimeMs());
+                    shareGroupMetrics.partitionLoadTime(initializedSharePartition.loadStartTimeMs());
                     replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
                 }
             });
-            sharePartitions.put(topicIdPartition, sharePartition);
+            sharePartitions.put(topicIdPartition, initializedSharePartition);
         }
 
         // Update the metrics for the topics for which we have received a share fetch request.
@@ -741,6 +747,12 @@ public class SharePartitionManager implements AutoCloseable {
         // The request will be added irrespective of whether the share partition is initialized or not.
         // Once the share partition is initialized, the delayed share fetch will be completed.
         addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time, remoteFetchMaxWaitMs), delayedShareFetchWatchKeys);
+    }
+
+    private SharePartition reinitializePendingTransactionalSharePartition(SharePartitionKey sharePartitionKey) {
+        log.debug("Reinitializing share partition with pending transactional state: {}", sharePartitionKey);
+        removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager);
+        return getOrCreateSharePartition(sharePartitionKey);
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {

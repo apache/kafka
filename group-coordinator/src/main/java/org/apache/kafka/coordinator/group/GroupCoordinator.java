@@ -51,6 +51,7 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -110,6 +111,23 @@ public interface GroupCoordinator {
     CompletableFuture<ShareGroupHeartbeatResponseData> shareGroupHeartbeat(
         AuthorizableRequestContext context,
         ShareGroupHeartbeatRequestData request
+    );
+
+    /**
+     * Validates that a share group member id and member epoch are current.
+     *
+     * @param context       The request context.
+     * @param groupId       The share group id.
+     * @param memberId      The share group member id.
+     * @param memberEpoch   The share group member epoch.
+     *
+     * @return A future yielding the validation error, or NONE when the member is valid.
+     */
+    CompletableFuture<Errors> validateShareGroupMember(
+        AuthorizableRequestContext context,
+        String groupId,
+        String memberId,
+        int memberEpoch
     );
 
     /**

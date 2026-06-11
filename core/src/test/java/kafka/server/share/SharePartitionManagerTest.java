@@ -2496,6 +2496,45 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testShareFetchReinitializesPendingTransactionalSharePartition() {
+        String groupId = "grp";
+        String memberId = "member-id";
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartitionKey sharePartitionKey = new SharePartitionKey(groupId, tp0);
+        SharePartition staleSharePartition = mock(SharePartition.class);
+        SharePartition refreshedSharePartition = mock(SharePartition.class);
+        SharePartitionManager.SharePartitionListener listener = mock(SharePartitionManager.SharePartitionListener.class);
+
+        when(staleSharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
+        when(staleSharePartition.hasPendingTransactionalRecords()).thenReturn(true);
+        when(staleSharePartition.listener()).thenReturn(listener);
+        when(refreshedSharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
+        when(refreshedSharePartition.hasPendingTransactionalRecords()).thenReturn(false);
+
+        SharePartitionCache partitionCache = mock(SharePartitionCache.class);
+        when(partitionCache.computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any()))
+            .thenReturn(staleSharePartition, refreshedSharePartition);
+        when(partitionCache.remove(sharePartitionKey)).thenReturn(staleSharePartition);
+
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withPartitionCache(partitionCache)
+            .withBrokerTopicStats(brokerTopicStats)
+            .build();
+
+        sharePartitionManager.fetchMessages(groupId, memberId, FETCH_PARAMS, BATCH_OPTIMIZED, 0,
+            MAX_FETCH_RECORDS, BATCH_SIZE, List.of(tp0));
+
+        verify(partitionCache, times(2)).computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any());
+        verify(partitionCache).remove(sharePartitionKey);
+        verify(staleSharePartition).markFenced();
+        verify(replicaManager).removeListener(tp0.topicPartition(), listener);
+        verify(refreshedSharePartition).maybeInitialize();
+        verify(replicaManager).addDelayedShareFetchRequest(any(), any());
+    }
+
+    @Test
     public void testSharePartitionInitializationFailure() throws Exception {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));

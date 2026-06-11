@@ -723,6 +723,34 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ));
     }
 
+    @Override
+    public CompletableFuture<Errors> validateShareGroupMember(
+        AuthorizableRequestContext context,
+        String groupId,
+        String memberId,
+        int memberEpoch
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(Errors.COORDINATOR_NOT_AVAILABLE);
+        }
+
+        if (groupId == null || groupId.isEmpty() || memberId == null || memberId.isEmpty()) {
+            return CompletableFuture.completedFuture(Errors.INVALID_REQUEST);
+        }
+
+        return runtime.scheduleReadOperation(
+            "validate-share-group-member",
+            topicPartitionFor(groupId),
+            (coordinator, lastCommittedOffset) -> coordinator.validateShareGroupMember(groupId, memberId, memberEpoch)
+        ).exceptionally(exception -> handleOperationException(
+            "validate-share-group-member",
+            groupId,
+            exception,
+            (error, message) -> error,
+            log
+        ));
+    }
+
     // Visibility for testing
     CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
         InitializeShareGroupStateParameters request,

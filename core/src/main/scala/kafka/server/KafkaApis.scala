@@ -95,6 +95,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
                 val shareCoordinator: ShareCoordinator,
+                val addPartitionsToTxnManager: AddPartitionsToTxnManager,
                 val autoTopicCreationManager: AutoTopicCreationManager,
                 val brokerId: Int,
                 val config: KafkaConfig,
@@ -3769,41 +3770,57 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    val shareStatePartitions = new util.HashSet[TopicPartition]()
-    validAcknowledgeBatches.keys.foreach { tip =>
-      shareStatePartitions.add(new TopicPartition(
-        SHARE_GROUP_STATE_TOPIC_NAME,
-        shareCoordinator.partitionFor(SharePartitionKey.getInstance(groupId, tip))))
-    }
+    groupCoordinator.validateShareGroupMember(request.context, groupId, memberId, data.memberEpoch)
+      .thenCompose[Unit] { memberError =>
+        if (memberError != Errors.NONE) {
+          requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, memberError.exception))
+          CompletableFuture.completedFuture[Unit](())
+        } else {
+          val shareStatePartitions = new util.HashSet[TopicPartition]()
+          validAcknowledgeBatches.keys.foreach { tip =>
+            shareStatePartitions.add(new TopicPartition(
+              SHARE_GROUP_STATE_TOPIC_NAME,
+              shareCoordinator.partitionFor(SharePartitionKey.getInstance(groupId, tip))))
+          }
 
-    val registrationDone = new CompletableFuture[Errors]()
-    txnCoordinator.handleAddPartitionsToTransaction(
-      transactionalId,
-      producerId,
-      producerEpoch,
-      shareStatePartitions,
-      (error: Errors) => registrationDone.complete(error),
-      TransactionVersion.TV_2,
-      requestLocal)
+          val registrationDone = new CompletableFuture[Errors]()
+          addPartitionsToTxnManager.addOrVerifyTransaction(
+            transactionalId,
+            producerId,
+            producerEpoch,
+            shareStatePartitions,
+            errors => {
+              val firstError = errors.values().asScala.find(_ != Errors.NONE).getOrElse(Errors.NONE)
+              registrationDone.complete(firstError)
+            },
+            AddPartitionsToTxnManager.TransactionSupportedOperation.ADD_PARTITION)
 
-    registrationDone.thenCompose[Unit] { error =>
-      if (error != Errors.NONE) {
-        requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, error.exception))
-        CompletableFuture.completedFuture[Unit](())
-      } else {
-        sharePartitionManager.acknowledgeTransactional(memberId, groupId, producerId, producerEpoch, validAcknowledgeBatches.toMap.asJava)
-          .handle[Unit] { (result, exception) =>
-            if (exception != null) {
-              requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+          registrationDone.thenCompose[Unit] { error =>
+            if (error != Errors.NONE) {
+              requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, error.exception))
+              CompletableFuture.completedFuture[Unit](())
             } else {
-              sendPartitionResponse(result.asScala.toMap ++ erroneous)
+              sharePartitionManager.acknowledgeTransactional(
+                  memberId,
+                  groupId,
+                  producerId,
+                  producerEpoch,
+                  validAcknowledgeBatches.asJava)
+                .handle[Unit] { (result, exception) =>
+                  if (exception != null) {
+                    requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+                  } else {
+                    sendPartitionResponse(result.asScala.toMap ++ erroneous)
+                  }
+                }
             }
           }
+        }
       }
-    }.exceptionally { exception =>
-      requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
-      null.asInstanceOf[Unit]
-    }
+      .exceptionally { exception =>
+        requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+        null.asInstanceOf[Unit]
+      }
   }
 
   def handleInitializeShareGroupStateRequest(request: Request): CompletableFuture[Unit] = {

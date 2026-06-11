@@ -87,6 +87,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -99,6 +100,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -485,10 +487,23 @@ public class TransactionManager {
         }
 
         log.debug("Begin staging share acks {} for share group {} to transaction", acknowledgements, groupMetadata);
-        TxnShareAcknowledgeHandler handler = txnShareAcknowledgeHandler(null, acknowledgements.acknowledgements(), groupMetadata);
+        if (acknowledgements.acknowledgements().isEmpty()) {
+            TransactionalRequestResult result = new TransactionalRequestResult("sendShareAcknowledgementsToTransaction");
+            result.done();
+            return result;
+        }
+
+        TransactionalRequestResult result = new TransactionalRequestResult("sendShareAcknowledgementsToTransaction");
+        AtomicInteger remainingRequests = new AtomicInteger(acknowledgements.acknowledgements().size());
+        acknowledgements.acknowledgements().forEach((topicIdPartition, partitionAcknowledgements) ->
+            enqueueRequest(txnShareAcknowledgeHandler(
+                result,
+                Collections.singletonMap(topicIdPartition, partitionAcknowledgements),
+                groupMetadata,
+                topicIdPartition.topicPartition(),
+                remainingRequests)));
         transactionStarted = true;
-        enqueueRequest(handler);
-        return handler.result;
+        return result;
     }
 
     public synchronized void maybeAddPartition(TopicPartition topicPartition) {
@@ -1396,6 +1411,7 @@ public class TransactionManager {
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
+        pendingTxnShareAcks.clear();
         preparedTxnState = ProducerIdAndEpoch.NONE;
     }
 
@@ -1494,6 +1510,10 @@ public class TransactionManager {
 
         String coordinatorKey() {
             return transactionalId;
+        }
+
+        TopicPartition targetTopicPartition() {
+            return null;
         }
 
         void setRetry() {
@@ -2016,7 +2036,9 @@ public class TransactionManager {
     private TxnShareAcknowledgeHandler txnShareAcknowledgeHandler(
             TransactionalRequestResult result,
             Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgements,
-            ShareGroupMetadata groupMetadata) {
+            ShareGroupMetadata groupMetadata,
+            TopicPartition targetTopicPartition,
+            AtomicInteger remainingRequests) {
         pendingTxnShareAcks.putAll(acknowledgements);
 
         List<TxnShareAcknowledgeTopic> topics = new ArrayList<>();
@@ -2056,24 +2078,25 @@ public class TransactionManager {
             .setTopics(topics);
 
         TxnShareAcknowledgeRequest.Builder builder = new TxnShareAcknowledgeRequest.Builder(data);
-        if (result == null) {
-            return new TxnShareAcknowledgeHandler(builder);
-        }
-        return new TxnShareAcknowledgeHandler(result, builder);
+        return new TxnShareAcknowledgeHandler(result, builder, acknowledgements.keySet(), targetTopicPartition, remainingRequests);
     }
 
     private class TxnShareAcknowledgeHandler extends TxnRequestHandler {
         private final TxnShareAcknowledgeRequest.Builder builder;
+        private final Set<TopicIdPartition> topicIdPartitions;
+        private final TopicPartition targetTopicPartition;
+        private final AtomicInteger remainingRequests;
 
         private TxnShareAcknowledgeHandler(TransactionalRequestResult result,
-                                           TxnShareAcknowledgeRequest.Builder builder) {
+                                           TxnShareAcknowledgeRequest.Builder builder,
+                                           Set<TopicIdPartition> topicIdPartitions,
+                                           TopicPartition targetTopicPartition,
+                                           AtomicInteger remainingRequests) {
             super(result);
             this.builder = builder;
-        }
-
-        private TxnShareAcknowledgeHandler(TxnShareAcknowledgeRequest.Builder builder) {
-            super("TxnShareAcknowledgeHandler");
-            this.builder = builder;
+            this.topicIdPartitions = topicIdPartitions;
+            this.targetTopicPartition = targetTopicPartition;
+            this.remainingRequests = remainingRequests;
         }
 
         @Override
@@ -2088,12 +2111,12 @@ public class TransactionManager {
 
         @Override
         FindCoordinatorRequest.CoordinatorType coordinatorType() {
-            return FindCoordinatorRequest.CoordinatorType.GROUP;
+            return null;
         }
 
         @Override
-        String coordinatorKey() {
-            return builder.data.groupId();
+        TopicPartition targetTopicPartition() {
+            return targetTopicPartition;
         }
 
         @Override
@@ -2108,12 +2131,13 @@ public class TransactionManager {
                 builder.data.groupId(), error);
 
             if (error == Errors.NONE) {
-                pendingTxnShareAcks.clear();
-                result.done();
+                topicIdPartitions.forEach(pendingTxnShareAcks::remove);
+                if (remainingRequests.decrementAndGet() == 0) {
+                    result.done();
+                }
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                     || error == Errors.NOT_COORDINATOR
                     || error == Errors.REQUEST_TIMED_OUT) {
-                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.data.groupId());
                 reenqueue();
             } else if (error.exception() instanceof RetriableException) {
                 reenqueue();

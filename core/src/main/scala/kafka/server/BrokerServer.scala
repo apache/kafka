@@ -473,6 +473,7 @@ class BrokerServer(
         groupCoordinator = groupCoordinator,
         txnCoordinator = transactionCoordinator,
         shareCoordinator = shareCoordinator,
+        addPartitionsToTxnManager = addPartitionsToTxnManager,
         autoTopicCreationManager = autoTopicCreationManager,
         brokerId = config.nodeId,
         config = config,

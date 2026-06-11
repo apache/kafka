@@ -1139,6 +1139,41 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testValidateShareGroupMember() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 3)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(metadataImage)
+            .build();
+
+        ShareGroupMember member = new ShareGroupMember.Builder(memberId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(100)
+            .setPreviousMemberEpoch(99)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setSubscribedTopicNames(List.of(fooTopicName))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2)))
+            .build();
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, member));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 100, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member));
+
+        assertEquals(Errors.NONE, context.groupMetadataManager.validateShareGroupMember(groupId, memberId, 100));
+        assertEquals(Errors.NONE, context.groupMetadataManager.validateShareGroupMember(groupId, memberId, 99));
+        assertEquals(Errors.UNKNOWN_MEMBER_ID, context.groupMetadataManager.validateShareGroupMember(groupId, "unknown", 100));
+        assertEquals(Errors.STALE_MEMBER_EPOCH, context.groupMetadataManager.validateShareGroupMember(groupId, memberId, 98));
+        assertEquals(Errors.GROUP_ID_NOT_FOUND, context.groupMetadataManager.validateShareGroupMember("unknown-group", memberId, 100));
+    }
+
+    @Test
     public void testStreamsGroupMemberCanRejoinWithEpochZero() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();

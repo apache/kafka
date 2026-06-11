@@ -1307,8 +1307,33 @@ public class TransactionManagerTest {
             shareAcknowledgements(tip),
             new ShareGroupMetadata(consumerGroupId, memberId, generationId));
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.NONE);
+
+        runUntil(sendAcksResult::isCompleted);
+        assertTrue(sendAcksResult.isSuccessful());
+        assertFalse(transactionManager.hasError());
+    }
+
+    @Test
+    public void testTxnShareAcknowledgeCompletesAfterAllPartitionRequests() {
+        TopicIdPartition tip0 = new TopicIdPartition(TOPIC_ID, tp0);
+        TopicIdPartition tip1 = new TopicIdPartition(TOPIC_ID, tp1);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
+            new ShareAcknowledgements(Map.of(
+                tip0, List.of(new ShareAcknowledgementBatch(5L, 6L, List.of(AcknowledgeType.ACCEPT.id))),
+                tip1, List.of(new ShareAcknowledgementBatch(7L, 8L, List.of(AcknowledgeType.ACCEPT.id))))),
+            new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+
+        runUntil(() -> !client.requests().isEmpty());
+        respondToNextTxnShareAcknowledgeRequest(Errors.NONE);
+        assertFalse(sendAcksResult.isCompleted());
+
+        runUntil(() -> !client.requests().isEmpty());
+        respondToNextTxnShareAcknowledgeRequest(Errors.NONE);
 
         runUntil(sendAcksResult::isCompleted);
         assertTrue(sendAcksResult.isSuccessful());
@@ -1326,7 +1351,6 @@ public class TransactionManagerTest {
             shareAcknowledgements(tip),
             new ShareGroupMetadata(consumerGroupId, memberId, generationId));
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.UNKNOWN_MEMBER_ID);
 
         runUntil(transactionManager::hasError);
@@ -1348,7 +1372,6 @@ public class TransactionManagerTest {
             shareAcknowledgements(tip),
             new ShareGroupMetadata(consumerGroupId, memberId, generationId));
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.INVALID_RECORD_STATE);
 
         runUntil(transactionManager::hasError);
@@ -1370,7 +1393,6 @@ public class TransactionManagerTest {
             shareAcknowledgements(tip),
             new ShareGroupMetadata(consumerGroupId, memberId, generationId));
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.PRODUCER_FENCED);
 
         runUntil(transactionManager::hasFatalError);
@@ -4622,6 +4644,26 @@ public class TransactionManagerTest {
                 .setTopicId(topicIdPartition.topicId())
                 .setPartitions(List.of(new TxnShareAcknowledgeResponseData.TxnShareAcknowledgePartitionResponse()
                     .setPartitionIndex(topicIdPartition.partition())
+                    .setErrorCode(partitionError.code())))))));
+    }
+
+    private void respondToNextTxnShareAcknowledgeRequest(Errors partitionError) {
+        TxnShareAcknowledgeRequest txnShareAcknowledgeRequest =
+            (TxnShareAcknowledgeRequest) client.requests().peek().requestBuilder().build();
+        assertEquals(consumerGroupId, txnShareAcknowledgeRequest.data().groupId());
+        assertEquals(producerId, txnShareAcknowledgeRequest.data().producerId());
+        assertEquals(epoch, txnShareAcknowledgeRequest.data().producerEpoch());
+        assertEquals(1, txnShareAcknowledgeRequest.data().topics().size());
+        assertEquals(1, txnShareAcknowledgeRequest.data().topics().get(0).partitions().size());
+
+        Uuid topicId = txnShareAcknowledgeRequest.data().topics().get(0).topicId();
+        int partition = txnShareAcknowledgeRequest.data().topics().get(0).partitions().get(0).partitionIndex();
+        client.respond(new TxnShareAcknowledgeResponse(new TxnShareAcknowledgeResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setResponses(List.of(new TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse()
+                .setTopicId(topicId)
+                .setPartitions(List.of(new TxnShareAcknowledgeResponseData.TxnShareAcknowledgePartitionResponse()
+                    .setPartitionIndex(partition)
                     .setErrorCode(partitionError.code())))))));
     }
 

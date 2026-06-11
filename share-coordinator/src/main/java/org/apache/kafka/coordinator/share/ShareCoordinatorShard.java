@@ -73,6 +73,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+@SuppressWarnings("ClassFanOutComplexity")
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
     private final Logger log;
     private final ShareCoordinatorConfig config;
@@ -89,10 +90,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final Time time;
 
     private static final byte DELIVERY_STATE_AVAILABLE = 0;
+    private static final byte DELIVERY_STATE_ACQUIRED = 1;
     private static final byte DELIVERY_STATE_ACKNOWLEDGED = 2;
     private static final byte DELIVERY_STATE_ARCHIVED = 4;
     private static final byte DELIVERY_STATE_TX_PENDING = 5;
     private static final byte ACKNOWLEDGE_TYPE_ACCEPT = 1;
+    private static final byte ACKNOWLEDGE_TYPE_REJECT = 3;
 
     public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
