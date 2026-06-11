@@ -34,8 +34,8 @@ This page extends the [Apache Kafka security model](security-model) to Kafka Con
 - **The REST API is unauthenticated by default.** Out of the box, anyone who can reach the REST port can create, reconfigure, stop, or delete any connector. Because connectors and plugins run arbitrary code, unrestricted REST access is effectively unrestricted code execution on the worker.
 - **Connect plugins run arbitrary code.** Connectors, converters, transformations, predicates, and REST extensions loaded from `plugin.path` execute in the worker JVM with its privileges. Install only plugins you trust.
 - **The REST API is a shared control plane with no per-connector isolation.** There is no notion of connector ownership: any caller allowed onto the API can act on every connector and read its configuration.
-- **A worker authenticates to Kafka as a single principal.** All connectors on a worker share that principal's identity and ACLs; Connect does not give each connector a distinct Kafka identity.
-- **Connect stores its state in Kafka topics.** Connector configurations (including any inlined secrets), source offsets, and status live in the `config.storage.topic`, `offset.storage.topic`, and `status.storage.topic`. Protect them with ACLs as you would any sensitive topic.
+- **A worker authenticates to Kafka as a single principal.** By default all connectors on a worker share that principal's identity and ACLs; Connect does not give each connector a distinct Kafka identity. A connector can override the internal clients' configuration — including credentials — unless `connector.client.config.override.policy` restricts it (see Authorization below).
+- **In distributed mode, Connect stores its state in Kafka topics.** Connector configurations (including any inlined secrets), source offsets, and status live in the `config.storage.topic`, `offset.storage.topic`, and `status.storage.topic`; protect them with ACLs as you would any sensitive topic. In standalone mode, offsets are kept in a local file (`offset.storage.file.filename`) instead, so its protection is the host filesystem's responsibility.
 
 ## The REST API and the Network Boundary
 
@@ -83,3 +83,11 @@ Connector configurations frequently contain credentials for external systems. As
 ## Plugins
 
 Connect loads connectors, converters, single-message transforms, predicates, `ConfigProvider`s, and REST extensions from `plugin.path`. All of them run in the worker JVM with its full privileges, so installing a plugin is equivalent to granting it arbitrary code execution on the worker. Install only plugins from sources you trust, and treat the ability to influence which plugins load — or to set class-loading connector configs — as administrator-level access.
+
+## Known Non-Findings
+
+In line with the [core model's classification](security-model), the following follow from Connect's design and are not, on their own, security vulnerabilities:
+
+- **File-based connectors granting disk access.** Adding the file connectors to a worker effectively grants read/write access to the worker's local disk. This is the connector's intended function, not a flaw.
+- **Local-disk-only weaknesses in the file-based config providers.** Issues that require an attacker to already have local disk access on a Connect worker — for example the ability to create arbitrary files or symlinks — are not security issues, because such access is outside Connect's trust boundary. Path-validation robustness in these providers may still be hardened independently.
+- **`PropertyFileLoginModule` storing cleartext credentials.** The reference `PropertyFileLoginModule` shipped with the basic auth extension is documented as test-only; production deployments are expected to supply a real `LoginModule`. Its cleartext storage is therefore expected behaviour rather than a defect.

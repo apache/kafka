@@ -31,6 +31,7 @@ type: docs
 - **Security is off by default.** A freshly-installed Apache Kafka cluster accepts unauthenticated `PLAINTEXT` connections on every listener and applies no authorization. This is appropriate only for closed test environments. Production deployments **must** explicitly configure authentication, authorization, and transport encryption before being exposed to any untrusted network.
 - **Apache Kafka assumes a trusted operator.** Anyone with shell access to a broker, controller, or the underlying disks can read every topic, forge any principal, and rewrite ACLs. The security model protects messages in transit and arbitrates client access — it does not defend brokers from their own administrators.
 - **Apache Kafka assumes a trusted broker fleet.** Brokers and KRaft controllers exchange records, replication state, and metadata over the inter-broker and controller listeners. Any host that can authenticate on those listeners is effectively part of the cluster's trust boundary.
+- **Apache Kafka trusts its JVM and classpath.** JARs on a process's classpath run with that process's full privileges. Placing code on the classpath — or configuring a component to load it — is equivalent to trusting that code; the model assumes no hostile JARs are present.
 - **The data plane and the control plane have different exposure.** Producer/consumer traffic, the Admin API, and JMX each have distinct authentication and authorization stories. Operators must configure them independently — securing one does not secure the others.
 - **Apache Kafka does not encrypt data at rest.** Log segments, index files, and snapshots are written as plain bytes. At-rest confidentiality is the responsibility of the underlying filesystem, block device, or message-level encryption performed by producers.
 - **Reporting vulnerabilities.** Suspected security issues should be reported privately to `security@kafka.apache.org` per the [ASF security process](https://www.apache.org/security/). Do not file public JIRA tickets, GitHub issues, or mailing-list posts for unpatched vulnerabilities.
@@ -122,13 +123,13 @@ Broker, client, and Connect properties files contain keystore passwords, SASL cr
 
 ## Component-Specific Notes
 
-- **JMX.** Brokers expose operational metrics over JMX. JMX is an administrators/operators-only interface and must never be exposed to actual users. It is unauthenticated by default and should either be disabled, bound to localhost with an exporter alongside, or configured with `com.sun.management.jmxremote.authenticate=true` and TLS.
+- **JMX.** Kafka processes, such as brokers, clients, Connect and Streams, expose operational metrics over JMX. JMX is an administrators/operators-only interface and must never be exposed to actual users. It is unauthenticated by default and should either be disabled, bound to localhost with an exporter alongside, or configured with `com.sun.management.jmxremote.authenticate=true` and TLS.
 
-The components built on top of the brokers and clients have their own security models, covered on separate pages:
+The components built on top of the Kafka clients have their own security models, covered on separate pages:
 
 - [Kafka Connect](security-model-connect)
 - [Kafka Streams](security-model-streams)
-- [MirrorMaker 2](security-model-mirrormaker)
+- [MirrorMaker](security-model-mirrormaker)
 
 ## Development and Test Tooling
 
@@ -138,6 +139,12 @@ Not everything shipped in the Apache Kafka source tree is part of the production
 - **System tests and release tooling.** The `tests/` system-test harness and the scripts under `release/` are operator/developer tooling for building, testing, and publishing Kafka. They are not components of a running cluster.
 
 When assessing the attack surface of a deployed cluster, scope it to the brokers, KRaft controllers, the client and inter-broker/controller listeners, the Admin API, and JMX — not the development tooling above.
+
+## Supported Versions and Artifacts
+
+Only the currently supported releases and `trunk` are in scope for security reports; issues that reproduce only on an end-of-life release should be reproduced against a supported version first.
+
+The published Docker images are a special case. They are free of known CVEs on their release day, but the project does not rebuild already-released images, so over time their base layers and bundled dependencies accumulate CVEs that are not specific to Apache Kafka. Those accumulated CVEs are therefore out of scope; operators are expected to rebuild or patch images for long-running deployments.
 
 ## Classifying Reports
 

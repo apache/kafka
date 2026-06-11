@@ -33,3 +33,10 @@ This page extends the [Apache Kafka security model](security-model) to Kafka Str
 - **Streams is a client library, not a service.** It runs inside your application's process, so its security boundary is the application's; there is no separate Streams network surface to secure.
 - **A Streams application authenticates as a single principal.** That principal needs ACLs covering its source topics, its internal repartition/changelog topics (typically `<application.id>-*`), and the consumer group `<application.id>`.
 - **Local state lives on disk.** State stores and their changelogs are only as protected as the host filesystem and the broker's at-rest story; Kafka does not encrypt them.
+
+## Known Non-Findings
+
+In line with the [core model's classification](security-model), the following are not, on their own, security vulnerabilities:
+
+- **Application-level issues in a Streams topology.** Streams runs inside the user's application, so bugs in user-supplied processors, state handling, or topology code fall within the application's trust boundary, not the broker's.
+- **Local state being readable on the host.** State stores and changelogs on disk are protected by the host filesystem, not by Kafka; reading them requires local access that is outside the model.
