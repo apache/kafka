@@ -21,7 +21,7 @@ import java.util.concurrent.CompletionStage;
 /**
  * Simple purgatory interface which supports waiting with expiration for a given threshold
  * to be reached. The threshold is specified through {@link #await(Comparable, long)}.
- * The returned future can be completed in the following ways:
+ * The returned stage can be completed in the following ways:
  *
  * 1) The stage is completed successfully if the threshold value is reached
  *    in a call to {@link #maybeComplete(Comparable, long)}.
@@ -33,7 +33,7 @@ import java.util.concurrent.CompletionStage;
  *    with a {@link org.apache.kafka.common.errors.TimeoutException}.
  *
  * Note that the stage objects should be organized in order so that completing awaiting
- * stages would stop early and not traverse all awaiting futures.
+ * stages would stop early and not traverse all awaiting stages.
  *
  * @param <T> threshold value type
  */
@@ -55,7 +55,7 @@ public interface FuturePurgatory<T extends Comparable<T>> {
      * Complete awaiting stages whose threshold value from {@link FuturePurgatory#await} are smaller
      * than the given threshold value. The completion callbacks will be triggered from the calling thread.
      *
-     * @param value         the threshold value used to determine which futures can be completed
+     * @param value         the threshold value used to determine which stages can be completed
      * @param currentTimeMs the current time in milliseconds that will be passed to
      *                      {@link CompletableFuture#complete(Object)} when the stages are completed
      */
@@ -65,7 +65,7 @@ public interface FuturePurgatory<T extends Comparable<T>> {
      * Complete all awaiting stages successfully.
      *
      * @param currentTimeMs the current time in milliseconds that will be passed to
-     *                      {@link CompletableFuture#complete(Object)} when the futures are completed
+     *                      {@link CompletableFuture#complete(Object)} when the stages are completed
      */
     void completeAll(long currentTimeMs);
 
@@ -79,9 +79,9 @@ public interface FuturePurgatory<T extends Comparable<T>> {
     void completeAllExceptionally(Throwable exception);
 
     /**
-     * The number of currently waiting futures.
+     * The number of currently waiting stages.
      *
-     * @return the number of waiting futures
+     * @return the number of waiting stages
      */
     int numWaiting();
 }
