@@ -422,7 +422,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     val rejectedResponse = new JoinGroupResponseData()
       .setProtocolName(null)
-      .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code)
+      .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code)
 
     // A new dynamic member is rejected.
     assertEquals(

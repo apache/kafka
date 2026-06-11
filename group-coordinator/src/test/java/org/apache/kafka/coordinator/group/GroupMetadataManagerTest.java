@@ -14233,7 +14233,7 @@ public class GroupMetadataManagerTest {
             .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
             .build();
         assertEquals(errorMessage,
-            assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupJoin(newMemberRequest, isStatic)).getMessage());
+            assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(newMemberRequest, isStatic)).getMessage());
 
         // The existing classic member cannot rejoin.
         JoinGroupRequestData rejoinRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
@@ -14243,7 +14243,7 @@ public class GroupMetadataManagerTest {
             .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
             .build();
         assertEquals(errorMessage,
-            assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupJoin(rejoinRequest, isStatic)).getMessage());
+            assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(rejoinRequest, isStatic)).getMessage());
 
         if (isStatic) {
             // A classic member cannot replace an existing consumer-protocol static member.
@@ -14254,7 +14254,7 @@ public class GroupMetadataManagerTest {
                 .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
                 .build();
             assertEquals(errorMessage,
-                assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupJoin(replaceRequest, true)).getMessage());
+                assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(replaceRequest, true)).getMessage());
         }
     }
 

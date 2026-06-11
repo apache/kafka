@@ -1399,13 +1399,13 @@ public class GroupMetadataManager {
      * migration policy is disabled, no classic member may join or rejoin the consumer group.
      *
      * @param consumerGroup The consumer group the classic member wants to join.
-     * @throws GroupIdNotFoundException if the classic member cannot join the consumer group.
+     * @throws InconsistentGroupProtocolException if the classic member cannot join the consumer group.
      */
     private void throwIfClassicMemberCannotJoinConsumerGroup(ConsumerGroup consumerGroup) {
         if (config.consumerGroupMigrationPolicy() == ConsumerGroupMigrationPolicy.DISABLED) {
             log.info("Cannot join the consumer group {} with the classic protocol because the group migration is disabled.",
                 consumerGroup.groupId());
-            throw new GroupIdNotFoundException(
+            throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
                 String.format("Cannot join the consumer group %s with the classic protocol because the group migration is disabled.", consumerGroup.groupId())
             );
         }
