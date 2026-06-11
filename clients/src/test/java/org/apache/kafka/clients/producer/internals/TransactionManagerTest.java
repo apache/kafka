@@ -20,9 +20,13 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.ShareAcknowledgementBatch;
+import org.apache.kafka.clients.consumer.ShareAcknowledgements;
+import org.apache.kafka.clients.consumer.ShareGroupMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -51,6 +55,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.message.TxnShareAcknowledgeResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -79,6 +84,8 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
+import org.apache.kafka.common.requests.TxnShareAcknowledgeRequest;
+import org.apache.kafka.common.requests.TxnShareAcknowledgeResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -1286,6 +1293,70 @@ public class TransactionManagerTest {
         assertFalse(sendOffsetsResult.isSuccessful());
         assertInstanceOf(CommitFailedException.class, sendOffsetsResult.error());
         assertAbortableError(CommitFailedException.class);
+    }
+
+    @Test
+    public void testTxnShareAcknowledgeCompletesWhenPartitionErrorsAreNone() {
+        TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
+            shareAcknowledgements(tip),
+            new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.NONE);
+
+        runUntil(sendAcksResult::isCompleted);
+        assertTrue(sendAcksResult.isSuccessful());
+        assertFalse(transactionManager.hasError());
+    }
+
+    @Test
+    public void testUnknownMemberIdInTxnShareAcknowledgePartitionResponse() {
+        TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
+            shareAcknowledgements(tip),
+            new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.UNKNOWN_MEMBER_ID);
+
+        runUntil(transactionManager::hasError);
+        assertInstanceOf(CommitFailedException.class, transactionManager.lastError());
+        assertTrue(sendAcksResult.isCompleted());
+        assertFalse(sendAcksResult.isSuccessful());
+        assertInstanceOf(CommitFailedException.class, sendAcksResult.error());
+        assertAbortableError(CommitFailedException.class);
+    }
+
+    @Test
+    public void testProducerFencedInTxnShareAcknowledgePartitionResponse() {
+        TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
+            shareAcknowledgements(tip),
+            new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnShareAcknowledgeResponse(consumerGroupId, producerId, epoch, tip, Errors.PRODUCER_FENCED);
+
+        runUntil(transactionManager::hasFatalError);
+        assertInstanceOf(ProducerFencedException.class, transactionManager.lastError());
+        assertTrue(sendAcksResult.isCompleted());
+        assertFalse(sendAcksResult.isSuccessful());
+        assertInstanceOf(ProducerFencedException.class, sendAcksResult.error());
+        assertThrows(ProducerFencedException.class, transactionManager::beginAbort);
+        assertTrue(transactionManager.hasError());
     }
 
     @Test
@@ -4506,6 +4577,36 @@ public class TransactionManagerTest {
             assertEquals(generationId, txnOffsetCommitRequest.data().generationIdOrMemberEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
+    }
+
+    private void prepareTxnShareAcknowledgeResponse(final String shareGroupId,
+                                                    final long producerId,
+                                                    final short producerEpoch,
+                                                    TopicIdPartition topicIdPartition,
+                                                    Errors partitionError) {
+        client.prepareResponse(request -> {
+            TxnShareAcknowledgeRequest txnShareAcknowledgeRequest = (TxnShareAcknowledgeRequest) request;
+            assertEquals(shareGroupId, txnShareAcknowledgeRequest.data().groupId());
+            assertEquals(producerId, txnShareAcknowledgeRequest.data().producerId());
+            assertEquals(producerEpoch, txnShareAcknowledgeRequest.data().producerEpoch());
+            assertEquals(1, txnShareAcknowledgeRequest.data().topics().size());
+            assertEquals(topicIdPartition.topicId(), txnShareAcknowledgeRequest.data().topics().get(0).topicId());
+            assertEquals(topicIdPartition.partition(), txnShareAcknowledgeRequest.data().topics().get(0).partitions().get(0).partitionIndex());
+            return true;
+        }, new TxnShareAcknowledgeResponse(new TxnShareAcknowledgeResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setResponses(List.of(new TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse()
+                .setTopicId(topicIdPartition.topicId())
+                .setPartitions(List.of(new TxnShareAcknowledgeResponseData.TxnShareAcknowledgePartitionResponse()
+                    .setPartitionIndex(topicIdPartition.partition())
+                    .setErrorCode(partitionError.code())))))));
+    }
+
+    private ShareAcknowledgements shareAcknowledgements(TopicIdPartition topicIdPartition) {
+        return new ShareAcknowledgements(Map.of(topicIdPartition, List.of(new ShareAcknowledgementBatch(
+            5L,
+            6L,
+            List.of(AcknowledgeType.ACCEPT.id)))));
     }
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {

@@ -57,6 +57,7 @@ import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData;
 import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData.TxnShareAcknowledgeBatch;
 import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData.TxnShareAcknowledgePartition;
 import org.apache.kafka.common.message.TxnShareAcknowledgeRequestData.TxnShareAcknowledgeTopic;
+import org.apache.kafka.common.message.TxnShareAcknowledgeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
@@ -93,6 +94,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
@@ -2098,36 +2100,51 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             TxnShareAcknowledgeResponse txnShareAckResponse = (TxnShareAcknowledgeResponse) response;
             Errors topLevelError = Errors.forCode(txnShareAckResponse.data().errorCode());
+            Errors error = topLevelError == Errors.NONE ?
+                firstPartitionError(txnShareAckResponse).orElse(Errors.NONE) :
+                topLevelError;
 
             log.debug("Received TxnShareAcknowledge response for share group {}: errorCode={}",
-                builder.data.groupId(), topLevelError);
+                builder.data.groupId(), error);
 
-            if (topLevelError == Errors.NONE) {
+            if (error == Errors.NONE) {
                 pendingTxnShareAcks.clear();
                 result.done();
-            } else if (topLevelError == Errors.COORDINATOR_NOT_AVAILABLE
-                    || topLevelError == Errors.NOT_COORDINATOR
-                    || topLevelError == Errors.REQUEST_TIMED_OUT) {
+            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
+                    || error == Errors.NOT_COORDINATOR
+                    || error == Errors.REQUEST_TIMED_OUT) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.data.groupId());
                 reenqueue();
-            } else if (topLevelError.exception() instanceof RetriableException) {
+            } else if (error.exception() instanceof RetriableException) {
                 reenqueue();
-            } else if (topLevelError == Errors.GROUP_AUTHORIZATION_FAILED) {
+            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
-            } else if (topLevelError == Errors.TRANSACTION_ABORTABLE) {
-                abortableError(topLevelError.exception());
-            } else if (topLevelError == Errors.UNKNOWN_MEMBER_ID
-                    || topLevelError == Errors.STALE_MEMBER_EPOCH) {
+            } else if (error == Errors.TRANSACTION_ABORTABLE) {
+                abortableError(error.exception());
+            } else if (error == Errors.UNKNOWN_MEMBER_ID
+                    || error == Errors.STALE_MEMBER_EPOCH) {
                 abortableError(new CommitFailedException("Transactional share acknowledgement failed " +
-                    "due to share group membership mismatch: " + topLevelError.exception().getMessage()));
-            } else if (topLevelError == Errors.INVALID_PRODUCER_EPOCH
-                    || topLevelError == Errors.PRODUCER_FENCED) {
+                    "due to share group membership mismatch: " + error.exception().getMessage()));
+            } else if (error == Errors.INVALID_PRODUCER_EPOCH
+                    || error == Errors.PRODUCER_FENCED) {
                 fatalError(Errors.PRODUCER_FENCED.exception());
-            } else if (topLevelError == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
-                fatalError(topLevelError.exception());
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatalError(error.exception());
             } else {
-                fatalError(new KafkaException("Unexpected error in TxnShareAcknowledgeResponse: " + topLevelError.message()));
+                fatalError(new KafkaException("Unexpected error in TxnShareAcknowledgeResponse: " + error.message()));
             }
+        }
+
+        private Optional<Errors> firstPartitionError(TxnShareAcknowledgeResponse response) {
+            for (TxnShareAcknowledgeResponseData.TxnShareAcknowledgeTopicResponse topicResponse : response.data().responses()) {
+                for (TxnShareAcknowledgeResponseData.TxnShareAcknowledgePartitionResponse partitionResponse : topicResponse.partitions()) {
+                    Errors error = Errors.forCode(partitionResponse.errorCode());
+                    if (error != Errors.NONE) {
+                        return Optional.of(error);
+                    }
+                }
+            }
+            return Optional.empty();
         }
     }
 
