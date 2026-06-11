@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.api.streams;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -58,16 +59,16 @@ public record StreamsGroupTopologyDescription(
     public record Source(String name, Set<String> topics, Set<String> successors) implements Node {
         public Source {
             Objects.requireNonNull(name, "name");
-            topics = Set.copyOf(Objects.requireNonNull(topics, "topics"));
-            successors = Set.copyOf(Objects.requireNonNull(successors, "successors"));
+            topics = Collections.unmodifiableSet(Objects.requireNonNull(topics, "topics"));
+            successors = Collections.unmodifiableSet(Objects.requireNonNull(successors, "successors"));
         }
     }
 
     public record Processor(String name, Set<String> stores, Set<String> successors) implements Node {
         public Processor {
             Objects.requireNonNull(name, "name");
-            stores = Set.copyOf(Objects.requireNonNull(stores, "stores"));
-            successors = Set.copyOf(Objects.requireNonNull(successors, "successors"));
+            stores = Collections.unmodifiableSet(Objects.requireNonNull(stores, "stores"));
+            successors = Collections.unmodifiableSet(Objects.requireNonNull(successors, "successors"));
         }
     }
 
@@ -75,7 +76,7 @@ public record StreamsGroupTopologyDescription(
         public Sink {
             Objects.requireNonNull(name, "name");
             Objects.requireNonNull(topic, "topic");
-            successors = Set.copyOf(Objects.requireNonNull(successors, "successors"));
+            successors = Collections.unmodifiableSet(Objects.requireNonNull(successors, "successors"));
         }
     }
 

@@ -131,6 +131,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -140,6 +141,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -165,6 +167,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
         private Optional<Plugin<Authorizer>> authorizerPlugin;
+        private Consumer<String> streamsGroupRemovalListener = groupId -> { };
 
         public Builder(
             GroupCoordinatorConfig config,
@@ -235,6 +238,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
+        public Builder withStreamsGroupRemovalListener(
+            Consumer<String> streamsGroupRemovalListener
+        ) {
+            this.streamsGroupRemovalListener = streamsGroupRemovalListener;
+            return this;
+        }
+
         @SuppressWarnings("NPathComplexity")
         @Override
         public GroupCoordinatorShard build() {
@@ -272,6 +282,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .withShareGroupAssignor(config.shareGroupAssignors().get(0))
                 .withAuthorizerPlugin(authorizerPlugin)
+                .withStreamsGroupRemovalListener(streamsGroupRemovalListener)
                 .build();
 
             OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()
@@ -930,6 +941,37 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long committedOffset
     ) {
         groupMetadataManager.validateStreamsGroupMember(groupId, memberId, committedOffset);
+    }
+
+    /**
+     * Persist the outcome of a topology description plugin call. Writes a metadata record
+     * advancing either {@code StoredDescriptionTopologyEpoch} (on plugin success) or
+     * {@code FailedDescriptionTopologyEpoch} (on permanent plugin failure).
+     *
+     * @param groupId           The streams group id.
+     * @param pushedEpoch       The topology epoch on the push that just completed.
+     * @param permanentFailure  True if the plugin signalled a permanent failure; false on success.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> streamsGroupSetTopologyDescriptionEpoch(
+        String groupId,
+        int pushedEpoch,
+        boolean permanentFailure
+    ) {
+        return groupMetadataManager.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, permanentFailure);
+    }
+
+    /**
+     * Return the subset of {@code groupIds} that are streams groups with a stored topology
+     * description. Used during {@code DeleteGroups} to identify which groups need a
+     * {@code plugin.deleteTopology} call before being tombstoned.
+     */
+    public Set<String> streamsGroupsWithStoredTopologyDescription(
+        Collection<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.streamsGroupsWithStoredTopologyDescription(groupIds, committedOffset);
     }
 
     /**

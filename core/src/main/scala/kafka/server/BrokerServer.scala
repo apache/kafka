@@ -712,6 +712,8 @@ class BrokerServer(
       .withPersister(persister)
       .withAuthorizerPlugin(authorizerPlugin.toJava)
       .withPartitionMetadataClient(partitionMetadataClient)
+      .withStreamsGroupTopologyDescriptionPlugin(
+        Optional.ofNullable(config.groupCoordinatorConfig.streamsGroupTopologyDescriptionPlugin(java.util.Map.of())))
       .build()
   }
 
