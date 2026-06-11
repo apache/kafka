@@ -1063,6 +1063,7 @@ public class SharePartition {
         CompletableFuture<Void> future = new CompletableFuture<>();
         Throwable throwable = null;
         List<InFlightState> stagedThisCall = new ArrayList<>();
+        List<PersisterBatch> persisterBatches = new ArrayList<>();
         lock.writeLock().lock();
         try {
             for (ShareAcknowledgementBatch batch : acknowledgementBatches) {
@@ -1092,7 +1093,16 @@ public class SharePartition {
                     break;
                 }
 
-                throwable = stageBatchTxnRecords(memberId, producerId, producerEpoch, batch, ackTypeMap, subMap, stagedThisCall);
+                throwable = stageBatchTxnRecords(
+                    memberId,
+                    producerId,
+                    producerEpoch,
+                    batch,
+                    ackTypeMap,
+                    subMap,
+                    stagedThisCall,
+                    persisterBatches
+                );
                 if (throwable != null) break;
             }
 
@@ -1106,7 +1116,22 @@ public class SharePartition {
         }
 
         if (throwable != null) future.completeExceptionally(throwable);
-        else future.complete(null);
+        else if (persisterBatches.isEmpty()) future.complete(null);
+        else writeShareGroupState(persisterBatches.stream().map(PersisterBatch::stateBatch).toList())
+            .whenComplete((result, exception) -> {
+                if (exception != null) {
+                    lock.writeLock().lock();
+                    try {
+                        persisterBatches.forEach(persisterBatch ->
+                            persisterBatch.updatedState().revertStagedTxnAcknowledge(producerId, producerEpoch));
+                    } finally {
+                        lock.writeLock().unlock();
+                    }
+                    future.completeExceptionally(exception);
+                    return;
+                }
+                future.complete(null);
+            });
         return future;
     }
 
@@ -1117,7 +1142,8 @@ public class SharePartition {
         ShareAcknowledgementBatch batch,
         Map<Long, Byte> ackTypeMap,
         NavigableMap<Long, InFlightBatch> subMap,
-        List<InFlightState> stagedThisCall
+        List<InFlightState> stagedThisCall,
+        List<PersisterBatch> persisterBatches
     ) {
         for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
             InFlightBatch inFlightBatch = entry.getValue();
@@ -1134,6 +1160,11 @@ public class SharePartition {
                     return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
                 }
                 stagedThisCall.add(staged);
+                persisterBatches.add(new PersisterBatch(
+                    staged,
+                    persisterStateBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), staged),
+                    null
+                ));
             } else {
                 for (Map.Entry<Long, InFlightState> os : inFlightBatch.offsetState().entrySet()) {
                     if (os.getKey() < batch.firstOffset() || os.getKey() < startOffset) continue;
@@ -1149,10 +1180,27 @@ public class SharePartition {
                         return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
                     }
                     stagedThisCall.add(staged);
+                    persisterBatches.add(new PersisterBatch(
+                        staged,
+                        persisterStateBatch(os.getKey(), os.getKey(), staged),
+                        null
+                    ));
                 }
             }
         }
         return null;
+    }
+
+    private PersisterStateBatch persisterStateBatch(long firstOffset, long lastOffset, InFlightState state) {
+        return new PersisterStateBatch(
+            firstOffset,
+            lastOffset,
+            state.state().id(),
+            (short) state.deliveryCount(),
+            state.stagedProducerId(),
+            state.stagedProducerEpoch(),
+            state.stagedAckType()
+        );
     }
 
     public void applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
