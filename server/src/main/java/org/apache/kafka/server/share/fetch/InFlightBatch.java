@@ -192,6 +192,14 @@ public class InFlightBatch {
         return inFlightState().stagedProducerId();
     }
 
+    public short batchStagedProducerEpoch() {
+        return inFlightState().stagedProducerEpoch();
+    }
+
+    public byte batchStagedAckType() {
+        return inFlightState().stagedAckType();
+    }
+
     public InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId, boolean dlqSupportEnabled) {
         return inFlightState().tryUpdateState(newState, ops, maxDeliveryCount, newMemberId, dlqSupportEnabled);
     }

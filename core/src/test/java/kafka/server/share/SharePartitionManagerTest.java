@@ -128,6 +128,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -3054,6 +3055,10 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
+        Mockito.when(sp1.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        Mockito.when(sp2.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT))
+            .thenReturn(CompletableFuture.completedFuture(null));
 
         SharePartitionCache partitionCache = new SharePartitionCache();
         partitionCache.put(new SharePartitionKey("grp", tp1), sp1);
@@ -3061,7 +3066,7 @@ public class SharePartitionManagerTest {
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCache(partitionCache).withBrokerTopicStats(brokerTopicStats).build();
 
-        sharePartitionManager.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+        assertNull(sharePartitionManager.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join());
 
         Mockito.verify(sp1).applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
         Mockito.verify(sp2).applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);

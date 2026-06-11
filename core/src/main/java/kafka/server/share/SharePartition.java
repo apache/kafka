@@ -1203,29 +1203,59 @@ public class SharePartition {
         );
     }
 
-    public void applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
-        List<DlqBatch> dlqBatches = new ArrayList<>();
-        boolean fetchableStateUpdated = false;
-        boolean cacheStateUpdated;
+    public CompletableFuture<Void> applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
+        List<TxnMarkerBatch> markerBatches = new ArrayList<>();
         lock.writeLock().lock();
         try {
             for (InFlightBatch batch : cachedState.values()) {
                 if (batch.offsetState() == null) {
-                    InFlightState updatedState = batch.applyBatchTxnMarker(producerId, producerEpoch, result, shareGroupDlqEnableSupplier.get());
-                    if (updatedState == null) {
-                        continue;
-                    }
-                    if (updatedState.state() == RecordState.AVAILABLE) {
-                        updateFindNextFetchOffset(true);
-                        fetchableStateUpdated = true;
-                    } else if (updatedState.state() == RecordState.ARCHIVING) {
-                        dlqBatches.add(new DlqBatch(updatedState, batch.firstOffset(), batch.lastOffset(), (short) updatedState.deliveryCount()));
-                    } else if (isStateTerminal(updatedState.state())) {
-                        deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(batch.firstOffset(), batch.lastOffset()));
+                    if (matchesTxnMarker(batch, producerId, producerEpoch)) {
+                        markerBatches.add(new TxnMarkerBatch(
+                            batch,
+                            null,
+                            batch.firstOffset(),
+                            batch.lastOffset(),
+                            finalStateForTxnMarker(batch, result),
+                            (short) batch.batchDeliveryCount()
+                        ));
                     }
                 } else {
                     for (Map.Entry<Long, InFlightState> state : batch.offsetState().entrySet()) {
-                        InFlightState updatedState = state.getValue().applyTxnMarker(producerId, producerEpoch, result, shareGroupDlqEnableSupplier.get());
+                        if (matchesTxnMarker(state.getValue(), producerId, producerEpoch)) {
+                            markerBatches.add(new TxnMarkerBatch(
+                                null,
+                                state.getValue(),
+                                state.getKey(),
+                                state.getKey(),
+                                finalStateForTxnMarker(state.getValue(), result),
+                                (short) state.getValue().deliveryCount()
+                            ));
+                        }
+                    }
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+        if (markerBatches.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        writeShareGroupState(markerBatches.stream().map(this::txnMarkerStateBatch).toList())
+            .whenComplete((writeResult, exception) -> {
+                if (exception != null) {
+                    future.completeExceptionally(exception);
+                    return;
+                }
+
+                List<DlqBatch> dlqBatches = new ArrayList<>();
+                boolean fetchableStateUpdated = false;
+                boolean cacheStateUpdated;
+                lock.writeLock().lock();
+                try {
+                    for (TxnMarkerBatch markerBatch : markerBatches) {
+                        InFlightState updatedState = applyTxnMarkerToBatch(markerBatch, producerId, producerEpoch, result);
                         if (updatedState == null) {
                             continue;
                         }
@@ -1233,25 +1263,85 @@ public class SharePartition {
                             updateFindNextFetchOffset(true);
                             fetchableStateUpdated = true;
                         } else if (updatedState.state() == RecordState.ARCHIVING) {
-                            dlqBatches.add(new DlqBatch(updatedState, state.getKey(), state.getKey(), (short) updatedState.deliveryCount()));
+                            dlqBatches.add(new DlqBatch(
+                                updatedState,
+                                markerBatch.firstOffset(),
+                                markerBatch.lastOffset(),
+                                markerBatch.deliveryCount()
+                            ));
                         } else if (isStateTerminal(updatedState.state())) {
-                            deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(state.getKey(), state.getKey()));
+                            deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(markerBatch.firstOffset(), markerBatch.lastOffset()));
                         }
                     }
+                    cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
+                } finally {
+                    lock.writeLock().unlock();
                 }
-            }
-            cacheStateUpdated = maybeUpdateCachedStateAndOffsets();
-        } finally {
-            lock.writeLock().unlock();
+                maybeCompleteDelayedShareFetchRequest(cacheStateUpdated || fetchableStateUpdated);
+                dlqBatches.forEach(dlqBatch -> initiateDLQAndArchive(
+                    dlqBatch.updatedState(),
+                    dlqBatch.firstOffset(),
+                    dlqBatch.lastOffset(),
+                    dlqBatch.deliveryCount(),
+                    ShareGroupDLQManager.CLIENT_REJECT
+                ));
+                future.complete(null);
+            });
+        return future;
+    }
+
+    private boolean matchesTxnMarker(InFlightState state, long producerId, short producerEpoch) {
+        return state.state() == RecordState.TX_PENDING &&
+            state.stagedProducerId() == producerId &&
+            state.stagedProducerEpoch() == producerEpoch;
+    }
+
+    private boolean matchesTxnMarker(InFlightBatch batch, long producerId, short producerEpoch) {
+        return batch.batchState() == RecordState.TX_PENDING &&
+            batch.batchStagedProducerId() == producerId &&
+            batch.batchStagedProducerEpoch() == producerEpoch;
+    }
+
+    private RecordState finalStateForTxnMarker(InFlightState state, TransactionResult result) {
+        if (result == TransactionResult.ABORT) {
+            return RecordState.AVAILABLE;
         }
-        maybeCompleteDelayedShareFetchRequest(cacheStateUpdated || fetchableStateUpdated);
-        dlqBatches.forEach(dlqBatch -> initiateDLQAndArchive(
-            dlqBatch.updatedState(),
-            dlqBatch.firstOffset(),
-            dlqBatch.lastOffset(),
-            dlqBatch.deliveryCount(),
-            ShareGroupDLQManager.CLIENT_REJECT
-        ));
+        if (state.stagedAckType() == AcknowledgeType.ACCEPT.id) {
+            return RecordState.ACKNOWLEDGED;
+        }
+        return shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+    }
+
+    private RecordState finalStateForTxnMarker(InFlightBatch batch, TransactionResult result) {
+        if (result == TransactionResult.ABORT) {
+            return RecordState.AVAILABLE;
+        }
+        if (batch.batchStagedAckType() == AcknowledgeType.ACCEPT.id) {
+            return RecordState.ACKNOWLEDGED;
+        }
+        return shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+    }
+
+    private InFlightState applyTxnMarkerToBatch(
+        TxnMarkerBatch markerBatch,
+        long producerId,
+        short producerEpoch,
+        TransactionResult result
+    ) {
+        boolean dlqSupportEnabled = markerBatch.finalState() == RecordState.ARCHIVING;
+        if (markerBatch.batch() != null) {
+            return markerBatch.batch().applyBatchTxnMarker(producerId, producerEpoch, result, dlqSupportEnabled);
+        }
+        return markerBatch.state().applyTxnMarker(producerId, producerEpoch, result, dlqSupportEnabled);
+    }
+
+    private PersisterStateBatch txnMarkerStateBatch(TxnMarkerBatch markerBatch) {
+        return new PersisterStateBatch(
+            markerBatch.firstOffset(),
+            markerBatch.lastOffset(),
+            markerBatch.finalState().id(),
+            markerBatch.deliveryCount()
+        );
     }
 
     /**
@@ -3754,6 +3844,15 @@ public class SharePartition {
         InFlightState updatedState,
         PersisterStateBatch stateBatch,
         Throwable dlqCause
+    ) { }
+
+    private record TxnMarkerBatch(
+        InFlightBatch batch,
+        InFlightState state,
+        long firstOffset,
+        long lastOffset,
+        RecordState finalState,
+        short deliveryCount
     ) { }
 
     /**

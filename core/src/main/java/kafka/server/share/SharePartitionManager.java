@@ -379,9 +379,11 @@ public class SharePartitionManager implements AutoCloseable {
         return mapAcknowledgementFutures(futures, Optional.empty());
     }
 
-    public void applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
+    public CompletableFuture<Void> applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
         log.debug("Broadcasting txn marker producerId={} epoch={} result={}", producerId, producerEpoch, result);
-        partitionCache.values().forEach(sp -> sp.applyTxnMarker(producerId, producerEpoch, result));
+        return CompletableFuture.allOf(partitionCache.values().stream()
+            .map(sp -> sp.applyTxnMarker(producerId, producerEpoch, result))
+            .toArray(CompletableFuture[]::new));
     }
 
     /**

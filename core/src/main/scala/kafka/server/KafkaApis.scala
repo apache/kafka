@@ -1848,8 +1848,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                     partitionResponse.error == Errors.NONE &&
                     shareMarkerApplied.compareAndSet(false, true)) {
                   sharePartitionManager.applyTxnMarker(producerId, marker.producerEpoch, marker.transactionResult)
+                    .whenComplete { (_, exception) =>
+                      val error = if (exception == null) partitionResponse.error else Errors.forException(exception)
+                      addResultAndMaybeComplete(topicIdPartition.topicPartition(), error)
+                    }
+                } else {
+                  addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
                 }
-                addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
               }
             },
             transactionVersion = markerTransactionVersion

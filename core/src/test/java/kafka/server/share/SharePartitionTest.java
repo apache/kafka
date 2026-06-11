@@ -13381,6 +13381,63 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testApplyTxnMarkerPersistsFinalState() {
+        Persister persister = Mockito.mock(Persister.class);
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)));
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+
+        sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join();
+
+        ArgumentCaptor<WriteShareGroupStateParameters> captor =
+            ArgumentCaptor.forClass(WriteShareGroupStateParameters.class);
+        Mockito.verify(persister, Mockito.times(2)).writeState(captor.capture());
+        PartitionStateBatchData partitionData = captor.getAllValues()
+            .get(1)
+            .groupTopicPartitionData()
+            .topicsData()
+            .get(0)
+            .partitions()
+            .get(0);
+        PersisterStateBatch stateBatch = partitionData.stateBatches().get(0);
+        assertEquals(10L, stateBatch.firstOffset());
+        assertEquals(14L, stateBatch.lastOffset());
+        assertEquals(RecordState.ACKNOWLEDGED.id(), stateBatch.deliveryState());
+        assertEquals((short) 1, stateBatch.deliveryCount());
+        assertEquals(PersisterStateBatch.NO_STAGED_PRODUCER_ID, stateBatch.stagedProducerId());
+        assertEquals(PersisterStateBatch.NO_STAGED_PRODUCER_EPOCH, stateBatch.stagedProducerEpoch());
+        assertEquals(PersisterStateBatch.NO_STAGED_ACK_TYPE, stateBatch.stagedAckType());
+    }
+
+    @Test
+    public void testApplyTxnMarkerLeavesPendingStateOnPersistFailure() {
+        Persister persister = Mockito.mock(Persister.class);
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.GROUP_ID_NOT_FOUND)));
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+
+        CompletableFuture<Void> marker = sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+
+        assertFutureThrows(GroupIdNotFoundException.class, marker);
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(100L, sharePartition.cachedState().get(10L).batchStagedProducerId());
+    }
+
+    @Test
     public void testStageTxnAcknowledgeAcceptThenAbortMarkerTransitionsToAvailable() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
