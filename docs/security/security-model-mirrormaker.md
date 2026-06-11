@@ -33,3 +33,10 @@ This page extends the [Apache Kafka security model](security-model) to MirrorMak
 - **It spans two trust boundaries at once.** A MirrorMaker instance authenticates to both a source and a target cluster; configure `source.cluster.*` and `target.cluster.*` independently, each with its own credentials and TLS settings.
 - **Never replicate in cleartext across an untrusted network.** Cross-cluster traffic frequently leaves a single security domain, so secure both client connections with TLS rather than tunnelling plaintext.
 - **It is a Connect deployment.** Its REST control plane, plugin model, and single-principal-per-worker caveats are exactly those of the [Connect security model](security-model-connect).
+
+## Known Non-Findings
+
+In line with the [core model's classification](security-model), the following follow from MirrorMaker's design and are not, on their own, security vulnerabilities. The [Connect non-findings](security-model-connect) apply as well, since MirrorMaker is a Connect deployment.
+
+- **Two security domains share one configuration.** In dedicated mode the configuration file holds the credentials for *both* the source and target clusters (`source.cluster.*` and `target.cluster.*`).
+- **The dedicated-mode internal REST server is not a user-facing API.** Dedicated mode starts an internal REST server that carries only inter-node task coordination (for example task-config and fencing requests), with requests signed between nodes.
