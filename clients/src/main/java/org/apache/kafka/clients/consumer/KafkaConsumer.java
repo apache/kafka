@@ -121,7 +121,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * have multiple such groups. To get semantics similar to pub-sub in a traditional messaging system each process would
  * have its own consumer group, so each process would subscribe to all the records published to the topic.
  * <p>
- * In addition, when group reassignment happens automatically, consumers can be notified through a {@link ConsumerRebalanceListener}
+ * In addition, when group reassignment happens automatically, consumers can be notified through a {@link RebalanceListener}
  * registered via {@link Consumer#setRebalanceListener(RebalanceListener)},
  * which allows them to finish necessary application-level logic such as state cleanup, manual offset
  * commits, etc. See <a href="#rebalancecallback">Storing Offsets Outside Kafka</a> for more details.
@@ -359,13 +359,13 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * This type of usage is simplest when the partition assignment is also done manually (this would be likely in the
  * search index use case described above). If the partition assignment is done automatically special care is
  * needed to handle the case where partition assignments change. This can be done by providing a
- * {@link ConsumerRebalanceListener} instance via {@link Consumer#setRebalanceListener(RebalanceListener)}.
+ * {@link RebalanceListener} instance via {@link Consumer#setRebalanceListener(RebalanceListener)}.
  * For example, when partitions are taken from a consumer the consumer will want to commit its offset for those partitions by
- * implementing {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)}. When partitions are assigned to a
+ * implementing {@link RebalanceListener#onPartitionsRevoked(Collection, RebalanceConsumer)}. When partitions are assigned to a
  * consumer, the consumer will want to look up the offset for those new partitions and correctly initialize the consumer
- * to that position by implementing {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection, RebalanceConsumer)}.
+ * to that position by implementing {@link RebalanceListener#onPartitionsAssigned(Collection, RebalanceConsumer)}.
  * <p>
- * Another common use for {@link ConsumerRebalanceListener} is to flush any caches the application maintains for
+ * Another common use for {@link RebalanceListener} is to flush any caches the application maintains for
  * partitions that are moved elsewhere.
  *
  * <h4>Controlling The Consumer's Position</h4>
@@ -728,6 +728,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Group rebalances will cause partition offsets to be reset, so providing your own listener gives you an
      * opportunity to commit offsets before a rebalance finishes.
      *
+     * <p>
+     * If you need to unregister a previously set {@link ConsumerRebalanceListener} via
+     * {@link #subscribe(Collection, ConsumerRebalanceListener)}, then use {@link #setRebalanceListener(RebalanceListener)}
+     * with a {@code null} reference. This method only changes the subscription and does not explicitly clear
+     * the reference/set a {@code null} listener.
+     *
      * @param topics The list of topics to subscribe to
      * @throws IllegalArgumentException If topics is null or contains null or empty elements
      * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
@@ -750,9 +756,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * when there is a change to the topics matching the provided pattern and when consumer group membership changes.
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
-     * <p>deprecated Use {@link #subscribe(Pattern)} to subscribe and
-     *             {@link Consumer#setRebalanceListener(RebalanceListener)} to register a rebalance listener
-     *             separately.
      * @param pattern Pattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics
@@ -774,6 +777,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link RebalanceListener} via {@link Consumer#setRebalanceListener(RebalanceListener)}.
      * Group rebalances will cause partition offsets to be reset, so providing your own listener gives you an
      * opportunity to commit offsets before a rebalance finishes.
+     *
+     * <p>
+     * If you need to unregister a previously set {@link ConsumerRebalanceListener} via
+     * {@link #subscribe(Pattern, ConsumerRebalanceListener)}, then use {@link #setRebalanceListener(RebalanceListener)}
+     * with a {@code null} reference. This method only changes the subscription and does not explicitly clear
+     * the reference/set a {@code null} listener.
      *
      * @param pattern Pattern to subscribe to
      * @throws IllegalArgumentException If pattern is null
@@ -828,6 +837,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Group rebalances will cause partition offsets to be reset, so providing your own listener gives you an
      * opportunity to commit offsets before a rebalance finishes.
      *
+     * <p>
+     * If you need to unregister a previously set {@link ConsumerRebalanceListener} via
+     * {@link #subscribe(SubscriptionPattern, ConsumerRebalanceListener)}, then use {@link #setRebalanceListener(RebalanceListener)}
+     * with a {@code null} reference. This method only changes the subscription and does not explicitly clear
+     * the reference/set a {@code null} listener.
+     *
      * @param pattern Pattern to subscribe to, that must be compatible with Google RE2/J.
      * @throws IllegalArgumentException If pattern is null or empty.
      * @throws IllegalStateException    If {@code subscribe()} is called previously with topics, or assign is called
@@ -870,10 +885,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If a listener was previously registered via one of the deprecated {@code subscribe(topics, listener)}
      * variants, calling this method will override it.
      *
+     * <p>
+     * Multiple invocations of this method will result in overriding any previous references stored.
+     * The final instance set prior to any {@link #poll(Duration) polls} will be the one to receive
+     * callbacks during rebalance events.
+     *
      * @param callback The listener to invoke on partition assignment changes, or {@code null} to remove
      *                 the current listener.
      *
-     * @see ConsumerRebalanceListener
+     * @see RebalanceListener
      * @see RebalanceConsumer
      */
     @Override
@@ -918,7 +938,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * or aborted transactions when isolation.level=read_committed.
      * Otherwise, it will await the passed timeout. If the timeout expires, an empty record set will be returned.
      * Note that this method may block beyond the timeout in order to execute custom
-     * {@link ConsumerRebalanceListener} callbacks.
+     * {@link RebalanceListener} callbacks.
      *
      *
      * @param timeout The maximum time to block (must not be greater than {@link Long#MAX_VALUE} milliseconds)
@@ -1874,7 +1894,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * fetch sessions). Even if a larger timeout is specified, the consumer will not wait longer than
      * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
      * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
-     * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
+     * {@link RebalanceListener}) does not consume time from the close timeout.
      * <p>
      * This close operation will attempt all shutdown steps even if one of them fails.
      * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
@@ -1912,7 +1932,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * fetch sessions). Even if a larger timeout is specified, the consumer will not wait longer than
      * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
      * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
-     * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
+     * {@link RebalanceListener}) does not consume time from the close timeout.
      * <p>
      * This close operation will attempt all shutdown steps even if one of them fails.
      * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
