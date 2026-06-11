@@ -174,8 +174,13 @@ public class InFlightBatch {
         return inFlightState().stageTxnAcknowledge(producerId, producerEpoch, ackType);
     }
 
-    public InFlightState applyBatchTxnMarker(long producerId, short producerEpoch, org.apache.kafka.common.requests.TransactionResult result) {
-        return inFlightState().applyTxnMarker(producerId, producerEpoch, result);
+    public InFlightState applyBatchTxnMarker(
+        long producerId,
+        short producerEpoch,
+        org.apache.kafka.common.requests.TransactionResult result,
+        boolean dlqSupportEnabled
+    ) {
+        return inFlightState().applyTxnMarker(producerId, producerEpoch, result, dlqSupportEnabled);
     }
 
     public boolean revertBatchStagedTxnAcknowledge(long producerId, short producerEpoch) {

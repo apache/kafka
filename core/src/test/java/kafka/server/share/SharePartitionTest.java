@@ -13317,7 +13317,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
 
         sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
-        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(10L).batchState());
+        assertTrue(sharePartition.cachedState().isEmpty());
+        assertEquals(15, sharePartition.startOffset());
     }
 
     @Test
@@ -13331,6 +13332,9 @@ public class SharePartitionTest {
 
         sharePartition.applyTxnMarker(200L, (short) 1, TransactionResult.ABORT);
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(10, sharePartition.nextFetchOffset());
+        assertArrayEquals(expectedAcquiredRecord(10, 14, 2).toArray(),
+            fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5).toArray());
     }
 
     @Test
@@ -13399,7 +13403,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testApplyTxnMarkerForCommitRejectTransitionsToArchiving() {
+    public void testApplyTxnMarkerForCommitRejectTransitionsToArchivedWhenDlqDisabled() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
 
@@ -13408,7 +13412,26 @@ public class SharePartitionTest {
         assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
 
         sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
-        assertEquals(RecordState.ARCHIVING, sharePartition.cachedState().get(10L).batchState());
+        assertTrue(sharePartition.cachedState().isEmpty());
+        assertEquals(15, sharePartition.startOffset());
+    }
+
+    @Test
+    public void testApplyTxnMarkerForCommitRejectArchivesAfterDlqWhenEnabled() throws Exception {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withShareGroupDlqEnableSupplier(() -> true)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.REJECT.id)))).join();
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+
+        sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
+        TestUtils.waitForCondition(sharePartition.cachedState()::isEmpty,
+            "Committed transactional reject should complete DLQ archive flow");
+        assertEquals(15, sharePartition.startOffset());
     }
 
     private static class SharePartitionBuilder {

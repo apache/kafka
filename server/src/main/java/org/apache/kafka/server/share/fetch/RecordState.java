@@ -67,7 +67,12 @@ public enum RecordState {
             throw new IllegalStateException("TX_PENDING can only be transitioned to from ACQUIRED");
         }
 
-        if (this == TX_PENDING && newState != ACKNOWLEDGED && newState != AVAILABLE && newState != ARCHIVING) {
+        if (this == TX_PENDING
+            && newState != ACKNOWLEDGED
+            && newState != AVAILABLE
+            && newState != ARCHIVING
+            && newState != ARCHIVED
+        ) {
             throw new IllegalStateException("Invalid transition from TX_PENDING to " + newState);
         }
 

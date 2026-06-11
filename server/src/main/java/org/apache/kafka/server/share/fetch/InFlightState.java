@@ -311,11 +311,11 @@ public class InFlightState {
 
     /**
      * Apply a transaction commit or abort marker to a TX_PENDING record.
-     * On COMMIT: ACCEPT resolves to ACKNOWLEDGED, REJECT resolves to ARCHIVING.
+     * On COMMIT: ACCEPT resolves to ACKNOWLEDGED, REJECT resolves to ARCHIVING or ARCHIVED based on DLQ configuration.
      * On ABORT: reverts to AVAILABLE so the record can be redelivered.
      * Returns null if the state is not TX_PENDING or the producer identity does not match.
      */
-    public InFlightState applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
+    public InFlightState applyTxnMarker(long producerId, short producerEpoch, TransactionResult result, boolean dlqSupportEnabled) {
         if (state != RecordState.TX_PENDING) {
             return null;
         }
@@ -324,10 +324,14 @@ public class InFlightState {
         }
         try {
             if (result == TransactionResult.COMMIT) {
-                RecordState nextState = (stagedAckType == AcknowledgeType.ACCEPT.id)
-                    ? RecordState.ACKNOWLEDGED
-                    : RecordState.ARCHIVING;
+                RecordState nextState;
+                if (stagedAckType == AcknowledgeType.ACCEPT.id) {
+                    nextState = RecordState.ACKNOWLEDGED;
+                } else {
+                    nextState = dlqSupportEnabled ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+                }
                 state = state.validateTransition(nextState);
+                memberId = EMPTY_MEMBER_ID;
             } else {
                 state = state.validateTransition(RecordState.AVAILABLE);
                 memberId = EMPTY_MEMBER_ID;
