@@ -526,6 +526,7 @@ public class GroupMetadataManagerTestContext {
                 GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
                 List.of(new MockPartitionAssignor("range"))
             );
+            config.putIfAbsent(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
 
             GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfigContext.fromProps(config);
 
@@ -806,6 +807,14 @@ public class GroupMetadataManagerTestContext {
             }
         });
         return results;
+    }
+
+    public MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> processTask(String key) {
+        MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord> result = executor.poll(key);
+        if (result != null && result.result().replayRecords()) {
+            result.result().records().forEach(this::replay);
+        }
+        return result;
     }
 
     public void assertSessionTimeout(
