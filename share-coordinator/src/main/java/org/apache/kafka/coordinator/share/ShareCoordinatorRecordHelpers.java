@@ -43,7 +43,10 @@ public class ShareCoordinatorRecordHelpers {
                         .setFirstOffset(batch.firstOffset())
                         .setLastOffset(batch.lastOffset())
                         .setDeliveryCount(batch.deliveryCount())
-                        .setDeliveryState(batch.deliveryState()))
+                        .setDeliveryState(batch.deliveryState())
+                        .setStagedProducerId(batch.stagedProducerId())
+                        .setStagedProducerEpoch(batch.stagedProducerEpoch())
+                        .setStagedAckType(batch.stagedAckType()))
                     .toList())
                 .setCreateTimestamp(offsetData.createTimestamp())
                 .setWriteTimestamp(offsetData.writeTimestamp()),
@@ -68,7 +71,10 @@ public class ShareCoordinatorRecordHelpers {
                         .setFirstOffset(batch.firstOffset())
                         .setLastOffset(batch.lastOffset())
                         .setDeliveryCount(batch.deliveryCount())
-                        .setDeliveryState(batch.deliveryState()))
+                        .setDeliveryState(batch.deliveryState())
+                        .setStagedProducerId(batch.stagedProducerId())
+                        .setStagedProducerEpoch(batch.stagedProducerEpoch())
+                        .setStagedAckType(batch.stagedAckType()))
                     .toList()),
                 (short) 0
             )

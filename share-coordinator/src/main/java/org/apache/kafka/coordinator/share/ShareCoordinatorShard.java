@@ -375,6 +375,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                         .setLastOffset(stateBatch.lastOffset())
                         .setDeliveryState(stateBatch.deliveryState())
                         .setDeliveryCount(stateBatch.deliveryCount())
+                        .setStagedProducerId(stateBatch.stagedProducerId())
+                        .setStagedProducerEpoch(stateBatch.stagedProducerEpoch())
+                        .setStagedAckType(stateBatch.stagedAckType())
                 ).toList() : List.of();
 
         ReadShareGroupStateResponseData responseData = ReadShareGroupStateResponse.toResponseData(
@@ -1036,7 +1039,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             batch.firstOffset(),
             batch.lastOffset(),
             batch.deliveryState(),
-            batch.deliveryCount()
+            batch.deliveryCount(),
+            batch.stagedProducerId(),
+            batch.stagedProducerEpoch(),
+            batch.stagedAckType()
         );
     }
 }

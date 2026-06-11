@@ -51,7 +51,13 @@
           { "name": "DeliveryState", "type": "int8", "versions": "0+",
             "about": "The delivery state - 0:Available,2:Acked,4:Archived." },
           { "name": "DeliveryCount", "type": "int16", "versions": "0+",
-            "about": "The delivery count." }
+            "about": "The delivery count." },
+          { "name": "StagedProducerId", "type": "int64", "versions": "0+", "taggedVersions": "0+", "tag": 0, "default": "-1",
+            "about": "The producer id for a pending transactional share acknowledgement, or -1 if none." },
+          { "name": "StagedProducerEpoch", "type": "int16", "versions": "0+", "taggedVersions": "0+", "tag": 1, "default": "-1",
+            "about": "The producer epoch for a pending transactional share acknowledgement, or -1 if none." },
+          { "name": "StagedAckType", "type": "int8", "versions": "0+", "taggedVersions": "0+", "tag": 2, "default": "-1",
+            "about": "The acknowledgement type staged by the pending transaction, or -1 if none." }
         ]}
       ]}
     ]}

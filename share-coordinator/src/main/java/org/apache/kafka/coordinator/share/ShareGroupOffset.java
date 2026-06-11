@@ -100,11 +100,27 @@ public class ShareGroupOffset {
     }
 
     private static PersisterStateBatch toPersisterOffsetsStateBatch(ShareSnapshotValue.StateBatch stateBatch) {
-        return new PersisterStateBatch(stateBatch.firstOffset(), stateBatch.lastOffset(), stateBatch.deliveryState(), stateBatch.deliveryCount());
+        return new PersisterStateBatch(
+            stateBatch.firstOffset(),
+            stateBatch.lastOffset(),
+            stateBatch.deliveryState(),
+            stateBatch.deliveryCount(),
+            stateBatch.stagedProducerId(),
+            stateBatch.stagedProducerEpoch(),
+            stateBatch.stagedAckType()
+        );
     }
 
     private static PersisterStateBatch toPersisterOffsetsStateBatch(ShareUpdateValue.StateBatch stateBatch) {
-        return new PersisterStateBatch(stateBatch.firstOffset(), stateBatch.lastOffset(), stateBatch.deliveryState(), stateBatch.deliveryCount());
+        return new PersisterStateBatch(
+            stateBatch.firstOffset(),
+            stateBatch.lastOffset(),
+            stateBatch.deliveryState(),
+            stateBatch.deliveryCount(),
+            stateBatch.stagedProducerId(),
+            stateBatch.stagedProducerEpoch(),
+            stateBatch.stagedAckType()
+        );
     }
 
     public static ShareGroupOffset fromRecord(ShareSnapshotValue record) {

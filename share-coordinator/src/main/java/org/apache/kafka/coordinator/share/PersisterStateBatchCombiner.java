@@ -137,7 +137,7 @@ public class PersisterStateBatchCombiner {
     }
 
     /**
-     * Compares the non-offset state of 2 batches i.e. the deliveryCount and deliverState.
+     * Compares the non-offset state of 2 batches.
      * <p>
      * Uses standard compareTo contract x < y => +int, x > y => -int, x == y => 0
      *
@@ -156,7 +156,19 @@ public class PersisterStateBatchCombiner {
         // 4 - ARCHIVED (terminal)
 
         if (deltaCount == 0) {   // same delivery count
-            return Byte.compare(b1.deliveryState(), b2.deliveryState());
+            int deltaState = Byte.compare(b1.deliveryState(), b2.deliveryState());
+            if (deltaState == 0) {
+                int deltaProducerId = Long.compare(b1.stagedProducerId(), b2.stagedProducerId());
+                if (deltaProducerId == 0) {
+                    int deltaProducerEpoch = Short.compare(b1.stagedProducerEpoch(), b2.stagedProducerEpoch());
+                    if (deltaProducerEpoch == 0) {
+                        return Byte.compare(b1.stagedAckType(), b2.stagedAckType());
+                    }
+                    return deltaProducerEpoch;
+                }
+                return deltaProducerId;
+            }
+            return deltaState;
         }
         return deltaCount;
     }
@@ -231,7 +243,7 @@ public class PersisterStateBatchCombiner {
                     // start offset intersects batch
                     //   ---------
                     //       |     -> start offset
-                    retainedBatches.add(new PersisterStateBatch(startOffset, batch.lastOffset(), batch.deliveryState(), batch.deliveryCount()));
+                    retainedBatches.add(copyWithOffsets(batch, startOffset, batch.lastOffset()));
                 }
             });
             // update the instance variable
@@ -247,7 +259,10 @@ public class PersisterStateBatchCombiner {
             // candidate:   ---       ----------           -----
             Math.max(candidate.lastOffset(), prev.lastOffset()),
             prev.deliveryState(),
-            prev.deliveryCount()
+            prev.deliveryCount(),
+            prev.stagedProducerId(),
+            prev.stagedProducerEpoch(),
+            prev.stagedAckType()
         ));
     }
 
@@ -273,12 +288,7 @@ public class PersisterStateBatchCombiner {
             // -----------
             if (compareBatchDeliveryInfo(candidate, prev) < 0) {
                 sortedBatches.add(prev);
-                sortedBatches.add(new PersisterStateBatch(
-                    prev.lastOffset() + 1,
-                    candidate.lastOffset(),
-                    candidate.deliveryState(),
-                    candidate.deliveryCount()
-                ));
+                sortedBatches.add(copyWithOffsets(candidate, prev.lastOffset() + 1, candidate.lastOffset()));
             } else {
                 // candidate priority is >= prev
                 sortedBatches.add(candidate);
@@ -302,21 +312,11 @@ public class PersisterStateBatchCombiner {
         if (compareBatchDeliveryInfo(candidate, prev) < 0) {
             sortedBatches.add(prev);
         } else {
-            sortedBatches.add(new PersisterStateBatch(
-                prev.firstOffset(),
-                candidate.firstOffset() - 1,
-                prev.deliveryState(),
-                prev.deliveryCount()
-            ));
+            sortedBatches.add(copyWithOffsets(prev, prev.firstOffset(), candidate.firstOffset() - 1));
 
             sortedBatches.add(candidate);
 
-            sortedBatches.add(new PersisterStateBatch(
-                candidate.lastOffset() + 1,
-                prev.lastOffset(),
-                prev.deliveryState(),
-                prev.deliveryCount()
-            ));
+            sortedBatches.add(copyWithOffsets(prev, candidate.lastOffset() + 1, prev.lastOffset()));
         }
     }
 
@@ -326,12 +326,7 @@ public class PersisterStateBatchCombiner {
         if (compareBatchDeliveryInfo(candidate, prev) < 0) {
             sortedBatches.add(prev);
         } else {
-            sortedBatches.add(new PersisterStateBatch(
-                prev.firstOffset(),
-                candidate.firstOffset() - 1,
-                prev.deliveryState(),
-                prev.deliveryCount()
-            ));
+            sortedBatches.add(copyWithOffsets(prev, prev.firstOffset(), candidate.firstOffset() - 1));
 
             sortedBatches.add(candidate);
         }
@@ -343,23 +338,25 @@ public class PersisterStateBatchCombiner {
         if (compareBatchDeliveryInfo(candidate, prev) < 0) {
             sortedBatches.add(prev);
 
-            sortedBatches.add(new PersisterStateBatch(
-                prev.lastOffset() + 1,
-                candidate.lastOffset(),
-                candidate.deliveryState(),
-                candidate.deliveryCount()
-            ));
+            sortedBatches.add(copyWithOffsets(candidate, prev.lastOffset() + 1, candidate.lastOffset()));
         } else {
             // candidate has higher priority
-            sortedBatches.add(new PersisterStateBatch(
-                prev.firstOffset(),
-                candidate.firstOffset() - 1,
-                prev.deliveryState(),
-                prev.deliveryCount()
-            ));
+            sortedBatches.add(copyWithOffsets(prev, prev.firstOffset(), candidate.firstOffset() - 1));
 
             sortedBatches.add(candidate);
         }
+    }
+
+    private static PersisterStateBatch copyWithOffsets(PersisterStateBatch batch, long firstOffset, long lastOffset) {
+        return new PersisterStateBatch(
+            firstOffset,
+            lastOffset,
+            batch.deliveryState(),
+            batch.deliveryCount(),
+            batch.stagedProducerId(),
+            batch.stagedProducerEpoch(),
+            batch.stagedAckType()
+        );
     }
 
     /**

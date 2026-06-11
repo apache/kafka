@@ -596,6 +596,60 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
+    public void testWriteReplayReadPreservesStagedAckMetadata() {
+        initSharePartition(shard, SHARE_PARTITION_KEY);
+        writeAndReplayRecord(shard, 0);
+
+        WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
+                    .setStateEpoch(0)
+                    .setLeaderEpoch(0)
+                    .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(10)
+                        .setDeliveryCount((short) 1)
+                        .setDeliveryState((byte) 5)
+                        .setStagedProducerId(123L)
+                        .setStagedProducerEpoch((short) 7)
+                        .setStagedAckType((byte) 1)))))));
+
+        CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> writeResult = shard.writeState(request);
+        shard.replay(0L, 0L, (short) 0, writeResult.records().get(0));
+
+        ReadShareGroupStateRequestData readRequest = new ReadShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setLeaderEpoch(0)))));
+
+        CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> readResult = shard.readStateAndMaybeUpdateLeaderEpoch(readRequest);
+
+        assertEquals(ReadShareGroupStateResponse.toResponseData(
+            TOPIC_ID,
+            PARTITION,
+            0,
+            0,
+            List.of(new ReadShareGroupStateResponseData.StateBatch()
+                .setFirstOffset(0)
+                .setLastOffset(10)
+                .setDeliveryCount((short) 1)
+                .setDeliveryState((byte) 5)
+                .setStagedProducerId(123L)
+                .setStagedProducerEpoch((short) 7)
+                .setStagedAckType((byte) 1)
+            )
+        ), readResult.response());
+    }
+
+    @Test
     public void testReadStateSummarySuccess() {
         initSharePartition(shard, SHARE_PARTITION_KEY);
         writeAndReplayDefaultRecord(shard);

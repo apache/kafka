@@ -26,16 +26,46 @@ import java.util.Objects;
  * This class contains the information for a single batch of state information for use by the {@link Persister}.
  */
 public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
+    public static final long NO_STAGED_PRODUCER_ID = -1L;
+    public static final short NO_STAGED_PRODUCER_EPOCH = -1;
+    public static final byte NO_STAGED_ACK_TYPE = -1;
+
     private final long firstOffset;
     private final long lastOffset;
     private final short deliveryCount;
     private final byte deliveryState;
+    private final long stagedProducerId;
+    private final short stagedProducerEpoch;
+    private final byte stagedAckType;
 
     public PersisterStateBatch(long firstOffset, long lastOffset, byte deliveryState, short deliveryCount) {
+        this(
+            firstOffset,
+            lastOffset,
+            deliveryState,
+            deliveryCount,
+            NO_STAGED_PRODUCER_ID,
+            NO_STAGED_PRODUCER_EPOCH,
+            NO_STAGED_ACK_TYPE
+        );
+    }
+
+    public PersisterStateBatch(
+        long firstOffset,
+        long lastOffset,
+        byte deliveryState,
+        short deliveryCount,
+        long stagedProducerId,
+        short stagedProducerEpoch,
+        byte stagedAckType
+    ) {
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
         this.deliveryState = deliveryState;
         this.deliveryCount = deliveryCount;
+        this.stagedProducerId = stagedProducerId;
+        this.stagedProducerEpoch = stagedProducerEpoch;
+        this.stagedAckType = stagedAckType;
     }
 
     public long firstOffset() {
@@ -54,12 +84,28 @@ public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
         return deliveryCount;
     }
 
+    public long stagedProducerId() {
+        return stagedProducerId;
+    }
+
+    public short stagedProducerEpoch() {
+        return stagedProducerEpoch;
+    }
+
+    public byte stagedAckType() {
+        return stagedAckType;
+    }
+
     public static PersisterStateBatch from(ReadShareGroupStateResponseData.StateBatch batch) {
         return new PersisterStateBatch(
             batch.firstOffset(),
             batch.lastOffset(),
             batch.deliveryState(),
-            batch.deliveryCount());
+            batch.deliveryCount(),
+            batch.stagedProducerId(),
+            batch.stagedProducerEpoch(),
+            batch.stagedAckType()
+        );
     }
 
     public static PersisterStateBatch from(WriteShareGroupStateRequestData.StateBatch batch) {
@@ -67,7 +113,11 @@ public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
             batch.firstOffset(),
             batch.lastOffset(),
             batch.deliveryState(),
-            batch.deliveryCount());
+            batch.deliveryCount(),
+            batch.stagedProducerId(),
+            batch.stagedProducerEpoch(),
+            batch.stagedAckType()
+        );
     }
 
     @Override
@@ -78,12 +128,15 @@ public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
         return firstOffset == that.firstOffset &&
             lastOffset == that.lastOffset &&
             deliveryCount == that.deliveryCount &&
-            deliveryState == that.deliveryState;
+            deliveryState == that.deliveryState &&
+            stagedProducerId == that.stagedProducerId &&
+            stagedProducerEpoch == that.stagedProducerEpoch &&
+            stagedAckType == that.stagedAckType;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(firstOffset, lastOffset, deliveryCount, deliveryState);
+        return Objects.hash(firstOffset, lastOffset, deliveryCount, deliveryState, stagedProducerId, stagedProducerEpoch, stagedAckType);
     }
 
     @Override
@@ -92,7 +145,10 @@ public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
             "firstOffset=" + firstOffset + "," +
             "lastOffset=" + lastOffset + "," +
             "deliveryCount=" + deliveryCount + "," +
-            "deliveryState=" + deliveryState +
+            "deliveryState=" + deliveryState + "," +
+            "stagedProducerId=" + stagedProducerId + "," +
+            "stagedProducerEpoch=" + stagedProducerEpoch + "," +
+            "stagedAckType=" + stagedAckType +
             ")";
     }
 
@@ -103,11 +159,14 @@ public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
      * - lastOffset
      * - deliveryCount
      * - deliveryState
+     * - stagedProducerId
+     * - stagedProducerEpoch
+     * - stagedAckType
      * <p>
      * Does not check all dimensions in every case. The first dimension
      * check resulting in non-zero comparison result is returned.
      * <p>
-     * In case the 2 objects are equal, all 4 dimension comparisons must
+     * In case the 2 objects are equal, all dimension comparisons must
      * be 0.
      * <p>
      * This method could be used for storing PersisterStateBatch objects
@@ -125,7 +184,19 @@ public class PersisterStateBatch implements Comparable<PersisterStateBatch> {
             if (deltaLast == 0) {
                 int deltaCount = this.deliveryCount() - other.deliveryCount();
                 if (deltaCount == 0) {
-                    return Byte.compare(this.deliveryState(), other.deliveryState());
+                    int deltaState = Byte.compare(this.deliveryState(), other.deliveryState());
+                    if (deltaState == 0) {
+                        int deltaProducerId = Long.compare(this.stagedProducerId(), other.stagedProducerId());
+                        if (deltaProducerId == 0) {
+                            int deltaProducerEpoch = Short.compare(this.stagedProducerEpoch(), other.stagedProducerEpoch());
+                            if (deltaProducerEpoch == 0) {
+                                return Byte.compare(this.stagedAckType(), other.stagedAckType());
+                            }
+                            return deltaProducerEpoch;
+                        }
+                        return deltaProducerId;
+                    }
+                    return deltaState;
                 }
                 return deltaCount;
             }
