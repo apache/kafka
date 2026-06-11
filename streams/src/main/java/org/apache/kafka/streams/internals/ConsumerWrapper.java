@@ -171,7 +171,7 @@ public abstract class ConsumerWrapper implements Consumer<byte[], byte[]> {
     }
 
     @Override
-    public void setRebalanceListener(RebalanceListener callback) {
+    public void setRebalanceListener(final RebalanceListener callback) {
         delegate.setRebalanceListener(callback);
     }
 
