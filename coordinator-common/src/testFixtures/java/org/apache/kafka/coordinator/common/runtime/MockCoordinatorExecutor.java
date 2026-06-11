@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.common.runtime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -102,5 +103,18 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         }
         queue.clear();
         return results;
+    }
+
+    public ExecutorResult<T> poll(String key) {
+        Iterator<ExecutorTask<?>> it = queue.iterator();
+        while (it.hasNext()) {
+            ExecutorTask<?> task = it.next();
+            if (task.key.equals(key)) {
+                it.remove();
+                tasks.remove(task.key, task.task);
+                return new ExecutorResult<>(task.key, task.execute());
+            }
+        }
+        return null;
     }
 }
