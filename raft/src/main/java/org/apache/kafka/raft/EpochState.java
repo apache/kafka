@@ -18,7 +18,8 @@ package org.apache.kafka.raft;
 
 import java.util.Optional;
 
-public interface EpochState extends AutoCloseable {
+public sealed interface EpochState extends AutoCloseable
+    permits LeaderState, FollowerState, UnattachedState, ResignedState, NomineeState {
 
     default Optional<LogOffsetMetadata> highWatermark() {
         return Optional.empty();
