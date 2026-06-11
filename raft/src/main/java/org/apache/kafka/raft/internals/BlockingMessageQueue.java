@@ -29,16 +29,29 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BlockingMessageQueue implements RaftMessageQueue {
-    // Marker object for wakeup events
-    private static final Object WAKEUP = new Object();
-
-    private final BlockingQueue<Object> queue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<InternalQueueEntry> queue = new LinkedBlockingQueue<>();
     private final AtomicInteger messageCount = new AtomicInteger(0);
+
+    /**
+     * Internal queue entry type used to discriminate between messages and wakeup signals.
+     *
+     * This sealed interface ensures type safety when polling the queue.
+     */
+    private sealed interface InternalQueueEntry { }
+
+    /**
+     * Marker entry used to unblock threads waiting on {@link #poll(long)} without delivering a message.
+     *
+     * Wakeup entries are drained during polling and do not contribute to the message count.
+     */
+    private record WakeupMarker() implements InternalQueueEntry { }
+
+    private static final WakeupMarker WAKEUP = new WakeupMarker();
 
     /**
      * A queue entry that contains a message and its associated future.
      */
-    private static final class MessageEntry implements QueueEntry {
+    private static final class MessageEntry implements QueueEntry, InternalQueueEntry {
         private final CompletableFuture<RaftMessage> future = new CompletableFuture<>();
         private final RaftMessage message;
 
@@ -69,14 +82,14 @@ public class BlockingMessageQueue implements RaftMessageQueue {
     @Override
     public Optional<QueueEntry> poll(long timeoutMs) {
         try {
-            var entry = queue.poll(timeoutMs, TimeUnit.MILLISECONDS);
-            // Drain all wakeup markers; only QueueEntry instances are messages
-            while (entry != null && !(entry instanceof QueueEntry)) {
+            InternalQueueEntry entry = queue.poll(timeoutMs, TimeUnit.MILLISECONDS);
+            // Drain all wakeup markers until we find a message or the queue is empty
+            while (entry instanceof WakeupMarker) {
                 entry = queue.poll();
             }
-            if (entry != null) {
+            if (entry instanceof MessageEntry messageEntry) {
                 messageCount.decrementAndGet();
-                return Optional.of((QueueEntry) entry);
+                return Optional.of(messageEntry);
             }
             return Optional.empty();
         } catch (InterruptedException e) {
@@ -104,5 +117,4 @@ public class BlockingMessageQueue implements RaftMessageQueue {
     public void wakeup() {
         queue.add(WAKEUP);
     }
-
 }
