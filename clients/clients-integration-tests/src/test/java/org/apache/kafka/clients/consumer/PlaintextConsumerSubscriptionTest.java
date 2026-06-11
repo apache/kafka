@@ -51,6 +51,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMI
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
@@ -92,10 +93,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerPatternSubscription() throws InterruptedException {
@@ -172,10 +183,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerSubsequentPatternSubscription() throws InterruptedException {
@@ -249,10 +270,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerPatternUnsubscription() throws InterruptedException {
@@ -298,10 +329,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerRe2JPatternSubscription() throws InterruptedException {
@@ -371,10 +412,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerRe2JPatternExpandSubscription() throws InterruptedException {
@@ -456,10 +507,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testRe2JPatternSubscriptionAndTopicSubscription() throws InterruptedException {
@@ -527,10 +588,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerExpandingTopicSubscriptions() throws InterruptedException {
@@ -567,10 +638,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerShrinkingTopicSubscriptions() throws InterruptedException {
@@ -612,10 +693,20 @@ public class PlaintextConsumerSubscriptionTest {
 
     @ClusterTests({
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
         }),
         @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000"),
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "true")
         })
     })
     public void testAsyncConsumerUnsubscribeTopic() throws InterruptedException {
