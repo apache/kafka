@@ -366,14 +366,29 @@ public class SharePartitionManager implements AutoCloseable {
         Map<TopicIdPartition, CompletableFuture<Throwable>> futures = new HashMap<>();
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
             SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
-            SharePartition sharePartition = partitionCache.get(sharePartitionKey);
-            if (sharePartition == null) {
-                futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+            CompletableFuture<Throwable> future = new CompletableFuture<>();
+            try {
+                initializeSharePartitionForTransactionalAcknowledge(sharePartitionKey)
+                    .whenComplete((sharePartition, initializationThrowable) -> {
+                        if (initializationThrowable != null) {
+                            Throwable throwable = Errors.maybeUnwrapException(initializationThrowable);
+                            fencedSharePartitionHandler().accept(sharePartitionKey, throwable);
+                            future.complete(throwable);
+                            return;
+                        }
+                        sharePartition.stageTxnAcknowledge(memberId, producerId, producerEpoch, acknowledgePartitionBatches)
+                            .whenComplete((result, throwable) -> {
+                                if (throwable != null) {
+                                    throwable = Errors.maybeUnwrapException(throwable);
+                                    fencedSharePartitionHandler().accept(sharePartitionKey, throwable);
+                                }
+                                future.complete(throwable);
+                            });
+                    });
+            } catch (Throwable throwable) {
+                futures.put(topicIdPartition, CompletableFuture.completedFuture(throwable));
                 return;
             }
-            CompletableFuture<Throwable> future = new CompletableFuture<>();
-            sharePartition.stageTxnAcknowledge(memberId, producerId, producerEpoch, acknowledgePartitionBatches)
-                .whenComplete((result, throwable) -> future.complete(throwable));
             futures.put(topicIdPartition, future);
         });
         return mapAcknowledgementFutures(futures, Optional.empty());
@@ -753,6 +768,19 @@ public class SharePartitionManager implements AutoCloseable {
         log.debug("Reinitializing share partition with pending transactional state: {}", sharePartitionKey);
         removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager);
         return getOrCreateSharePartition(sharePartitionKey);
+    }
+
+    private CompletableFuture<SharePartition> initializeSharePartitionForTransactionalAcknowledge(
+        SharePartitionKey sharePartitionKey
+    ) {
+        SharePartition sharePartition = getOrCreateSharePartition(sharePartitionKey);
+        return sharePartition.maybeInitialize().thenCompose(ignored -> {
+            if (sharePartition.hasPendingTransactionalRecords()) {
+                SharePartition refreshedSharePartition = reinitializePendingTransactionalSharePartition(sharePartitionKey);
+                return refreshedSharePartition.maybeInitialize().thenApply(refreshedResult -> refreshedSharePartition);
+            }
+            return CompletableFuture.completedFuture(sharePartition);
+        });
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {
