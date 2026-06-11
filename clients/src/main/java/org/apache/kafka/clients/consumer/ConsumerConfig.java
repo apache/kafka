@@ -690,6 +690,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                                         Type.STRING,
                                         ShareAcknowledgementMode.IMPLICIT.name(),
@@ -811,10 +816,20 @@ public class ConsumerConfig extends AbstractConfig {
         return loggingLog;
     }
 
+    /**
+     * Constructs a new ConsumerConfig with the given properties.
+     *
+     * @param props The consumer configuration properties
+     */
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Constructs a new ConsumerConfig with the given properties.
+     *
+     * @param props The consumer configuration properties
+     */
     public ConsumerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
@@ -823,10 +838,20 @@ public class ConsumerConfig extends AbstractConfig {
         super(CONFIG, props, doLog);
     }
 
+    /**
+     * Returns the set of all configuration keys.
+     *
+     * @return The set of configuration keys
+     */
     public static Set<String> configNames() {
         return CONFIG.names();
     }
 
+    /**
+     * Returns the configuration definition.
+     *
+     * @return The configuration definition
+     */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }

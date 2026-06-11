@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.internals.AbstractIterator;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 

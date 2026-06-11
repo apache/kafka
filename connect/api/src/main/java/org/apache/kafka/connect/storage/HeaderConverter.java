@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.header.Header;
@@ -36,7 +36,7 @@ import java.io.Closeable;
  * The following tags are automatically added to all metrics registered: <code>connector</code> set to connector name,
  * <code>task</code> set to the task id and <code>converter</code> set to <code>header</code>.
  */
-public interface HeaderConverter extends Configurable, Closeable {
+public interface HeaderConverter extends Configurable, Closeable, ConnectPlugin {
 
     /**
      * Convert the header name and byte array value into a {@link Header} object.
@@ -58,8 +58,12 @@ public interface HeaderConverter extends Configurable, Closeable {
     byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value);
 
     /**
-     * Configuration specification for this set of header converters.
-     * @return the configuration specification; may not be null
+     * Get the version of this component.
+     *
+     * @return the version, formatted as a String. The version may not be {@code null} or empty.
      */
-    ConfigDef config();
+    @Override
+    default String version() {
+        return "undefined";
+    }
 }

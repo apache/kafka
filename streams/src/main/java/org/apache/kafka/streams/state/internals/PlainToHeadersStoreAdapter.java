@@ -110,6 +110,17 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
         store.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return store.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return store.committedOffset(partition);
+    }
+
     @Override
     public void close() {
         store.close();

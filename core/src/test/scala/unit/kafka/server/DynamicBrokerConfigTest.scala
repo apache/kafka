@@ -21,7 +21,6 @@ import java.{lang, util}
 import java.util.{Optional, Properties, Map => JMap}
 import java.util.concurrent.{CompletionStage, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
-import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
@@ -34,7 +33,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
-import org.apache.kafka.network.{SocketServer => JSocketServer, SocketServerConfigs}
+import org.apache.kafka.network.{SocketServerConfigs, SocketServer => JSocketServer}
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.DirectoryEventHandler
@@ -43,11 +42,11 @@ import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogMa
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryContext, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogManager, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.{anyString, anySet}
+import org.mockito.ArgumentMatchers.{anySet, anyString}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{mock, never, times, verify, verifyNoMoreInteractions, when}
 
@@ -156,7 +155,7 @@ class DynamicBrokerConfigTest {
     props.put(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, "2")
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(2, config.numRecoveryThreadsPerDataDir)
-    Mockito.verify(logManagerMock).resizeRecoveryThreadPool(newSize = 2)
+    Mockito.verify(logManagerMock).resizeRecoveryThreadPool(2)
 
     props.put(ServerConfigs.BACKGROUND_THREADS_CONFIG, "6")
     config.dynamicConfig.updateDefaultConfig(props)
@@ -250,7 +249,7 @@ class DynamicBrokerConfigTest {
 
     val props3 = new Properties()
     props3.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "-1")
-    val err3 = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
+    val err3 = assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props3, perBrokerConfig = true))
     assertTrue(err3.getMessage.contains("Value must be at least 1"))
     verifyNoMoreInteractions(remoteLogManager)
 
@@ -772,6 +771,55 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
+  def testDynamicLogRemoteCopyLagThrowsOnIncorrectConfig(): Unit = {
+    // log remote copy lag ms cannot exceed effective log local retention ms
+    verifyIncorrectLogRemoteCopyLagProps(
+      retentionMs = 1000L,
+      logLocalRetentionMs = -2L,
+      logRemoteCopyLagMs = 1001L,
+      retentionBytes = 1000L,
+      logLocalRetentionBytes = -2L,
+      logRemoteCopyLagBytes = 100L
+    )
+
+    // log remote copy lag bytes cannot exceed effective log local retention bytes
+    verifyIncorrectLogRemoteCopyLagProps(
+      retentionMs = 1000L,
+      logLocalRetentionMs = -2L,
+      logRemoteCopyLagMs = 100L,
+      retentionBytes = 1000L,
+      logLocalRetentionBytes = -2L,
+      logRemoteCopyLagBytes = 1001L
+    )
+
+  }
+
+  def verifyIncorrectLogRemoteCopyLagProps(retentionMs: Long,
+                                           logLocalRetentionMs: Long,
+                                           logRemoteCopyLagMs: Long,
+                                           retentionBytes: Long,
+                                           logLocalRetentionBytes: Long,
+                                           logRemoteCopyLagBytes: Long): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 8181)
+    props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, retentionMs.toString)
+    props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, retentionBytes.toString)
+    val config = KafkaConfig(props)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[DirectoryEventHandler]))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
+
+    val newProps = new Properties()
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_MS_PROP, logRemoteCopyLagMs.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes.toString)
+    // validate default config
+    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(newProps, perBrokerConfig = false))
+    // validate per broker config
+    assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(newProps, perBrokerConfig = true))
+  }
+
+  @Test
   def testDynamicRemoteFetchMaxWaitMsConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     val config = KafkaConfig(props)
@@ -1033,8 +1081,8 @@ class DynamicBrokerConfigTest {
 
     Mockito.when(serverMock.config).thenReturn(config)
     Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
-    Mockito.when(logManagerMock.allLogs).thenReturn(Iterable.empty)
-    Mockito.when(logManagerMock.directoryId(ArgumentMatchers.anyString())).thenAnswer(_ => Some(Uuid.randomUuid()))
+    Mockito.when(logManagerMock.allLogs).thenReturn(util.Set.of)
+    Mockito.when(logManagerMock.directoryId(ArgumentMatchers.anyString())).thenAnswer(_ => Optional.of(Uuid.randomUuid()))
 
     val currentDefaultLogConfig = new AtomicReference(new LogConfig(new Properties))
     Mockito.when(logManagerMock.currentDefaultConfig).thenAnswer(_ => currentDefaultLogConfig.get())
@@ -1065,7 +1113,6 @@ class DynamicBrokerConfigTest {
     assertTrue(ctx.config.cordonedLogDirs.isEmpty)
     val logDirs = ctx.config.logDirs()
     verify(ctx.directoryEventHandler, never()).handleCordoned(anySet)
-    verify(ctx.directoryEventHandler, never()).handleUncordoned(anySet)
 
     // Cordoning 1 new log dir, so 1 new handleCordoned invocation
     val props = new Properties()
@@ -1073,42 +1120,42 @@ class DynamicBrokerConfigTest {
     ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
-    verify(ctx.directoryEventHandler, never()).handleUncordoned(anySet)
 
     // When using *, no other entries must be specified, so no new invocations
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "*,/invalid/log/dir")
     ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
-    verify(ctx.directoryEventHandler, never()).handleUncordoned(anySet)
 
     // Invalid log dir, so no new invocations
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "/invalid/log/dir")
     ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(util.List.of(logDirs.get(0)), ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(1)).handleCordoned(anySet)
-    verify(ctx.directoryEventHandler, times(0)).handleUncordoned(anySet)
 
     // * cordons the 2nd log dir, so 1 new handleCordoned invocation
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "*")
     ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(logDirs, ctx.config.cordonedLogDirs)
     verify(ctx.directoryEventHandler, times(2)).handleCordoned(anySet)
-    verify(ctx.directoryEventHandler, never()).handleUncordoned(anySet)
 
-    // clearing all cordoned log dirs, so 1 new handleUncordoned invocation
+    // same value so no new invocations
+    props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "*")
+    ctx.config.dynamicConfig.updateBrokerConfig(0, props)
+    assertEquals(logDirs, ctx.config.cordonedLogDirs)
+    verify(ctx.directoryEventHandler, times(2)).handleCordoned(anySet)
+
+    // clearing all cordoned log dirs, so 1 new handleCordoned invocation
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "")
     ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertTrue(ctx.config.cordonedLogDirs.isEmpty)
-    verify(ctx.directoryEventHandler, times(2)).handleCordoned(anySet)
-    verify(ctx.directoryEventHandler, times(1)).handleUncordoned(anySet)
+    verify(ctx.directoryEventHandler, times(3)).handleCordoned(anySet)
 
     // * cordons all log dirs, so 1 new handleCordoned invocation
     props.put(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, String.join(",", logDirs))
     ctx.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals(logDirs, ctx.config.cordonedLogDirs)
-    verify(ctx.directoryEventHandler, times(3)).handleCordoned(anySet)
-    verify(ctx.directoryEventHandler, times(1)).handleUncordoned(anySet)
+    verify(ctx.directoryEventHandler, times(4)).handleCordoned(anySet)
   }
 
   @Test
@@ -1180,20 +1227,65 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testCoordinatorCachedBufferMaxBytesUpdates(): Unit = {
+  def testDynamicGroupCoordinatorConfig(): Unit = {
+    assertTrue(GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.contains(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG))
+    assertTrue(GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.contains(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+    assertTrue(GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.contains(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG))
+    assertTrue(GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.contains(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+    assertTrue(GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.contains(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG))
+    assertTrue(GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.contains(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG))
+    assertTrue(GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.contains(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG))
+
     val origProps = TestUtils.createBrokerConfig(0, port = 8181)
     origProps.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "2097152")
-    origProps.put(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "3145728")
-    val ctx = new DynamicLogConfigContext(origProps)
-    assertEquals(2 * 1024 * 1024, ctx.config.groupCoordinatorConfig.cachedBufferMaxBytes())
-    assertEquals(3 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
+    origProps.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "500")
+    origProps.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
+    origProps.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "250")
+    origProps.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
+    origProps.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "125")
+    origProps.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false")
+    val config = KafkaConfig(origProps)
+    config.dynamicConfig.initialize(None)
+    assertEquals(2 * 1024 * 1024, config.groupCoordinatorConfig.cachedBufferMaxBytes())
+    assertEquals(500, config.groupCoordinatorConfig.consumerGroupAssignmentIntervalMs())
+    assertEquals(false, config.groupCoordinatorConfig.consumerGroupAssignorOffloadEnable())
+    assertEquals(250, config.groupCoordinatorConfig.shareGroupAssignmentIntervalMs())
+    assertEquals(false, config.groupCoordinatorConfig.shareGroupAssignorOffloadEnable())
+    assertEquals(125, config.groupCoordinatorConfig.streamsGroupAssignmentIntervalMs())
+    assertEquals(false, config.groupCoordinatorConfig.streamsGroupAssignorOffloadEnable())
 
     val props = new Properties()
     props.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "4194304")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "1000")
+    props.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "true")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "500")
+    props.put(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "true")
+    props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "250")
+    props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "true")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(4 * 1024 * 1024, config.groupCoordinatorConfig.cachedBufferMaxBytes())
+    assertEquals(1000, config.groupCoordinatorConfig.consumerGroupAssignmentIntervalMs())
+    assertEquals(true, config.groupCoordinatorConfig.consumerGroupAssignorOffloadEnable())
+    assertEquals(500, config.groupCoordinatorConfig.shareGroupAssignmentIntervalMs())
+    assertEquals(true, config.groupCoordinatorConfig.shareGroupAssignorOffloadEnable())
+    assertEquals(250, config.groupCoordinatorConfig.streamsGroupAssignmentIntervalMs())
+    assertEquals(true, config.groupCoordinatorConfig.streamsGroupAssignorOffloadEnable())
+  }
+
+  @Test
+  def testDynamicShareCoordinatorConfig(): Unit = {
+    assertTrue(ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS.contains(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG))
+
+    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
+    origProps.put(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "3145728")
+    val config = KafkaConfig(origProps)
+    config.dynamicConfig.initialize(None)
+    assertEquals(3 * 1024 * 1024, config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
+
+    val props = new Properties()
     props.put(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "5242880")
-    ctx.config.dynamicConfig.updateDefaultConfig(props)
-    assertEquals(4 * 1024 * 1024, ctx.config.groupCoordinatorConfig.cachedBufferMaxBytes())
-    assertEquals(5 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(5 * 1024 * 1024, config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
   }
 }
 

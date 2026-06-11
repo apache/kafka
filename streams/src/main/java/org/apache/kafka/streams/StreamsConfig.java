@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -397,6 +398,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_42 = UpgradeFromValues.UPGRADE_FROM_42.toString();
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 4.3.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_43 = UpgradeFromValues.UPGRADE_FROM_43.toString();
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -533,6 +540,15 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String DEFAULT_DSL_STORE = ROCKS_DB;
 
+    /** {@code default.interactive.query.isolation.level} */
+    public static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG = "default.interactive.query.isolation.level";
+    private static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DOC = "The default <code>IsolationLevel</code> used by interactive queries. " +
+        "Only meaningful when <code>" + "enable.transactional.statestores" + "</code> is <code>true</code>: " +
+        "<code>READ_UNCOMMITTED</code> reads include writes staged in the transaction buffer since the last commit; " +
+        "<code>READ_COMMITTED</code> reads skip the transaction buffer and return only committed data. " +
+        "IQv1 queries always use this value. IQv2 queries use this value as a default, but can override it per-query.";
+    public static final String DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DEFAULT = IsolationLevel.READ_UNCOMMITTED.name();
+
     /** {@code dsl.store.suppliers.class } */
     public static final String DSL_STORE_SUPPLIERS_CLASS_CONFIG = "dsl.store.suppliers.class";
     static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
@@ -565,6 +581,14 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code enable.metrics.push} */
     @SuppressWarnings("WeakerAccess")
     public static  final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+
+    /** {@code enable.transactional.statestores} */
+    public static final String TRANSACTIONAL_STATE_STORES_CONFIG = "enable.transactional.statestores";
+    private static final String TRANSACTIONAL_STATE_STORES_DOC = "Whether to enable transactional state stores. " +
+            "When enabled, state stores will buffer writes in a transaction buffer (if supported by the state store implementation), " +
+            "before committing them when the corresponding Kafka changelog transaction has committed. \n" +
+            "Under EOS, state stores will no longer be wiped on-error and rebuilt from scratch. " +
+            "In the event of an error (under either EOS or ALOS), only the writes since the last successful commit will be lost and replayed through the topology.";
     @Deprecated
     public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal client metrics for (main, restore, and global) consumers, producers, and admin clients." +
         " The cluster must have a client metrics subscription which corresponds to a client.";
@@ -1107,6 +1131,11 @@ public class StreamsConfig extends AbstractConfig {
                     true,
                     Importance.LOW,
                     ENABLE_METRICS_PUSH_DOC)
+            .define(TRANSACTIONAL_STATE_STORES_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.LOW,
+                    TRANSACTIONAL_STATE_STORES_DOC)
             .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
                     Type.INT,
                     null,
@@ -1157,6 +1186,14 @@ public class StreamsConfig extends AbstractConfig {
                     ConfigDef.CaseInsensitiveValidString.in(DSL_STORE_FORMAT_DEFAULT, DSL_STORE_FORMAT_HEADERS),
                     Importance.LOW,
                     DSL_STORE_FORMAT_DOC)
+            .define(DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG,
+                    Type.STRING,
+                    DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DEFAULT,
+                    ConfigDef.CaseInsensitiveValidString.in(
+                        IsolationLevel.READ_UNCOMMITTED.name(),
+                        IsolationLevel.READ_COMMITTED.name()),
+                    Importance.LOW,
+                    DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),
@@ -1256,6 +1293,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+            .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.LOW,
+                    CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
             .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
@@ -1362,6 +1404,7 @@ public class StreamsConfig extends AbstractConfig {
             + ".vector.enabled__";
 
         // Private API used to control the prefix of the auto created topics
+        @Deprecated
         public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
 
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
@@ -1664,29 +1707,61 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, String> clientTags = getClientTags();
 
         if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
-            throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
-                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
+            throw new ConfigException(
+                String.format(
+                    "At most %s client tags can be specified using %s prefix.",
+                    MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
+                    CLIENT_TAG_PREFIX
+                )
+            );
         }
 
         for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+            // no need to call `trim()` because for LIST type `AbstractConfig` takes already care of this
+            if (rackAwareAssignmentTag.isEmpty()) {
+                throw new ConfigException(
+                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    rackAwareAssignmentTags,
+                    "Contains invalid value []. Tag key cannot be empty."
+                );
+            }
             if (!clientTags.containsKey(rackAwareAssignmentTag)) {
-                throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                                          rackAwareAssignmentTags,
-                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
-                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
+                throw new ConfigException(
+                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    rackAwareAssignmentTags,
+                    String.format(
+                        "Contains invalid value [%s] which doesn't have corresponding tag set via [%s] prefix.",
+                        rackAwareAssignmentTag,
+                        CLIENT_TAG_PREFIX
+                    )
+                );
             }
         }
 
         clientTags.forEach((tagKey, tagValue) -> {
+            if (tagKey.trim().isEmpty()) {
+                throw new ConfigException("Invalid config `client.tag.` (missing client tag key).");
+            }
+            if (tagValue.trim().isEmpty()) {
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    "[]",
+                    "Tag value cannot be empty."
+                );
+            }
             if (tagKey.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagKey,
-                                          "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    tagKey,
+                    "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + "."
+                );
             }
             if (tagValue.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagValue,
-                                          "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    tagValue,
+                    "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + "."
+                );
             }
         });
     }
@@ -1997,6 +2072,7 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @return Map of the client tags.
      */
+
     @SuppressWarnings("WeakerAccess")
     public Map<String, String> getClientTags() {
         return originalsWithPrefix(CLIENT_TAG_PREFIX).entrySet().stream().collect(
@@ -2065,6 +2141,14 @@ public class StreamsConfig extends AbstractConfig {
     public KafkaClientSupplier getKafkaClientSupplier() {
         return getConfiguredInstance(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG,
             KafkaClientSupplier.class);
+    }
+
+    /**
+     * Return the configured default {@link IsolationLevel} used by interactive queries.
+     */
+    public IsolationLevel defaultInteractiveQueryIsolationLevel() {
+        return IsolationLevel.valueOf(
+            getString(DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
     }
 
     /**

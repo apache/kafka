@@ -19,10 +19,11 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -77,7 +79,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
 /**
@@ -230,6 +231,7 @@ public class StateDirectory implements AutoCloseable {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
+            final boolean transactionalStateStoresEnabled = new TopologyConfig(config).transactionalStateStoresEnabled;
 
             // Initialize thread-specific resources needed to open stores in the state directory
             final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
@@ -263,7 +265,7 @@ public class StateDirectory implements AutoCloseable {
                     try {
                         // We only handle TaskCorruptedException at this point. Any other exception is considered fatal.
                         StateManagerUtil.registerStateStores(log, threadLogPrefix, subTopology, temporaryStateManager, this, initContext);
-                        temporaryStateManager.checkpoint();
+                        temporaryStateManager.commit();
                     } catch (final TaskCorruptedException tce) {
                         // At this point, we only log a warning and continue with the startup store initialization.
                         // The task-corrupted exception will be handled in the first Task assignment phase.
@@ -271,7 +273,11 @@ public class StateDirectory implements AutoCloseable {
                     } finally {
                         // Make sure the state manager writes the local checkpoint file before closing the stores
                         // This will be replaced in the future when removing the checkpoint file dependency.
-                        temporaryStateManager.close();
+                        StateManagerUtil.closeStateManager(
+                            log, threadLogPrefix, true, eosEnabled,
+                            transactionalStateStoresEnabled,
+                            temporaryStateManager, this, Task.TaskType.ACTIVE
+                        );
                     }
                     tasksInLocalState.add(task);
                 }
@@ -427,13 +433,6 @@ public class StateDirectory implements AutoCloseable {
     }
 
     /**
-     * @return The File handle for the checkpoint in the given task's directory
-     */
-    File checkpointFileFor(final TaskId taskId) {
-        return new File(getOrCreateDirectoryForTask(taskId), StateManagerUtil.CHECKPOINT_FILE_NAME);
-    }
-
-    /**
      * Decide if the directory of the task is empty or not
      */
     boolean directoryForTaskIsEmpty(final TaskId taskId) {
@@ -444,7 +443,7 @@ public class StateDirectory implements AutoCloseable {
 
     private boolean taskDirIsEmpty(final File taskDir) {
         final File[] storeDirs = taskDir.listFiles(pathname ->
-                !pathname.getName().equals(CHECKPOINT_FILE_NAME));
+                !pathname.getName().startsWith(LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME));
 
         boolean taskDirEmpty = true;
 
@@ -474,7 +473,7 @@ public class StateDirectory implements AutoCloseable {
      * @return directory for the global stores
      * @throws ProcessorStateException if the global store directory does not exists and could not be created
      */
-    File globalStateDir() {
+    public File globalStateDir() {
         final File dir = new File(stateDir, "global");
         if (hasPersistentStores) {
             if (!dir.exists() && !dir.mkdir()) {

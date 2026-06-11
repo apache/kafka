@@ -40,6 +40,7 @@
   // protocol is used.
   //
   // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
+  // It can return UNKNOWN_TOPIC_ID if topic IDs used and the topic is not found in metadata.
   "validVersions": "1-10",
   "flexibleVersions": "6+",
   // Supported errors:

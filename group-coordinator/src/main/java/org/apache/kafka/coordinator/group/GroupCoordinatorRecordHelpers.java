@@ -263,7 +263,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param groupId   The consumer group id.
      * @return The record.
      */
-    public static CoordinatorRecord newConsumerGroupTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newConsumerGroupTargetAssignmentMetadataTombstoneRecord(
         String groupId
     ) {
         return CoordinatorRecord.tombstone(
@@ -694,7 +694,7 @@ public class GroupCoordinatorRecordHelpers {
      * @param groupId   The group id.
      * @return The record.
      */
-    public static CoordinatorRecord newShareGroupTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newShareGroupTargetAssignmentMetadataTombstoneRecord(
         String groupId
     ) {
         return CoordinatorRecord.tombstone(

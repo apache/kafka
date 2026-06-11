@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ByteUtils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -60,6 +62,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.mockito.Mockito.mock;
@@ -220,7 +223,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldGetRecordsWithPrefixKey() {
         store.put(hi, there);
-        store.put(Bytes.increment(hi), world);
+        store.put(ByteUtils.increment(hi), world);
 
         final List<Bytes> keys = new ArrayList<>();
         final List<Bytes> values = new ArrayList<>();
@@ -261,6 +264,18 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), is(notNullValue()));
         assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), hasEntry(0, 100L));
 
+    }
+
+    @Test
+    public void shouldDelegateReadOnlyUncommittedToInner() {
+        assertThat(store.readOnly(IsolationLevel.READ_UNCOMMITTED),
+            sameInstance(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)));
+    }
+
+    @Test
+    public void shouldDelegateReadOnlyCommittedToInner() {
+        assertThat(store.readOnly(IsolationLevel.READ_COMMITTED),
+            sameInstance(inner.readOnly(IsolationLevel.READ_COMMITTED)));
     }
 
     private StreamsConfig streamsConfigMock() {

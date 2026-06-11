@@ -17,13 +17,12 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatter;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -32,20 +31,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.function.Function;
 
 import javax.security.auth.login.AppConfigurationEntry;
-
-import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 
 /**
  * {@code ClientCredentialsJwtRetriever} is a {@link JwtRetriever} that performs the steps to request
@@ -109,27 +96,26 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientCredentialsJwtRetriever.class);
 
+    private final Time time;
     private HttpJwtRetriever delegate;
+
+    public ClientCredentialsJwtRetriever() {
+        this(Time.SYSTEM);
+    }
+
+    public ClientCredentialsJwtRetriever(Time time) {
+        this.time = time;
+    }
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
 
-        ConfigOrJaas configOrJaas = new ConfigOrJaas(cu, jou);
-        String clientId = configOrJaas.clientId();
-        String clientSecret = configOrJaas.clientSecret();
-        String scope = configOrJaas.scope();
-        boolean urlencodeHeader = validateUrlencodeHeader(cu);
-
-        HttpRequestFormatter requestFormatter = new ClientCredentialsRequestFormatter(
-            clientId,
-            clientSecret,
-            scope,
-            urlencodeHeader
-        );
-
+        HttpRequestFormatter requestFormatter = ClientCredentialsRequestFormatterFactory.create(cu, jou, time);
         delegate = new HttpJwtRetriever(requestFormatter);
+
+        LOG.debug("Created instance of {} as delegate", delegate.getClass().getName());
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
@@ -144,109 +130,5 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
     @Override
     public void close() throws IOException {
         Utils.closeQuietly(delegate, "JWT retriever delegate");
-    }
-
-    /**
-     * In some cases, the incoming {@link Map} doesn't contain a value for
-     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
-     * will cause a {@link NullPointerException} when it is later unboxed.
-     *
-     * <p/>
-     *
-     * This utility method ensures that we have a non-{@code null} value to use in the
-     * {@link HttpJwtRetriever} constructor.
-     */
-    static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
-        Boolean urlencodeHeader = configurationUtils.get(SASL_OAUTHBEARER_HEADER_URLENCODE);
-        return Objects.requireNonNullElse(urlencodeHeader, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE);
-    }
-
-    /**
-     * Retrieves the values first from configuration, then falls back to JAAS, and, if required, throws an error.
-     */
-    private static class ConfigOrJaas {
-
-        private final ConfigurationUtils cu;
-        private final JaasOptionsUtils jou;
-
-        private ConfigOrJaas(ConfigurationUtils cu, JaasOptionsUtils jou) {
-            this.cu = cu;
-            this.jou = jou;
-        }
-
-        private String clientId() {
-            return getValue(
-                SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID,
-                CLIENT_ID_CONFIG,
-                true,
-                cu::validateString,
-                jou::validateString
-            );
-        }
-
-        private String clientSecret() {
-            return getValue(
-                SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
-                CLIENT_SECRET_CONFIG,
-                true,
-                cu::validatePassword,
-                jou::validateString
-            );
-        }
-
-        private String scope() {
-            return getValue(
-                SASL_OAUTHBEARER_SCOPE,
-                SCOPE_CONFIG,
-                false,
-                cu::validateString,
-                jou::validateString
-            );
-        }
-
-        private String getValue(String configName,
-                                String jaasName,
-                                boolean isRequired,
-                                Function<String, String> configValueGetter,
-                                Function<String, String> jaasValueGetter) {
-            boolean isPresentInConfig = cu.containsKey(configName);
-            boolean isPresentInJaas = jou.containsKey(jaasName);
-
-            if (isPresentInConfig) {
-                if (isPresentInJaas) {
-                    // Log if the user is using the deprecated JAAS option.
-                    LOG.warn(
-                        "Both the OAuth configuration {} as well as the JAAS option {} (from the {} configuration) were provided. " +
-                        "Since the {} JAAS option is deprecated, it will be ignored and the value from the {} configuration will be used. " +
-                        "Please update your configuration to only use {}.",
-                        configName,
-                        jaasName,
-                        SASL_JAAS_CONFIG,
-                        jaasName,
-                        configName,
-                        configName
-                    );
-                }
-
-                return configValueGetter.apply(configName);
-            } else if (isPresentInJaas) {
-                String value = jaasValueGetter.apply(jaasName);
-
-                // Log if the user is using the deprecated JAAS option.
-                LOG.warn(
-                    "The OAuth JAAS option {} was configured in {}, but that JAAS option is deprecated and will be removed. " +
-                    "Please update your configuration to use the {} configuration instead.",
-                    jaasName,
-                    SASL_JAAS_CONFIG,
-                    configName
-                );
-
-                return value;
-            } else if (isRequired) {
-                throw new ConfigException(configName, null);
-            } else {
-                return null;
-            }
-        }
     }
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -82,6 +83,7 @@ import static org.apache.kafka.streams.StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFF
 import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
@@ -1039,6 +1041,40 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldUseDefaultInteractiveQueryIsolationLevelWhenNotSpecified() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, config.defaultInteractiveQueryIsolationLevel());
+    }
+
+    @Test
+    public void shouldAcceptValidInteractiveQueryIsolationLevels() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "READ_UNCOMMITTED");
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "READ_COMMITTED");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionForInvalidInteractiveQueryIsolationLevel() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "FOO");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("Invalid value FOO for configuration default.interactive.query.isolation.level"));
+    }
+
+    @Test
+    public void shouldAcceptInteractiveQueryIsolationLevelCaseInsensitively() {
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        assertEquals(IsolationLevel.READ_UNCOMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "read_committed");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+
+        props.put(StreamsConfig.DEFAULT_INTERACTIVE_QUERY_ISOLATION_LEVEL_CONFIG, "Read_Committed");
+        assertEquals(IsolationLevel.READ_COMMITTED, new StreamsConfig(props).defaultInteractiveQueryIsolationLevel());
+    }
+
+    @Test
     public void shouldSpecifyRocksdbDslSupplierWhenNotExplicitlyAddedToConfigs() {
         final Class<?> expectedDefaultStoreType = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
         final Class<?> actualDefaultStoreType = streamsConfig.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
@@ -1182,7 +1218,36 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithUnknownTags() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            "Invalid value [cluster] for configuration rack.aware.assignment.tags: Contains invalid value [cluster] which doesn't have corresponding tag set via [client.tag.] prefix.",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldAllowWhitespacesInRackAwareAssignmentTagsList() {
+        // AbstractConfig is supposed to take care of WS handling for LIST type
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
+        final StreamsConfig config = new StreamsConfig(props);
+        final Map<String, String> clientTags = config.getClientTags();
+        assertEquals(2, clientTags.size());
+        assertEquals("eu-central-1a", clientTags.get("zone"));
+        assertEquals("cluster-1", clientTags.get("cluster"));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithEmptyTag() {
+        // AbstractConfig is supposed to take care of WS handling for LIST type
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone, ");
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            "Invalid value [zone, ] for configuration rack.aware.assignment.tags: Contains invalid value []. Tag key cannot be empty.",
+            exception.getMessage()
+        );
     }
 
     @Test
@@ -1191,8 +1256,12 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.clientTagPrefix(key), "eu-central-1a");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
-            String.format("Invalid value %s for configuration %s: Tag key exceeds maximum length of %s.",
-                          key, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH),
+            String.format(
+                "Invalid value %s for configuration client.tag.%s: Tag key exceeds maximum length of %s.",
+                key,
+                key,
+                StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH
+            ),
             exception.getMessage()
         );
     }
@@ -1203,8 +1272,34 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.clientTagPrefix("x"), value);
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
-            String.format("Invalid value %s for configuration %s: Tag value exceeds maximum length of %s.",
-                          value, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH),
+            String.format(
+                "Invalid value %s for configuration client.tag.x: Tag value exceeds maximum length of %s.",
+                value,
+                StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH
+            ),
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagKeyIsEmpty() {
+        props.put(StreamsConfig.clientTagPrefix(" "), "tagValue");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            "Invalid config `client.tag.` (missing client tag key).",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagValueIsEmpty() {
+        final Map<String, Object> config = new HashMap<>();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app.id");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        config.put(StreamsConfig.clientTagPrefix("tagKey"), " ");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(config));
+        assertEquals(
+            "Invalid value [] for configuration client.tag.tagKey: Tag value cannot be empty.",
             exception.getMessage()
         );
     }
@@ -1817,6 +1912,18 @@ public class StreamsConfigTest {
 
             assertEquals(0, streamsConfigLogs.getMessages().size());
         }
+    }
+
+    @Test
+    public void shouldDisableTransactionalStateStoresByDefault() {
+        assertFalse(streamsConfig.getBoolean(TRANSACTIONAL_STATE_STORES_CONFIG));
+    }
+
+    @Test
+    public void shouldEnableTransactionalStateStoresWhenConfigured() {
+        props.put(TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(streamsConfig.getBoolean(TRANSACTIONAL_STATE_STORES_CONFIG));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

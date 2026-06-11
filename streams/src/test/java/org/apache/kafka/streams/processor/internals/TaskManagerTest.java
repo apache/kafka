@@ -34,9 +34,9 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -78,6 +78,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -117,7 +118,6 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -255,7 +255,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldLockCommitableTasksOnCorruptionWithProcessingThreads() {
+    public void shouldLockCommittableTasksOnCorruptionWithProcessingThreads() {
         final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
@@ -2472,6 +2472,7 @@ public class TaskManagerTest {
         when(corruptedActive.prepareCommit(false)).thenReturn(emptyMap());
         when(corruptedActive.changelogPartitions()).thenReturn(taskId00ChangelogPartitions);
         doNothing().when(corruptedActive).suspend();
+        doNothing().when(corruptedActive).markChangelogAsCorrupted(taskId00ChangelogPartitions);
         doNothing().when(corruptedActive).postCommit(true);
         doNothing().when(corruptedActive).closeDirty();
         doNothing().when(corruptedActive).revive();
@@ -2482,21 +2483,24 @@ public class TaskManagerTest {
 
         taskManager.handleCorruption(singleton(taskId00));
 
-        // 1. verify corrupted task was closed dirty and revived
+        // 1. verify corrupted task was closed dirty and revived; markChangelogAsCorrupted precedes postCommit
         final InOrder corruptedOrder = inOrder(corruptedActive, tasks);
         corruptedOrder.verify(corruptedActive).prepareCommit(false);
         corruptedOrder.verify(corruptedActive).suspend();
+        corruptedOrder.verify(corruptedActive).markChangelogAsCorrupted(taskId00ChangelogPartitions);
         corruptedOrder.verify(corruptedActive).postCommit(true);
         corruptedOrder.verify(corruptedActive).closeDirty();
         corruptedOrder.verify(tasks).removeTask(corruptedActive);
         corruptedOrder.verify(corruptedActive).revive();
         corruptedOrder.verify(tasks).addPendingTasksToInit(Set.of(corruptedActive));
 
-        // 2. verify uncorrupted task attempted commit, failed with timeout, then was closed dirty and revived
+        // 2. verify uncorrupted task attempted commit, failed with timeout; EOS converts TimeoutException to
+        //    TaskCorruptedException so it also ends up in the corrupted path (markAsCorrupted=true)
         final InOrder uncorruptedOrder = inOrder(uncorruptedActive, producer, tasks);
         uncorruptedOrder.verify(uncorruptedActive).prepareCommit(true);
-        uncorruptedOrder.verify(producer).commitTransaction(offsets, groupMetadata); // tries to commit, throws TimeoutException
+        uncorruptedOrder.verify(producer).commitTransaction(offsets, groupMetadata); // throws TimeoutException → TaskCorruptedException
         uncorruptedOrder.verify(uncorruptedActive).suspend();
+        uncorruptedOrder.verify(uncorruptedActive).markChangelogAsCorrupted(taskId01ChangelogPartitions);
         uncorruptedOrder.verify(uncorruptedActive).postCommit(true);
         uncorruptedOrder.verify(uncorruptedActive).closeDirty();
         uncorruptedOrder.verify(tasks).removeTask(uncorruptedActive);
@@ -2988,6 +2992,55 @@ public class TaskManagerTest {
         verify(task00).prepareCommit(true);
         verify(task00).postCommit(true);
         verify(task00).suspend();
+    }
+
+    @Test
+    public void shouldSuspendRevokedTasksWhenPrepareCommitThrows() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allInitializedTasks()).thenReturn(Set.of(task00));
+
+        when(task00.commitNeeded()).thenReturn(true);
+        when(task00.prepareCommit(true)).thenThrow(new TaskMigratedException("task migrated"));
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        final StreamsException thrown = assertThrows(StreamsException.class,
+            () -> taskManager.handleRevocation(taskId00Partitions));
+
+        assertInstanceOf(TaskMigratedException.class, thrown);
+        assertEquals(Optional.of(taskId00), thrown.taskId());
+
+        verify(task00).suspend();
+        verify(task00, never()).postCommit(anyBoolean());
+    }
+
+    @Test
+    public void shouldAttachSuppressedExceptionWhenPrepareCommitAndSuspendBothFailDuringRevocation() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RUNNING)
+            .build();
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.allInitializedTasks()).thenReturn(Set.of(task00));
+
+        when(task00.commitNeeded()).thenReturn(true);
+        when(task00.prepareCommit(true)).thenThrow(new TaskMigratedException("task migrated"));
+        doThrow(new RuntimeException("suspend failed")).when(task00).suspend();
+
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+
+        final StreamsException thrown = assertThrows(StreamsException.class,
+            () -> taskManager.handleRevocation(taskId00Partitions));
+
+        assertInstanceOf(TaskMigratedException.class, thrown);
+        assertEquals(1, thrown.getSuppressed().length);
+        assertInstanceOf(StreamsException.class, thrown.getSuppressed()[0]);
     }
 
     @Test
@@ -4992,7 +5045,6 @@ public class TaskManagerTest {
         final Path checkpointFilePath = checkpointFile.toPath();
         Files.createFile(checkpointFilePath);
         new OffsetCheckpoint(checkpointFile).write(offsets);
-        lenient().when(stateDirectory.checkpointFileFor(task)).thenReturn(checkpointFile);
         expectDirectoryNotEmpty(task);
     }
 

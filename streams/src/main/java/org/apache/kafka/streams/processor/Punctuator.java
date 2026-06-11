@@ -33,15 +33,15 @@ public interface Punctuator {
      * Perform the scheduled periodic operation.
      *
      * <p> If this method accesses {@link org.apache.kafka.streams.processor.api.ProcessorContext} or
-     * {@link org.apache.kafka.streams.processor.api.ProcessorContext}, record metadata like topic,
+     * {@link org.apache.kafka.streams.processor.ProcessorContext}, record metadata like topic,
      * partition, and offset or {@link org.apache.kafka.streams.processor.api.RecordMetadata} won't
      * be available.
      *
      * <p> Furthermore, for any record that is sent downstream via
      * {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(Record)}
-     * or {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(Record)}, there
+     * or {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object)}, there
      * won't be any record metadata. If
-     * {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(Record)} is used,
+     * {@link org.apache.kafka.streams.processor.ProcessorContext#forward(Object, Object)} is used,
      * it's also not possible to set records headers.
      *
      * @param timestamp when the operation is being called, depending on {@link PunctuationType}

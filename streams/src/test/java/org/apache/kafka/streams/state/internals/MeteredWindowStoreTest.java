@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -30,14 +33,16 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -47,10 +52,12 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.nio.charset.StandardCharsets;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -71,10 +78,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -356,10 +365,8 @@ public class MeteredWindowStoreTest {
         store.init(context, store);
         store.commit(Map.of());
 
-        // it suffices to verify one flush metric since all flush metrics are recorded by the same sensor
-        // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("flush-rate");
-        assertTrue((Double) metric.metricValue() > 0);
+        final KafkaMetric commitMetric = metric("commit-rate");
+        assertTrue((Double) commitMetric.metricValue() > 0);
     }
 
     @Test
@@ -389,6 +396,46 @@ public class MeteredWindowStoreTest {
             new SerdeThatDoesntHandleNull()
         );
         assertTrue(metered.setFlushListener(null, false));
+    }
+
+    @Test
+    public void shouldPassRecordHeadersToValueDeserializerWhenFlushListenerIsSet() {
+        final String headerKey = "flush";
+        final Deserializer<String> valueDeserializer = mock(Deserializer.class);
+        final Serde<String> valueSerde = Serdes.serdeFrom(Serdes.String().serializer(), valueDeserializer);
+        when(valueDeserializer.deserialize(anyString(), any(Headers.class), any(byte[].class))).thenReturn("value");
+
+        final InMemoryWindowStore inner = new InMemoryWindowStore(
+            "flush-listener-inner",
+            RETENTION_PERIOD,
+            WINDOW_SIZE_MS,
+            false,
+            STORE_TYPE
+        );
+        final CachingWindowStore cachingStore = new CachingWindowStore(inner, WINDOW_SIZE_MS, 100L);
+        final MeteredWindowStore<String, String> metered = new MeteredWindowStore<>(
+            cachingStore,
+            WINDOW_SIZE_MS,
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            valueSerde
+        );
+        metered.init(context, metered);
+        assertTrue(metered.setFlushListener(record -> { }, false));
+
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add(headerKey, "new".getBytes(StandardCharsets.UTF_8));
+        
+        context.setRecordContext(new ProcessorRecordContext(TIMESTAMP, 0L, 0, "topic", headers));
+        metered.put(KEY, "value", TIMESTAMP);
+
+        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        verify(valueDeserializer).deserialize(anyString(), headersCaptor.capture(), any(byte[].class));
+
+        final Header capturedLastHeader = headersCaptor.getValue().lastHeader(headerKey);
+        assertThat(capturedLastHeader, not(nullValue()));
+        assertThat(new String(capturedLastHeader.value(), StandardCharsets.UTF_8), equalTo("new"));
     }
 
     @Test
@@ -440,6 +487,16 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> store.backwardFetch(null, 0L, 1L));
+    }
+
+    @Test
+    public void shouldTrackNumKeysMetric() {
+        store.init(context, store);
+
+        final KafkaMetric numKeysMetric = metric("num-keys");
+        assertThat(numKeysMetric, not(nullValue()));
+        // inner store is a mock (not InMemoryWindowStore), so returns -1
+        assertThat((Long) numKeysMetric.metricValue(), equalTo(-1L));
     }
 
     @SuppressWarnings("unused")
@@ -526,6 +583,176 @@ public class MeteredWindowStoreTest {
         }
 
         assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewFetchPointInTimeApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.fetch(KEY_BYTES, TIMESTAMP)).thenReturn(VALUE_BYTES);
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertThat(view.fetch(KEY, TIMESTAMP), equalTo(VALUE));
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewFetchSingleKeyApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.fetch(KEY_BYTES, ofEpochMilli(1), ofEpochMilli(1)))
+            .thenReturn(KeyValueIterators.emptyWindowStoreIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.fetch(KEY, ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewBackwardFetchSingleKeyApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.backwardFetch(KEY_BYTES, ofEpochMilli(1), ofEpochMilli(1)))
+            .thenReturn(KeyValueIterators.emptyWindowStoreIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.backwardFetch(KEY, ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewFetchRangeApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.fetch(KEY_BYTES, KEY_BYTES, ofEpochMilli(1), ofEpochMilli(1)))
+            .thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.fetch(KEY, KEY, ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewBackwardFetchRangeApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.backwardFetch(KEY_BYTES, KEY_BYTES, ofEpochMilli(1), ofEpochMilli(1)))
+            .thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.backwardFetch(KEY, KEY, ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewAllApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.all()).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.all().close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewBackwardAllApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.backwardAll()).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.backwardAll().close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewFetchAllApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.fetchAll(ofEpochMilli(1), ofEpochMilli(1))).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.fetchAll(ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldReadOnlyViewBackwardFetchAllApplySerdesAndRecordMetric() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.backwardFetchAll(ofEpochMilli(1), ofEpochMilli(1))).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        view.backwardFetchAll(ofEpochMilli(1), ofEpochMilli(1)).close();
+        assertThat((Double) metric("fetch-rate").metricValue(), greaterThan(0.0));
+    }
+
+    @SuppressWarnings({"unchecked", "unused"})
+    @Test
+    public void shouldRecordOpenIteratorMetricsOnReadOnlyViewIterators() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(innerView);
+        when(innerView.all()).thenReturn(KeyValueIterators.emptyIterator());
+
+        store.init(context, store);
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+
+        final ReadOnlyWindowStore<String, String> view = store.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        try (final KeyValueIterator<Windowed<String>, String> unused = view.all()) {
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+        }
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldPassReadCommittedThroughToInner() {
+        final ReadOnlyWindowStore<Bytes, byte[]> innerView = mock(ReadOnlyWindowStore.class);
+        when(innerStoreMock.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(innerView);
+
+        store.init(context, store);
+
+        store.readOnly(IsolationLevel.READ_COMMITTED);
+
+        verify(innerStoreMock).readOnly(IsolationLevel.READ_COMMITTED);
+    }
+
+    @Test
+    public void shouldThrowNpeOnNullIsolationLevel() {
+        store.init(context, store);
+
+        assertThrows(NullPointerException.class, () -> store.readOnly(null));
     }
 
     private KafkaMetric metric(final String name) {

@@ -33,8 +33,8 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -355,6 +355,43 @@ public class PartitionLeaderStrategyIntegrationTest {
         driver.onResponse(time.milliseconds(), requestSpecs.get(0), listOffsetsResponseSuccess(requestSpecs.get(0).keys), NODE_1);
         assertTrue(result.all().get(tp0).isDone());
         assertTrue(result.all().get(tp1).isDone());
+    }
+
+    @Test
+    public void testRetryLookupForStaleCachedLeader() {
+        // A leader cached from an earlier request can point at a broker that has since left the
+        // cluster. Such a request skips the lookup stage and goes straight to fulfillment, but the
+        // admin client can never route it because the broker is gone. The driver must be able to
+        // send the request back to the lookup stage so the leader can be re-resolved.
+        PartitionLeaderCache partitionLeaderCache = new PartitionLeaderCache();
+
+        TopicPartition tp0 = new TopicPartition("T", 0);
+
+        // Seed the cache so the request goes straight to the fulfillment stage on broker 1.
+        partitionLeaderCache.put(Map.of(tp0, 1));
+
+        PartitionLeaderStrategy.PartitionLeaderFuture<Void> result =
+            new PartitionLeaderStrategy.PartitionLeaderFuture<>(Collections.singleton(tp0), partitionLeaderCache);
+        AdminApiDriver<TopicPartition, Void> driver = buildDriver(result);
+
+        List<AdminApiDriver.RequestSpec<TopicPartition>> requestSpecs = driver.poll();
+        assertEquals(1, requestSpecs.size());
+
+        AdminApiDriver.RequestSpec<TopicPartition> spec = requestSpecs.get(0);
+        assertEquals(OptionalInt.of(1), spec.scope.destinationBrokerId());
+        assertEquals(Collections.singleton(tp0), spec.keys);
+
+        // Send the request back to the lookup stage. The leader can be re-resolved, so this reports
+        // that it moved the key back to lookup.
+        assertTrue(driver.maybeRetryLookup(time.milliseconds(), spec));
+        assertFalse(result.all().get(tp0).isDone());
+
+        requestSpecs = driver.poll();
+        assertEquals(1, requestSpecs.size());
+
+        AdminApiDriver.RequestSpec<TopicPartition> retrySpec = requestSpecs.get(0);
+        assertEquals(OptionalInt.empty(), retrySpec.scope.destinationBrokerId());
+        assertEquals(Collections.singleton(tp0), retrySpec.keys);
     }
 
     @Test

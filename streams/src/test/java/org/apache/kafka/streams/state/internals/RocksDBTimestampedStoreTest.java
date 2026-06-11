@@ -38,12 +38,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.state.internals.RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
@@ -88,7 +91,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
@@ -371,7 +375,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
@@ -510,6 +515,40 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             keyValueStore.put(new Bytes("key7".getBytes()), "7777777".getBytes());
         } finally {
             keyValueStore.close();
+        }
+    }
+
+    // KAFKA-20456 regression: the offsets-CF ColumnFamilyOptions allocated by
+    // offsetsCFOptions() must be released on close(); otherwise the JNI-auto-allocated
+    // default BlockBasedTableFactory and its LRUCache leak per store open.
+    @Test
+    public void shouldCloseOffsetsCfOptionsOnStoreClose() {
+        final CapturingOffsetsTimestampedStore capturingStore = new CapturingOffsetsTimestampedStore();
+        rocksDBStore = capturingStore;
+        rocksDBStore.init(context, rocksDBStore);
+
+        final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
+        assertTrue(captured.isOwningHandle(),
+                "offsets CF options should own its native handle while store is open");
+
+        rocksDBStore.close();
+
+        assertFalse(captured.isOwningHandle(),
+                "offsets CF options native handle should be released by close()");
+    }
+
+    private static final class CapturingOffsetsTimestampedStore extends RocksDBTimestampedStore {
+        ColumnFamilyOptions capturedOffsetsOptions;
+
+        CapturingOffsetsTimestampedStore() {
+            super(DB_NAME, METRICS_SCOPE);
+        }
+
+        @Override
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
+            return capturedOffsetsOptions;
         }
     }
 }

@@ -35,6 +35,7 @@ import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.partition.AlterPartitionManager
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -89,7 +90,9 @@ class LocalLeaderEndPointTest extends Logging {
       alterPartitionManager = alterPartitionManager
     )
 
-    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    val delta = new MetadataDelta.Builder()
+      .setImage(MetadataImage.EMPTY)
+      .build()
     delta.replay(new FeatureLevelRecord()
       .setName(MetadataVersion.FEATURE_NAME)
       .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
@@ -160,7 +163,7 @@ class LocalLeaderEndPointTest extends Logging {
     bumpLeaderEpoch()
     appendRecords(replicaManager, topicIdPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    replicaManager.logManager.getLog(topicPartition).foreach(log => log.updateLocalLogStartOffset(3))
+    replicaManager.logManager.getLog(topicPartition).ifPresent(_.updateLocalLogStartOffset(3))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, 7))
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, 7))
   }
@@ -262,7 +265,7 @@ class LocalLeaderEndPointTest extends Logging {
 
     // Bump epoch and advance local log start offset without changing log start offset
     bumpLeaderEpoch()
-    replicaManager.logManager.getLog(topicPartition).foreach(_.updateLocalLogStartOffset(3))
+    replicaManager.logManager.getLog(topicPartition).ifPresent(_.updateLocalLogStartOffset(3))
 
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 1)
     assertEquals(new OffsetAndEpoch(-1L, -1), result)
@@ -410,7 +413,9 @@ class LocalLeaderEndPointTest extends Logging {
   }
 
   private def bumpLeaderEpoch(): Unit = {
-    val delta = new MetadataDelta(image)
+    val delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new PartitionChangeRecord()
       .setTopicId(topicId)
       .setPartitionId(partition)

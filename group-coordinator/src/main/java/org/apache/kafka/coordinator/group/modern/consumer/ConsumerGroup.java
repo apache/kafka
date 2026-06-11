@@ -29,7 +29,7 @@ import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
@@ -670,11 +670,27 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         // the member should be using the OffsetCommit API version >= 9.
         if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
             throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
-                "by members using the modern group protocol");
+                "by members using the consumer group protocol");
         }
 
-        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
-        return CommitPartitionValidator.NO_OP;
+        // For members in a consumer group, the epoch must either match the last epoch sent
+        // in a heartbeat or be greater than or equal to the partition's assignment epoch.
+        if (memberEpoch == member.memberEpoch()) {
+            return CommitPartitionValidator.NO_OP;
+        }
+
+        if (memberEpoch > member.memberEpoch()) {
+            if (member.useClassicProtocol()) {
+                throw new IllegalGenerationException(String.format("Received generation id %d is newer than "
+                    + "current member epoch %d.", memberEpoch, member.memberEpoch()));
+            } else {
+                throw new StaleMemberEpochException(String.format("Received member epoch %d is newer than "
+                    + "current member epoch %d.", memberEpoch, member.memberEpoch()));
+            }
+        }
+
+        // Member epoch is older; validate against per-partition assignment epochs.
+        return createAssignmentEpochValidator(member, memberEpoch);
     }
 
     /**
@@ -740,7 +756,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         members.keySet().forEach(memberId ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId))
         );
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord(groupId));
 
         members.keySet().forEach(memberId ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId))
@@ -777,7 +793,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, removedMemberId));
         });
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord(groupId));
 
         members.keySet().forEach(memberId -> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
@@ -835,6 +851,54 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                     + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
             }
         }
+    }
+
+    /**
+     * Creates a validator that checks if the received member epoch is valid for each partition's assignment epoch.
+     * A commit is rejected if the partition is not assigned to the member
+     * or if the received client-side epoch is older than the partition's assignment epoch (KIP-1251).
+     *
+     * @param member              The consumer whose assignments are being validated.
+     * @param receivedMemberEpoch The received member epoch.
+     * @return A validator for per-partition validation.
+     */
+    private CommitPartitionValidator createAssignmentEpochValidator(
+        ConsumerGroupMember member,
+        int receivedMemberEpoch
+    ) {
+        return (topicName, topicId, partitionId) -> {
+            // Search for the partition in the assigned partitions, then in partitions pending revocation.
+            Integer assignmentEpoch = member.assignmentEpoch(topicId, partitionId);
+            if (assignmentEpoch == null) {
+                assignmentEpoch = member.pendingRevocationEpoch(topicId, partitionId);
+            }
+
+            if (assignmentEpoch == null) {
+                if (member.useClassicProtocol()) {
+                    throw new IllegalGenerationException(String.format(
+                        "Partition %s-%d is not assigned or pending revocation for member.",
+                        topicName, partitionId));
+                } else {
+                    throw new StaleMemberEpochException(String.format(
+                        "Partition %s-%d is not assigned or pending revocation for member.",
+                        topicName, partitionId));
+                }
+            }
+
+            if (receivedMemberEpoch < assignmentEpoch) {
+                if (member.useClassicProtocol()) {
+                    throw new IllegalGenerationException(String.format(
+                        "Received generation id %d is older than assignment epoch %d for partition %s-%d.",
+                        receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
+                    );
+                } else {
+                    throw new StaleMemberEpochException(String.format(
+                        "Received member epoch %d is older than assignment epoch %d for partition %s-%d.",
+                        receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
+                    );
+                }
+            }
+        };
     }
 
     /**

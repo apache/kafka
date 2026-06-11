@@ -43,7 +43,7 @@ public class DelayedActionQueue implements ActionQueue {
                 Runnable action = queue.poll();
                 if (action == null) return;
                 action.run();
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 LOGGER.error("failed to complete delayed actions", e);
             }
         }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -46,6 +47,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -523,5 +525,53 @@ public class CompositeReadOnlyWindowStoreTest {
     @Test
     public void shouldThrowNPEIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> windowStore.fetch(null, ofEpochMilli(0), ofEpochMilli(0)));
+    }
+
+    @Test
+    public void readOnlyShouldReturnNewInstanceWithOverride() {
+        final CompositeReadOnlyWindowStore<String, String> override =
+            (CompositeReadOnlyWindowStore<String, String>) windowStore.readOnly(IsolationLevel.READ_COMMITTED);
+        assertNotSame(windowStore, override);
+    }
+
+    @Test
+    public void readOnlyShouldPropagateLevelToUnderlyingStore() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final ReadOnlyWindowStoreStub<String, String> recorder = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stub.addStore(storeName, recorder);
+        final CompositeReadOnlyWindowStore<String, String> store = new CompositeReadOnlyWindowStore<>(
+            new WrappingStoreProvider(asList(stub), StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.windowStore())),
+            QueryableStoreTypes.windowStore(),
+            storeName
+        );
+
+        StreamsTestUtils.toListAndCloseIterator(
+            store.readOnly(IsolationLevel.READ_COMMITTED).fetch("k", ofEpochMilli(0), ofEpochMilli(0)));
+
+        assertEquals(IsolationLevel.READ_COMMITTED, recorder.isolationLevel);
+    }
+
+    @Test
+    public void readOnlyOverrideShouldBeatProviderDefault() {
+        final StateStoreProviderStub stub = new StateStoreProviderStub(false);
+        final ReadOnlyWindowStoreStub<String, String> recorder = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
+        stub.addStore(storeName, recorder);
+        final CompositeReadOnlyWindowStore<String, String> store = new CompositeReadOnlyWindowStore<>(
+            new WrappingStoreProvider(asList(stub),
+                StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.windowStore()),
+                IsolationLevel.READ_UNCOMMITTED),
+            QueryableStoreTypes.windowStore(),
+            storeName
+        );
+
+        StreamsTestUtils.toListAndCloseIterator(
+            store.readOnly(IsolationLevel.READ_COMMITTED).fetch("k", ofEpochMilli(0), ofEpochMilli(0)));
+
+        assertEquals(IsolationLevel.READ_COMMITTED, recorder.isolationLevel);
+    }
+
+    @Test
+    public void readOnlyShouldRejectNullLevel() {
+        assertThrows(NullPointerException.class, () -> windowStore.readOnly(null));
     }
 }

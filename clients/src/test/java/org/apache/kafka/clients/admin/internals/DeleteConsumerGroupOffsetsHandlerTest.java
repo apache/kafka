@@ -30,7 +30,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.OffsetDeleteRequest;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -114,8 +114,8 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
                             new OffsetDeleteResponsePartition()
                                 .setPartitionIndex(t0p0.partition())
                                 .setErrorCode(error.code())
-                        ).iterator()))
-                ).iterator()));
+                        )))
+                )));
         }
         return response;
     }
@@ -131,8 +131,8 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
                             new OffsetDeleteResponsePartition()
                                 .setPartitionIndex(t0p0.partition())
                                 .setErrorCode(error.code())
-                        ).iterator()))
-                ).iterator()))
+                        )))
+                )))
         );
     }
 

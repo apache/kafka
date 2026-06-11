@@ -25,22 +25,38 @@ public class CloseOptions {
      * Enum to specify the group membership operation upon closing the Kafka Streams application.
      *
      * <ul>
-     *   <li><b>{@code LEAVE_GROUP}</b>: means the consumer leave the group.</li>
-     *   <li><b>{@code REMAIN_IN_GROUP}</b>: means the consumer will not leave the group explicitly.
-     *       Note that this option is ignored when using the streams group protocol
-     *       ({@code group.protocol=streams}); in that case, the consumer will always leave the group.</li>
+     *   <li><b>{@code DEFAULT}</b>: Applies the default behavior based on the active protocol and membership type:
+     *     <ul>
+     *       <li>For the <b>classic protocol</b>: The consumer will remain in the group.</li>
+     *       <li>For the <b>streams protocol</b> ({@code group.protocol=streams}):
+     *         <ul>
+     *           <li><b>Dynamic members</b>: The consumer will leave the group (consistent with the
+     *               protocol's design for dynamic members).</li>
+     *           <li><b>Static members</b>: The consumer will remain in the group until session timeout
+     *               (consistent with static membership semantics).</li>
+     *         </ul>
+     *       </li>
+     *     </ul>
+     *   </li>
+     *   <li><b>{@code LEAVE_GROUP}</b>: The consumer will explicitly leave the group, regardless of the
+     *       active protocol.</li>
+     *   <li><b>{@code REMAIN_IN_GROUP}</b>: The consumer will remain in the group, regardless of the
+     *       active protocol. Under the streams protocol, this enables a faster rebalance upon restart
+     *       for static members.</li>
      * </ul>
      */
     public enum GroupMembershipOperation {
+        DEFAULT,
         LEAVE_GROUP,
         REMAIN_IN_GROUP
     }
 
     /**
      * Specifies the group membership operation upon shutdown.
-     * By default, {@code GroupMembershipOperation.REMAIN_IN_GROUP} will be applied, which follows the KafkaStreams default behavior.
+     * By default, {@code GroupMembershipOperation.DEFAULT} will be applied, which adapts the behavior
+     * based on the active protocol.
      */
-    protected GroupMembershipOperation operation = GroupMembershipOperation.REMAIN_IN_GROUP;
+    protected GroupMembershipOperation operation = GroupMembershipOperation.DEFAULT;
 
     /**
      * Specifies the maximum amount of time to wait for the close process to complete.
@@ -69,7 +85,8 @@ public class CloseOptions {
     /**
      * Static method to create a {@code CloseOptions} with a specified group membership operation.
      *
-     * @param operation the group membership operation to apply. Must be one of {@code LEAVE_GROUP}, {@code REMAIN_IN_GROUP}.
+     * @param operation the group membership operation to apply. Must be one of {@code DEFAULT},
+     *                  {@code LEAVE_GROUP}, or {@code REMAIN_IN_GROUP}.
      * @return a new {@code CloseOptions} instance with the specified group membership operation.
      */
     public static CloseOptions groupMembershipOperation(final GroupMembershipOperation operation) {
@@ -90,7 +107,8 @@ public class CloseOptions {
     /**
      * Fluent method to set the group membership operation upon shutdown.
      *
-     * @param operation the group membership operation to apply. Must be one of {@code LEAVE_GROUP}, {@code REMAIN_IN_GROUP}.
+     * @param operation the group membership operation to apply. Must be one of {@code DEFAULT},
+     *                  {@code LEAVE_GROUP}, or {@code REMAIN_IN_GROUP}.
      * @return this {@code CloseOptions} instance.
      */
     public CloseOptions withGroupMembershipOperation(final GroupMembershipOperation operation) {

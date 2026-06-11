@@ -23,9 +23,9 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 

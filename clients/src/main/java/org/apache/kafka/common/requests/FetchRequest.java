@@ -30,7 +30,6 @@ import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.internal.RecordBatch;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -159,8 +158,8 @@ public class FetchRequest extends AbstractRequest {
         private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
         private FetchMetadata metadata = FetchMetadata.LEGACY;
-        private List<TopicIdPartition> removed = Collections.emptyList();
-        private List<TopicIdPartition> replaced = Collections.emptyList();
+        private List<TopicIdPartition> removed = List.of();
+        private List<TopicIdPartition> replaced = List.of();
         private String rackId = "";
 
         public static Builder forConsumer(short maxVersion, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {

@@ -20,7 +20,6 @@ package test.plugins;
 import java.util.Map;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.storage.Converter;
@@ -29,7 +28,7 @@ import org.apache.kafka.connect.storage.Converter;
  * Converter to test multiverioning of plugins.
  * Any instance of the string PLACEHOLDER_FOR_VERSION will be replaced with the actual version during plugin compilation.
  */
-public class VersionedConverter implements Converter, Versioned {
+public class VersionedConverter implements Converter {
 
     public VersionedConverter() {
         super();

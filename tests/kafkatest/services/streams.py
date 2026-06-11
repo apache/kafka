@@ -15,6 +15,7 @@
 
 import os.path
 import signal
+import uuid
 from . import streams_property
 from . import consumer_property
 from ducktape.services.service import Service
@@ -216,6 +217,8 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
                      'user_test_args3': user_test_args3,
                      'user_test_args4': user_test_args4}
         self.log_level = "DEBUG"
+        # Create a randomized state directory path to prevent test interference
+        self.state_dir = os.path.join(self.PERSISTENT_ROOT, str(uuid.uuid4()))
 
     @property
     def node(self):
@@ -299,7 +302,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         return cmd
 
     def prop_file(self):
-        cfg = KafkaConfig(**{streams_property.STATE_DIR: self.PERSISTENT_ROOT, streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()})
+        cfg = KafkaConfig(**{streams_property.STATE_DIR: self.state_dir, streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()})
         return cfg.render()
 
     def start_node(self, node):
@@ -339,7 +342,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
         self.UPGRADE_FROM = upgrade_from
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
                       streams_property.GROUP_PROTOCOL: self.GROUP_PROTOCOL,
@@ -427,7 +430,7 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                                                                 processingMode)
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       # the old broker (< 2.4) does not support configuration replication.factor=-1
                       "replication.factor": 1,
@@ -527,7 +530,7 @@ class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
         self.JOIN_TOPIC = None
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       'topology.optimization': self.OPTIMIZED_CONFIG,
                       'input.topic': self.INPUT_TOPIC,
@@ -567,7 +570,7 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
 
     def prop_file(self):
         properties = self.extra_properties.copy()
-        properties[streams_property.STATE_DIR] = self.PERSISTENT_ROOT
+        properties[streams_property.STATE_DIR] = self.state_dir
         properties[streams_property.KAFKA_SERVERS] = self.kafka.bootstrap_servers()
 
         if self.UPGRADE_FROM is not None:
@@ -614,7 +617,7 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
         self.AGGREGATION_TOPIC = None
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       'input.topic': self.INPUT_TOPIC,
                       'aggregation.topic': self.AGGREGATION_TOPIC,
@@ -638,7 +641,7 @@ class StaticMemberTestService(StreamsTestBaseService):
         self.GROUP_INSTANCE_ID = group_instance_id
         self.NUM_THREADS = num_threads
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.NUM_THREADS: self.NUM_THREADS,
                       consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
@@ -704,7 +707,7 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
         return cmd
 
     def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+        properties = {streams_property.STATE_DIR: self.state_dir,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       'source.topic': self.SOURCE_TOPIC,
                       'sink.topic': self.SINK_TOPIC,

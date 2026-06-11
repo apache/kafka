@@ -17,9 +17,9 @@
 package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

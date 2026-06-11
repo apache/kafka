@@ -138,7 +138,7 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregateWithHeader) {
-        store.put(sessionKey, AggregationWithHeadersDeserializer.rawAggregation(aggregateWithHeader));
+        store.put(sessionKey, Utils.rawAggregation(aggregateWithHeader));
     }
 
     @Override
@@ -154,6 +154,17 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         store.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return store.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return store.committedOffset(partition);
     }
 
     @Override

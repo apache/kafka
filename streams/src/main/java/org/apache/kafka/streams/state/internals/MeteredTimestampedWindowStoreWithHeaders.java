@@ -21,8 +21,11 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
@@ -54,16 +57,18 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K> key type
  * @param <V> value type
  */
-class MeteredTimestampedWindowStoreWithHeaders<K, V>
+public class MeteredTimestampedWindowStoreWithHeaders<K, V>
     extends MeteredWindowStore<K, ValueTimestampHeaders<V>>
     implements TimestampedWindowStoreWithHeaders<K, V> {
 
-    MeteredTimestampedWindowStoreWithHeaders(final WindowStore<Bytes, byte[]> inner,
-                                             final long windowSizeMs,
-                                             final String metricScope,
-                                             final Time time,
-                                             final Serde<K> keySerde,
-                                             final Serde<ValueTimestampHeaders<V>> valueSerde) {
+    MeteredTimestampedWindowStoreWithHeaders(
+        final WindowStore<Bytes, byte[]> inner,
+        final long windowSizeMs,
+        final String metricScope,
+        final Time time,
+        final Serde<K> keySerde,
+        final Serde<ValueTimestampHeaders<V>> valueSerde
+    ) {
         super(inner, windowSizeMs, metricScope, time, keySerde, valueSerde);
     }
 
@@ -80,10 +85,38 @@ class MeteredTimestampedWindowStoreWithHeaders<K, V>
     @Override
     public void put(final K key, final ValueTimestampHeaders<V> value, final long windowStartTimestamp) {
         Objects.requireNonNull(key, "key cannot be null");
-        final Headers headers = value == null || value.headers() == null ? new RecordHeaders() : value.headers();
         try {
             maybeMeasureLatency(
-                () -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers), windowStartTimestamp),
+                () -> {
+                    if (value == null) {
+                        // Deletion path
+                        final ProcessorRecordContext currentContext = internalContext.recordContext();
+
+                        // Create new headers object to isolate delete operation from input record
+                        final Headers deleteHeaders = new RecordHeaders(currentContext.headers());
+
+                        // Create temporary context with new headers
+                        final ProcessorRecordContext temporaryContext = new ProcessorRecordContext(
+                            currentContext.timestamp(),
+                            currentContext.offset(),
+                            currentContext.partition(),
+                            currentContext.topic(),
+                            deleteHeaders
+                        );
+
+                        try {
+                            internalContext.setRecordContext(temporaryContext);
+                            wrapped().put(serializeKey(key, deleteHeaders), null, windowStartTimestamp);
+                        } finally {
+                            // Restore original context
+                            internalContext.setRecordContext(currentContext);
+                        }
+                    } else {
+                        // it's ok to only pass headers into `serializeKey`, because for the value case passed-in headers are
+                        // getting ignored anyway, because the value (of type `ValueTimestampHeaders`) itself carries the headers
+                        wrapped().put(serializeKey(key, value.headers()), serializeValue(value), windowStartTimestamp);
+                    }
+                },
                 time,
                 putSensor
             );
@@ -94,15 +127,13 @@ class MeteredTimestampedWindowStoreWithHeaders<K, V>
         }
     }
 
-    protected Bytes keyBytes(final K key, final Headers headers) {
-        return Bytes.wrap(serdes.rawKey(key, headers));
-    }
-
     @SuppressWarnings("unchecked")
     @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+    public <R> QueryResult<R> query(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
@@ -130,141 +161,115 @@ class MeteredTimestampedWindowStoreWithHeaders<K, V>
      * ValueTimestampHeaders to either ValueAndTimestamp<V> (for timestamped stores) or V (for non-timestamped stores).
      */
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runWindowKeyQuery(final WindowKeyQuery<K, ValueTimestampHeaders<V>> query,
-                                                 final PositionBound positionBound,
-                                                 final QueryConfig config) {
+    private <R> QueryResult<R> runWindowKeyQuery(
+        final WindowKeyQuery<K, ValueTimestampHeaders<V>> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final QueryResult<R> queryResult;
+
         if (query.getTimeFrom().isPresent() && query.getTimeTo().isPresent()) {
             final WindowKeyQuery<Bytes, byte[]> rawKeyQuery =
-                    WindowKeyQuery.withKeyAndWindowStartRange(
-                        keyBytes(query.getKey(), new RecordHeaders()),
-                        query.getTimeFrom().get(),
-                        query.getTimeTo().get()
-                    );
+                WindowKeyQuery.withKeyAndWindowStartRange(
+                    serializeKey(query.getKey(), internalContext.headers()),
+                    query.getTimeFrom().get(),
+                    query.getTimeTo().get()
+                );
             final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 if (isUnderlyingStoreTimestamped()) {
                     // For timestamped stores, return ValueAndTimestamp<V>
-                    final Function<byte[], ValueAndTimestamp<V>> valueFrom = bytes -> {
-                        final ValueTimestampHeaders<V> vth = serdes.valueFrom(bytes, new RecordHeaders());
-                        return vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp());
-                    };
-
-                    final MeteredWindowStoreIterator<ValueAndTimestamp<V>> typedResult =
-                            new MeteredWindowStoreIterator<>(
-                                rawResult.getResult(),
-                                fetchSensor,
-                                iteratorDurationSensor,
-                                streamsMetrics,
-                                valueFrom,
-                                time,
-                                numOpenIterators,
-                                openIterators
-                            );
-                    final QueryResult<MeteredWindowStoreIterator<ValueAndTimestamp<V>>> typedQueryResult =
-                            InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
-                    queryResult = (QueryResult<R>) typedQueryResult;
+                    final MeteredWindowStoreIterator<ValueAndTimestamp<V>> typedResult = meteredIterator(
+                        rawResult,
+                        rawValueTimestampHeaders -> {
+                            final ValueTimestampHeaders<V> vth = deserializeValue(rawValueTimestampHeaders);
+                            return vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp());
+                        }
+                    );
+                    queryResult = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 } else {
                     // For non-timestamped stores, return plain V
-                    final Function<byte[], V> valueFrom = bytes -> {
-                        final ValueTimestampHeaders<V> vth = serdes.valueFrom(bytes, new RecordHeaders());
-                        return vth == null ? null : vth.value();
-                    };
-
-                    final MeteredWindowStoreIterator<V> typedResult =
-                            new MeteredWindowStoreIterator<>(
-                                rawResult.getResult(),
-                                fetchSensor,
-                                iteratorDurationSensor,
-                                streamsMetrics,
-                                valueFrom,
-                                time,
-                                numOpenIterators,
-                                openIterators
-                            );
-                    final QueryResult<MeteredWindowStoreIterator<V>> typedQueryResult =
-                            InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
-                    queryResult = (QueryResult<R>) typedQueryResult;
+                    final MeteredWindowStoreIterator<V> typedResult = meteredIterator(
+                        rawResult,
+                        rawValueTimestampHeaders -> {
+                            final ValueTimestampHeaders<V> vth = deserializeValue(rawValueTimestampHeaders);
+                            return vth == null ? null : vth.value();
+                        }
+                    );
+                    queryResult = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 }
             } else {
                 queryResult = (QueryResult<R>) rawResult;
             }
         } else {
             queryResult = QueryResult.forFailure(
-                    FailureReason.UNKNOWN_QUERY_TYPE,
-                    "This store (" + getClass() + ") doesn't know how to execute"
-                        + " the given query (" + query + ") because it only supports closed-range"
-                        + " queries."
-                        + " Contact the store maintainer if you need support for a new query type."
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "This store (" + getClass() + ") doesn't know how to execute"
+                    + " the given query (" + query + ") because it only supports closed-range"
+                    + " queries."
+                    + " Contact the store maintainer if you need support for a new query type."
             );
         }
         return queryResult;
     }
 
+    private <ValueType> MeteredWindowStoreIterator<ValueType> meteredIterator(
+        final QueryResult<WindowStoreIterator<byte[]>> rawResult,
+        final Function<byte[], ValueType> valueDeserializer
+    ) {
+        return new MeteredWindowStoreIterator<>(
+            rawResult.getResult(),
+            fetchSensor,
+            iteratorDurationSensor,
+            valueDeserializer,
+            time,
+            numOpenIterators,
+            openIterators
+        );
+    }
 
     /**
      * Handles WindowRangeQuery by creating a MeteredWindowedKeyValueIterator with conversion from
      * ValueTimestampHeaders to either ValueAndTimestamp<V> (for timestamped stores) or V (for non-timestamped stores).
      */
     @SuppressWarnings("unchecked")
-    private <R> QueryResult<R> runWindowRangeQuery(final WindowRangeQuery<K, ValueTimestampHeaders<V>> query,
-                                                   final PositionBound positionBound,
-                                                   final QueryConfig config) {
+    private <R> QueryResult<R> runWindowRangeQuery(
+        final WindowRangeQuery<K, ValueTimestampHeaders<V>> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
         final QueryResult<R> result;
+
         if (query.getTimeFrom().isPresent() && query.getTimeTo().isPresent()) {
             final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
-                    WindowRangeQuery.withWindowStartRange(
-                        query.getTimeFrom().get(),
-                        query.getTimeTo().get()
-                    );
-            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
-                    wrapped().query(rawKeyQuery, positionBound, config);
-            if (rawResult.isSuccess()) {
-                final Function<byte[], K> keyFrom = bytes -> serdes.keyFrom(bytes, new RecordHeaders());
+                WindowRangeQuery.withWindowStartRange(
+                    query.getTimeFrom().get(),
+                    query.getTimeTo().get()
+                );
 
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
                 if (isUnderlyingStoreTimestamped()) {
                     // For timestamped stores, return ValueAndTimestamp<V>
-                    final Function<byte[], ValueAndTimestamp<V>> valueFrom = bytes -> {
-                        final ValueTimestampHeaders<V> vth = serdes.valueFrom(bytes, new RecordHeaders());
-                        return vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp());
-                    };
-
                     final MeteredWindowedKeyValueIterator<K, ValueAndTimestamp<V>> typedResult =
-                            new MeteredWindowedKeyValueIterator<>(
-                                rawResult.getResult(),
-                                fetchSensor,
-                                iteratorDurationSensor,
-                                streamsMetrics,
-                                keyFrom,
-                                valueFrom,
-                                time,
-                                numOpenIterators,
-                                openIterators
-                            );
+                        meteredWindowedIterator(
+                            rawResult,
+                            valueTimestampHeaders -> valueTimestampHeaders == null ? null : ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp())
+                        );
+
                     final QueryResult<MeteredWindowedKeyValueIterator<K, ValueAndTimestamp<V>>> typedQueryResult =
-                            InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                     result = (QueryResult<R>) typedQueryResult;
                 } else {
                     // For non-timestamped stores, return plain V
-                    final Function<byte[], V> valueFrom = bytes -> {
-                        final ValueTimestampHeaders<V> vth = serdes.valueFrom(bytes, new RecordHeaders());
-                        return vth == null ? null : vth.value();
-                    };
-
                     final MeteredWindowedKeyValueIterator<K, V> typedResult =
-                            new MeteredWindowedKeyValueIterator<>(
-                                rawResult.getResult(),
-                                fetchSensor,
-                                iteratorDurationSensor,
-                                streamsMetrics,
-                                keyFrom,
-                                valueFrom,
-                                time,
-                                numOpenIterators,
-                                openIterators
-                            );
+                        meteredWindowedIterator(
+                            rawResult,
+                            valueTimestampHeaders -> valueTimestampHeaders == null ? null : valueTimestampHeaders.value()
+                        );
+
                     final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
-                            InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                     result = (QueryResult<R>) typedQueryResult;
                 }
             } else {
@@ -272,25 +277,189 @@ class MeteredTimestampedWindowStoreWithHeaders<K, V>
             }
         } else {
             result = QueryResult.forFailure(
-                    FailureReason.UNKNOWN_QUERY_TYPE,
-                    "This store (" + getClass() + ") doesn't know how to"
-                        + " execute the given query (" + query + ") because"
-                        + " WindowStores only supports WindowRangeQuery.withWindowStartRange."
-                        + " Contact the store maintainer if you need support for a new query type."
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "This store (" + getClass() + ") doesn't know how to"
+                    + " execute the given query (" + query + ") because"
+                    + " WindowStores only supports WindowRangeQuery.withWindowStartRange."
+                    + " Contact the store maintainer if you need support for a new query type."
             );
         }
         return result;
     }
 
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetch(
+        final K keyFrom,
+        final K keyTo,
+        final long timeFrom,
+        final long timeTo
+    ) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().fetch(
+                serializeKey(keyFrom, internalContext.headers()),
+                serializeKey(keyTo, internalContext.headers()),
+                timeFrom,
+                timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetch(
+        final K keyFrom,
+        final K keyTo,
+        final long timeFrom,
+        final long timeTo
+    ) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardFetch(
+                serializeKey(keyFrom, internalContext.headers()),
+                serializeKey(keyTo, internalContext.headers()),
+                timeFrom,
+                timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAll(final long timeFrom, final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().fetchAll(timeFrom, timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAll(final long timeFrom, final long timeTo) {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardFetchAll(timeFrom, timeTo)
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> all() {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().all()
+        );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardAll() {
+        return new MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            wrapped().backwardAll()
+        );
+    }
+
+    private class MeteredTimestampedWindowStoreWithHeadersKeyValueIterator
+        implements KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>>, MeteredIterator {
+
+        private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
+        private final long startNs;
+        private final long startTimestampMs;
+        private KeyValue<Windowed<K>, ValueTimestampHeaders<V>> cachedNext;
+
+        private MeteredTimestampedWindowStoreWithHeadersKeyValueIterator(
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
+            this.iter = iter;
+            this.startNs = time.nanoseconds();
+            this.startTimestampMs = time.milliseconds();
+            numOpenIterators.increment();
+            openIterators.add(this);
+        }
+
+        @Override
+        public long startTimestamp() {
+            return this.startTimestampMs;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cachedNext != null || iter.hasNext();
+        }
+
+        @Override
+        public KeyValue<Windowed<K>, ValueTimestampHeaders<V>> next() {
+            if (cachedNext != null) {
+                final KeyValue<Windowed<K>, ValueTimestampHeaders<V>> result = cachedNext;
+                cachedNext = null;
+                return result;
+            }
+
+            final KeyValue<Windowed<Bytes>, byte[]> next = iter.next();
+            final ValueTimestampHeaders<V> valueTimestampHeaders = deserializeValue(next.value);
+            final Headers headers = valueTimestampHeaders != null ? valueTimestampHeaders.headers() : new RecordHeaders();
+            final K key = deserializeKey(next.key.key().get(), headers);
+            final Windowed<K> windowedKey = new Windowed<>(key, next.key.window());
+            return KeyValue.pair(windowedKey, valueTimestampHeaders);
+        }
+
+        @Override
+        public void close() {
+            try {
+                iter.close();
+            } finally {
+                final long duration = time.nanoseconds() - startNs;
+                fetchSensor.record(duration);
+                iteratorDurationSensor.record(duration);
+                numOpenIterators.decrement();
+                openIterators.remove(this);
+            }
+        }
+
+        @Override
+        public Windowed<K> peekNextKey() {
+            if (cachedNext == null) {
+                cachedNext = next();
+            }
+            return cachedNext.key;
+        }
+    }
+
+    private <ValueType> MeteredWindowedKeyValueIterator<K, ValueType> meteredWindowedIterator(
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult,
+        final Function<ValueTimestampHeaders<V>, ValueType> valueConverter
+    ) {
+        return new MeteredWindowedKeyValueWithHeadersIterator<>(
+            rawResult.getResult(),
+            fetchSensor,
+            iteratorDurationSensor,
+            this::deserializeValue,
+            this::deserializeKey,
+            ValueTimestampHeaders::headers,
+            valueConverter,
+            time,
+            numOpenIterators,
+            openIterators
+        );
+    }
+
     private boolean isUnderlyingStoreTimestamped() {
-        Object store = wrapped();
+        StateStore store = wrapped();
         do {
-            if (store instanceof TimestampedBytesStore
-                    || store instanceof TimestampedToHeadersWindowStoreAdapter) {
+            // Check adapters first before attempting to unwrap
+            if (store instanceof TimestampedToHeadersWindowStoreAdapter) {
                 return true;
             }
-            store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
-        } while ((store instanceof WrappedStateStore));
-        return store instanceof TimestampedBytesStore;
+            if (store instanceof PlainToHeadersWindowStoreAdapter) {
+                return false; // Plain store doesn't preserve timestamps
+            }
+            if (store instanceof TimestampedBytesStore) {
+                return true;
+            }
+            // Only unwrap if it's a WrappedStateStore
+            if (store instanceof WrappedStateStore) {
+                store = ((WrappedStateStore<?, ?, ?>) store).wrapped();
+            } else {
+                break;
+            }
+        } while (true);
+
+        return false;
     }
+
+    private Bytes serializeKey(final K key, final Headers headers) {
+        return Bytes.wrap(serdes.rawKey(key, headers));
+    }
+
+    private K deserializeKey(final byte[] rawKey, final Headers headers) {
+        return serdes.keyFrom(rawKey, headers);
+    }
+
 }

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.message.AbortedTxn;
+
 import java.util.Collections;
 import java.util.List;
 

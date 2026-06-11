@@ -497,6 +497,11 @@ public class ConnectorValidationIntegrationTest {
 
     public abstract static class TestConverter implements Converter, HeaderConverter {
 
+        @Override
+        public String version() {
+            return "";
+        }
+
         // Defined by both Converter and HeaderConverter interfaces
         @Override
         public ConfigDef config() {

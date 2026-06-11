@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;

@@ -79,7 +79,6 @@ import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.intersection;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
@@ -1269,11 +1268,11 @@ public class UtilsTest {
             recordingCallable(recorded, "valid-2", null),
             recordingCallable(recorded, null, new TestException("exception-3"))
         ));
-        Map<String, Object> expected = Utils.mkMap(
-            mkEntry("valid-0", "valid-0"),
-            mkEntry("exception-1", new TestException("exception-1")),
-            mkEntry("valid-2", "valid-2"),
-            mkEntry("exception-3", new TestException("exception-3"))
+        Map<String, Object> expected = Map.of(
+            "valid-0", "valid-0",
+            "exception-1", new TestException("exception-1"),
+            "valid-2", "valid-2",
+            "exception-3", new TestException("exception-3")
         );
         assertEquals(expected, recorded);
 
@@ -1282,9 +1281,9 @@ public class UtilsTest {
             recordingCallable(recorded, "valid-0", null),
             recordingCallable(recorded, "valid-1", null)
         ));
-        expected = Utils.mkMap(
-            mkEntry("valid-0", "valid-0"),
-            mkEntry("valid-1", "valid-1")
+        expected = Map.of(
+            "valid-0", "valid-0",
+            "valid-1", "valid-1"
         );
         assertEquals(expected, recorded);
 
@@ -1293,9 +1292,9 @@ public class UtilsTest {
             recordingCallable(recorded, null, new TestException("exception-0")),
             recordingCallable(recorded, null, new TestException("exception-1")))
         );
-        expected = Utils.mkMap(
-            mkEntry("exception-0", new TestException("exception-0")),
-            mkEntry("exception-1", new TestException("exception-1"))
+        expected = Map.of(
+            "exception-0", new TestException("exception-0"),
+            "exception-1", new TestException("exception-1")
         );
         assertEquals(expected, recorded);
     }

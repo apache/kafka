@@ -288,7 +288,7 @@ public class StreamsRebalanceDataTest {
     }
 
     @Test
-    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologiesAndClientTags() {
+    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologiesClientTags() {
         final UUID processId = UUID.randomUUID();
         final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
         final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
@@ -296,6 +296,7 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
             clientTags
         );
@@ -327,6 +328,7 @@ public class StreamsRebalanceDataTest {
             () -> new StreamsRebalanceData(
                 null,
                 endpoint,
+                Optional.empty(),
                 subtopologies,
                 clientTags
             )
@@ -345,6 +347,7 @@ public class StreamsRebalanceDataTest {
             () -> new StreamsRebalanceData(
                 processId,
                 null,
+                Optional.empty(),
                 subtopologies,
                 clientTags
             )
@@ -363,11 +366,32 @@ public class StreamsRebalanceDataTest {
             () -> new StreamsRebalanceData(
                 processId,
                 endpoint,
+                Optional.empty(),
                 null,
                 clientTags
             )
         );
         assertEquals("Subtopologies cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldNotAcceptNullRackId() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData(
+                processId,
+                endpoint,
+                null,
+                subtopologies,
+                clientTags
+            )
+        );
+        assertEquals("Rack ID cannot be null", exception.getMessage());
     }
 
     @Test
@@ -381,6 +405,7 @@ public class StreamsRebalanceDataTest {
             () -> new StreamsRebalanceData(
                 processId,
                 endpoint,
+                Optional.empty(),
                 subtopologies,
                 null
             )
@@ -397,6 +422,7 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
             clientTags
         );
@@ -413,6 +439,7 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
             clientTags
         );
@@ -429,6 +456,7 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
             clientTags
         );
@@ -445,6 +473,7 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
+            Optional.empty(),
             subtopologies,
             clientTags
         );
@@ -463,6 +492,7 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 processId,
                 endpoint,
+                Optional.empty(),
                 subtopologies,
                 clientTags
         );
@@ -481,6 +511,7 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
                 processId,
                 endpoint,
+                Optional.empty(),
                 subtopologies,
                 clientTags
         );

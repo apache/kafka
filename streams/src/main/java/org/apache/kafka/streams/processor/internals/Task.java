@@ -144,11 +144,7 @@ public interface Task {
      */
     void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics);
 
-    /**
-     * @param enforceCheckpoint if true the task would always execute the checkpoint;
-     *                          otherwise it may skip if the state has not advanced much
-     */
-    void maybeCheckpoint(final boolean enforceCheckpoint);
+    void maybeCheckpoint();
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 

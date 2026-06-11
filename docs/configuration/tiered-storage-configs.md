@@ -39,16 +39,17 @@ All configurations here should start with the prefix defined by `remote.log.meta
 The implementation of `TopicBasedRemoteLogMetadataManager` needs to create admin, producer, and consumer clients for the internal topic `__remote_log_metadata`.
 
 Additional configurations can be provided for different types of clients using the following configuration properties: 
-    
-    
-    # Configs for admin, producer, and consumer clients
-    <rlmm.prefix>.remote.log.metadata.common.client.<kafka.property> = <value>
 
-    # Configs only for admin client
-    <rlmm.prefix>.remote.log.metadata.admin.<kafka.property> = <value>
-    
-    # Configs only for producer client
-    <rlmm.prefix>.remote.log.metadata.producer.<kafka.property> = <value>
-    
-    # Configs only for consumer client
-    <rlmm.prefix>.remote.log.metadata.consumer.<kafka.property> = <value>
+```properties
+# Configs for admin, producer, and consumer clients
+<rlmm.prefix>.remote.log.metadata.common.client.<kafka.property> = <value>
+
+# Configs only for admin client
+<rlmm.prefix>.remote.log.metadata.admin.<kafka.property> = <value>
+
+# Configs only for producer client
+<rlmm.prefix>.remote.log.metadata.producer.<kafka.property> = <value>
+
+# Configs only for consumer client
+<rlmm.prefix>.remote.log.metadata.consumer.<kafka.property> = <value>
+```

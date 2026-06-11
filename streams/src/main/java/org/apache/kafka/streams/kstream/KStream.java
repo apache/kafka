@@ -757,7 +757,7 @@ public interface KStream<K, V> {
      * <p>You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * To explicitly set key/value serdes, to customize the names of the repartition and changelog topic, or to
      * customize the used state store, use {@link #join(KStream, ValueJoiner, JoinWindows, StreamJoined)}.
-     * For more control over the repartitioning, use {@link #repartition(Repartitioned)} on eiter input before {@code join()}.
+     * For more control over the repartitioning, use {@link #repartition(Repartitioned)} on either input before {@code join()}.
      *
      * @param rightStream
      *        the {@code KStream} to be joined with this stream

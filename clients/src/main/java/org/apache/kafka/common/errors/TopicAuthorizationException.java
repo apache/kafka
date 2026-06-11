@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.errors;
 
-import java.util.Collections;
 import java.util.Set;
 
 public class TopicAuthorizationException extends AuthorizationException {
@@ -32,7 +31,7 @@ public class TopicAuthorizationException extends AuthorizationException {
     }
 
     public TopicAuthorizationException(String message) {
-        this(message, Collections.emptySet());
+        this(message, Set.of());
     }
 
     /**

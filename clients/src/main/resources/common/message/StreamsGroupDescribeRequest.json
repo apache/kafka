@@ -18,12 +18,17 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "StreamsGroupDescribeRequest",
-  "validVersions": "0",
+  // Version 1 adds IncludeTopologyDescription (KIP-1331). Marked unstable until the broker
+  // topology-description manager lands; flip to false before release.
+  "latestVersionUnstable": true,
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "GroupIds", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The ids of the groups to describe" },
     { "name": "IncludeAuthorizedOperations", "type": "bool", "versions": "0+",
-      "about": "Whether to include authorized operations." }
+      "about": "Whether to include authorized operations." },
+    { "name": "IncludeTopologyDescription", "type": "bool", "versions": "1+", "default": "false",
+      "about": "Whether to include the full topology description from the topology description plugin in the response." }
   ]
 }

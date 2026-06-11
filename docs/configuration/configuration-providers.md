@@ -45,26 +45,29 @@ To use a configuration provider, specify it in your configuration using the `con
 Configuration providers allow you to pass parameters and retrieve configuration data from various sources.
 
 To specify configuration providers, you use a comma-separated list of aliases and the fully-qualified class names that implement the configuration providers:
-    
-    
-    config.providers=provider1,provider2
-    config.providers.provider1.class=com.example.Provider1
-    config.providers.provider2.class=com.example.Provider2
+
+```properties
+config.providers=provider1,provider2
+config.providers.provider1.class=com.example.Provider1
+config.providers.provider2.class=com.example.Provider2
+```
 
 Each provider can have its own set of parameters, which are passed in a specific format:
-    
-    
-    config.providers.<provider_alias>.param.<name>=<value>
+
+```properties
+config.providers.<provider_alias>.param.<name>=<value>
+```
 
 The `ConfigProvider` interface serves as a base for all configuration providers. Custom implementations of this interface can be created to retrieve configuration data from various sources. You can package the implementation as a JAR file, add the JAR to your classpath, and reference the provider's class in your configuration.
 
 **Example custom provider configuration**
-    
-    
-    config.providers=customProvider
-    config.providers.customProvider.class=com.example.customProvider
-    config.providers.customProvider.param.param1=value1
-    config.providers.customProvider.param.param2=value2
+
+```properties
+config.providers=customProvider
+config.providers.customProvider.class=com.example.customProvider
+config.providers.customProvider.param.param1=value1
+config.providers.customProvider.param.param2=value2
+```
 
 ## DirectoryConfigProvider
 
@@ -75,16 +78,18 @@ Each file represents a key, and its content is the value. This provider is usefu
 To restrict the files that the `DirectoryConfigProvider` can access, use the `allowed.paths` parameter. This parameter accepts a comma-separated list of paths that the provider is allowed to access. If not set, all paths are allowed.
 
 **Example`DirectoryConfigProvider` configuration**
-    
-    
-    config.providers=dirProvider
-    config.providers.dirProvider.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider
-    config.providers.dirProvider.param.allowed.paths=/path/to/dir1,/path/to/dir2
+
+```properties
+config.providers=dirProvider
+config.providers.dirProvider.class=org.apache.kafka.common.config.provider.DirectoryConfigProvider
+config.providers.dirProvider.param.allowed.paths=/path/to/dir1,/path/to/dir2
+```
 
 To reference a value supplied by the `DirectoryConfigProvider`, use the correct placeholder syntax: 
-    
-    
-    ${dirProvider:<path_to_file>:<file_name>}
+
+```text
+${dirProvider:<path_to_file>:<file_name>}
+```
 
 ## EnvVarConfigProvider
 
@@ -97,16 +102,18 @@ This provider is useful for configuring applications running in containers, for 
 To restrict which environment variables the `EnvVarConfigProvider` can access, use the `allowlist.pattern` parameter. This parameter accepts a regular expression that environment variable names must match to be used by the provider.
 
 **Example`EnvVarConfigProvider` configuration**
-    
-    
-    config.providers=envVarProvider
-    config.providers.envVarProvider.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider
-    config.providers.envVarProvider.param.allowlist.pattern=^MY_ENVAR1_.*
+
+```properties
+config.providers=envVarProvider
+config.providers.envVarProvider.class=org.apache.kafka.common.config.provider.EnvVarConfigProvider
+config.providers.envVarProvider.param.allowlist.pattern=^MY_ENVAR1_.*
+```
 
 To reference a value supplied by the `EnvVarConfigProvider`, use the correct placeholder syntax: 
-    
-    
-    ${envVarProvider:<enVar_name>}
+
+```text
+${envVarProvider:<enVar_name>}
+```
 
 ## FileConfigProvider
 
@@ -117,41 +124,46 @@ This provider is useful for loading configuration data from mounted files.
 To restrict the file paths that the `FileConfigProvider` can access, use the `allowed.paths` parameter. This parameter accepts a comma-separated list of paths that the provider is allowed to access. If not set, all paths are allowed.
 
 **Example`FileConfigProvider` configuration**
-    
-    
-    config.providers=fileProvider
-    config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider
-    config.providers.fileProvider.param.allowed.paths=/path/to/config1,/path/to/config2
+
+```properties
+config.providers=fileProvider
+config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider
+config.providers.fileProvider.param.allowed.paths=/path/to/config1,/path/to/config2
+```
 
 To reference a value supplied by the `FileConfigProvider`, use the correct placeholder syntax: 
-    
-    
-    ${fileProvider:<path_and_filename>:<property>}
+
+```text
+${fileProvider:<path_and_filename>:<property>}
+```
 
 ## Example: Referencing files
 
 Here’s an example that uses a file configuration provider with Kafka Connect to provide authentication credentials to a database for a connector. 
 
 First, create a `connector-credentials.properties` configuration file with the following credentials: 
-    
-    
-    dbUsername=my-username
-    dbPassword=my-password
+
+```properties
+dbUsername=my-username
+dbPassword=my-password
+```
 
 Specify a `FileConfigProvider` in the Kafka Connect configuration: 
 
 **Example Kafka Connect configuration with a`FileConfigProvider`**
-    
-    
-    config.providers=fileProvider
-    config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider
+
+```properties
+config.providers=fileProvider
+config.providers.fileProvider.class=org.apache.kafka.common.config.provider.FileConfigProvider
+```
 
 Next, reference the properties from the file in the connector configuration.
 
 **Example connector configuration referencing file properties**
-    
-    
-    database.user=${fileProvider:/path/to/connector-credentials.properties:dbUsername}
-    database.password=${fileProvider:/path/to/connector-credentials.properties:dbPassword}
+
+```properties
+database.user=${fileProvider:/path/to/connector-credentials.properties:dbUsername}
+database.password=${fileProvider:/path/to/connector-credentials.properties:dbPassword}
+```
 
 At runtime, the configuration provider reads and extracts the values from the properties file.

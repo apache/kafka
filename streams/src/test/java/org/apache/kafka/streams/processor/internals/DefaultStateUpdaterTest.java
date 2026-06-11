@@ -72,7 +72,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
@@ -346,7 +345,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
 
         verifyRestoredActiveTasks(task);
-        verifyCheckpointTasks(true, task);
+        verifyCheckpointTasks(task);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verifyPausedTasks();
@@ -379,7 +378,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task3);
 
         verifyRestoredActiveTasks(task3, task1, task2);
-        verifyCheckpointTasks(true, task3, task1, task2);
+        verifyCheckpointTasks(task3, task1, task2);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verifyPausedTasks();
@@ -610,7 +609,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task4);
 
         verifyRestoredActiveTasks(task2, task1);
-        verifyCheckpointTasks(true, task2, task1);
+        verifyCheckpointTasks(task2, task1);
         verifyUpdatingStandbyTasks(task4, task3);
         verifyExceptionsAndFailedTasks();
         verifyPausedTasks();
@@ -640,7 +639,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task2);
 
         verifyRestoredActiveTasks(task1);
-        verifyCheckpointTasks(true, task1);
+        verifyCheckpointTasks(task1);
         verifyUpdatingStandbyTasks(task2);
         final InOrder orderVerifier = inOrder(changelogReader);
         orderVerifier.verify(changelogReader, times(1)).enforceRestoreActive();
@@ -649,7 +648,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task3);
 
         verifyRestoredActiveTasks(task1, task3);
-        verifyCheckpointTasks(true, task3);
+        verifyCheckpointTasks(task3);
         orderVerifier.verify(changelogReader, times(1)).enforceRestoreActive();
         orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
     }
@@ -779,7 +778,7 @@ class DefaultStateUpdaterTest {
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
-        verifyCheckpointTasks(true, task);
+        verifyCheckpointTasks(task);
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyPausedTasks();
@@ -874,7 +873,7 @@ class DefaultStateUpdaterTest {
         assertEquals(new StateUpdater.RemovedTaskResult(statefulTask), futureOfStatefulTask.get());
         assertEquals(new StateUpdater.RemovedTaskResult(standbyTask), futureOfStandbyTask.get());
         verifyPausedTasks();
-        verifyCheckpointTasks(true, statefulTask, standbyTask);
+        verifyCheckpointTasks(statefulTask, standbyTask);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verify(changelogReader).unregister(statefulTask.changelogPartitions(), StandbyUpdateListener.SuspendReason.MIGRATED);
@@ -1035,7 +1034,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task2);
 
         verifyPausedTasks(task1);
-        verifyCheckpointTasks(true, task1);
+        verifyCheckpointTasks(task1);
         verifyRestoredActiveTasks();
         verifyUpdatingTasks(task2);
         verifyExceptionsAndFailedTasks();
@@ -1058,7 +1057,7 @@ class DefaultStateUpdaterTest {
 
         verifyPausedTasks(task1);
         verifyUpdatingTasks(task2);
-        verifyCheckpointTasks(true, task1);
+        verifyCheckpointTasks(task1);
         verify(changelogReader, never()).enforceRestoreActive();
     }
 
@@ -1070,7 +1069,7 @@ class DefaultStateUpdaterTest {
         when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks(task);
-        verifyCheckpointTasks(true, task);
+        verifyCheckpointTasks(task);
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
@@ -1451,7 +1450,7 @@ class DefaultStateUpdaterTest {
         time.sleep(COMMIT_INTERVAL + 1);
 
         verifyExceptionsAndFailedTasks();
-        verifyCheckpointTasks(false, task1, task2, task3, task4);
+        verifyCheckpointTasks(task1, task2, task3, task4);
     }
 
     @Test
@@ -1480,15 +1479,15 @@ class DefaultStateUpdaterTest {
         }
     }
 
-    private void verifyCheckpointTasks(final boolean enforceCheckpoint, final Task... tasks) {
+    private void verifyCheckpointTasks(final Task... tasks) {
         for (final Task task : tasks) {
-            verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(1)).maybeCheckpoint(enforceCheckpoint);
+            verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(1)).maybeCheckpoint();
         }
     }
 
     private void verifyNeverCheckpointTasks(final Task... tasks) {
         for (final Task task : tasks) {
-            verify(task, never()).maybeCheckpoint(anyBoolean());
+            verify(task, never()).maybeCheckpoint();
         }
     }
 
@@ -1742,7 +1741,7 @@ class DefaultStateUpdaterTest {
         final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final ProcessorStateException processorStateException = new ProcessorStateException("flush");
-        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint();
 
         stateUpdater.add(failedStatefulTask);
         stateUpdater.add(activeTask1);
@@ -1760,7 +1759,7 @@ class DefaultStateUpdaterTest {
         final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final ProcessorStateException processorStateException = new ProcessorStateException("flush");
-        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint();
 
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(TASK_0_2));
         when(changelogReader.restore(Map.of(
@@ -1790,7 +1789,7 @@ class DefaultStateUpdaterTest {
                 throw processorStateException;
             }
             return null;
-        }).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+        }).when(failedStatefulTask).maybeCheckpoint();
         when(changelogReader.allChangelogsCompleted()).thenReturn(true);
 
         stateUpdater.add(failedStatefulTask);
@@ -1812,7 +1811,7 @@ class DefaultStateUpdaterTest {
         final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final ProcessorStateException processorStateException = new ProcessorStateException("flush");
-        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint();
         when(topologyMetadata.isPaused(null)).thenReturn(false).thenReturn(false).thenReturn(true);
 
         stateUpdater.add(failedStatefulTask);
@@ -1831,7 +1830,7 @@ class DefaultStateUpdaterTest {
         final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
         final ProcessorStateException processorStateException = new ProcessorStateException("flush");
-        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint();
         when(changelogReader.completedChangelogs()).thenReturn(Set.of(TOPIC_PARTITION_B_0));
 
         stateUpdater.add(failedStatefulTask);

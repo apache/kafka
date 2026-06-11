@@ -26,23 +26,65 @@ type: docs
 -->
 
 
+## Upgrading to 4.4.0
+
+### Upgrading Servers to 4.4.0 from any version 3.3.x through 4.3.0
+
+### Notable changes in 4.4.0
+
+  * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
+  * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.
+  * Storage directories formatted by the `kafka-storage` tool are no longer forward-compatible. A Kafka broker must be the same version as, or newer than, the `kafka-storage` tool that formatted its directory, regardless of the `--release-version` chosen at format time. For further details, please refer to [KIP-1170](https://cwiki.apache.org/confluence/x/ZYoEFQ).
+
 ## Upgrading to 4.3.0
 
 ### Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0
 
+Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.3.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.3.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.3.x.
+
+**For a rolling upgrade:**
+
+  1. Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
+  2. Once the cluster's behavior and performance have been verified, finalize the upgrade by running `bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.3`
+  3. Note that cluster metadata downgrade is not supported in this version since it has metadata changes. Every [MetadataVersion](https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java) has a boolean parameter that indicates if there are metadata changes (i.e. `IBP_4_3_IV0(30, "4.3", "IV0", true)` means this version has metadata changes). Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.
+
 ### Notable changes in 4.3.0
 
+  * `kafka-configs.sh --alter --delete-config` no longer requires the specified config keys to exist on the target resource. Previously, attempting to delete a non-existent config key raised an `InvalidConfigurationException`. The deletion is now a no-op when the key does not exist, which allows managing configs for offline brokers via `--bootstrap-controller`. For further details, please refer to [KAFKA-20506](https://issues.apache.org/jira/browse/KAFKA-20506).
   * Support dynamically changing configs for dynamic quorum controllers. Previously only brokers and static quorum controllers were supported. For further details, please refer to [KAFKA-18928](https://issues.apache.org/jira/browse/KAFKA-18928). 
   * Two new configs have been introduced: `group.coordinator.cached.buffer.max.bytes` and `share.coordinator.cached.buffer.max.bytes`. They allow the respective coordinators to set the maximum buffer size retained for reuse. For further details, please refer to [KIP-1196](https://cwiki.apache.org/confluence/x/hA5JFg). 
   * The new config have been introduced: `remote.log.metadata.topic.min.isr` with 2 as default value. You can correct the min.insync.replicas for the existed __remote_log_metadata topic via kafka-configs.sh if needed. For further details, please refer to [KIP-1235](https://cwiki.apache.org/confluence/x/yommFw).
   * The new config prefix `remote.log.metadata.admin.` has been introduced. It allows independent configuration of the admin client used by `TopicBasedRemoteLogMetadataManager`. For further details, please refer to [KIP-1208](https://cwiki.apache.org/confluence/x/vYqhFg).
   * The `kafka-streams-scala` library is deprecated as of Kafka 4.3 and will be removed in Kafka 5.0. For further details, please refer to the [migration guide](/{version}/streams/developer-guide/scala-migration).
+  * Kafka Streams now supports opt-in headers-aware state stores for DSL operators via the new `dsl.store.format` config. The config accepts `DEFAULT` or `HEADERS`. Store-supplier APIs use the `DslStoreFormat` enum, whose values are `PLAIN`, `TIMESTAMPED`, and `HEADERS`; `DslStoreFormat.DEFAULT` does not exist. This builds on the headers-aware state store implementations introduced in [KIP-1271](https://cwiki.apache.org/confluence/x/QIM8G). For further details and current DSL result-header limitations, please refer to [KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G).
   * Support for cordoning log directories: For further details, please refer to [KIP-1066](https://cwiki.apache.org/confluence/x/Lg_TEg).
   * The `group.coordinator.rebalance.protocols` configuration is deprecated and will be removed in Kafka 5.0. In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions (`group.version`, `streams.version`, `share.version`) via `kafka-features.sh`. For further details, please refer to [KIP-1237](https://cwiki.apache.org/confluence/x/jIqmFw).
+  * New group configs have been introduced: `share.delivery.count.limit`, `share.partition.max.record.locks` and `share.renew.acknowledge.enable`, along with equivalent broker configs for specifying minimum and maximum values. In addition, the validation of group configs has been improved. For further details, please refer to [KIP-1240](https://cwiki.apache.org/confluence/x/tIHMFw).
+  * A new `group.coordinator.background.threads` config has been added to control the size of the group coordinator's thread pool used to updating regular expression subscriptions. Previously, the thread pool only had a single thread. Now the thread pool has two threads by default and its size is configurable. For further details, please refer to [KIP-1263](https://cwiki.apache.org/confluence/x/DIE8G).
+  * New `group.consumer.assignment.interval.ms`, `group.share.assignment.interval.ms` and `group.streams.assignment.interval.ms` configs have been added to set the interval between assignment updates for consumer, share and streams groups, along with broker configs for specifying minimum and maximum values and group configs. These default to an interval of 1 second and previously had an effective value of 0. For further details, please refer to [KIP-1263](https://cwiki.apache.org/confluence/x/DIE8G).
+  * A new dynamic broker configuration `follower.fetch.last.tiered.offset.enable` (default: `false`) has been added. When enabled on a cluster with tiered storage, a newly added follower replica that has no local data will skip directly to the earliest pending upload offset on the leader, avoiding re-fetching data that is already stored in remote storage. This reduces bootstrap time significantly for large tiered-storage topics. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
+  * The `ListOffsets` API has been extended to version 11, adding support for the `EARLIEST_PENDING_UPLOAD_TIMESTAMP` (-6) timestamp type. This allows clients to query the earliest offset on the leader that has not yet been uploaded to tiered storage. For further details, please refer to [KIP-1023](https://cwiki.apache.org/confluence/x/8op3EQ).
+
+## Upgrading to 4.2.1
+
+### Notable changes in 4.2.1
+
+  * Includes a fix for a critical deadlock in the [KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw) Share Group path ([KAFKA-20505](https://issues.apache.org/jira/browse/KAFKA-20505)).
+  * Includes a fix for a rolling upgrade issue ([KAFKA-20322](https://issues.apache.org/jira/browse/KAFKA-20322)) that could cause `UnsupportedVersionException` for clusters using transactional producers.
+  * Includes a fix for a critical broker-side bug in the offline migration code for the Streams Rebalance Protocol ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)). Migrations from classic to streams groups are now safe starting with 4.2.1.
 
 ## Upgrading to 4.2.0
 
 ### Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x
+
+Note: Apache Kafka 4.2 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.2.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.2.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.2.x.
+
+**For a rolling upgrade:**
+
+  1. Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
+  2. Once the cluster's behavior and performance have been verified, finalize the upgrade by running `bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.2`
+  3. Note that cluster metadata downgrade is supported in this version since it has no metadata changes. Every [MetadataVersion](https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java) has a boolean parameter that indicates if there are metadata changes (i.e. `IBP_4_2_IV1(29, "4.2", "IV1", false)` means this version has no metadata changes). Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.
+
 
   * If you wish to use share groups in a cluster with fewer than 3 brokers, you must set the broker configurations `share.coordinator.state.topic.replication.factor` and `share.coordinator.state.topic.min.isr` to 1 before you start using share groups. This is because share groups make use of a new internal topic called `__share_group_state` which is automatically created when you first use share groups. In common with the other internal topics, the default configuration uses 3 replicas and requires at least 3 brokers.
 
@@ -50,7 +92,7 @@ type: docs
 
   * The `--max-partition-memory-bytes` option in `kafka-console-producer` is deprecated and will be removed in Kafka 5.0. Please use `--batch-size` instead. 
   * Queues for Kafka ([KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw)) is production-ready in Apache Kafka 4.2. This feature introduces a new kind of group called share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer. Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part of an ordered stream. 
-  * The Streams Rebalance Protocol ([KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol)) is now production-ready for its core feature set. This broker-driven rebalancing system designed specifically for Kafka Streams applications provides faster, more stable rebalances and better observability. For more information about the supported feature set, usage, and migration, please refer to the [Streams developer guide](/{version}/documentation/streams/developer-guide/streams-rebalance-protocol.html). Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. Users planning to migrate should upgrade their brokers to a later release that includes the fix.
+  * The Streams Rebalance Protocol ([KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol)) is now production-ready for its core feature set. This broker-driven rebalancing system designed specifically for Kafka Streams applications provides faster, more stable rebalances and better observability. For more information about the supported feature set, usage, and migration, please refer to the [Streams developer guide](/{version}/streams/developer-guide/streams-rebalance-protocol). Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix is available in 4.2.1.
   * The `org.apache.kafka.common.header.internals.RecordHeader` class has been updated to be read thread-safe. See [KIP-1205](https://cwiki.apache.org/confluence/x/nYmhFg) for details. In other words, each individual `Header` object within a `ConsumerRecord`'s `headers` can now be safely read from multiple threads concurrently. 
   * The `org.apache.kafka.disallowed.login.modules` config was deprecated. Please use the `org.apache.kafka.allowed.login.modules` instead. 
   * The `remote.log.manager.thread.pool.size` config was deprecated. Please use the `remote.log.manager.follower.thread.pool.size` instead. 
@@ -104,11 +146,30 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
   * Added an optional `--node-id` flag to the `FeatureCommand` command. It specifies the node to describe. If not provided, an arbitrary node is used.
 
 
+## Upgrading to 4.1.2
+
+### Notable changes in 4.1.2
+
+* Includes a fix for the rare Kafka producer bug ([KAFKA-19012](https://issues.apache.org/jira/browse/KAFKA-19012)), in which a record could end up on the incorrect topic.
+
+
+
+## Upgrading to 4.1.1
+
+### Notable changes in 4.1.1
+
+* Includes a fix for the critical Kafka Streams bug ([KAFKA-19748](https://issues.apache.org/jira/browse/KAFKA-19748)), solving the memory leak issues that affected users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins).
+* Includes a fix for the critical Kafka Streams bug ([KAFKA-19479](https://issues.apache.org/jira/browse/KAFKA-19479)), related to potential data loss.
+
+
+
 ## Upgrading to 4.1.0
 
 **Note:** Kafka Streams 4.1.0 contains a critical memory leak bug ([KAFKA-19748](https://issues.apache.org/jira/browse/KAFKA-19748)) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1, which includes the fix for it.
 
 ### Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x
+
+The rolling upgrade procedure for 4.1.x is identical to the 4.0 upgrade. Please refer to the [Upgrading Servers to 4.0.x](#upgrading-servers-to-401-from-any-version-33x-through-39x) section for detailed step-by-step instructions.
 
 ### Notable changes in 4.1.0
 

@@ -78,6 +78,7 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.mockito.stubbing.Answer;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -310,7 +311,7 @@ public class KafkaStreamsTest {
     }
 
     private void prepareConsumer(final StreamThread thread, final AtomicReference<StreamThread.State> state) {
-        doAnswer(invocation -> {
+        final Answer<Object> shutdownAnswer = invocation -> {
             supplier.consumer.close(
                 org.apache.kafka.clients.consumer.CloseOptions.groupMembershipOperation(org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
             );
@@ -325,7 +326,9 @@ public class KafkaStreamsTest {
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.PENDING_SHUTDOWN, StreamThread.State.RUNNING);
             threadStateListenerCapture.getValue().onChange(thread, StreamThread.State.DEAD, StreamThread.State.PENDING_SHUTDOWN);
             return null;
-        }).when(thread).shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        };
+        doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.DEFAULT);
+        doAnswer(shutdownAnswer).when(thread).shutdown(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     }
 
     private void prepareThreadLock(final StreamThread thread) {
@@ -1910,6 +1913,76 @@ public class KafkaStreamsTest {
                 final StateDirectory stateDirectory = constructed.constructed().get(0);
                 streams.start();
                 verify(stateDirectory, never()).cleanOutdatedDirsOnStartup(anyLong());
+            }
+        }
+    }
+
+    @Test
+    public void shouldHandleCloseAfterErrorState() throws Exception {
+        // Regression test for the race condition bug fixed by KAFKA-17379 that also fixed KAFKA-16600.
+        prepareStreams();
+        final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
+        final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
+        prepareThreadState(streamThreadOne, state1);
+        prepareThreadState(streamThreadTwo, state2);
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING,
+                "Streams never started"
+            );
+
+            final int numberOfConcurrentCloseThreads = 10;
+            final AtomicReference<Throwable> closeException = new AtomicReference<>();
+            final CountDownLatch startLatch = new CountDownLatch(1);
+            final CountDownLatch completionLatch = new CountDownLatch(numberOfConcurrentCloseThreads + 1);
+
+            // Launch multiple close() threads
+            for (int i = 0; i < numberOfConcurrentCloseThreads; i++) {
+                new Thread(
+                    () -> {
+                        try {
+                            startLatch.await();
+                            streams.close(Duration.ofSeconds(10));
+                        } catch (final Throwable t) {
+                            closeException.compareAndSet(null, t);
+                        } finally {
+                            completionLatch.countDown();
+                        }
+                    },
+                    "CloseThread-" + i
+                ).start();
+            }
+
+            // Launch error thread
+            new Thread(
+                () -> {
+                    try {
+                        startLatch.await();
+                        streams.closeToError();
+                    } catch (final Throwable t) {
+                        // Ignore - this is expected to race
+                    } finally {
+                        completionLatch.countDown();
+                    }
+                },
+                "ErrorThread"
+            ).start();
+
+            // Start the race
+            startLatch.countDown();
+
+            // Wait for completion
+            assertTrue(
+                completionLatch.await(15, TimeUnit.SECONDS),
+                "All threads should complete within timeout"
+            );
+
+            if (closeException.get() != null) {
+                // Before fix: StreamsException("Failed to shut down while in state ERROR")
+                // After fix:  No exception
+                fail("Race condition detected; close() threw exception", closeException.get());
             }
         }
     }

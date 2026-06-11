@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 

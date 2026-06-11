@@ -75,15 +75,17 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  *
  * <ul>
  * <li>partitions_revoked: outputs the partitions revoked through {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)}.
- *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsRevoked}</li>
+ *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsRevoked}.</li>
  * <li>partitions_assigned: outputs the partitions assigned through {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsAssigned}.</li>
  * <li>records_consumed: contains a summary of records consumed in a single call to {@link KafkaConsumer#poll(Duration)}.
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.RecordsConsumed}.</li>
  * <li>record_data: contains the key, value, and offset of an individual consumed record (only included if verbose
  *     output is enabled). See {@link org.apache.kafka.tools.VerifiableConsumer.RecordData}.</li>
- * <li>offsets_committed: The result of every offset commit (only included if auto-commit is not enabled).
- *     See {@link org.apache.kafka.tools.VerifiableConsumer.OffsetsCommitted}</li>
+ * <li>offsets_committed: the result of every offset commit (only included if auto-commit is not enabled).
+ *     See {@link org.apache.kafka.tools.VerifiableConsumer.OffsetsCommitted}.</li>
+ * <li>shutdown_requested: emitted as consumer shutdown is requested.
+ *     See {@link org.apache.kafka.tools.VerifiableConsumer.ShutdownRequested}.</li>
  * <li>shutdown_complete: emitted after the consumer returns from {@link KafkaConsumer#close()}.
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.ShutdownComplete}.</li>
  * </ul>

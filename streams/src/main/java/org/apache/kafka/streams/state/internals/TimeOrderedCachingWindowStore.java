@@ -58,7 +58,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
-class TimeOrderedCachingWindowStore
+public class TimeOrderedCachingWindowStore
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
     implements WindowStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
 
@@ -91,7 +91,7 @@ class TimeOrderedCachingWindowStore
     }
 
     private void enforceWrappedStore(final WindowStore<Bytes, byte[]> underlying) {
-        final RocksDBTimeOrderedWindowStore timeOrderedWindowStore = getWrappedStore(underlying);
+        final RocksDBTimeOrderedWindowStore<?> timeOrderedWindowStore = getWrappedStore(underlying);
         if (timeOrderedWindowStore == null) {
             throw new IllegalArgumentException("TimeOrderedCachingWindowStore only supports RocksDBTimeOrderedWindowStore backed store");
         }
@@ -100,9 +100,12 @@ class TimeOrderedCachingWindowStore
     }
 
     @SuppressWarnings("unchecked")
-    private RocksDBTimeOrderedWindowStore getWrappedStore(final StateStore wrapped) {
+    private RocksDBTimeOrderedWindowStore<?> getWrappedStore(final StateStore wrapped) {
         if (wrapped instanceof RocksDBTimeOrderedWindowStore) {
-            return (RocksDBTimeOrderedWindowStore) wrapped;
+            return (RocksDBTimeOrderedWindowStore<?>) wrapped;
+        }
+        if (wrapped instanceof TimestampedToHeadersWindowStoreAdapter) {
+            return getWrappedStore(((TimestampedToHeadersWindowStoreAdapter) wrapped).store);
         }
         if (wrapped instanceof WrappedStateStore) {
             return getWrappedStore(((WrappedStateStore<?, Bytes, byte[]>) wrapped).wrapped());
@@ -110,6 +113,7 @@ class TimeOrderedCachingWindowStore
         return null;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         final String prefix = StreamsConfig.InternalConfig.getString(

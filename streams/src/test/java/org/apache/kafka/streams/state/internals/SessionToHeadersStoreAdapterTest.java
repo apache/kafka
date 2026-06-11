@@ -245,12 +245,12 @@ public class SessionToHeadersStoreAdapterTest {
 
     @Test
     public void shouldStripHeadersFromRawAggregationValue() {
-        final byte[] result = AggregationWithHeadersDeserializer.rawAggregation(VALUE_WITH_EMPTY_HEADERS);
+        final byte[] result = Utils.rawAggregation(VALUE_WITH_EMPTY_HEADERS);
         assertArrayEquals(RAW_VALUE, result);
     }
 
     @Test
     public void shouldReturnNullFromRawAggregationValueForNull() {
-        assertNull(AggregationWithHeadersDeserializer.rawAggregation(null));
+        assertNull(Utils.rawAggregation(null));
     }
 }

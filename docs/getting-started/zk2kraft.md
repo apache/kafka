@@ -104,23 +104,27 @@ This section documents differences in behavior between KRaft mode and ZooKeeper 
 
 * The dynamic log levels feature allows you to change the log4j settings of a running broker or controller process without restarting it. The command-line syntax for setting dynamic log levels on brokers has not changed in KRaft mode. Here is an example of setting the log level on a broker:  
 
-        
-        ./bin/kafka-configs.sh --bootstrap-server localhost:9092 \
-            --entity-type broker-loggers \
-            --entity-name 1 \
-            --alter \
-            --add-config org.apache.kafka.raft.KafkaNetworkChannel=TRACE
-                        
+
+  ```bash
+  ./bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+      --entity-type broker-loggers \
+      --entity-name 1 \
+      --alter \
+      --add-config org.apache.kafka.raft.KafkaNetworkChannel=TRACE
+  ```
+
 
 * When setting dynamic log levels on the controllers, the `--bootstrap-controller` flag must be used. Here is an example of setting the log level ona controller:  
 
-        
-        ./bin/kafka-configs.sh --bootstrap-controller localhost:9093 \
-            --entity-type broker-loggers \
-            --entity-name 1 \
-            --alter \
-            --add-config org.apache.kafka.raft.KafkaNetworkChannel=TRACE
-                        
+
+  ```bash
+  ./bin/kafka-configs.sh --bootstrap-controller localhost:9093 \
+      --entity-type broker-loggers \
+      --entity-name 1 \
+      --alter \
+      --add-config org.apache.kafka.raft.KafkaNetworkChannel=TRACE
+  ```
+
 
   
   Note that the entity-type must be specified as `broker-loggers`, even though we are changing a controller's log level rather than a broker's log level. 
@@ -134,23 +138,27 @@ This section documents differences in behavior between KRaft mode and ZooKeeper 
 
 * Some Kafka configurations can be changed dynamically, without restarting the process. The command-line syntax for setting dynamic log levels on brokers has not changed in KRaft mode. Here is an example of setting the number of IO threads on a broker:  
 
-        
-        ./bin/kafka-configs.sh --bootstrap-server localhost:9092 \
-            --entity-type brokers \
-            --entity-name 1 \
-            --alter \
-            --add-config num.io.threads=5
-                        
+
+  ```bash
+  ./bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+      --entity-type brokers \
+      --entity-name 1 \
+      --alter \
+      --add-config num.io.threads=5
+  ```
+
 
 * Controllers will apply all applicable cluster-level dynamic configurations. For example, the following command-line will change the `max.connections` setting on all of the brokers and all of the controllers in the cluster:  
 
-        
-        ./bin/kafka-configs.sh --bootstrap-server localhost:9092 \
-            --entity-type brokers \
-            --entity-default \
-            --alter \
-            --add-config max.connections=10000
-                        
+
+  ```bash
+  ./bin/kafka-configs.sh --bootstrap-server localhost:9092 \
+      --entity-type brokers \
+      --entity-default \
+      --alter \
+      --add-config max.connections=10000
+  ```
+
 
   
 Prior to version 4.3, dynamic configuration updates were not supported unless a static quorum was used. 

@@ -52,7 +52,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;

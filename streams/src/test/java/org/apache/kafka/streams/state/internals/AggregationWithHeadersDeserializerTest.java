@@ -25,8 +25,12 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Iterator;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -94,26 +98,35 @@ public class AggregationWithHeadersDeserializerTest {
         assertThrows(SerializationException.class, () -> deserializer.deserialize("topic", invalidData));
     }
 
-    @Test
+    @ParameterizedTest
+    @MethodSource("headers")
     public void shouldExtractHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
         headers.add("key1", "value1".getBytes());
         final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
 
-        final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer());
-        final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
+        try (final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer())) {
+            final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
 
-        final Headers extractedHeaders = AggregationWithHeadersDeserializer.headers(serialized);
-        assertNotNull(extractedHeaders);
+            final Headers extractedHeaders = Utils.headers(serialized);
+            assertNotNull(extractedHeaders);
 
-        final Header header = extractedHeaders.iterator().next();
-        assertEquals("key1", header.key());
-        assertArrayEquals("value1".getBytes(), header.value());
+            final Header header = extractedHeaders.iterator().next();
+            assertEquals("key1", header.key());
+            assertArrayEquals("value1".getBytes(), header.value());
+        }
+    }
+
+    private static Stream<Arguments> headers() {
+        return Stream.of(
+                new RecordHeaders().add("key1", "value1".getBytes()),
+                new RecordHeaders()
+            ).map(Arguments::of);
     }
 
     @Test
     public void shouldReturnNullForNullInput() {
-        assertNull(AggregationWithHeadersDeserializer.headers(null));
+        assertNull(Utils.headers(null));
     }
 }

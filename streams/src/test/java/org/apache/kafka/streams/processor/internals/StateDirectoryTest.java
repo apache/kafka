@@ -18,9 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -878,11 +878,20 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldNotHoldLockAfterInitializeStartupStores() {
+        final TaskId taskId = new TaskId(0, 0);
+        initializeStartupStores(taskId, true);
+
+        assertTrue(directory.hasStartupTasks());
+        assertNull(directory.lockOwner(taskId));
+    }
+
+    @Test
     public void shouldUnlockStartupStateOnClose() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupStores(taskId, true);
 
-        assertEquals(Thread.currentThread(), directory.lockOwner(taskId));
+        assertNull(directory.lockOwner(taskId));
         directory.close();
         assertNull(directory.lockOwner(taskId));
     }

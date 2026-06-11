@@ -207,6 +207,7 @@ public final class StateSerdes<K, V> {
      * @param key  the key to be serialized
      * @return     the serialized key
      */
+    @SuppressWarnings("resource")
     public byte[] rawKey(final K key, final Headers headers) {
         try {
             return keySerde.serializer().serialize(topic, headers, key);
@@ -230,7 +231,6 @@ public final class StateSerdes<K, V> {
      * @deprecated Since 4.3. Use {@link #rawValue(Object, Headers)} instead.
      */
     @Deprecated
-    @SuppressWarnings("rawtypes")
     public byte[] rawValue(final V value) {
         return rawValue(value, new RecordHeaders());
     }
@@ -241,7 +241,7 @@ public final class StateSerdes<K, V> {
      * @param value  the value to be serialized
      * @return       the serialized value
      */
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes", "resource"})
     public byte[] rawValue(final V value, final Headers headers) {
         try {
             return valueSerde.serializer().serialize(topic, headers, value);

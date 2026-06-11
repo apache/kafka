@@ -38,20 +38,18 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     final Logger log = LoggerFactory.getLogger(ListDeserializer.class);
 
-    private static final Map<Class<? extends Deserializer<?>>, Integer> FIXED_LENGTH_DESERIALIZERS = mkMap(
-        mkEntry(ShortDeserializer.class, Short.BYTES),
-        mkEntry(IntegerDeserializer.class, Integer.BYTES),
-        mkEntry(FloatDeserializer.class, Float.BYTES),
-        mkEntry(LongDeserializer.class, Long.BYTES),
-        mkEntry(DoubleDeserializer.class, Double.BYTES),
-        mkEntry(UUIDDeserializer.class, 36)
+    private static final Map<Class<? extends Deserializer<?>>, Integer> FIXED_LENGTH_DESERIALIZERS = Map.of(
+        ShortDeserializer.class, Short.BYTES,
+        IntegerDeserializer.class, Integer.BYTES,
+        FloatDeserializer.class, Float.BYTES,
+        LongDeserializer.class, Long.BYTES,
+        DoubleDeserializer.class, Double.BYTES,
+        UUIDDeserializer.class, 36
     );
 
     private Deserializer<Inner> inner;
@@ -150,8 +148,14 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         return SerializationStrategy.VALUES[serializationStrategyFlag];
     }
 
-    private List<Integer> deserializeNullIndexList(final DataInputStream dis) throws IOException {
+    private List<Integer> deserializeNullIndexList(final DataInputStream dis, final int length) throws IOException {
         int nullIndexListSize = dis.readInt();
+        if (nullIndexListSize < 0) {
+            throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be negative.");
+        }
+        if (nullIndexListSize > length) {
+            throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be larger than overall number of bytes.");
+        }
         List<Integer> nullIndexList = new ArrayList<>(nullIndexListSize);
         while (nullIndexListSize != 0) {
             nullIndexList.add(dis.readInt());
@@ -175,12 +179,13 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
             List<Integer> nullIndexList = null;
             if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
                 // In CONSTANT_SIZE strategy, indexes of null entries are decoded from a null index list
-                nullIndexList = deserializeNullIndexList(dis);
+                nullIndexList = deserializeNullIndexList(dis, data.length);
             }
-            final int size = dis.readInt();
+            final int size = readListSize(dis, data.length);
             List<Inner> deserializedList = createListInstance(size);
             for (int i = 0; i < size; i++) {
-                int entrySize = serStrategy == SerializationStrategy.CONSTANT_SIZE ? primitiveSize : dis.readInt();
+                int entrySize = readEntrySize(dis, serStrategy, data.length);
+
                 if (entrySize == ListSerde.NULL_ENTRY_VALUE || (nullIndexList != null && nullIndexList.contains(i))) {
                     deserializedList.add(null);
                     continue;
@@ -197,6 +202,32 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         } catch (IOException e) {
             throw new KafkaException("Unable to deserialize into a List", e);
         }
+    }
+
+    private int readListSize(final DataInputStream dis, final int length) throws IOException {
+        final int size = dis.readInt();
+        if (size < 0) {
+            throw new SerializationException("Corrupted byte[]. The number of list entries cannot be negative.");
+        }
+        if (size > length) {
+            throw new SerializationException("Corrupted byte[]. The number of list entries cannot be larger than overall number of bytes.");
+        }
+        return size;
+    }
+
+    private int readEntrySize(
+        final DataInputStream dis,
+        final SerializationStrategy serStrategy,
+        final int length
+    ) throws IOException {
+        final int entrySize = serStrategy == SerializationStrategy.CONSTANT_SIZE ? primitiveSize : dis.readInt();
+        if (entrySize < -1) { // value `-1` is valid, encoding a null entry (-> ListSerde.NULL_ENTRY_VALUE)
+            throw new SerializationException("Corrupted byte[]. A list entry cannot have negative size.");
+        }
+        if (entrySize > length) {
+            throw new SerializationException("Corrupted byte[]. A list entry cannot be larger than the overall number of bytes.");
+        }
+        return entrySize;
     }
 
     @Override

@@ -90,7 +90,7 @@ public class StateUpdaterFailureIntegrationTest {
      * <p><ul>
      * <li>We have an unhandled task in {@link org.apache.kafka.streams.processor.internals.DefaultStateUpdater}</li>
      * <li>StreamThread is not running, so {@link org.apache.kafka.streams.processor.internals.TaskManager#handleExceptionsFromStateUpdater} is not called anymore</li>
-     * <li>The task throws exception in {@link org.apache.kafka.streams.processor.internals.Task#maybeCheckpoint(boolean)} while being processed by {@code DefaultStateUpdater}</li>
+     * <li>The task throws exception in {@link org.apache.kafka.streams.processor.internals.Task#maybeCheckpoint()} while being processed by {@code DefaultStateUpdater}</li>
      * <li>{@link org.apache.kafka.streams.processor.internals.TaskManager#shutdownStateUpdater} tries to clean up all tasks that are left in the {@code DefaultStateUpdater}</li>
      * </ul><p>
      * If all conditions are met, {@code TaskManager} needs to be able to handle the failed task from the {@code DefaultStateUpdater} correctly and not hang.

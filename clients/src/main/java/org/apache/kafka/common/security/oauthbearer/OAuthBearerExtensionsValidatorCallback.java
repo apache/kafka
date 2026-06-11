@@ -25,8 +25,6 @@ import java.util.Objects;
 
 import javax.security.auth.callback.Callback;
 
-import static org.apache.kafka.common.utils.CollectionUtils.subtractMap;
-
 /**
  * A {@code Callback} for use by the {@code SaslServer} implementation when it
  * needs to validate the SASL extensions for the OAUTHBEARER mechanism
@@ -87,7 +85,14 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
      * @return An immutable {@link Map} consisting of the extensions that have neither been validated nor invalidated
      */
     public Map<String, String> ignoredExtensions() {
-        return Collections.unmodifiableMap(subtractMap(subtractMap(inputExtensions.map(), invalidExtensions), validatedExtensions));
+        Map<String, String> ignored = new HashMap<>();
+        for (Map.Entry<String, String> entry : inputExtensions.map().entrySet()) {
+            String key = entry.getKey();
+            if (!invalidExtensions.containsKey(key) && !validatedExtensions.containsKey(key)) {
+                ignored.put(key, entry.getValue());
+            }
+        }
+        return Collections.unmodifiableMap(ignored);
     }
 
     /**

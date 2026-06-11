@@ -18,8 +18,9 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -68,6 +69,9 @@ class StandbyTaskCreator {
     Collection<StandbyTask> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         final List<StandbyTask> createdTasks = new ArrayList<>();
 
+        final String upgradeFromStr = applicationConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
+        final UpgradeFromValues upgradeFrom = upgradeFromStr != null ? UpgradeFromValues.fromString(upgradeFromStr) : null;
+
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
@@ -78,10 +82,12 @@ class StandbyTaskCreator {
                     taskId,
                     Task.TaskType.STANDBY,
                     eosEnabled(applicationConfig),
+                    applicationConfig.getBoolean(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG),
                     getLogContext(taskId),
                     stateDirectory,
                     topology.storeToChangelogTopic(),
-                    partitions);
+                    partitions,
+                    upgradeFrom);
 
                 final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
                     taskId,

@@ -39,7 +39,12 @@ public class ShareGroupMetrics implements AutoCloseable {
     private static final String PARTITION_LOAD_TIME_MS = "PartitionLoadTimeMs";
     private static final String TOPIC_PARTITIONS_FETCH_RATIO = "RequestTopicPartitionsFetchRatio";
     private static final String TOPIC_PARTITIONS_ACQUIRE_TIME_MS = "TopicPartitionsAcquireTimeMs";
+    private static final String DEAD_LETTER_QUEUE_RECORD_COUNT = "DeadLetterQueueRecordCount";
+    private static final String DEAD_LETTER_QUEUE_TOTAL_PRODUCE_REQ_PER_SEC = "DeadLetterQueueTotalProduceRequestsPerSec";
+    private static final String DEAD_LETTER_QUEUE_FAILED_PRODUCE_REQ_PER_SEC = "DeadLetterQueueFailedProduceRequestsPerSec";
+
     private static final String ACK_TYPE_TAG = "ackType";
+    private static final String GROUP_ID_TAG = "group";
 
     /**
      * Metric for the rate of records acknowledged per acknowledgement type.
@@ -57,6 +62,19 @@ public class ShareGroupMetrics implements AutoCloseable {
      * Metric for the time taken to acquire topic partitions for a group.
      */
     private final Map<String, Histogram> topicPartitionsAcquireTimeMs;
+    /**
+     * Total records written to DLQ topic per group. We are using meter here
+     * as it will provide count and per sec attributes.
+     */
+    private final Map<String, Meter> dlqRecordCountPerGroup;
+    /**
+     * Total produce requests to the DLQ topic per group.
+     */
+    private final Map<String, Meter> dlqProduceTotalPerGroup;
+    /**
+     * Failed produce requests to the DLQ topic per group.
+     */
+    private final Map<String, Meter> dlqProduceFailedPerGroup;
 
     private final KafkaMetricsGroup metricsGroup;
     private final Time time;
@@ -78,6 +96,9 @@ public class ShareGroupMetrics implements AutoCloseable {
         this.partitionLoadTimeMs = metricsGroup.newHistogram(PARTITION_LOAD_TIME_MS);
         this.topicPartitionsFetchRatio = new ConcurrentHashMap<>();
         this.topicPartitionsAcquireTimeMs = new ConcurrentHashMap<>();
+        this.dlqRecordCountPerGroup = new ConcurrentHashMap<>();
+        this.dlqProduceTotalPerGroup = new ConcurrentHashMap<>();
+        this.dlqProduceFailedPerGroup = new ConcurrentHashMap<>();
     }
 
     public void recordAcknowledgement(byte ackType) {
@@ -97,13 +118,13 @@ public class ShareGroupMetrics implements AutoCloseable {
 
     public void recordTopicPartitionsFetchRatio(String groupId, long value) {
         topicPartitionsFetchRatio.computeIfAbsent(groupId,
-            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_FETCH_RATIO, true, Map.of("group", groupId)));
+            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_FETCH_RATIO, true, Map.of(GROUP_ID_TAG, groupId)));
         topicPartitionsFetchRatio.get(groupId).update(value);
     }
 
     public void recordTopicPartitionsAcquireTimeMs(String groupId, long timeMs) {
         topicPartitionsAcquireTimeMs.computeIfAbsent(groupId,
-            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_ACQUIRE_TIME_MS, true, Map.of("group", groupId)));
+            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_ACQUIRE_TIME_MS, true, Map.of(GROUP_ID_TAG, groupId)));
         topicPartitionsAcquireTimeMs.get(groupId).update(timeMs);
     }
 
@@ -127,13 +148,43 @@ public class ShareGroupMetrics implements AutoCloseable {
         return topicPartitionsAcquireTimeMs.get(groupId);
     }
 
+    public void recordDLQRecordWrite(String shareGroupId, int count) {
+        dlqRecordCountPerGroup.computeIfAbsent(shareGroupId, k -> metricsGroup.newMeter(
+            DEAD_LETTER_QUEUE_RECORD_COUNT,
+            "requests",
+            TimeUnit.SECONDS,
+            Map.of(GROUP_ID_TAG, k)
+        )).mark(count);
+    }
+
+    public void recordDLQProduce(String shareGroupId) {
+        dlqProduceTotalPerGroup.computeIfAbsent(shareGroupId, k -> metricsGroup.newMeter(
+            DEAD_LETTER_QUEUE_TOTAL_PRODUCE_REQ_PER_SEC,
+            "errors",
+            TimeUnit.SECONDS,
+            Map.of(GROUP_ID_TAG, k)
+        )).mark();
+    }
+
+    public void recordDLQProduceFailed(String shareGroupId) {
+        dlqProduceFailedPerGroup.computeIfAbsent(shareGroupId, k -> metricsGroup.newMeter(
+            DEAD_LETTER_QUEUE_FAILED_PRODUCE_REQ_PER_SEC,
+            "errors",
+            TimeUnit.SECONDS,
+            Map.of(GROUP_ID_TAG, k)
+        )).mark();
+    }
+
     @Override
     public void close() throws Exception {
         Arrays.stream(AcknowledgeType.values()).forEach(
             m -> metricsGroup.removeMetric(RECORD_ACKNOWLEDGEMENTS_PER_SEC, Map.of(ACK_TYPE_TAG, m.toString())));
         metricsGroup.removeMetric(PARTITION_LOAD_TIME_MS);
-        topicPartitionsFetchRatio.forEach((k, v) -> metricsGroup.removeMetric(TOPIC_PARTITIONS_FETCH_RATIO, Map.of("group", k)));
-        topicPartitionsAcquireTimeMs.forEach((k, v) -> metricsGroup.removeMetric(TOPIC_PARTITIONS_ACQUIRE_TIME_MS, Map.of("group", k)));
+        topicPartitionsFetchRatio.forEach((k, v) -> metricsGroup.removeMetric(TOPIC_PARTITIONS_FETCH_RATIO, Map.of(GROUP_ID_TAG, k)));
+        topicPartitionsAcquireTimeMs.forEach((k, v) -> metricsGroup.removeMetric(TOPIC_PARTITIONS_ACQUIRE_TIME_MS, Map.of(GROUP_ID_TAG, k)));
+        dlqRecordCountPerGroup.forEach((k, v) -> metricsGroup.removeMetric(DEAD_LETTER_QUEUE_RECORD_COUNT, Map.of(GROUP_ID_TAG, k)));
+        dlqProduceTotalPerGroup.forEach((k, v) -> metricsGroup.removeMetric(DEAD_LETTER_QUEUE_TOTAL_PRODUCE_REQ_PER_SEC, Map.of(GROUP_ID_TAG, k)));
+        dlqProduceFailedPerGroup.forEach((k, v) -> metricsGroup.removeMetric(DEAD_LETTER_QUEUE_FAILED_PRODUCE_REQ_PER_SEC, Map.of(GROUP_ID_TAG, k)));
     }
 
     private static String capitalize(String string) {

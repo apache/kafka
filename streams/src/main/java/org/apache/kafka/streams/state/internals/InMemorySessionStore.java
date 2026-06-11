@@ -54,7 +54,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 
-public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
+public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRetentionPeriod {
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemorySessionStore.class);
 
@@ -80,13 +80,20 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private StateStoreContext stateStoreContext;
     private final Position position;
 
-    InMemorySessionStore(final String name,
-                         final long retentionPeriod,
-                         final String metricScope) {
+    public InMemorySessionStore(
+        final String name,
+        final long retentionPeriod,
+        final String metricScope
+    ) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.metricScope = metricScope;
         this.position = Position.emptyPosition();
+    }
+
+    @Override
+    public long retentionPeriod() {
+        return retentionPeriod;
     }
 
     @Override
@@ -379,6 +386,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         endTimeMap.clear();
         openIterators.clear();
         open = false;
+    }
+
+    long numEntries() {
+        return endTimeMap.values().stream()
+            .flatMap(keyMap -> keyMap.values().stream())
+            .mapToLong(Map::size)
+            .sum();
     }
 
     private void removeExpiredSegments() {

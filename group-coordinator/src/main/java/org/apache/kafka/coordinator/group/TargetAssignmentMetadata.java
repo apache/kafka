@@ -29,7 +29,7 @@ public record TargetAssignmentMetadata(int assignmentEpoch, long assignmentTimes
      * The initial target assignment metadata for groups.
      * This is different to tombstoned assignment metadata which has an assignment epoch of -1.
      */
-    public static final TargetAssignmentMetadata ZERO = new TargetAssignmentMetadata(0, 0L);
+    public static final TargetAssignmentMetadata INITIAL = new TargetAssignmentMetadata(1, 0L);
 
     public TargetAssignmentMetadata {
         if (assignmentEpoch < 0 && assignmentEpoch != -1) {

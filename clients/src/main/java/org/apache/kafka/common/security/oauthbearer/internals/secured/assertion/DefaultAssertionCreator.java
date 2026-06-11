@@ -24,7 +24,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.util.Base64;
@@ -33,6 +32,7 @@ import java.util.Optional;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.RefreshPolicy.lastModifiedPolicy;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.privateKey;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.sign;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionUtils.stripPemEncoding;
 
 /**
  * This is the "default" {@link AssertionCreator} in that it is the common case of using a configured signing
@@ -56,7 +56,7 @@ public class DefaultAssertionCreator implements AssertionCreator {
 
         this.privateKeyFile = new CachedFile<>(
             privateKeyFile,
-            new PrivateKeyTransformer(passphrase),
+            new PrivateKeyTransformer(algorithm, passphrase),
             lastModifiedPolicy()
         );
     }
@@ -74,20 +74,18 @@ public class DefaultAssertionCreator implements AssertionCreator {
 
     private static class PrivateKeyTransformer implements CachedFile.Transformer<PrivateKey> {
 
+        private final String algorithm;
         private final Optional<String> passphrase;
 
-        public PrivateKeyTransformer(Optional<String> passphrase) {
+        public PrivateKeyTransformer(String algorithm, Optional<String> passphrase) {
+            this.algorithm = algorithm;
             this.passphrase = passphrase;
         }
 
         @Override
         public PrivateKey transform(File file, String contents) {
             try {
-                contents = contents.replace("-----BEGIN PRIVATE KEY-----", "")
-                    .replace("-----END PRIVATE KEY-----", "")
-                    .replace("\n", "");
-
-                return privateKey(contents.getBytes(StandardCharsets.UTF_8), passphrase);
+                return privateKey(stripPemEncoding(contents), algorithm, passphrase);
             } catch (GeneralSecurityException | IOException e) {
                 throw new JwtRetrieverException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
             }

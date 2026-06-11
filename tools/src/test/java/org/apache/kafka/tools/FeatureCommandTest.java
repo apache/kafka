@@ -71,7 +71,7 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(features.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(features.get(4))
         );
         assertFeatureOutput(
@@ -111,7 +111,7 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(features.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(features.get(4))
         );
         assertFeatureOutput(
@@ -168,7 +168,7 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(featuresWithUnstable.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(4))
         );
         assertFeatureOutput(
@@ -262,7 +262,7 @@ public class FeatureCommandTest {
                 outputWithoutEpoch(featuresWithUnstable.get(3))
         );
         assertFeatureOutput(
-                "share.version", "0", "1", "0",
+                "share.version", "0", "2", "0",
                 outputWithoutEpoch(featuresWithUnstable.get(4))
         );
         assertFeatureOutput(

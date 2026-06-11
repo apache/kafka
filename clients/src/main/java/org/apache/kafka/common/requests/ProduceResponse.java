@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.internal.RecordBatch;
 
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -74,7 +73,7 @@ public class ProduceResponse extends AbstractResponse {
      */
     @Deprecated
     public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses) {
-        this(responses, DEFAULT_THROTTLE_TIME, Collections.emptyList());
+        this(responses, DEFAULT_THROTTLE_TIME, List.of());
     }
 
     /**
@@ -85,7 +84,7 @@ public class ProduceResponse extends AbstractResponse {
      */
     @Deprecated
     public ProduceResponse(Map<TopicIdPartition, PartitionResponse> responses, int throttleTimeMs) {
-        this(toData(responses, throttleTimeMs, Collections.emptyList()));
+        this(toData(responses, throttleTimeMs, List.of()));
     }
 
     /**
@@ -170,11 +169,11 @@ public class ProduceResponse extends AbstractResponse {
         }
 
         public PartitionResponse(Errors error, String errorMessage) {
-            this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET, Collections.emptyList(), errorMessage);
+            this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET, List.of(), errorMessage);
         }
 
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset) {
-            this(error, baseOffset, logAppendTime, logStartOffset, Collections.emptyList(), null);
+            this(error, baseOffset, logAppendTime, logStartOffset, List.of(), null);
         }
 
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors) {

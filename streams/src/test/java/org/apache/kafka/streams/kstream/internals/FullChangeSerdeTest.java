@@ -16,7 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +32,10 @@ import java.nio.ByteBuffer;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class FullChangeSerdeTest {
     private final FullChangeSerde<String> serde = FullChangeSerde.wrap(Serdes.String());
@@ -58,22 +69,22 @@ public class FullChangeSerdeTest {
 
     @Test
     public void shouldRoundTripNull() {
-        assertThat(serde.serializeParts(null, null), nullValue());
+        assertThat(serde.serializeParts(null, null, null), nullValue());
         assertThat(mergeChangeArraysIntoSingleLegacyFormattedArray(null), nullValue());
         assertThat(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(null), nullValue());
-        assertThat(serde.deserializeParts(null, null), nullValue());
+        assertThat(serde.deserializeParts(null, null, null), nullValue());
     }
 
 
     @Test
     public void shouldRoundTripNullChange() {
         assertThat(
-            serde.serializeParts(null, new Change<>(null, null)),
+            serde.serializeParts(null, null, new Change<>(null, null)),
             is(new Change<byte[]>(null, null))
         );
 
         assertThat(
-            serde.deserializeParts(null, new Change<>(null, null)),
+            serde.deserializeParts(null, null, new Change<>(null, null)),
             is(new Change<String>(null, null))
         );
 
@@ -86,34 +97,78 @@ public class FullChangeSerdeTest {
 
     @Test
     public void shouldRoundTripOldNull() {
-        final Change<byte[]> serialized = serde.serializeParts(null, new Change<>("new", null));
+        final Change<byte[]> serialized = serde.serializeParts(null, new RecordHeaders(), new Change<>("new", null));
         final byte[] legacyFormat = mergeChangeArraysIntoSingleLegacyFormattedArray(serialized);
         final Change<byte[]> decomposedLegacyFormat = FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(legacyFormat);
         assertThat(
-            serde.deserializeParts(null, decomposedLegacyFormat),
+            serde.deserializeParts(null, new RecordHeaders(), decomposedLegacyFormat),
             is(new Change<>("new", null))
         );
     }
 
     @Test
     public void shouldRoundTripNewNull() {
-        final Change<byte[]> serialized = serde.serializeParts(null, new Change<>(null, "old"));
+        final Change<byte[]> serialized = serde.serializeParts(null, new RecordHeaders(), new Change<>(null, "old"));
         final byte[] legacyFormat = mergeChangeArraysIntoSingleLegacyFormattedArray(serialized);
         final Change<byte[]> decomposedLegacyFormat = FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(legacyFormat);
         assertThat(
-            serde.deserializeParts(null, decomposedLegacyFormat),
+            serde.deserializeParts(null, new RecordHeaders(), decomposedLegacyFormat),
             is(new Change<>(null, "old"))
         );
     }
 
     @Test
     public void shouldRoundTripChange() {
-        final Change<byte[]> serialized = serde.serializeParts(null, new Change<>("new", "old"));
+        final Change<byte[]> serialized = serde.serializeParts(null, new RecordHeaders(), new Change<>("new", "old"));
         final byte[] legacyFormat = mergeChangeArraysIntoSingleLegacyFormattedArray(serialized);
         final Change<byte[]> decomposedLegacyFormat = FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(legacyFormat);
         assertThat(
-            serde.deserializeParts(null, decomposedLegacyFormat),
+            serde.deserializeParts(null, new RecordHeaders(), decomposedLegacyFormat),
             is(new Change<>("new", "old"))
         );
+    }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingSerializer() {
+        final Serializer<String> mockSerializer = mock(StringSerializer.class);
+        final Serde<String> mockSerde = mock(Serdes.StringSerde.class);
+        when(mockSerde.serializer()).thenReturn(mockSerializer);
+
+        final String topic = "dummy";
+        final String newValue = "new";
+        final String oldValue = "old";
+        final Headers headers = new RecordHeaders().add("key", "value".getBytes());
+        final Change<String> data = new Change<>(newValue, oldValue);
+
+        final FullChangeSerde<String> testSerde = FullChangeSerde.wrap(mockSerde);
+
+        testSerde.serializeParts(topic, headers, data);
+
+        verify(mockSerializer).serialize(topic, headers, newValue);
+        verify(mockSerializer).serialize(topic, headers, oldValue);
+        verify(mockSerializer, never()).serialize(topic, newValue);
+        verify(mockSerializer, never()).serialize(topic, oldValue);
+    }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingDeserializer() {
+        final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
+        final Serde<String> mockSerde = mock(Serdes.StringSerde.class);
+        when(mockSerde.deserializer()).thenReturn(mockDeserializer);
+
+        final String topic = "dummy";
+        final byte[] newValueBytes = "new".getBytes();
+        final byte[] oldValueBytes = "old".getBytes();
+        final Headers headers = new RecordHeaders().add("key", "value".getBytes());
+        final Change<byte[]> serialChange = new Change<>(newValueBytes, oldValueBytes);
+
+        final FullChangeSerde<String> testSerde = FullChangeSerde.wrap(mockSerde);
+
+        testSerde.deserializeParts(topic, headers, serialChange);
+
+        verify(mockDeserializer).deserialize(topic, headers, newValueBytes);
+        verify(mockDeserializer).deserialize(topic, headers, oldValueBytes);
+        verify(mockDeserializer, never()).deserialize(topic, newValueBytes);
+        verify(mockDeserializer, never()).deserialize(topic, oldValueBytes);
     }
 }

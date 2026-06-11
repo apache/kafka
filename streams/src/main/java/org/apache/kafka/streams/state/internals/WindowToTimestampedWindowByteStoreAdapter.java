@@ -36,7 +36,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
 
-class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, byte[]> {
+public class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, byte[]> {
     final WindowStore<Bytes, byte[]> store;
 
     WindowToTimestampedWindowByteStoreAdapter(final WindowStore<Bytes, byte[]> store) {
@@ -165,6 +165,17 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         store.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return store.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return store.committedOffset(partition);
     }
 
     @Override

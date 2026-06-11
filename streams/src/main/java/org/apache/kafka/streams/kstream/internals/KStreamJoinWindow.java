@@ -24,7 +24,8 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.util.Collections;
 import java.util.Set;
@@ -49,12 +50,11 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
 
     private class KStreamJoinWindowProcessor extends ContextualProcessor<K, V, K, V> {
 
-        private WindowStore<K, V> window;
+        private TimestampedWindowStoreWithHeaders<K, V> window;
 
         @Override
         public void init(final ProcessorContext<K, V> context) {
             super.init(context);
-
             window = context.getStateStore(thisWindowStoreFactory.storeName());
         }
 
@@ -65,7 +65,9 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
             context().forward(record);
             if (record.key() != null) {
                 // Every record basically starts a new window. We're using a window store mostly for the retention.
-                window.put(record.key(), record.value(), record.timestamp());
+                window.put(record.key(),
+                        ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()),
+                        record.timestamp());
             }
         }
     }

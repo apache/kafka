@@ -202,7 +202,10 @@
               files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|TopologyTestDriverTest|KafkaStreamsTest|EosIntegrationTest|RestoreIntegrationTest).java"/>
 
     <suppress checks="MethodLength"
-              files="(EosIntegrationTest|KStreamKStreamJoinTest|RocksDBWindowStoreTest).java"/>
+              files="(EosIntegrationTest|KStreamKStreamJoinTest|KStreamKStreamLeftJoinTest|KStreamKStreamOuterJoinTest|KStreamSlidingWindowAggregateTest|KTableKTableForeignKeyJoinIntegrationTest|RocksDBWindowStoreTest|TopologyTestDriverTest).java"/>
+
+    <suppress checks="ParameterNumber"
+              files="(TopologyTestDriverTest).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*[/\\]streams[/\\].*test[/\\].*.java"/>
@@ -211,16 +214,13 @@
               files="(KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest|RelationalSmokeTest|MockProcessorContextStateStoreTest|IQv2StoreIntegrationTest|StreamsConfigTest).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(KStreamKStreamJoinTest|StreamThreadTest|TaskManagerTest|StreamTaskTest).java"/>
+              files="(KStreamKStreamJoinTest|StreamTaskTest|StreamThreadTest|TaskManagerTest|TopologyTestDriverTest).java"/>
 
     <suppress checks="NPathComplexity"
               files="(KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|RelationalSmokeTest|MockProcessorContextStateStoreTest|TopologyTestDriverTest|IQv2StoreIntegrationTest).java"/>
 
     <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl)"
               files="Murmur3Test.java"/>
-
-    <suppress checks="MethodLength"
-              files="(KStreamSlidingWindowAggregateTest|KStreamKStreamLeftJoinTest|KStreamKStreamOuterJoinTest|KTableKTableForeignKeyJoinIntegrationTest).java"/>
 
     <!-- Streams test-utils -->
     <suppress checks="ClassFanOutComplexity|ClassDataAbstractionCoupling"
@@ -235,11 +235,11 @@
     <suppress checks="ClassDataAbstractionCoupling"
               files="(VerifiableConsumer|DumpLogSegmentsTest).java"/>
     <suppress checks="CyclomaticComplexity"
-              files="(AclCommand|ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance|Agent).java"/>
+              files="(AclCommand|ConfigCommand|ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance|Agent).java"/>
     <suppress checks="BooleanExpressionComplexity"
               files="(StreamsResetter|DefaultMessageFormatter).java"/>
     <suppress checks="NPathComplexity"
-              files="(AclCommand|DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool|LineMessageReader|ConsoleProducer|DumpLogSegments).java"/>
+              files="(AclCommand|ConfigCommand|DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool|LineMessageReader|ConsoleProducer|DumpLogSegments).java"/>
     <suppress checks="ParameterNumber"
               files="(ProduceBenchSpec|ConsumeBenchSpec|SustainedConnectionSpec).java"/>
     <suppress id="dontUseSystemExit"
@@ -269,7 +269,7 @@
 
     <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorRecordSerde|GroupMetadataManagerTestContext).java"/>
+              files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorRecordSerde|GroupMetadataManagerTestContext|GroupConfigTest).java"/>
     <suppress checks="(NPathComplexity|MethodLength)"
               files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GroupCoordinatorShard).java"/>
     <suppress checks="ClassFanOutComplexity"
@@ -297,15 +297,21 @@
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
-              files="(LogLoader|LogValidator|RemoteLogManager|UnifiedLog).java"/>
+              files="(LogLoader|LogManager|LogValidator|RemoteLogManager|UnifiedLog).java"/>
     <suppress checks="NPathComplexity"
-              files="(LocalLog|LogLoader|LogValidator|RemoteLogManager|RemoteIndexCache|UnifiedLog).java"/>
+              files="(LocalLog|LogLoader|LogManager|LogValidator|RemoteLogManager|RemoteIndexCache|UnifiedLog).java"/>
     <suppress checks="ParameterNumber"
-              files="(LogLoader|UnifiedLog).java"/>
+              files="(LogLoader|LogManager|UnifiedLog).java"/>
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
-              files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest).java"/>
+              files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest|UnifiedLogTest).java"/>
     <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>
-    <suppress checks="JavaNCSS" files="RemoteLogManagerTest.java"/>
+    <suppress checks="JavaNCSS" files="(RemoteLogManagerTest|UnifiedLogTest).java"/>
+    
+    <!-- storage test -->
+    <suppress checks="ImportControl" files="TransactionsExpirationTest.java"/>
+    <suppress checks="ImportControl" files="TransactionsTest.java"/>
+    <suppress checks="ImportControl" files="TransactionsWithMaxInFlightOneTest.java"/>
+    <suppress checks="(NPathComplexity|ClassDataAbstractionCoupling|ClassFanOutComplexity|JavaNCSS|MethodLength)" files="LogCleanerTest.java"/>
 
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"

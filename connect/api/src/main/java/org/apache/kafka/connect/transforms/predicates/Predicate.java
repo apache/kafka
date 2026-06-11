@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.transforms.predicates;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
 /**
@@ -37,14 +37,18 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  *
  * @param <R> The type of record.
  */
-public interface Predicate<R extends ConnectRecord<R>> extends Configurable, AutoCloseable {
+public interface Predicate<R extends ConnectRecord<R>> extends Configurable, AutoCloseable, ConnectPlugin {
+
 
     /**
-     * Configuration specification for this predicate.
+     * Get the version of this component.
      *
-     * @return the configuration definition for this predicate; never null
+     * @return the version, formatted as a String. The version may not be {@code null} or empty.
      */
-    ConfigDef config();
+    @Override
+    default String version() {
+        return "undefined";
+    }
 
     /**
      * Returns whether the given record satisfies this predicate.

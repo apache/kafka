@@ -51,8 +51,8 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
@@ -736,10 +736,17 @@ public class GroupMetadataManagerTestContext {
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
         StreamsGroupHeartbeatRequestData request
     ) {
+        return streamsGroupHeartbeat(request, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
+    }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request,
+        short version
+    ) {
         RequestContext context = new RequestContext(
             new RequestHeader(
                 ApiKeys.STREAMS_GROUP_HEARTBEAT,
-                ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(),
+                version,
                 "client",
                 0
             ),
@@ -1374,7 +1381,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public List<StreamsGroupDescribeResponseData.DescribedGroup> sendStreamsGroupDescribe(List<String> groupIds) {
-        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset);
+        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset).describedGroups();
     }
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {

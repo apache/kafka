@@ -44,12 +44,15 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Properties;
 
@@ -59,6 +62,9 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,10 +82,10 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.metricsScope()).thenReturn("metricScope");
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
     }
 
@@ -125,8 +131,8 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         setUp();
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
         assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class, wrapped);
@@ -137,9 +143,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         setUp();
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .withCachingEnabled()
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .withCachingEnabled()
+            .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
@@ -154,9 +160,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("name", "metrics-scope"));
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
         assertInstanceOf(RocksDBTimestampedStoreWithHeaders.class, ((WrappedStateStore) store).wrapped());
     }
 
@@ -166,9 +172,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStore("name", "metrics-scope"));
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
         assertInstanceOf(TimestampedToHeadersStoreAdapter.class, ((WrappedStateStore) store).wrapped());
     }
 
@@ -176,7 +182,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     public void shouldThrowNullPointerIfInnerIsNull() {
         setUpWithoutInner();
         assertThrows(NullPointerException.class, () ->
-                new TimestampedKeyValueStoreBuilderWithHeaders<>(null, Serdes.String(), Serdes.String(), new MockTime()));
+            new TimestampedKeyValueStoreBuilderWithHeaders<>(null, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
     @Test
@@ -197,7 +203,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     public void shouldThrowNullPointerIfTimeIsNull() {
         setUpWithoutInner();
         assertThrows(NullPointerException.class, () ->
-                new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), null));
+            new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
     @Test
@@ -206,7 +212,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.metricsScope()).thenReturn(null);
 
         final Exception e = assertThrows(NullPointerException.class,
-                () -> new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+            () -> new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
         assertTrue(e.getMessage().contains("storeSupplier's metricsScope can't be null"));
     }
 
@@ -229,24 +235,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -259,7 +265,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify wrapper type for InMemoryKeyValueStore
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             assertInstanceOf(HeadersBytesStore.class, wrapped,
-                    "Expected wrapper to implement HeadersBytesStore for InMemoryKeyValueStore");
+                "Expected wrapper to implement HeadersBytesStore for InMemoryKeyValueStore");
 
             // Query at typed level - KeyQuery should return just the value
             final KeyQuery<String, String> query = KeyQuery.withKey("test-key");
@@ -282,24 +288,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -312,7 +318,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify wrapper type for InMemoryKeyValueStore
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             assertInstanceOf(HeadersBytesStore.class, wrapped,
-                    "Expected wrapper to implement HeadersBytesStore for InMemoryKeyValueStore");
+                "Expected wrapper to implement HeadersBytesStore for InMemoryKeyValueStore");
 
             // Query at typed level - TimestampedKeyQuery should return value + timestamp
             final TimestampedKeyQuery<String, String> query = TimestampedKeyQuery.withKey("test-key");
@@ -337,24 +343,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -377,24 +383,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -420,24 +426,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -463,30 +469,30 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
         try {
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            
+
             // Get initial position
             final Position initialPosition = wrapped.getPosition();
             assertNotNull(initialPosition, "Expected non-null initial position");
@@ -498,7 +504,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Get position after puts
             final Position afterPutPosition = wrapped.getPosition();
             assertNotNull(afterPutPosition, "Expected non-null position after puts");
-            
+
             // Position object should be the same instance (stores maintain a single position)
             // The position content might be updated internally by the context
         } finally {
@@ -506,33 +512,56 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
-    @Test
-    public void shouldReturnUnknownQueryTypeForKeyQueryOnHeadersStore() {
+    private static ThreadCache mockCacheHit() {
+        final ThreadCache cache = mock(ThreadCache.class);
+        final LRUCacheEntry entry = mock(LRUCacheEntry.class);
+        final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
+        lenient().when(entry.value()).thenReturn(entryValue);
+        lenient().when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
+        return cache;
+    }
+
+    private TimestampedKeyValueStoreWithHeaders<String, String> headersStoreMaybeWithCache(final boolean cachingEnabled) {
         when(supplier.name()).thenReturn("test-store");
         when(supplier.metricsScope()).thenReturn("metricScope");
         when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
 
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+        final File dir = TestUtils.tempDirectory();
+        final ThreadCache cache = mockCacheHit();
+        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            null,
+            cache
         );
 
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+        
+        final TimestampedKeyValueStoreWithHeaders<String, String> store;
+        if (cachingEnabled) {
+            store = builder.withLoggingDisabled()
+                .withCachingEnabled()
+                .build();
+        } else {
+            store = builder.withLoggingDisabled()
                 .withCachingDisabled()
                 .build();
+        }
 
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
-        );
         store.init(context, store);
+        return store;
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReturnUnknownQueryTypeForKeyQueryOnHeadersStore(final boolean cachingEnabled) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = headersStoreMaybeWithCache(cachingEnabled);
 
         try {
             final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
@@ -545,9 +574,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify: Headers store currently returns UNKNOWN_QUERY_TYPE
             assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
             assertEquals(
-                    FailureReason.UNKNOWN_QUERY_TYPE,
-                    result.getFailureReason(),
-                    "Expected UNKNOWN_QUERY_TYPE failure reason"
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                result.getFailureReason(),
+                "Expected UNKNOWN_QUERY_TYPE failure reason"
             );
             assertNotNull(result.getPosition(), "Expected position to be set");
         } finally {
@@ -555,38 +584,15 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
-    @Test
-    public void shouldReturnUnknownQueryTypeForRangeQueryOnHeadersStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
-        );
-        store.init(context, store);
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReturnUnknownQueryTypeForRangeQueryOnHeadersStore(final boolean cachingEnabled) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = headersStoreMaybeWithCache(cachingEnabled);
 
         try {
             final RangeQuery<Bytes, byte[]> query = RangeQuery.withRange(
-                    new Bytes("a".getBytes()),
-                    new Bytes("z".getBytes())
+                new Bytes("a".getBytes()),
+                new Bytes("z".getBytes())
             );
             final PositionBound positionBound = PositionBound.unbounded();
             final QueryConfig config = new QueryConfig(false);
@@ -597,9 +603,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify: Headers store currently returns UNKNOWN_QUERY_TYPE
             assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
             assertEquals(
-                    FailureReason.UNKNOWN_QUERY_TYPE,
-                    result.getFailureReason(),
-                    "Expected UNKNOWN_QUERY_TYPE failure reason"
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                result.getFailureReason(),
+                "Expected UNKNOWN_QUERY_TYPE failure reason"
             );
             assertNotNull(result.getPosition(), "Expected position to be set");
         } finally {
@@ -614,24 +620,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -646,12 +652,12 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify: Execution info was collected
             assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
             assertTrue(
-                    result.getExecutionInfo().get(0).contains("Handled in"),
-                    "Expected execution info to contain handling information"
+                result.getExecutionInfo().get(0).contains("Handled in"),
+                "Expected execution info to contain handling information"
             );
             assertTrue(
-                    result.getExecutionInfo().get(0).contains(RocksDBTimestampedStoreWithHeaders.class.getName()),
-                    "Expected execution info to mention the class name"
+                result.getExecutionInfo().get(0).contains(RocksDBTimestampedStoreWithHeaders.class.getName()),
+                "Expected execution info to mention the class name"
             );
         } finally {
             store.close();
@@ -665,24 +671,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -695,7 +701,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify adapter is used for legacy timestamped store
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped,
-                    "Expected TimestampedToHeadersStoreAdapter for legacy timestamped store");
+                "Expected TimestampedToHeadersStoreAdapter for legacy timestamped store");
 
             // Query at typed level - KeyQuery should return just the value
             final KeyQuery<String, String> query = KeyQuery.withKey("test-key");
@@ -704,7 +710,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify IQv2 query result
             // Adapter delegates to RocksDBTimestampedStore which supports IQv2 through RocksDBStore
             assertTrue(result.isSuccess(),
-                    "Expected query to succeed since RocksDBTimestampedStore supports IQv2");
+                "Expected query to succeed since RocksDBTimestampedStore supports IQv2");
             assertNotNull(result.getPosition(), "Expected position to be set");
             assertInstanceOf(String.class, result.getResult());
             assertEquals("adapter-value", result.getResult(), "KeyQuery should return just the value");
@@ -720,24 +726,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -750,7 +756,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify adapter is used for legacy timestamped store
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped,
-                    "Expected TimestampedToHeadersStoreAdapter for legacy timestamped store");
+                "Expected TimestampedToHeadersStoreAdapter for legacy timestamped store");
 
             // Query at typed level - TimestampedKeyQuery should return value + timestamp
             final TimestampedKeyQuery<String, String> query = TimestampedKeyQuery.withKey("test-key");
@@ -759,7 +765,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Verify IQv2 query result
             // Adapter delegates to RocksDBTimestampedStore which supports IQv2 through RocksDBStore
             assertTrue(result.isSuccess(),
-                    "Expected query to succeed since RocksDBTimestampedStore supports IQv2");
+                "Expected query to succeed since RocksDBTimestampedStore supports IQv2");
             assertNotNull(result.getPosition(), "Expected position to be set");
             assertNotNull(result.getResult(), "Expected non-null result");
             assertInstanceOf(ValueAndTimestamp.class, result.getResult());
@@ -777,24 +783,24 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final File dir = TestUtils.tempDirectory();
         final Properties props = StreamsTestUtils.getStreamsConfig();
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
         store.init(context, store);
 
@@ -811,13 +817,13 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
 
             final String executionInfo = String.join("\n", result.getExecutionInfo());
             assertTrue(
-                    executionInfo.contains("Handled in"),
-                    "Expected execution info to contain handling information"
+                executionInfo.contains("Handled in"),
+                "Expected execution info to contain handling information"
             );
             // Should mention the adapter class
             assertTrue(
-                    executionInfo.contains(TimestampedToHeadersStoreAdapter.class.getName()),
-                    "Expected execution info to mention the adapter class"
+                executionInfo.contains(TimestampedToHeadersStoreAdapter.class.getName()),
+                "Expected execution info to mention the adapter class"
             );
         } finally {
             store.close();

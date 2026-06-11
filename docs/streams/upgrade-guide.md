@@ -57,6 +57,8 @@ Downgrading from 3.0.x or newer version to 2.8.x or older version needs special 
 
 Downgrading from 4.0.x or newer version to older than 4.0.0 needs special attention: Since 4.0.0 release, Kafka Streams upgraded RocksDB from version 7.9.2 to 9.7.3. This upgrade introduces a RocksDB file format version change from version 5 to version 6 (introduced in RocksDB 8.6). While the newer RocksDB version (9.7.3) can read state stores written in the old format (version 5), the older RocksDB versions cannot read state stores written in the new format (version 6). This means that downgrading from Kafka Streams 4.0.x or newer to versions older than 4.0.0 in-flight is not possible out-of-the-box. Users must first delete the local RocksDB state stores written by Kafka Streams 4.0.x or newer before downgrading to versions older than 4.0.0, which will then restore the state stores from the changelogs using the old file format.
 
+Downgrading from 4.3.x or newer version to 4.2.x or older version needs special attention: Since 4.3.0 release, Kafka Streams persists state store changelog offsets inside each state store rather than in a per-task `.checkpoint` file (see [KIP-1035](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1035%3A+StateStore+managed+changelog+offsets)). For built-in RocksDB stores, offsets are written into a dedicated `offsets` column family inside each RocksDB instance. Older Kafka Streams versions do not declare this column family when opening RocksDB, so they will fail to open the store and the application will crash on startup. In-flight downgrade is therefore not supported. To downgrade to 4.2.x or older, stop each application instance, delete the local state directory (`state.dir`), then start the older version — Kafka Streams will restore all state stores from their changelog topics using the older on-disk format.
+
 Kafka Streams does not support running multiple instances of the same application as different processes on the same physical state directory. Starting in 2.8.0 (as well as 2.7.1 and 2.6.2), this restriction will be enforced. If you wish to run more than one instance of Kafka Streams, you must configure them with different values for `state.dir`. 
 
 Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured by setting `"processing.guarantee"` to `"exactly_once_v2"` for application versions 3.0+, or setting it to `"exactly_once_beta"` for versions between 2.6 and 2.8. To use this new feature, your brokers must be on version 2.5.x or newer. If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+, you first need to upgrade your application to version 3.0.x, staying on `"exactly_once"`, and then do second round of rolling bounces to switch to `"exactly_once_v2"`. If you are upgrading an EOS application from an older (pre-2.6) version to a version between 2.6 and 2.8, follow these same steps but with the config `"exactly_once_beta"` instead. No special steps are required to upgrade an application using `"exactly_once_beta"` from version 2.6+ to 3.0 or higher: you can just change the config from `"exactly_once_beta"` to `"exactly_once_v2"` during the rolling upgrade. For a downgrade, do the reverse: first switch the config from `"exactly_once_v2"` to `"exactly_once"` to disable the feature in your 2.6.x application. Afterward, you can downgrade your application to a pre-2.6.x version. 
@@ -65,11 +67,62 @@ Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires Ma
 
 ## Streams API changes in 4.3.0
 
+**Note:** Kafka Streams 4.3.0 contains a critical native memory leak in the RocksDB state store layer ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616)). The `ColumnFamilyOptions` for the offsets column family is not closed, and column family handles can leak on close-path exceptions, which under cascading task closes (e.g., rebalances or error-triggered recoveries) leads to unbounded off-heap memory growth and eventual OOM. Users running Kafka Streams should consider upgrading directly to 4.3.1, which includes the fix for it.
+
 Kafka Streams now supports `ProcessingExceptionHandler` for global store/KTable processing via [KIP-1270](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1270%3A+Extend+ProcessExceptionalHandler+for+GlobalThread). Previously, the `ProcessingExceptionHandler` only applied to regular stream tasks. With this release, you can now configure exception handling for global store/KTables by setting the new config `processing.exception.handler.global.enabled` to `true` (recommended). When enabled, the configured `ProcessingExceptionHandler` will be invoked for exceptions occurring during global store/KTable processing. Note that Dead Letter Queue (DLQ) support is not yet available for global store/KTable and will be added in an upcoming release. More details can be found in [KIP-1270](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1270%3A+Extend+ProcessExceptionalHandler+for+GlobalThread).
 
 The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, and `poll-ratio`, along with streams state updater metrics `active-restore-ratio`, `standby-restore-ratio`, `idle-ratio`, and `checkpoint-ratio` have been updated. Each metric now reports, over a rolling measurement window, the ratio of time this thread spends performing the given action (`{action}`) to the total elapsed time in that window. The effective window duration is determined by the metrics configuration: `metrics.sample.window.ms` (per-sample window length) and `metrics.num.samples` (number of rolling windows).
 
 Kafka Streams now allows to purge local state directories and checkpoint files during application startup if they have not been modified for a certain period of time. This can be configured via the new `state.cleanup.dir.max.age.ms` config. More details can be found in [KIP-1259](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1259%3A+Add+configuration+to+wipe+Kafka+Streams+local+state+on+startup)
+
+Kafka Streams now persists state store changelog offsets inside each state store rather than in a single per-task `.checkpoint` file ([KIP-1035](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1035%3A+StateStore+managed+changelog+offsets)). This is an internal infrastructure change and is transparent to most users — existing per-task `.checkpoint` files are migrated automatically on first startup, and no application or operator action is required. EOS crash behavior is unchanged in 4.3: state stores are still wiped and fully restored from the changelog. KIP-1035 is a prerequisite for [KIP-892: Transactional Semantics for StateStores](https://cwiki.apache.org/confluence/display/KAFKA/KIP-892%3A+Transactional+Semantics+for+StateStores), which will use these per-store offsets to make EOS state writes transactional and skip the full restore. Authors of custom `StateStore` implementations may opt-in to managing their own offsets via `managesOffsets()`, `commit(Map<TopicPartition, Long>)`, and `committedOffset(TopicPartition)`; see KIP-1035 for the API. For downgrade implications, see [Notable compatibility changes in past releases](#notable-compatibility-changes-in-past-releases).
+
+### Header-aware state stores for the Processor API (KIP-1271) {#kip-1271-headers-aware-stores}
+
+Kafka Streams adds **header-aware** state stores. Opt in with the new `Stores` suppliers whose names end with `WithHeaders` and the matching `StoreBuilder` factories. For example:
+
+- `persistentTimestampedKeyValueStoreWithHeaders` with `timestampedKeyValueStoreWithHeadersBuilder`
+- `persistentTimestampedWindowStoreWithHeaders` with `timestampedWindowStoreWithHeadersBuilder`
+- `persistentSessionStoreWithHeaders` with `sessionStoreWithHeadersBuilder`
+
+See the [Processor API state store documentation](/{version}/streams/developer-guide/processor-api/#headers-in-state-stores).
+
+Existing applications that keep using the same headerless `Stores` suppliers and builders are unaffected: storage format, changelogs, and performance stay as before.
+
+For stores that adopt the header-aware format, KIP-1271 defines a single rolling-bounce upgrade: the changelog topic format is unchanged, legacy rows are read with empty header sets until rewritten, and RocksDB-backed stores migrate data lazily on access. Downgrading in place after migration is not supported except by clearing local store data and restoring from the changelog.
+
+Storing headers increases disk and serialization cost versus headerless stores; the KIP discusses lazy header parsing and other performance considerations.
+
+`TopologyTestDriver` and Interactive Queries support the new store types. The existing `store()` facades continue to return values (or `ValueAndTimestamp`) without exposing record headers. See the [interactive queries guide](/{version}/streams/developer-guide/interactive-queries/#header-aware-stores-interactive-queries).
+
+### Headers-Aware State Stores for DSL Operators (KIP-1285)
+
+[KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G) lets DSL operators use the headers-aware state stores introduced by [KIP-1271](#kip-1271-headers-aware-stores). Set [`dsl.store.format=HEADERS`](/{version}/streams/developer-guide/config-streams.html#dsl-store-format) to use headers-aware stores for supported DSL operators. These stores can keep record headers together with the value and timestamp.
+
+The config only chooses the state store format. It does not define how DSL operators create headers for output records; see [Current limitations](#current-limitations) below.
+
+```java
+// Enable headers-aware stores globally for all DSL operators
+Properties props = new Properties();
+props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HEADERS");
+```
+
+Per-operator customization is possible by providing a custom `DslStoreSuppliers` via `Materialized.withStoreType(...)`, or by supplying explicit headers-aware store suppliers. The pre-existing `boolean isTimestamped` constructors and `isTimestamped()` methods on `DslKeyValueParams` and `DslWindowParams`, and the 3-argument constructor on `DslSessionParams`, are deprecated in favor of `DslStoreFormat`-based constructors. Existing applications are not affected by default.
+
+#### Current limitations {#current-limitations}
+
+Today, DSL result headers behave as follows:
+
+* Aggregations (`count`, `reduce`, `aggregate`, including their windowed and session-windowed variants), KTable-KTable joins (inner / left / outer), materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores.
+* KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers. They may carry the headers from the record that triggered the result.
+* `suppress()` and left/outer stream-stream joins use non-headers-aware buffer stores. Records that pass through those buffers lose their headers.
+
+A follow-up KIP will give users explicit control over how DSL result headers are computed. See [Stateful transformations](/{version}/streams/developer-guide/dsl-api.html#stateful-transformations) for more details.
+
+#### Changelog, migration, and performance
+
+KIP-1285 does not change the changelog wire format, the migration procedure, or the per-store overhead — those are properties of the underlying KIP-1271 stores. See the [KIP-1271 section](#kip-1271-headers-aware-stores) above for the full description of changelog compatibility, the lazy per-key RocksDB migration on `DEFAULT`→`HEADERS`, the restore behavior, and the per-record size impact. The DSL config `dsl.store.format` only controls which operators participate; once an operator is using a headers-aware store, the store runtime behavior is identical to the Processor API case.
+
 
 ### Deprecation of streams-scala module (KIP-1244)
 
@@ -79,14 +132,14 @@ For a detailed migration guide with code examples, see [Migrating from Streams S
 
 ## Streams API changes in 4.2.0
 
-**Note:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. Users planning to migrate should upgrade their brokers to a later release that includes the fix.
-
 ### General Availability for a core feature set of the Streams Rebalance Protocol (KIP-1071)
 
 The Streams Rebalance Protocol is a broker-driven rebalancing system designed specifically for Kafka Streams applications. 
 This release marks the General Availability for the core functionality detailed in [KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol).
 For more information about the feature set, design, usage and migration, 
-please refer to the [developer guide](/{version}/documentation/streams/developer-guide/streams-rebalance-protocol.html).
+please refer to the [developer guide](/{version}/streams/developer-guide/streams-rebalance-protocol).
+
+**Note:** Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix is available in 4.2.1.
 
 ### Other changes
 
@@ -296,7 +349,7 @@ We added a new Serde type `Boolean` in [KIP-907](https://cwiki.apache.org/conflu
 
 [KIP-770](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=186878390) deprecates config `cache.max.bytes.buffering` in favor of the newly introduced config `statestore.cache.max.bytes`. To improve monitoring, two new metrics `input-buffer-bytes-total` and `cache-size-bytes-total` were added at the DEBUG level. Note, that the KIP is only partially implemented in the 3.4.0 release, and config `input.buffer.max.bytes` is not available yet. 
 
-[KIP-873](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211883356) enables you to multicast result records to multiple partition of downstream sink topics and adds functionality for choosing to drop result records without sending. The `Integer StreamPartitioner.partition()` method is deprecated and replaced by the newly added `Optiona≶Set<Integer>>StreamPartitioner.partitions()` method, which enables returning a set of partitions to send the record to. 
+[KIP-873](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211883356) enables you to multicast result records to multiple partition of downstream sink topics and adds functionality for choosing to drop result records without sending. The `Integer StreamPartitioner.partition()` method is deprecated and replaced by the newly added `Optional<Set<Integer>> StreamPartitioner.partitions()` method, which enables returning a set of partitions to send the record to. 
 
 [KIP-862](https://cwiki.apache.org/confluence/x/WSf1D) adds a DSL optimization for stream-stream self-joins. The optimization is enabled via a new option `single.store.self.join` which can be set via existing config `topology.optimization`. If enabled, the DSL will use a different join processor implementation that uses a single RocksDB store instead of two, to avoid unnecessary data duplication for the self-join case. 
 
@@ -335,8 +388,8 @@ The Kafka Streams DSL may insert so-called repartition topics for certain DSL op
 
 ## Streams API changes in 3.1.0
 
-The semantics of left/outer stream-stream join got improved via [KIP-633](https://cwiki.apache.org/confluence/x/Ho2NCg). Previously, left-/outer stream-stream join might have emitted so-call spurious left/outer results, due to an eager-emit strategy. The implementation was changed to emit left/outer join result records only after the join window is closed. The old API to specify the join window, i.e., `JoinWindows.of()` that enables the eager-emit strategy, was deprecated in favor of a `JoinWindows.ofTimeDifferenceAndGrace()` and `JoinWindows.ofTimeDifferencWithNoGrace()`. The new semantics are only enabled if you use the new join window builders.  
-Additionally, KIP-633 makes setting a grace period also mandatory for windowed aggregations, i.e., for `TimeWindows` (hopping/tumbling), `SessionWindows`, and `SlidingWindows`. The corresponding builder methods `.of(...)` were deprecated in favor of the new `.ofTimeDifferenceAndGrace()` and `.ofTimeDifferencWithNoGrace()` methods. 
+The semantics of left/outer stream-stream join got improved via [KIP-633](https://cwiki.apache.org/confluence/x/Ho2NCg). Previously, left-/outer stream-stream join might have emitted so-called spurious left/outer results, due to an eager-emit strategy. The implementation was changed to emit left/outer join result records only after the join window is closed. The old API to specify the join window, i.e., `JoinWindows.of()` that enables the eager-emit strategy, was deprecated in favor of a `JoinWindows.ofTimeDifferenceAndGrace()` and `JoinWindows.ofTimeDifferenceWithNoGrace()`. The new semantics are only enabled if you use the new join window builders.  
+Additionally, KIP-633 makes setting a grace period also mandatory for windowed aggregations, i.e., for `TimeWindows` (hopping/tumbling), `SessionWindows`, and `SlidingWindows`. The corresponding builder methods `.of(...)` were deprecated in favor of the new `.ofTimeDifferenceAndGrace()` and `.ofTimeDifferenceWithNoGrace()` methods. 
 
 [KIP-761](https://cwiki.apache.org/confluence/x/vAUBCw) adds new metrics that allow to track blocking times on the underlying consumer and producer clients. Check out the section on [Kafka Streams metrics](/documentation/#kafka_streams_monitoring) for more details. 
 
@@ -436,7 +489,7 @@ We changed the default value of `default.key.serde` and `default.value.serde` to
 
 ## Streams API changes in 2.7.0
 
-In `KeyQueryMetadata` we deprecated `getActiveHost()`, `getStandbyHosts()` as well as `getPartition()` and replaced them with `activeHost()`, `standbyHosts()` and `partition()` respectively. `KeyQueryMetadata` was introduced in Kafka Streams 2.5 release with getter methods having prefix `get`. The intend of this change is to bring the method names to Kafka custom to not use the `get` prefix for getter methods. The old methods are deprecated and is not effected. (Cf. [KIP-648](https://cwiki.apache.org/confluence/x/vyd4CQ).) 
+In `KeyQueryMetadata` we deprecated `getActiveHost()`, `getStandbyHosts()` as well as `getPartition()` and replaced them with `activeHost()`, `standbyHosts()` and `partition()` respectively. `KeyQueryMetadata` was introduced in Kafka Streams 2.5 release with getter methods having prefix `get`. The intent of this change is to bring the method names to Kafka custom to not use the `get` prefix for getter methods. The old methods are deprecated and is not affected. (Cf. [KIP-648](https://cwiki.apache.org/confluence/x/vyd4CQ).) 
 
 The `StreamsConfig` variable for configuration parameter `"topology.optimization"` is renamed from `TOPOLOGY_OPTIMIZATION` to `TOPOLOGY_OPTIMIZATION_CONFIG`. The old variable is deprecated. Note, that the parameter name itself is not affected. (Cf. [KIP-626](https://cwiki.apache.org/confluence/x/gBB4CQ).) 
 
@@ -493,7 +546,7 @@ Kafka Streams `test-utils` got improved via [KIP-470](https://cwiki.apache.org/c
 
 In 2.4.0, we deprecated `WindowStore#put(K key, V value)` that should never be used. Instead the existing `WindowStore#put(K key, V value, long windowStartTimestamp)` should be used ([KIP-474](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=115526545)). 
 
-Furthermore, the `PartitionGrouper` interface and its corresponding configuration parameter `partition.grouper` were deprecated ([KIP-528](https://cwiki.apache.org/confluence/x/BwzABw)) and will be removed in the next major release ([KAFKA-7785](https://issues.apache.org/jira/browse/KAFKA-7785). Hence, this feature won't be supported in the future any longer and you need to updated your code accordingly. If you use a custom `PartitionGrouper` and stop to use it, the created tasks might change. Hence, you will need to reset your application to upgrade it. 
+Furthermore, the `PartitionGrouper` interface and its corresponding configuration parameter `partition.grouper` were deprecated ([KIP-528](https://cwiki.apache.org/confluence/x/BwzABw)) and will be removed in the next major release ([KAFKA-7785](https://issues.apache.org/jira/browse/KAFKA-7785). Hence, this feature won't be supported in the future any longer and you need to update your code accordingly. If you use a custom `PartitionGrouper` and stop using it, the created tasks might change. Hence, you will need to reset your application to upgrade it. 
 
 For Streams API changes in version older than 2.4.x, please check [3.9 upgrade document](/39/documentation/streams/upgrade-guide).
 
@@ -501,91 +554,29 @@ For Streams API changes in version older than 2.4.x, please check [3.9 upgrade d
 
 The following table shows which versions of the Kafka Streams API are compatible with various Kafka broker versions. For Kafka Stream version older than 2.4.x, please check [3.9 upgrade document](/39/documentation/streams/upgrade-guide).  
   
-<table>  
-<tr>  
-<th>
-
-
-</th>  
-<th>
-
-Kafka Broker (columns)
-</th> </tr>  
-<tr>  
-<td>
-
-Kafka Streams API (rows)
-</td>  
-<td>
-
-2.4.x and  
-2.5.x and  
-2.6.x and  
-2.7.x and  
-2.8.x and  
-3.0.x and  
-3.1.x and  
-3.2.x and  
-3.3.x and  
-3.4.x and  
-3.5.x and  
-3.6.x and  
-3.7.x and  
-3.8.x and  
-3.9.x and  
-4.0.x
-</td>  
-<td>
-
-4.1.x and
-4.2.x
-</td> </tr>  
-<tr>  
-<td>
-
-2.4.x and  
-2.5.x
-</td>  
-<td>
-
-compatible
-</td>  
-<td>
-
-compatible
-</td> </tr>  
-<tr>  
-<td>
-
-2.6.x and  
-2.7.x and  
-2.8.x and  
-3.0.x and  
-3.1.x and  
-3.2.x and  
-3.3.x and  
-3.4.x and  
-3.5.x and  
-3.6.x and  
-3.7.x and  
-3.8.x and  
-3.9.x and  
-4.0.x and  
-4.1.x and  
-4.2.x
-</td>  
-<td>
-
-compatible; enabling exactly-once v2 requires broker version 2.5.x or higher
-</td>  
-<td>
-
-compatible
-</td> </tr> </table>
+<table>
+<tr>
+<th></th>
+<th colspan="2">Kafka Broker (columns)</th>
+</tr>
+<tr>
+<th>Kafka Streams API (rows)</th>
+<th>2.4.x - 4.0.x</th>
+<th>4.1.x - 4.3.x</th>
+</tr>
+<tr>
+<th>2.4.x - 2.5.x</th>
+<td>compatible</td>
+<td>compatible</td>
+</tr>
+<tr>
+<th>2.6.x - 4.3.x</th>
+<td>compatible; enabling exactly-once v2 requires broker version 2.5.x or higher</td>
+<td>compatible</td>
+</tr>
+</table>
 
 [Previous](/43/documentation/streams/developer-guide/app-reset-tool) Next
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
-
-

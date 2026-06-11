@@ -25,12 +25,11 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.KafkaMetric;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -55,6 +54,9 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     private boolean closed;
     private Uuid clientInstanceId;
 
+    /**
+     * Constructs a new MockShareConsumer for testing.
+     */
     public MockShareConsumer() {
         this.subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         this.records = new HashMap<>();
@@ -142,7 +144,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     @Override
     public synchronized Map<MetricName, ? extends Metric> metrics() {
         ensureNotClosed();
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     @Override

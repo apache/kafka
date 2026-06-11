@@ -16,8 +16,6 @@
  */
 package kafka.server;
 
-import kafka.network.RequestChannel;
-
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
@@ -25,6 +23,7 @@ import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.network.Request;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaManager;
@@ -76,22 +75,22 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
      * @param request client request
      * @return Number of milliseconds to throttle in case of quota violation. Zero otherwise
      */
-    public int maybeRecordAndGetThrottleTimeMs(RequestChannel.Request request, long timeMs) {
+    public int maybeRecordAndGetThrottleTimeMs(Request request, long timeMs) {
         if (quotasEnabled()) {
-            request.setRecordNetworkThreadTimeCallback(timeNanos -> {
-                recordNoThrottle(request.session(), request.header().clientId(), nanosToPercentage(Long.parseLong(timeNanos.toString())));
-            });
+            request.setRecordNetworkThreadTimeCallback(timeNanos ->
+                recordNoThrottle(request.session(), request.header().clientId(), nanosToPercentage(timeNanos))
+            );
             return recordAndGetThrottleTimeMs(request.session(), request.header().clientId(), nanosToPercentage(request.requestThreadTimeNanos()), timeMs);
         } else {
             return 0;
         }
     }
 
-    public void maybeRecordExempt(RequestChannel.Request request) {
+    public void maybeRecordExempt(Request request) {
         if (quotasEnabled()) {
-            request.setRecordNetworkThreadTimeCallback(timeNanos -> {
-                recordExempt(nanosToPercentage(Long.parseLong(timeNanos.toString())));
-            });
+            request.setRecordNetworkThreadTimeCallback(timeNanos ->
+                recordExempt(nanosToPercentage(timeNanos))
+            );
             recordExempt(nanosToPercentage(request.requestThreadTimeNanos()));
         }
     }
