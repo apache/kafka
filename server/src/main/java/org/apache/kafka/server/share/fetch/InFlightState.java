@@ -68,10 +68,25 @@ public class InFlightState {
     }
 
     InFlightState(RecordState state, int deliveryCount, String memberId, AcquisitionLockTimerTask acquisitionLockTimeoutTask) {
+        this(state, deliveryCount, memberId, acquisitionLockTimeoutTask, -1L, (short) -1, (byte) -1);
+    }
+
+    InFlightState(
+        RecordState state,
+        int deliveryCount,
+        String memberId,
+        AcquisitionLockTimerTask acquisitionLockTimeoutTask,
+        long stagedProducerId,
+        short stagedProducerEpoch,
+        byte stagedAckType
+    ) {
         this.state = state;
         this.deliveryCount = deliveryCount;
         this.memberId = memberId;
         this.acquisitionLockTimeoutTask = acquisitionLockTimeoutTask;
+        this.stagedProducerId = stagedProducerId;
+        this.stagedProducerEpoch = stagedProducerEpoch;
+        this.stagedAckType = stagedAckType;
     }
 
     /**

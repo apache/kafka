@@ -69,13 +69,53 @@ public class InFlightBatch {
         AcquisitionLockTimeoutHandler timeoutHandler,
         SharePartitionMetrics sharePartitionMetrics
     ) {
+        this(
+            timer,
+            time,
+            memberId,
+            firstOffset,
+            lastOffset,
+            state,
+            deliveryCount,
+            acquisitionLockTimeoutTask,
+            timeoutHandler,
+            sharePartitionMetrics,
+            -1L,
+            (short) -1,
+            (byte) -1
+        );
+    }
+
+    public InFlightBatch(
+        Timer timer,
+        Time time,
+        String memberId,
+        long firstOffset,
+        long lastOffset,
+        RecordState state,
+        int deliveryCount,
+        AcquisitionLockTimerTask acquisitionLockTimeoutTask,
+        AcquisitionLockTimeoutHandler timeoutHandler,
+        SharePartitionMetrics sharePartitionMetrics,
+        long stagedProducerId,
+        short stagedProducerEpoch,
+        byte stagedAckType
+    ) {
         this.timer = timer;
         this.time = time;
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
         this.timeoutHandler = timeoutHandler;
         this.sharePartitionMetrics = sharePartitionMetrics;
-        this.batchState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
+        this.batchState = new InFlightState(
+            state,
+            deliveryCount,
+            memberId,
+            acquisitionLockTimeoutTask,
+            stagedProducerId,
+            stagedProducerEpoch,
+            stagedAckType
+        );
     }
 
     /**

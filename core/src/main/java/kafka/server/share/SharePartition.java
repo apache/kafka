@@ -517,7 +517,8 @@ public class SharePartition {
                     previousBatchLastOffset = stateBatch.lastOffset();
                     InFlightBatch inFlightBatch = new InFlightBatch(timer, time, EMPTY_MEMBER_ID, stateBatch.firstOffset(),
                         stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(),
-                        null, timeoutHandler, sharePartitionMetrics);
+                        null, timeoutHandler, sharePartitionMetrics, stateBatch.stagedProducerId(),
+                        stateBatch.stagedProducerEpoch(), stateBatch.stagedAckType());
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
                     // During initialization, deliveryCompleteCount is updated with the number of records that are in the
                     // ACKNOWLEDGED or ARCHIVED state.

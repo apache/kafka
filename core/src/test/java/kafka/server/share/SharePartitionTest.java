@@ -215,6 +215,43 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testMaybeInitializeRestoresPendingTxnAckMetadata() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
+                    List.of(new PersisterStateBatch(
+                        5L,
+                        10L,
+                        RecordState.TX_PENDING.id,
+                        (short) 1,
+                        100L,
+                        (short) 1,
+                        AcknowledgeType.ACCEPT.id)))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)));
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+
+        InFlightBatch inFlightBatch = sharePartition.cachedState().get(5L);
+        assertEquals(RecordState.TX_PENDING, inFlightBatch.batchState());
+        assertEquals(100L, inFlightBatch.batchStagedProducerId());
+        assertEquals((short) 1, inFlightBatch.batchStagedProducerEpoch());
+        assertEquals(AcknowledgeType.ACCEPT.id, inFlightBatch.batchStagedAckType());
+
+        sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join();
+        assertTrue(sharePartition.cachedState().isEmpty());
+        assertEquals(11, sharePartition.startOffset());
+    }
+
+    @Test
     public void testMaybeInitializeDefaultStartEpochGroupConfigReturnsEarliest() {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
