@@ -777,7 +777,14 @@ class BrokerServer(
     if (config.shareGroupConfig.shareGroupDLQManagerClassName.nonEmpty) {
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupDLQManagerClassName, classOf[Object]).asInstanceOf[Class[ShareGroupDLQManager]]
       if (klass.getName.equals(classOf[DefaultShareGroupDLQManager].getName)) {
-        DefaultShareGroupDLQManager.instance(NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")), new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager), Time.SYSTEM, shareGroupTimer, shareGroupMetrics, shareGroupLogReader)
+        DefaultShareGroupDLQManager.instance(
+          NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
+          new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
+          Time.SYSTEM,
+          shareGroupTimer,
+          shareGroupMetrics,
+          shareGroupLogReader
+        )
       } else if (klass.getName.equals(classOf[NoOpShareGroupDLQManager].getName)) {
         info("Using no-op share group DLQ manager")
         new NoOpShareGroupDLQManager()

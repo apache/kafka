@@ -98,6 +98,13 @@ public class ShareGroupDLQStateManager {
     private static final int MAX_REQUEST_ATTEMPTS = 5;
     private static final int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
     private static final double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
+
+    /**
+     * In most cases we expect the records getting DLQ'ed will be single offsets and
+     * not complete batches. Hence, using a large upper limit while reading from the log
+     * would be fruitless in most cases. Therefore, the value of 1 MB has been chosen
+     * for the DLQ related log reads.
+     */
     private static final int DLQ_MAX_FETCH_BYTES = 1024 * 1024;
     private static final Logger log = LoggerFactory.getLogger(ShareGroupDLQStateManager.class);
 
@@ -231,6 +238,15 @@ public class ShareGroupDLQStateManager {
         private Node dlqPartitionLeaderNode;
         private int dlqDestinationPartition;
         private ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
+
+        // Maps DLQ'ed offsets to the actual records read from the log.
+        // The lifecycle of this map is linked to that of the ProduceRequestHandler, which
+        // completes when the PRODUCE request succeeds or completely fails.
+        // Since we know that the record data is not going to change,
+        // by virtue of the append only log, we needn't populate it repeatedly
+        // for the same PRODUCE request. This map is filled lazily when
+        // first PRODUCE RPC is sent and reused in case of retriable errors,
+        // making log reads efficient.
         private Map<Long, Record> originalRecordData;
 
         public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
