@@ -342,11 +342,7 @@ public class MockConsumerTest {
         List<RebalanceConsumer> capturedOnAssign = new ArrayList<>();
         List<RebalanceConsumer> capturedOnRevoke = new ArrayList<>();
 
-        consumer.setRebalanceListener(new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+        consumer.setRebalanceListener(new RebalanceListener() {
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                 capturedOnAssign.add(rc);
@@ -367,5 +363,4 @@ public class MockConsumerTest {
         assertEquals(2, capturedOnAssign.size());
         assertThrows(IllegalStateException.class, () -> capturedOnRevoke.get(0).assignment());
     }
-
 }

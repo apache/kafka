@@ -484,8 +484,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * <p>
      * @param topics The list of topics to subscribe to
-     * @param listener {@link Optional} listener instance to get notifications on partition assignment/revocation
-     *                 for the subscribed topics
+     * @param listener listener instance to get notifications on partition assignment/revocation
+     *                 for the subscribed topics; null argument is ignored
      * @throws IllegalArgumentException If topics is null or contains null or empty elements
      * @throws IllegalStateException If {@code subscribe()} is called previously with pattern, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
@@ -508,7 +508,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 throwIfNoAssignorsConfigured();
 
-                subscriptions.setRebalanceListener(listener, this);
+                if (listener != null)
+                    subscriptions.setRebalanceListener(listener, this);
 
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
@@ -569,9 +570,9 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * Group rebalances only take place during an active call to {@link #poll(Duration)}.
      *
      * @param pattern Pattern to subscribe to
-     * @param listener {@code @Nullable} listener instance to get notifications on partition assignment/revocation
-     *                 for the subscribed topics
-     * @throws IllegalArgumentException If pattern or listener is null
+     * @param listener listener instance to get notifications on partition assignment/revocation
+     *                 for the subscribed topics. null argument is ignored
+     * @throws IllegalArgumentException If pattern is null
      * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
      *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
      *                               configured at-least one partition assignment strategy
@@ -586,7 +587,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
-            subscriptions.setRebalanceListener(listener, this);
+            if (listener != null)
+                subscriptions.setRebalanceListener(listener, this);
             subscriptions.subscribe(pattern);
             coordinator.updatePatternSubscription(metadata.fetch());
             metadata.requestUpdateForNewTopics();

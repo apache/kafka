@@ -865,7 +865,7 @@ public abstract class ConsumerCoordinatorTest {
             public void onPartitionsAssigned(
                     Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
                 super.onPartitionsAssigned(partitions, rebalanceConsumer);
-                throw new KafkaException("Kaboom on partition assign!");
+                throw new IllegalStateException("Illegal state on partition assign!");
             }
         };
 

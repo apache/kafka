@@ -2268,7 +2268,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             throwIfGroupIdNotDefined();
             throwIfSubscriptionPatternIsInvalid(pattern);
-            subscriptions.setRebalanceListener(listener, this);
+            if (listener != null)
+                subscriptions.setRebalanceListener(listener, this);
             log.info("Subscribing to regular expression {}", pattern);
             applicationEventHandler.addAndGet(new TopicRe2JPatternSubscriptionChangeEvent(
                 pattern,
@@ -2305,7 +2306,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // Clear the buffered data which are not a part of newly assigned topics
                 final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
 
-                subscriptions.setRebalanceListener(listener, this);
+                if (listener != null)
+                    subscriptions.setRebalanceListener(listener, this);
+
                 for (TopicPartition tp : subscriptions.assignedPartitions()) {
                     if (topics.contains(tp.topic()))
                         currentTopicPartitions.add(tp);

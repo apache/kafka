@@ -20,13 +20,17 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RebalanceConsumer;
 import org.apache.kafka.clients.consumer.RebalanceListener;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.PartitionStates;
@@ -35,6 +39,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -47,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.LongSupplier;
@@ -197,7 +203,7 @@ public class SubscriptionState {
      *            Use {@link #subscribe(Set)} and {@link #setRebalanceListener} instead.
      */
     public synchronized boolean subscribe(Set<String> topics, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(l -> this.rebalanceListener = new SimpleRebalanceListener(l));
+        listener.ifPresent(l -> this.rebalanceListener = new SimpleInternalRebalanceListener(l));
         setSubscriptionType(SubscriptionType.AUTO_TOPICS);
         return changeSubscription(topics);
     }
@@ -207,7 +213,7 @@ public class SubscriptionState {
      *            Use {@link #subscribe(Pattern)} and {@link #setRebalanceListener} instead.
      */
     public synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(l -> this.rebalanceListener = new SimpleRebalanceListener(l));
+        listener.ifPresent(l -> this.rebalanceListener = new SimpleInternalRebalanceListener(l));
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
         this.subscribedPattern = pattern;
     }
@@ -217,7 +223,7 @@ public class SubscriptionState {
      *            Use {@link #subscribe(SubscriptionPattern)} and {@link #setRebalanceListener} instead.
      */
     public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
-        listener.ifPresent(l -> this.rebalanceListener = new SimpleRebalanceListener(l));
+        listener.ifPresent(l -> this.rebalanceListener = new SimpleInternalRebalanceListener(l));
         setSubscriptionType(SubscriptionType.AUTO_PATTERN_RE2J);
         this.subscribedRe2JPattern = pattern;
     }
@@ -365,18 +371,21 @@ public class SubscriptionState {
      */
     public void setRebalanceListener(RebalanceListener listener) {
         Objects.requireNonNull(listener, "Listener must not be null when setting a rebalance listener");
-        this.rebalanceListener = new SimpleRebalanceListener(listener);
+        this.rebalanceListener = new SimpleInternalRebalanceListener(listener);
     }
 
     /**
      * Sets the current rebalance listener for this subscription.
-     * @param listener the listener. must not be null
+     * @param listener the listener
      * @param consumer the consumer instance to orchestrate callbacks in {@link org.apache.kafka.clients.consumer.RebalanceConsumer}. must not be null
      */
     public void setRebalanceListener(RebalanceListener listener, Consumer<?, ?> consumer) {
-        Objects.requireNonNull(listener, "Listener must not be null when setting a rebalance listener");
-        Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
-        this.rebalanceListener = new ConsumerAwareRebalanceListener(listener, consumer);
+        if (listener != null) {
+            Objects.requireNonNull(consumer, "Consumer must not be null when a listener is provided");
+            this.rebalanceListener = new ConsumerAwareRebalanceListener(listener, consumer);
+        } else {
+            this.rebalanceListener = null;
+        }
     }
 
     /**
@@ -1514,26 +1523,188 @@ public class SubscriptionState {
      * <p>The intention is pass an intentional null reference for the {@link RebalanceConsumer} param so
      * any tests will fail and nudge the assertions towards the new {@link RebalanceListener} method.
      */
-    public static class SimpleRebalanceListener extends InternalRebalanceListener {
+    public static class SimpleInternalRebalanceListener extends InternalRebalanceListener {
         private final RebalanceListener delegate;
 
-        public SimpleRebalanceListener(RebalanceListener delegate) {
+        public SimpleInternalRebalanceListener(RebalanceListener delegate) {
             this.delegate = delegate;
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            delegate.onPartitionsRevoked(partitions, null);
+            delegate.onPartitionsRevoked(partitions, new NoOpRebalanceConsumer());
         }
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            delegate.onPartitionsAssigned(partitions, null);
+            delegate.onPartitionsAssigned(partitions, new NoOpRebalanceConsumer());
         }
 
         @Override
         public void onPartitionsLost(Collection<TopicPartition> partitions) {
-            delegate.onPartitionsLost(partitions, null);
+            delegate.onPartitionsLost(partitions, new NoOpRebalanceConsumer());
+        }
+    }
+
+    private static class NoOpRebalanceConsumer implements RebalanceConsumer {
+
+        @Override
+        public void commitSync() {
+        }
+
+        @Override
+        public void commitSync(Duration timeout) {
+
+        }
+
+        @Override
+        public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
+
+        }
+
+        @Override
+        public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
+
+        }
+
+        @Override
+        public void commitAsync() {
+
+        }
+
+        @Override
+        public void commitAsync(OffsetCommitCallback callback) {
+
+        }
+
+        @Override
+        public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+
+        }
+
+        @Override
+        public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions) {
+            return Map.of();
+        }
+
+        @Override
+        public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, Duration timeout) {
+            return Map.of();
+        }
+
+        @Override
+        public long position(TopicPartition partition) {
+            return 0;
+        }
+
+        @Override
+        public long position(TopicPartition partition, Duration timeout) {
+            return 0;
+        }
+
+        @Override
+        public void seek(TopicPartition partition, long offset) {
+
+        }
+
+        @Override
+        public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
+
+        }
+
+        @Override
+        public void seekToBeginning(Collection<TopicPartition> partitions) {
+
+        }
+
+        @Override
+        public void seekToEnd(Collection<TopicPartition> partitions) {
+
+        }
+
+        @Override
+        public Set<TopicPartition> assignment() {
+            return Set.of();
+        }
+
+        @Override
+        public void pause(Collection<TopicPartition> partitions) {
+
+        }
+
+        @Override
+        public void resume(Collection<TopicPartition> partitions) {
+
+        }
+
+        @Override
+        public Set<TopicPartition> paused() {
+            return Set.of();
+        }
+
+        @Override
+        public Uuid clientInstanceId(Duration timeout) {
+            return Uuid.ZERO_UUID;
+        }
+
+        @Override
+        public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
+            return Map.of();
+        }
+
+        @Override
+        public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
+            return Map.of();
+        }
+
+        @Override
+        public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
+            return Map.of();
+        }
+
+        @Override
+        public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
+            return Map.of();
+        }
+
+        @Override
+        public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
+            return Map.of();
+        }
+
+        @Override
+        public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch, Duration timeout) {
+            return Map.of();
+        }
+
+        @Override
+        public List<PartitionInfo> partitionsFor(String topic) {
+            return List.of();
+        }
+
+        @Override
+        public List<PartitionInfo> partitionsFor(String topic, Duration timeout) {
+            return List.of();
+        }
+
+        @Override
+        public Map<String, List<PartitionInfo>> listTopics() {
+            return Map.of();
+        }
+
+        @Override
+        public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
+            return Map.of();
+        }
+
+        @Override
+        public OptionalLong currentLag(TopicPartition topicPartition) {
+            return OptionalLong.empty();
+        }
+
+        @Override
+        public ConsumerGroupMetadata groupMetadata() {
+            return null;
         }
     }
 }
