@@ -162,7 +162,7 @@ See [docker/README.md](docker/README.md) for detailed information.
 ```
 
 ### Running a task for a specific project
-This is for `core`, `examples` and `clients`
+This is for `core`, `
 
 ```bash
 ./gradlew core:jar
