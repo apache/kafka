@@ -8385,6 +8385,42 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Persist the outcome of a topology description plugin call for a streams group.
+     *
+     * <p>On a successful plugin {@code setTopology} the {@code StoredDescriptionTopologyEpoch}
+     * field is advanced to the pushed epoch; on a permanent failure the
+     * {@code FailedDescriptionTopologyEpoch} field is advanced instead so subsequent
+     * heartbeats at the same epoch do not re-solicit a push.
+     *
+     * @param groupId           The streams group id.
+     * @param pushedEpoch       The topology epoch on the push that just completed.
+     * @param permanentFailure  True if the plugin signalled a permanent failure; false on success.
+     * @return A coordinator result carrying the metadata record that updates the field.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> streamsGroupSetTopologyDescriptionEpoch(
+        String groupId,
+        int pushedEpoch,
+        boolean permanentFailure
+    ) throws GroupIdNotFoundException {
+        StreamsGroup group = streamsGroup(groupId);
+
+        int newStored = permanentFailure ? group.storedDescriptionTopologyEpoch() : pushedEpoch;
+        int newFailed = permanentFailure ? pushedEpoch : group.failedDescriptionTopologyEpoch();
+
+        CoordinatorRecord record = newStreamsGroupMetadataRecord(
+            groupId,
+            group.groupEpoch(),
+            group.metadataHash(),
+            group.validatedTopologyEpoch(),
+            group.lastAssignmentConfigs(),
+            newStored,
+            newFailed
+        );
+        return new CoordinatorResult<>(List.of(record), null);
+    }
+
+    /**
      * Validates that (1) the instance id exists and is mapped to the member id
      * if the group instance id is provided; and (2) the member id exists in the group.
      *

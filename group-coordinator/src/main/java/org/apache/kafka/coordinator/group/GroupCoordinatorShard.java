@@ -933,6 +933,25 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Persist the outcome of a topology description plugin call. Writes a metadata record
+     * advancing either {@code StoredDescriptionTopologyEpoch} (on plugin success) or
+     * {@code FailedDescriptionTopologyEpoch} (on permanent plugin failure).
+     *
+     * @param groupId           The streams group id.
+     * @param pushedEpoch       The topology epoch on the push that just completed.
+     * @param permanentFailure  True if the plugin signalled a permanent failure; false on success.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> streamsGroupSetTopologyDescriptionEpoch(
+        String groupId,
+        int pushedEpoch,
+        boolean permanentFailure
+    ) {
+        return groupMetadataManager.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, permanentFailure);
+    }
+
+    /**
      * Handles a ShareGroupDescribe request.
      *
      * @param groupIds      The IDs of the groups to describe.
