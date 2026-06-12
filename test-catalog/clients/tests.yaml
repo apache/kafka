@@ -4957,9 +4957,12 @@ org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallbackTest:
 - testToken
 org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandlerTest:
 - testBasic
+- testConfigureAcceptsCustomValidatorClass
+- testFailsFastWhenJwksUrlAbsent
 - testHandlerCloseDoesNotThrowException
 - testHandlerConfigureThrowsException
 - testInvalidAccessToken
+- testRejectsForgedUnsignedTokenWhenJwksUrlSet
 org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackTest:
 - testError
 - testToken
