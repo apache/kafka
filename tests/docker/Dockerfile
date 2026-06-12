@@ -96,7 +96,7 @@ RUN mkdir -p "/opt/kafka-3.8.1" && chmod a+rw /opt/kafka-3.8.1 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-3.9.2" && chmod a+rw /opt/kafka-3.9.2 && curl -s "$KAFKA_MIRROR/kafka_2.13-3.9.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.9.2"
 RUN mkdir -p "/opt/kafka-4.0.1" && chmod a+rw /opt/kafka-4.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.0.1"
 RUN mkdir -p "/opt/kafka-4.1.2" && chmod a+rw /opt/kafka-4.1.2 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.1.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.1.2"
-RUN mkdir -p "/opt/kafka-4.2.0" && chmod a+rw /opt/kafka-4.2.0 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.2.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.2.0"
+RUN mkdir -p "/opt/kafka-4.2.1" && chmod a+rw /opt/kafka-4.2.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.2.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.2.1"
 RUN mkdir -p "/opt/kafka-4.3.0" && chmod a+rw /opt/kafka-4.3.0 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.3.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.3.0"
 
 
@@ -121,7 +121,7 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.8.1-test.jar" -o /opt/kafka-3.8.1/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.2-test.jar" -o /opt/kafka-3.9.2/libs/kafka-streams-3.9.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.0.1-test.jar" -o /opt/kafka-4.0.1/libs/kafka-streams-4.0.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.1.2-test.jar" -o /opt/kafka-4.1.2/libs/kafka-streams-4.1.2-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.2.0-test.jar" -o /opt/kafka-4.2.0/libs/kafka-streams-4.2.0-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.2.1-test.jar" -o /opt/kafka-4.2.1/libs/kafka-streams-4.2.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.3.0-test.jar" -o /opt/kafka-4.3.0/libs/kafka-streams-4.3.0-test.jar
 
 # To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper 
