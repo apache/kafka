@@ -519,15 +519,13 @@ public class PlaintextConsumerCallbackTest {
         var partitionsAssigned = new AtomicBoolean(false);
         var partitionsRevoked = new AtomicBoolean(false);
         try (var consumer = createConsumer(protocol)) {
-            consumer.setRebalanceListener(new ConsumerRebalanceListener() {
+            consumer.setRebalanceListener(new RebalanceListener() {
                 @Override
-                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
                     if (partitions.contains(tp)) {
                         partitionsAssigned.set(true);
                     }
                 }
-                @Override
-                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
 
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
@@ -535,11 +533,6 @@ public class PlaintextConsumerCallbackTest {
                         execute.accept(rc, partitions);
                         partitionsRevoked.set(true);
                     }
-                }
-
-                @Override
-                public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer consumer) {
-
                 }
             });
             consumer.subscribe(List.of(topic));
