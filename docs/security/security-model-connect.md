@@ -31,7 +31,7 @@ This page extends the [Apache Kafka security model](security-model) to Kafka Con
 ## Things You Need To Know
 
 - **Connect inherits the broker's client security model.** Authentication to the brokers, broker-side authorization, and transport encryption are exactly as described in the [core security model](security-model). This page only describes what Connect layers on top.
-- **The REST API is unauthenticated by default.** Out of the box, anyone who can reach the REST port can create, reconfigure, stop, or delete any connector. Because connectors and plugins run arbitrary code, unrestricted REST access is effectively unrestricted code execution on the worker.
+- **The REST API is unauthenticated by default.** Out of the box, anyone who can reach the REST port can create, reconfigure, stop, or delete any connector. Because connectors and plugins run arbitrary code, REST access lets a caller run anything the worker's installed plugins allow.
 - **Connect plugins run arbitrary code.** Connectors, converters, transformations, predicates, and REST extensions loaded from `plugin.path` execute in the worker JVM with its privileges. Install only plugins you trust.
 - **The REST API is a shared control plane with no per-connector isolation.** There is no notion of connector ownership: any caller allowed onto the API can act on every connector and read its configuration.
 - **A worker authenticates to Kafka as a single principal.** By default all connectors on a worker share that principal's identity and ACLs; Connect does not give each connector a distinct Kafka identity. A connector can override the internal clients' configuration — including credentials — unless `connector.client.config.override.policy` restricts it (see Authorization below).
@@ -44,7 +44,7 @@ The REST API is configured with the `listeners` property (for example `http://ho
 Operators should:
 
 1. Never expose the REST API to untrusted networks or users; bind it to a management network or front it with a reverse proxy.
-2. Use `admin.listeners` to separate the admin endpoints from the regular listeners, or set it to empty to disable them where they are not needed.
+2. Use `admin.listeners` to separate the admin endpoints from the regular listeners, or set it to empty to disable them where they are not needed. If `admin.listeners` is not set, the `/admin` endpoints are attached to the default listeners.
 3. Prefer an `https` listener so that both user traffic and inter-worker forwarding are encrypted.
 
 ## Authentication
@@ -52,7 +52,7 @@ Operators should:
 Connect enables no authentication on the REST API by default. There are two common ways to add it:
 
 - **Reverse proxy.** Terminate authentication (mTLS, OIDC, basic auth, etc.) in a proxy in front of the workers and allow only the proxy to reach the REST port.
-- **REST extension.** Register an authentication extension via `rest.extension.classes`. The built-in `BasicAuthSecurityRestExtension` performs JAAS-based HTTP basic authentication. Its reference `PropertyFileLoginModule` stores credentials in cleartext and is **not** intended for production — back it with a real `LoginModule` (LDAP, a database, etc.) instead.
+- **REST extension.** Register an authentication extension via `rest.extension.classes`. The built-in `BasicAuthSecurityRestExtension` performs JAAS-based HTTP basic authentication against a configured `LoginModule`. The reference `PropertyFileLoginModule` is **not** intended for production, as it stores credentials in cleartext; production deployments should configure a `LoginModule` that authenticates against a real credential store.
 
 REST authentication only establishes *who is calling*; it does not, on its own, authorize that caller on a per-connector basis (see Authorization below). Separately, the worker's authentication *to the Kafka brokers* uses the standard `ssl.*`/`sasl.*` client configs described in the [core model](security-model).
 
@@ -78,7 +78,7 @@ Two independent channels need TLS:
 Connector configurations frequently contain credentials for external systems. As in the [core model](security-model), reference them indirectly through a `ConfigProvider` rather than inlining them, and set `allowed.paths` on the file-based providers to constrain which directories they can read. Two Connect-specific caveats:
 
 - **Config providers are resolved through the shared REST API.** A caller who can guess or enumerate a provider alias can resolve its full value, so a provider is only as isolated as the REST API in front of it.
-- **Inlined secrets are persisted in the config topic.** Any secret placed directly in a connector configuration is written to `config.storage.topic` as an ordinary Kafka record, and is therefore only as protected as that topic's ACLs and the brokers' at-rest story. A `ConfigProvider` reference keeps the secret itself out of the topic.
+- **What goes in the config topic depends on how secrets are supplied.** A secret placed directly in a connector configuration is written to `config.storage.topic` as an ordinary Kafka record, and is therefore only as protected as that topic's ACLs and the brokers' at-rest story. A `ConfigProvider` reference keeps the secret itself out of the topic — only the template string (`${alias:fields}`) is stored, not the resolved value. Note, however, that this does not hide the secret from REST API callers: anyone who knows a valid template string can usually retrieve the resolved value through the REST API.
 
 ## Plugins
 

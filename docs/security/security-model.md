@@ -32,6 +32,7 @@ type: docs
 - **Apache Kafka assumes a trusted operator.** Anyone with shell access to a broker, controller, or the underlying disks can read every topic, forge any principal, and rewrite ACLs. The security model protects messages in transit and arbitrates client access — it does not defend brokers from their own administrators.
 - **Apache Kafka assumes a trusted broker fleet.** Brokers and KRaft controllers exchange records, replication state, and metadata over the inter-broker and controller listeners. Any host that can authenticate on those listeners is effectively part of the cluster's trust boundary.
 - **Apache Kafka trusts its JVM and classpath.** JARs on a process's classpath run with that process's full privileges. Placing code on the classpath — or configuring a component to load it — is equivalent to trusting that code; the model assumes no hostile JARs are present.
+- **Pluggable interfaces grant code execution.** Every Apache Kafka component exposes pluggable interfaces (authorizers, (de)serializers, connectors, transforms, config providers, and similar) that are loaded by class name and run with the host process's privileges. Configuring one is equivalent to running its code, so only install and use plugins that you fully trust.
 - **The data plane and the control plane have different exposure.** Producer/consumer traffic, the Admin API, and JMX each have distinct authentication and authorization stories. Operators must configure them independently — securing one does not secure the others.
 - **Apache Kafka does not encrypt data at rest.** Log segments, index files, and snapshots are written as plain bytes. At-rest confidentiality is the responsibility of the underlying filesystem, block device, or message-level encryption performed by producers.
 - **Reporting vulnerabilities.** Suspected security issues should be reported privately to `security@kafka.apache.org` per the [ASF security process](https://www.apache.org/security/). Do not file public JIRA tickets, GitHub issues, or mailing-list posts for unpatched vulnerabilities.
@@ -129,7 +130,6 @@ The components built on top of the Kafka clients have their own security models,
 
 - [Kafka Connect](security-model-connect)
 - [Kafka Streams](security-model-streams)
-- [MirrorMaker](security-model-mirrormaker)
 
 ## Development and Test Tooling
 
