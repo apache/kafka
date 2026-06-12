@@ -114,7 +114,8 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
     void recordBytesFetched(String topic, int bytes) {
         String name = topicBytesFetchedMetricName(topic);
-        maybeRecordDeprecatedBytesFetched(name, topic, bytes);
+        maybeRecordDeprecatedBytesFetched(topic, bytes);
+        maybeRemoveDeprecatedBytesFetched(topic);
 
         Sensor bytesFetched = new SensorBuilder(metrics, name, () -> Map.of("topic", topic))
             .withAvg(metricsRegistry.topicFetchSizeAvg)
@@ -126,7 +127,8 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
     void recordRecordsFetched(String topic, int records) {
         String name = topicRecordsFetchedMetricName(topic);
-        maybeRecordDeprecatedRecordsFetched(name, topic, records);
+        maybeRecordDeprecatedRecordsFetched(topic, records);
+        maybeRemoveDeprecatedRecordsFetched(topic);
 
         Sensor recordsFetched = new SensorBuilder(metrics, name, () -> Map.of("topic", topic))
             .withAvg(metricsRegistry.topicRecordsPerRequestAvg)
@@ -139,7 +141,8 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
         this.recordsLag.record(lag);
 
         String name = partitionRecordsLagMetricName(tp);
-        maybeRecordDeprecatedPartitionLag(name, tp, lag);
+        maybeRecordDeprecatedPartitionLag(tp, lag);
+        maybeRemoveDeprecatedPartitionLag(tp);
 
         Sensor recordsLag = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
             .withValue(metricsRegistry.partitionRecordsLag)
@@ -154,7 +157,8 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
         this.recordsLead.record(lead);
 
         String name = partitionRecordsLeadMetricName(tp);
-        maybeRecordDeprecatedPartitionLead(name, tp, lead);
+        maybeRecordDeprecatedPartitionLead(tp, lead);
+        maybeRemoveDeprecatedPartitionLead(tp);
 
         Sensor recordsLead = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
             .withValue(metricsRegistry.partitionRecordsLead)
@@ -184,15 +188,17 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
                     metrics.removeSensor(partitionRecordsLeadMetricName(tp));
                     metrics.removeMetric(partitionPreferredReadReplicaMetricName(tp));
                     // Remove deprecated metrics.
-                    metrics.removeSensor(deprecatedMetricName(partitionRecordsLagMetricName(tp)));
-                    metrics.removeSensor(deprecatedMetricName(partitionRecordsLeadMetricName(tp)));
-                    metrics.removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
+                    metrics.removeSensor(deprecatedPartitionRecordsLagMetricName(tp));
+                    metrics.removeSensor(deprecatedPartitionRecordsLeadMetricName(tp));
+                    if (!newAssignedPartitions.contains(deprecatedTopicPartition(tp))) {
+                        metrics.removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
+                    }
                 }
             }
 
             for (TopicPartition tp : newAssignedPartitions) {
                 if (!this.assignedPartitions.contains(tp)) {
-                    maybeRecordDeprecatedPreferredReadReplica(tp, subscription);
+                    maybeRemoveDeprecatedPreferredReadReplica(tp);
 
                     MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
                     metrics.addMetricIfAbsent(
@@ -203,15 +209,23 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
                 }
             }
 
+            for (TopicPartition tp : newAssignedPartitions) {
+                maybeRecordDeprecatedPreferredReadReplica(tp, subscription, newAssignedPartitions);
+            }
+
             this.assignedPartitions = newAssignedPartitions;
             this.assignmentId = newAssignmentId;
         }
     }
 
     @Deprecated // To be removed in Kafka 5.0 release.
-    private void maybeRecordDeprecatedBytesFetched(String name, String topic, int bytes) {
-        if (shouldReportDeprecatedMetric(topic)) {
-            Sensor deprecatedBytesFetched = new SensorBuilder(metrics, deprecatedMetricName(name), () -> topicTags(topic))
+    private void maybeRecordDeprecatedBytesFetched(String topic, int bytes) {
+        if (shouldReportDeprecatedMetric(topic) &&
+                metrics.getSensor(topicBytesFetchedMetricName(topic.replace('.', '_'))) == null) {
+            Sensor deprecatedBytesFetched = new SensorBuilder(
+                    metrics,
+                    deprecatedTopicBytesFetchedMetricName(topic),
+                    () -> topicTags(topic))
                 .withAvg(metricsRegistry.topicFetchSizeAvg)
                 .withMax(metricsRegistry.topicFetchSizeMax)
                 .withMeter(metricsRegistry.topicBytesConsumedRate, metricsRegistry.topicBytesConsumedTotal)
@@ -221,9 +235,13 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     }
 
     @Deprecated // To be removed in Kafka 5.0 release.
-    private void maybeRecordDeprecatedRecordsFetched(String name, String topic, int records) {
-        if (shouldReportDeprecatedMetric(topic)) {
-            Sensor deprecatedRecordsFetched = new SensorBuilder(metrics, deprecatedMetricName(name), () -> topicTags(topic))
+    private void maybeRecordDeprecatedRecordsFetched(String topic, int records) {
+        if (shouldReportDeprecatedMetric(topic) &&
+                metrics.getSensor(topicRecordsFetchedMetricName(topic.replace('.', '_'))) == null) {
+            Sensor deprecatedRecordsFetched = new SensorBuilder(
+                    metrics,
+                    deprecatedTopicRecordsFetchedMetricName(topic),
+                    () -> topicTags(topic))
                 .withAvg(metricsRegistry.topicRecordsPerRequestAvg)
                 .withMeter(metricsRegistry.topicRecordsConsumedRate, metricsRegistry.topicRecordsConsumedTotal)
                 .build();
@@ -232,9 +250,13 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     }
 
     @Deprecated // To be removed in Kafka 5.0 release.
-    private void maybeRecordDeprecatedPartitionLag(String name, TopicPartition tp, long lag) {
-        if (shouldReportDeprecatedMetric(tp.topic())) {
-            Sensor deprecatedRecordsLag = new SensorBuilder(metrics, deprecatedMetricName(name), () -> topicPartitionTags(tp))
+    private void maybeRecordDeprecatedPartitionLag(TopicPartition tp, long lag) {
+        if (shouldReportDeprecatedMetric(tp.topic()) &&
+                metrics.getSensor(partitionRecordsLagMetricName(deprecatedTopicPartition(tp))) == null) {
+            Sensor deprecatedRecordsLag = new SensorBuilder(
+                    metrics,
+                    deprecatedPartitionRecordsLagMetricName(tp),
+                    () -> topicPartitionTags(tp))
                 .withValue(metricsRegistry.partitionRecordsLag)
                 .withMax(metricsRegistry.partitionRecordsLagMax)
                 .withAvg(metricsRegistry.partitionRecordsLagAvg)
@@ -245,9 +267,13 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     }
 
     @Deprecated // To be removed in Kafka 5.0 release.
-    private void maybeRecordDeprecatedPartitionLead(String name, TopicPartition tp, double lead) {
-        if (shouldReportDeprecatedMetric(tp.topic())) {
-            Sensor deprecatedRecordsLead = new SensorBuilder(metrics, deprecatedMetricName(name), () -> topicPartitionTags(tp))
+    private void maybeRecordDeprecatedPartitionLead(TopicPartition tp, double lead) {
+        if (shouldReportDeprecatedMetric(tp.topic()) &&
+                metrics.getSensor(partitionRecordsLeadMetricName(deprecatedTopicPartition(tp))) == null) {
+            Sensor deprecatedRecordsLead = new SensorBuilder(
+                    metrics,
+                    deprecatedPartitionRecordsLeadMetricName(tp),
+                    () -> topicPartitionTags(tp))
                 .withValue(metricsRegistry.partitionRecordsLead)
                 .withMin(metricsRegistry.partitionRecordsLeadMin)
                 .withAvg(metricsRegistry.partitionRecordsLeadAvg)
@@ -258,14 +284,52 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
     }
 
     @Deprecated // To be removed in Kafka 5.0 release.
-    private void maybeRecordDeprecatedPreferredReadReplica(TopicPartition tp, SubscriptionState subscription) {
-        if (shouldReportDeprecatedMetric(tp.topic())) {
+    private void maybeRecordDeprecatedPreferredReadReplica(
+            TopicPartition tp,
+            SubscriptionState subscription,
+            Set<TopicPartition> assignedPartitions) {
+        if (shouldReportDeprecatedMetric(tp.topic()) && !assignedPartitions.contains(deprecatedTopicPartition(tp))) {
             MetricName metricName = deprecatedPartitionPreferredReadReplicaMetricName(tp);
             metrics.addMetricIfAbsent(
                 metricName,
                 null,
                 (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
             );
+        }
+    }
+
+    @Deprecated // To be removed in Kafka 5.0 release.
+    private void maybeRemoveDeprecatedBytesFetched(String topic) {
+        if (!shouldReportDeprecatedMetric(topic)) {
+            metrics.removeSensor(deprecatedTopicBytesFetchedMetricName(topic));
+        }
+    }
+
+    @Deprecated // To be removed in Kafka 5.0 release.
+    private void maybeRemoveDeprecatedRecordsFetched(String topic) {
+        if (!shouldReportDeprecatedMetric(topic)) {
+            metrics.removeSensor(deprecatedTopicRecordsFetchedMetricName(topic));
+        }
+    }
+
+    @Deprecated // To be removed in Kafka 5.0 release.
+    private void maybeRemoveDeprecatedPartitionLag(TopicPartition tp) {
+        if (!shouldReportDeprecatedMetric(tp.topic())) {
+            metrics.removeSensor(deprecatedPartitionRecordsLagMetricName(tp));
+        }
+    }
+
+    @Deprecated // To be removed in Kafka 5.0 release.
+    private void maybeRemoveDeprecatedPartitionLead(TopicPartition tp) {
+        if (!shouldReportDeprecatedMetric(tp.topic())) {
+            metrics.removeSensor(deprecatedPartitionRecordsLeadMetricName(tp));
+        }
+    }
+
+    @Deprecated // To be removed in Kafka 5.0 release.
+    private void maybeRemoveDeprecatedPreferredReadReplica(TopicPartition tp) {
+        if (!shouldReportDeprecatedMetric(tp.topic())) {
+            metrics.removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
         }
     }
 
@@ -277,12 +341,37 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
         return "topic." + topic + ".records-fetched";
     }
 
+    @Deprecated
+    private static String deprecatedTopicBytesFetchedMetricName(String topic) {
+        return deprecatedMetricName(topicBytesFetchedMetricName(topic.replace('.', '_')));
+    }
+
+    @Deprecated
+    private static String deprecatedTopicRecordsFetchedMetricName(String topic) {
+        return deprecatedMetricName(topicRecordsFetchedMetricName(topic.replace('.', '_')));
+    }
+
     private static String partitionRecordsLeadMetricName(TopicPartition tp) {
         return tp + ".records-lead";
     }
 
     private static String partitionRecordsLagMetricName(TopicPartition tp) {
         return tp + ".records-lag";
+    }
+
+    @Deprecated
+    private static String deprecatedPartitionRecordsLeadMetricName(TopicPartition tp) {
+        return deprecatedMetricName(partitionRecordsLeadMetricName(deprecatedTopicPartition(tp)));
+    }
+
+    @Deprecated
+    private static String deprecatedPartitionRecordsLagMetricName(TopicPartition tp) {
+        return deprecatedMetricName(partitionRecordsLagMetricName(deprecatedTopicPartition(tp)));
+    }
+
+    @Deprecated
+    private static TopicPartition deprecatedTopicPartition(TopicPartition tp) {
+        return new TopicPartition(tp.topic().replace('.', '_'), tp.partition());
     }
 
     private static String deprecatedMetricName(String name) {
