@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentConfigsImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -192,6 +194,58 @@ public class GroupSpecBuilderTest {
                     .withNumStandbyReplicas(1)
             ),
             builder.build()
+        );
+    }
+
+    @Test
+    public void testAssignorOffload() {
+        String fooSubtopologyId = Uuid.randomUuid().toString();
+
+        Map<String, String> assignmentConfigs = new HashMap<>(Map.of(
+            AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG, "1"
+        ));
+
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member-1")
+            .setProcessId("processId")
+            .setClientTags(Map.of())
+            .setInstanceId(null)
+            .setRackId(null)
+            .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 0,
+                mkTasks(fooSubtopologyId, 1, 2)
+            ))
+            .build();
+        Map<String, StreamsGroupMember> members = new HashMap<>(Map.of(
+            "member-1", member
+        ));
+        MemberTaskOffsets memberTaskOffsets = new MemberTaskOffsets(
+            Map.of(fooSubtopologyId, Map.of(0, 10L)),
+            Map.of(fooSubtopologyId, Map.of(0, 20L))
+        );
+        Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>(Map.of(
+            "member-1", memberTaskOffsets
+        ));
+
+        GroupSpec groupSpec = new GroupSpecBuilder(assignmentConfigs)
+            .withMembers(members)
+            .withTaskOffsets(taskOffsets)
+            .withAssignorOffload(true)
+            .build();
+
+        // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
+        assignmentConfigs.clear();
+        members.clear();
+        taskOffsets.clear();
+
+        assertEquals(
+            new GroupSpecImpl(
+                // members and taskOffsets
+                Map.of("member-1", createMemberMetadataAndState(member, memberTaskOffsets)),
+                // assignmentConfigs
+                AssignmentConfigsImpl.fromMap(Map.of(
+                    AssignmentConfigsImpl.NUM_STANDBY_REPLICAS_CONFIG, "1"
+                ))
+            ),
+            groupSpec
         );
     }
 }
