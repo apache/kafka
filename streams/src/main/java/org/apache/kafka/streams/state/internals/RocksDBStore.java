@@ -716,6 +716,19 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
      * property to get an approximate count. The returned size also includes
      * a count of dirty keys in the store's in-memory cache, which may lead to some
      * double-counting of entries and inflate the estimate.
+     * <p>
+     * The <code>rocksdb.estimate-num-keys</code> property reflects the raw LSM-tree
+     * state (memtable plus SSTables) prior to background compaction. Repeated
+     * writes to the same key and tombstones (null-value writes) each count toward
+     * the estimate until RocksDB compacts them away. Consequently, immediately
+     * after the store has been restored from its changelog topic (for example,
+     * inside the first invocations of
+     * {@link org.apache.kafka.streams.processor.api.Processor#init} or
+     * {@link org.apache.kafka.streams.processor.api.Processor#process}), this
+     * estimate is typically inflated by every duplicate update and tombstone
+     * replayed during restoration. The estimate converges toward the live-key
+     * count as background compaction proceeds; iterating the store via
+     * {@link #all()} is the only way to obtain an exact count.
      *
      * @return an approximate count of key-value mappings in the store.
      */

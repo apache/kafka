@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -104,9 +105,13 @@ public record StreamsGroupMember(String memberId,
         }
 
         public Builder(StreamsGroupMember member) {
+            this(Objects.requireNonNull(member, "member cannot be null"), member.memberId);
+        }
+
+        public Builder(StreamsGroupMember member, String memberId) {
             Objects.requireNonNull(member, "member cannot be null");
 
-            this.memberId = member.memberId;
+            this.memberId = memberId;
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
             this.instanceId = member.instanceId;
@@ -314,6 +319,37 @@ public record StreamsGroupMember(String memberId,
                 assignedTasks,
                 tasksPendingRevocation
             );
+        }
+
+        /**
+         * Resets the assignment epochs to 0 for all assigned active tasks.
+         * Used when a static member leaves, so that the rejoining member's
+         * active tasks will be assigned from epoch 0 to the new member ID.
+         * All commits using the old member ID will be fenced.
+         */
+        public Builder resetAssignedTasksEpochsToZero() {
+            if (this.assignedTasks.isEmpty()) {
+                return this;
+            }
+
+            if (this.assignedTasks.activeTasksWithEpochs().isEmpty()) {
+                return this;
+            }
+
+            Map<String, Map<Integer, Integer>> resetActiveTasks = new HashMap<>();
+            for (Map.Entry<String, Map<Integer, Integer>> entry : this.assignedTasks.activeTasksWithEpochs().entrySet()) {
+                Map<Integer, Integer> resetActiveTaskEpochs = new HashMap<>();
+                for (Integer partitionId : entry.getValue().keySet()) {
+                    resetActiveTaskEpochs.put(partitionId, 0);
+                }
+                resetActiveTasks.put(entry.getKey(), resetActiveTaskEpochs);
+            }
+            this.assignedTasks = new TasksTupleWithEpochs(
+                resetActiveTasks,
+                this.assignedTasks.standbyTasks(),
+                this.assignedTasks.warmupTasks()
+            );
+            return this;
         }
     }
 

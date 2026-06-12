@@ -471,7 +471,7 @@ attempting to start new ones."
         docker_run "${node}" "${image_name}" "${expose_ports}"
     done
     mkdir -p "${ducker_dir}/build"
-    exec 3<> "${ducker_dir}/build/node_hosts"
+    exec 3> "${ducker_dir}/build/node_hosts"
     for n in $(seq -f %02g 1 ${num_nodes}); do
         local node="ducker${n}"
         if [[ "${ipv6}" == "true" ]]; then
@@ -512,7 +512,7 @@ attempting to start new ones."
 generate_cluster_json_file() {
     local num_nodes="${1}"
     local path="${2}"
-    exec 3<> "${path}"
+    exec 3> "${path}"
 cat<<EOF >&3
 {
   "_comment": [

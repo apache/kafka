@@ -1416,7 +1416,7 @@ class KafkaApisTest extends Logging {
               .setCommittedOffset(10)))))
 
     val requestChannelRequest = buildRequest(
-      TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(txnOffsetCommitRequest, true, true).build(version)
+      TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(txnOffsetCommitRequest, true).build(version)
     )
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
@@ -1480,7 +1480,7 @@ class KafkaApisTest extends Logging {
               .setCommittedOffset(10)))))
 
     val requestChannelRequest = buildRequest(
-      TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(txnOffsetCommitRequest, true, true).build(version)
+      TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(txnOffsetCommitRequest, true).build(version)
     )
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
@@ -1562,7 +1562,7 @@ class KafkaApisTest extends Logging {
               .setCommittedOffset(70)))))
 
     val requestChannelRequest = buildRequest(
-      TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(txnOffsetCommitRequest, true, true).build(version)
+      TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(txnOffsetCommitRequest, true).build(version)
     )
 
     // This is the request expected by the group coordinator.

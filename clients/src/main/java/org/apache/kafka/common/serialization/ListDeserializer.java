@@ -153,8 +153,8 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         if (nullIndexListSize < 0) {
             throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be negative.");
         }
-        if (nullIndexListSize > length) {
-            throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be larger than overall number of bytes.");
+        if (nullIndexListSize > length / Integer.BYTES) {
+            throw new SerializationException("Corrupted byte[]. The number of null list entries cannot be larger than overall number of elements.");
         }
         List<Integer> nullIndexList = new ArrayList<>(nullIndexListSize);
         while (nullIndexListSize != 0) {
@@ -220,14 +220,18 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         final SerializationStrategy serStrategy,
         final int length
     ) throws IOException {
-        final int entrySize = serStrategy == SerializationStrategy.CONSTANT_SIZE ? primitiveSize : dis.readInt();
-        if (entrySize < -1) { // value `-1` is valid, encoding a null entry (-> ListSerde.NULL_ENTRY_VALUE)
-            throw new SerializationException("Corrupted byte[]. A list entry cannot have negative size.");
+        if (serStrategy == SerializationStrategy.CONSTANT_SIZE) {
+            return primitiveSize;
+        } else {
+            final int entrySize = dis.readInt();
+            if (entrySize < -1) { // value `-1` is valid, encoding a null entry (-> ListSerde.NULL_ENTRY_VALUE)
+                throw new SerializationException("Corrupted byte[]. A list entry cannot have negative size.");
+            }
+            if (entrySize > length) {
+                throw new SerializationException("Corrupted byte[]. A list entry cannot be larger than the overall number of bytes.");
+            }
+            return entrySize;
         }
-        if (entrySize > length) {
-            throw new SerializationException("Corrupted byte[]. A list entry cannot be larger than the overall number of bytes.");
-        }
-        return entrySize;
     }
 
     @Override

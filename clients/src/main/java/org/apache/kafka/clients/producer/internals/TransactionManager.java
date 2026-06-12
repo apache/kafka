@@ -1295,7 +1295,7 @@ public class TransactionManager {
             .setGroupInstanceId(groupMetadata.groupInstanceId().orElse(null))
             .setTopics(topics);
         var builder = allHaveTopicIds
-            ? TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, isTransactionV2Enabled(), true)
+            ? TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, isTransactionV2Enabled())
             : TxnOffsetCommitRequest.Builder.forTopicNames(data, isTransactionV2Enabled());
         if (result == null) {
             // In this case, transaction V2 is in use.
