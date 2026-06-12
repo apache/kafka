@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.test.TestUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -430,8 +431,7 @@ public class TestPlugins {
 
     private static Path extractResourceDirectoryFromJar(String resourceDir, URL resource) throws IOException {
         String prefix = resourceDir.endsWith("/") ? resourceDir : resourceDir + "/";
-        Path tmpDir = Files.createTempDirectory("test-plugins-resources.");
-        tmpDir.toFile().deleteOnExit();
+        Path tmpDir = TestUtils.tempDirectory("test-plugins-resources.").toPath();
         JarURLConnection connection = (JarURLConnection) resource.openConnection();
         // Do not share the cached JarFile with the classloader, so we own it and can close it.
         connection.setUseCaches(false);
