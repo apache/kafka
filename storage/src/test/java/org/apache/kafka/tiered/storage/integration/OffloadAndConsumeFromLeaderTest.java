@@ -16,31 +16,57 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
-import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createServerPropsForRemoteStorage;
 
 /**
  * Test Cases:
  *    Elementary offloads and fetches from tiered storage.
  */
-public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarness {
+public final class OffloadAndConsumeFromLeaderTest {
 
-    /**
-     * Cluster of one broker
-     * @return number of brokers in the cluster
-     */
-    @Override
-    public int brokerCount() {
-        return 1;
+    private static final int BROKER_COUNT = 3;
+    private static final int NUM_REMOTE_LOG_METADATA_PARTITIONS = 5;
+
+    @SuppressWarnings("unused")
+    private static List<ClusterConfig> clusterConfig() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
+                .setBrokers(BROKER_COUNT)
+                .setServerProperties(createServerPropsForRemoteStorage(
+                        OffloadAndConsumeFromLeaderTest.class.getSimpleName().toLowerCase(Locale.ROOT),
+                        BROKER_COUNT,
+                        NUM_REMOTE_LOG_METADATA_PARTITIONS))
+                .build());
     }
 
-    @Override
-    protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final int broker = 0;
+    @ClusterTemplate("clusterConfig")
+    public void testOffloadAndConsumeFromLeaderWithClassicGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeOffloadAndConsumeFromLeaderTest(clusterInstance, GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTemplate("clusterConfig")
+    public void testOffloadAndConsumeFromLeaderWithConsumerGroupProtocol(ClusterInstance clusterInstance) throws Exception {
+        executeOffloadAndConsumeFromLeaderTest(clusterInstance, GroupProtocol.CONSUMER);
+    }
+
+    private void executeOffloadAndConsumeFromLeaderTest(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws Exception {
+        final int broker0 = 0;
         final String topicA = "topicA";
         final String topicB = "topicB";
         final int p0 = 0;
@@ -48,10 +74,12 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
         final int replicationFactor = 1;
         final int oneBatchPerSegment = 1;
         final int twoBatchPerSegment = 2;
-        final Map<Integer, List<Integer>> replicaAssignment = null;
+        // Pin the partition to broker 0 so that the broker0-based expectations are deterministic
+        // regardless of how many brokers the cluster has.
+        final Map<Integer, List<Integer>> replicaAssignment = Map.of(p0, List.of(broker0));
         final boolean enableRemoteLogStorage = true;
 
-        builder
+        final TieredStorageTestBuilder builder = new TieredStorageTestBuilder()
                 /*
                  * (1) Create a topic which segments contain only one batch and produce three records
                  *       with a batch size of 1.
@@ -77,8 +105,8 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  */
                 .createTopic(topicA, partitionCount, replicationFactor, oneBatchPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
-                .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
-                .expectSegmentToBeOffloaded(broker, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
+                .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
+                .expectSegmentToBeOffloaded(broker0, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 2L)
                 .produce(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
@@ -107,9 +135,9 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                 .createTopic(topicB, partitionCount, replicationFactor, twoBatchPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
                 .expectEarliestLocalOffsetInLogDirectory(topicB, p0, 4L)
-                .expectSegmentToBeOffloaded(broker, topicB, p0, 0,
+                .expectSegmentToBeOffloaded(broker0, topicB, p0, 0,
                         new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"))
-                .expectSegmentToBeOffloaded(broker, topicB, p0, 2,
+                .expectSegmentToBeOffloaded(broker0, topicB, p0, 2,
                         new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"))
                 .produce(topicB, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"))
@@ -126,10 +154,23 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *       - For topic B, two segments are present in the tiered storage, as asserted by the
                  *         previous sub-test-case.
                  */
-                .bounce(broker)
-                .expectFetchFromTieredStorage(broker, topicA, p0, 1)
+                .bounce(broker0)
+                .expectFetchFromTieredStorage(broker0, topicA, p0, 1)
                 .consume(topicA, p0, 1L, 2, 1)
-                .expectFetchFromTieredStorage(broker, topicB, p0, 2)
+                .expectFetchFromTieredStorage(broker0, topicB, p0, 2)
                 .consume(topicB, p0, 1L, 4, 3);
+
+        final Map<String, Object> extraConsumerProps = Map.of(
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
+        );
+        try (TieredStorageTestContext context = new TieredStorageTestContext(clusterInstance, extraConsumerProps)) {
+            try {
+                for (TieredStorageTestAction action : builder.complete()) {
+                    action.execute(context);
+                }
+            } finally {
+                context.printReport(System.out);
+            }
+        }
     }
 }

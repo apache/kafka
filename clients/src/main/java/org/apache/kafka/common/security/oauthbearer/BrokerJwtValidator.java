@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -164,11 +163,11 @@ public class BrokerJwtValidator implements JwtValidator {
         Collection<String> scopeRawCollection;
 
         if (scopeRaw instanceof String)
-            scopeRawCollection = Collections.singletonList((String) scopeRaw);
+            scopeRawCollection = List.of((String) scopeRaw);
         else if (scopeRaw instanceof Collection)
             scopeRawCollection = (Collection<String>) scopeRaw;
         else
-            scopeRawCollection = Collections.emptySet();
+            scopeRawCollection = Set.of();
 
         NumericDate expirationRaw = getClaim(claims::getExpirationTime, ReservedClaimNames.EXPIRATION_TIME);
         String subRaw = getClaim(() -> claims.getStringClaimValue(subClaimName), subClaimName);

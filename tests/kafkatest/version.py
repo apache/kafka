@@ -118,6 +118,11 @@ class KafkaVersion(LooseVersion):
         # - For older versions, continue using --property
         return self >= V_4_2_0
 
+    def supports_consumer_close_timeout(self):
+        # The VerifiableConsumer --close-timeout option was added in the 4.4.0 development cycle.
+        # Older versions do not recognize the argument and fail to start, so only pass it on newer versions.
+        return self >= DEV_VERSION
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
@@ -252,3 +257,7 @@ LATEST_4_1 = V_4_1_2
 # 4.2.x version
 V_4_2_0 = KafkaVersion("4.2.0")
 LATEST_4_2 = V_4_2_0
+
+# 4.3.x version
+V_4_3_0 = KafkaVersion("4.3.0")
+LATEST_4_3 = V_4_3_0

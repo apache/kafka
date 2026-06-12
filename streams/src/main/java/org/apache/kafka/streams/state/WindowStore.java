@@ -162,7 +162,7 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
     }
 
     /**
-     * Gets all the key-value pairs that belong to the windows within in the given time range.
+     * Gets all the key-value pairs that belong to the windows within the given time range.
      *
      * @param timeFrom the beginning of the time slot from which to search (inclusive)
      * @param timeTo   the end of the time slot from which to search (inclusive)

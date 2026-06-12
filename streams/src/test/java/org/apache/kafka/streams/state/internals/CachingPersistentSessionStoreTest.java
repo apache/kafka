@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
@@ -858,6 +860,173 @@ public class CachingPersistentSessionStoreTest {
                 )
             );
         }
+    }
+
+    @Test
+    public void shouldReadCommittedBypassesCache() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+
+        // cache-only entry is invisible under READ_COMMITTED
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> it =
+                 cachingStore.readOnly(IsolationLevel.READ_COMMITTED).findSessions(keyA, 0, 0)) {
+            assertFalse(it.hasNext());
+        }
+
+        cachingStore.commit(Map.of());
+
+        // once flushed to store it is visible
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> it =
+                 cachingStore.readOnly(IsolationLevel.READ_COMMITTED).findSessions(keyA, 0, 0)) {
+            assertTrue(it.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchSession() {
+        // keyA in store, keyB in cache
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "store".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(0, 0)), "cache".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        assertArrayEquals("store".getBytes(), view.fetchSession(keyA, 0, 0));
+        assertArrayEquals("cache".getBytes(), view.fetchSession(keyB, 0, 0));
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFindSessionsMergesCacheAndStore() {
+        // keyA window(0,0) in store; keyA window(10,10) in cache
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(10, 10)), "2".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results =
+            toListAndCloseIterator(view.findSessions(keyA, 0, 10));
+        assertEquals(2, results.size());
+        verifyWindowedKeyValue(results.get(0), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(results.get(1), new Windowed<>(keyA, new SessionWindow(10, 10)), "2");
+    }
+
+    @Test
+    public void shouldReadUncommittedViewBackwardFindSessionsMergesCacheAndStore() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(10, 10)), "2".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results =
+            toListAndCloseIterator(view.backwardFindSessions(keyA, 0, 10));
+        assertEquals(2, results.size());
+        verifyWindowedKeyValue(results.get(0), new Windowed<>(keyA, new SessionWindow(10, 10)), "2");
+        verifyWindowedKeyValue(results.get(1), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFindSessionsRangeMergesCacheAndStore() {
+        // keyA in store, keyB in cache
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(0, 0)), "2".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results =
+            toListAndCloseIterator(view.findSessions(keyA, keyB, 0, 0));
+        assertEquals(2, results.size());
+        verifyWindowedKeyValue(results.get(0), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(results.get(1), new Windowed<>(keyB, new SessionWindow(0, 0)), "2");
+    }
+
+    @Test
+    public void shouldReadUncommittedViewBackwardFindSessionsRangeMergesCacheAndStore() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(0, 0)), "2".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results =
+            toListAndCloseIterator(view.backwardFindSessions(keyA, keyB, 0, 0));
+        assertEquals(2, results.size());
+        verifyWindowedKeyValue(results.get(0), new Windowed<>(keyB, new SessionWindow(0, 0)), "2");
+        verifyWindowedKeyValue(results.get(1), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchSingleKeyMergesCacheAndStore() {
+        // keyA window(0,0) in store; keyA window(10,10) in cache
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(10, 10)), "2".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.fetch(keyA));
+        assertEquals(2, results.size());
+        verifyWindowedKeyValue(results.get(0), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(results.get(1), new Windowed<>(keyA, new SessionWindow(10, 10)), "2");
+    }
+
+    @Test
+    public void shouldReadUncommittedViewBackwardFetchSingleKeyMergesCacheAndStore() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(10, 10)), "2".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.backwardFetch(keyA));
+        assertEquals(2, results.size());
+        verifyWindowedKeyValue(results.get(0), new Windowed<>(keyA, new SessionWindow(10, 10)), "2");
+        verifyWindowedKeyValue(results.get(1), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchRangeMergesCacheAndStore() {
+        // keyA in store, keyB in cache
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(0, 0)), "2".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.fetch(keyA, keyB));
+        assertEquals(2, results.size());
+        verifyWindowedKeyValue(results.get(0), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(results.get(1), new Windowed<>(keyB, new SessionWindow(0, 0)), "2");
+    }
+
+    @Test
+    public void shouldReadUncommittedViewBackwardFetchRangeMergesCacheAndStore() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(0, 0)), "2".getBytes());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.backwardFetch(keyA, keyB));
+        assertEquals(2, results.size());
+        verifyWindowedKeyValue(results.get(0), new Windowed<>(keyB, new SessionWindow(0, 0)), "2");
+        verifyWindowedKeyValue(results.get(1), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchSessionReturnsNullForCachedTombstone() {
+        // Flush keyA to the underlying store, then remove it (cache holds null tombstone).
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "store".getBytes());
+        cachingStore.commit(Map.of());
+        cachingStore.remove(new Windowed<>(keyA, new SessionWindow(0, 0)));
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        // Cache tombstone (null value) shadows the underlying "store" value.
+        assertNull(view.fetchSession(keyA, 0, 0));
+    }
+
+    @Test
+    public void shouldReadUncommittedViewFetchRangeWithNullBounds() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(0, 0)), "2".getBytes());
+        cachingStore.commit(Map.of());
+
+        final ReadOnlySessionStore<Bytes, byte[]> view = cachingStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        // null keyFrom/keyTo means unbounded — should return all sessions without NPE.
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(view.fetch(null, null));
+        assertEquals(2, results.size());
     }
 
     private List<KeyValue<Windowed<Bytes>, byte[]>> addSessionsUntilOverflow(final String... sessionIds) {
