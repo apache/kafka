@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResp
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
@@ -44,6 +46,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +57,7 @@ import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createCo
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -632,6 +636,248 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         GroupCoordinatorService service = buildService(mockRuntime(), Optional.of(plugin), true);
         service.shutdown();
         verify(plugin, times(1)).close();
+    }
+
+    @Test
+    public void testDeleteGroupsPluginFailureReturnsGroupDeletionFailed() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+
+        when(runtime.scheduleWriteOperation(
+            eq("delete-share-groups"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-pre-delete"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection results =
+            service.deleteGroups(
+                requestContext(ApiKeys.DELETE_GROUPS),
+                List.of("foo"),
+                BufferSupplier.NO_CACHING
+            ).get(5, TimeUnit.SECONDS);
+
+        DeleteGroupsResponseData.DeletableGroupResult result = results.find("foo");
+        assertNotNull(result);
+        assertEquals(Errors.GROUP_DELETION_FAILED.code(), result.errorCode());
+        assertEquals("plugin offline", result.errorMessage());
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("delete-groups"), any(), any());
+    }
+
+    @Test
+    public void testDeleteGroupsPluginFailureDowngradesErrorOnV2() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+
+        when(runtime.scheduleWriteOperation(
+            eq("delete-share-groups"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-pre-delete"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection results =
+            service.deleteGroups(
+                requestContext(ApiKeys.DELETE_GROUPS, (short) 2),
+                List.of("foo"),
+                BufferSupplier.NO_CACHING
+            ).get(5, TimeUnit.SECONDS);
+
+        DeleteGroupsResponseData.DeletableGroupResult result = results.find("foo");
+        assertNotNull(result);
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), result.errorCode());
+        assertNull(result.errorMessage());
+    }
+
+    @Test
+    public void testDeleteGroupsPluginSuccessProceedsToTombstone() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo"))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        when(runtime.scheduleWriteOperation(
+            eq("delete-share-groups"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-pre-delete"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
+        when(runtime.scheduleWriteOperation(
+            eq("delete-groups"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection results =
+            service.deleteGroups(
+                requestContext(ApiKeys.DELETE_GROUPS),
+                List.of("foo"),
+                BufferSupplier.NO_CACHING
+            ).get(5, TimeUnit.SECONDS);
+
+        DeleteGroupsResponseData.DeletableGroupResult result = results.find("foo");
+        assertNotNull(result);
+        assertEquals(Errors.NONE.code(), result.errorCode());
+        assertNull(result.errorMessage());
+        verify(plugin, times(1)).deleteTopology("foo");
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("delete-groups"), eq(GROUP_TP), any());
+    }
+
+    @Test
+    public void testDeleteGroupsWithoutPluginSkipsPluginCall() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        when(runtime.scheduleWriteOperation(
+            eq("delete-share-groups"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
+        when(runtime.scheduleWriteOperation(
+            eq("delete-groups"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.empty(), true);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection results =
+            service.deleteGroups(
+                requestContext(ApiKeys.DELETE_GROUPS),
+                List.of("foo"),
+                BufferSupplier.NO_CACHING
+            ).get(5, TimeUnit.SECONDS);
+
+        DeleteGroupsResponseData.DeletableGroupResult result = results.find("foo");
+        assertNotNull(result);
+        assertEquals(Errors.NONE.code(), result.errorCode());
+        verify(runtime, never()).scheduleReadOperation(
+            eq("streams-group-topology-pre-delete"), any(), any());
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("delete-groups"), eq(GROUP_TP), any());
+    }
+
+    @Test
+    public void testDeleteGroupsSkipsPluginCallWhenNoStoredTopology() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        when(runtime.scheduleWriteOperation(
+            eq("delete-share-groups"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-pre-delete"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Set.of()));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("foo"));
+        when(runtime.scheduleWriteOperation(
+            eq("delete-groups"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection results =
+            service.deleteGroups(
+                requestContext(ApiKeys.DELETE_GROUPS),
+                List.of("foo"),
+                BufferSupplier.NO_CACHING
+            ).get(5, TimeUnit.SECONDS);
+
+        DeleteGroupsResponseData.DeletableGroupResult result = results.find("foo");
+        assertNotNull(result);
+        assertEquals(Errors.NONE.code(), result.errorCode());
+        verify(plugin, never()).deleteTopology(anyString());
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("delete-groups"), eq(GROUP_TP), any());
+    }
+
+    @Test
+    public void testDeleteGroupsMixedPluginOutcome() throws Exception {
+        // Two streams groups on the same partition; plugin succeeds for "good", fails for "bad".
+        // Only "good" should reach the underlying delete-groups write; "bad" surfaces as
+        // GROUP_DELETION_FAILED in the response.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("good"))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(plugin.deleteTopology("bad"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("rejected")));
+
+        when(runtime.scheduleWriteOperation(
+            eq("delete-share-groups"),
+            any(),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-pre-delete"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(Set.of("good", "bad")));
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection tombstoneResult =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        tombstoneResult.add(new DeleteGroupsResponseData.DeletableGroupResult().setGroupId("good"));
+        when(runtime.scheduleWriteOperation(
+            eq("delete-groups"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(tombstoneResult));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection results =
+            service.deleteGroups(
+                requestContext(ApiKeys.DELETE_GROUPS),
+                List.of("good", "bad"),
+                BufferSupplier.NO_CACHING
+            ).get(5, TimeUnit.SECONDS);
+
+        DeleteGroupsResponseData.DeletableGroupResult goodResult = results.find("good");
+        assertNotNull(goodResult);
+        assertEquals(Errors.NONE.code(), goodResult.errorCode());
+
+        DeleteGroupsResponseData.DeletableGroupResult badResult = results.find("bad");
+        assertNotNull(badResult);
+        assertEquals(Errors.GROUP_DELETION_FAILED.code(), badResult.errorCode());
+        assertEquals("rejected", badResult.errorMessage());
     }
 
     private static StreamsGroupTopologyDescriptionUpdateRequestData validUpdateRequest() {

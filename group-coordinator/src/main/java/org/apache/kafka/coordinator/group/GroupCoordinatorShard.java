@@ -132,6 +132,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -956,6 +957,18 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         boolean permanentFailure
     ) {
         return groupMetadataManager.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, permanentFailure);
+    }
+
+    /**
+     * Return the subset of {@code groupIds} that are streams groups with a stored topology
+     * description. Used during {@code DeleteGroups} to identify which groups need a
+     * {@code plugin.deleteTopology} call before being tombstoned.
+     */
+    public Set<String> streamsGroupsWithStoredTopologyDescription(
+        Collection<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.streamsGroupsWithStoredTopologyDescription(groupIds, committedOffset);
     }
 
     /**

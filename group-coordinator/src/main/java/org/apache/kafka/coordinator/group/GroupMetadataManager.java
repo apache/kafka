@@ -182,6 +182,7 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -8388,6 +8389,35 @@ public class GroupMetadataManager {
                     + currentEpoch + ".");
         }
         return member;
+    }
+
+    /**
+     * Filter the given group ids down to those that are streams groups with a non-default
+     * {@code StoredDescriptionTopologyEpoch}. The result is used by {@code DeleteGroups}
+     * to decide which groups warrant a {@code plugin.deleteTopology} call before the
+     * group is tombstoned. Non-existent groups and non-streams groups are silently
+     * skipped — they have no plugin state to clean up.
+     *
+     * @param groupIds        Candidate group ids on this shard.
+     * @param committedOffset A committed offset corresponding to the desired snapshot.
+     * @return The subset of {@code groupIds} that are streams groups with a stored topology.
+     */
+    public Set<String> streamsGroupsWithStoredTopologyDescription(
+        Collection<String> groupIds,
+        long committedOffset
+    ) {
+        Set<String> withStored = new HashSet<>();
+        for (String groupId : groupIds) {
+            try {
+                StreamsGroup group = streamsGroup(groupId, committedOffset);
+                if (group.storedDescriptionTopologyEpoch(committedOffset) != -1) {
+                    withStored.add(groupId);
+                }
+            } catch (GroupIdNotFoundException ignored) {
+                // Not a streams group on this shard; nothing to clean up.
+            }
+        }
+        return withStored;
     }
 
     /**

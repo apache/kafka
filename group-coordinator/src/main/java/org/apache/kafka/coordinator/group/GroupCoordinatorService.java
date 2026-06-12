@@ -1627,9 +1627,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     return CompletableFuture.completedFuture(deletableGroupResults);
                 }
 
-                return handleDeleteGroups(context, topicPartition, retainedGroupIds)
-                    .whenComplete((resp, __) -> resp.forEach(result -> deletableGroupResults.add(result.duplicate())))
-                    .thenApply(__ -> deletableGroupResults);
+                return streamsGroupTopologyDescriptionManager.deleteBeforeGroupDelete(topicPartition, retainedGroupIds)
+                    .thenCompose(streamsErrMap -> {
+                        List<String> afterStreams = filterStreamsTopologyErrors(
+                            streamsErrMap, retainedGroupIds, deletableGroupResults, context.requestVersion());
+                        if (afterStreams.isEmpty()) {
+                            return CompletableFuture.completedFuture(deletableGroupResults);
+                        }
+                        return handleDeleteGroups(context, topicPartition, afterStreams)
+                            .whenComplete((resp, __) -> resp.forEach(result -> deletableGroupResults.add(result.duplicate())))
+                            .thenApply(__ -> deletableGroupResults);
+                    });
             });
             // deleteShareGroups has its own exceptionally block, so we don't need one here.
 
@@ -1686,6 +1694,49 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // Let us invoke the standard procedure of any non-share
         // groups or successfully deleted share groups remaining.
         return groupSet.stream().toList();
+    }
+
+    /**
+     * Move plugin failures into {@code deletableGroupResults} and return the group ids
+     * that should still proceed to tombstoning.
+     *
+     * <p>Per KIP-1331, {@code GROUP_DELETION_FAILED} and the per-group {@code ErrorMessage}
+     * field were introduced in DeleteGroups v3. For older clients we downgrade the error to
+     * {@code UNKNOWN_SERVER_ERROR} with no message — matching the convention used by KIP-1043
+     * for new error codes that pre-existing request versions cannot interpret. Errors that
+     * predate this KIP (e.g. NOT_COORDINATOR surfaced from the runtime via the exceptionally
+     * branch above) are passed through unchanged.
+     */
+    private static List<String> filterStreamsTopologyErrors(
+        Map<String, ApiError> streamsErrMap,
+        List<String> groupIds,
+        DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults,
+        int requestVersion
+    ) {
+        if (streamsErrMap.isEmpty()) {
+            return groupIds;
+        }
+        List<String> retained = new ArrayList<>(groupIds.size() - streamsErrMap.size());
+        for (String groupId : groupIds) {
+            ApiError err = streamsErrMap.get(groupId);
+            if (err == null) {
+                retained.add(groupId);
+            } else {
+                Errors effectiveError = err.error();
+                String effectiveMessage = err.message();
+                if (effectiveError == Errors.GROUP_DELETION_FAILED && requestVersion < 3) {
+                    effectiveError = Errors.UNKNOWN_SERVER_ERROR;
+                    effectiveMessage = null;
+                }
+                deletableGroupResults.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                        .setErrorCode(effectiveError.code())
+                        .setErrorMessage(effectiveMessage)
+                );
+            }
+        }
+        return retained;
     }
 
     private CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> handleDeleteGroups(
