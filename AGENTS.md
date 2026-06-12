@@ -22,14 +22,10 @@ AI assistants) operating on this repository.
 
 ## Security
 
-The Apache Kafka security model lives under [docs/security/](./docs/security/). It
-starts with the core model and is extended per component:
+See [SECURITY.md](./SECURITY.md) for how to report a vulnerability and for links
+to the Apache Kafka security model under [docs/security/](./docs/security/).
 
-- Core model: [docs/security/security-model.md](./docs/security/security-model.md)
-- Kafka Connect: [docs/security/security-model-connect.md](./docs/security/security-model-connect.md)
-- Kafka Streams: [docs/security/security-model-streams.md](./docs/security/security-model-streams.md)
-
-Agents that scan this repository should consult these files before reporting
-issues. In particular, the core model defines what is in and out of scope, how
-reports are classified, and a list of known non-findings; each component page
-adds its own known non-findings.
+Agents that scan this repository should consult `SECURITY.md` and the linked
+security model before reporting issues. In particular, the core model defines
+what is in and out of scope, how reports are classified, and a list of known
+non-findings; each component page adds its own known non-findings.
