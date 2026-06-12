@@ -98,9 +98,11 @@ import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.coordinator.group.streams.TopologyDescriptionManager;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsDelta;
@@ -250,6 +252,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
+            Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin =
+                Optional.ofNullable(config.streamsGroupTopologyDescriptionPlugin(Map.of()));
+
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
                 new GroupCoordinatorShard.Builder(config, groupConfigManager)
                     .withAuthorizerPlugin(authorizerPlugin);
@@ -297,7 +302,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 groupConfigManager,
                 persister,
                 timer,
-                partitionMetadataClient
+                partitionMetadataClient,
+                streamsGroupTopologyDescriptionPlugin,
+                time
             );
         }
     }
@@ -353,6 +360,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final PartitionMetadataClient partitionMetadataClient;
 
     /**
+     * The broker-level component that owns the streams-group topology description plugin
+     * (KIP-1331): plugin reference, per-group push back-off, and the three entry points
+     * the service delegates into — heartbeat post-processing, the push RPC, and the
+     * pre-tombstone hook on DeleteGroups.
+     */
+    private final TopologyDescriptionManager topologyDescriptionManager;
+
+    /**
      * The number of partitions of the __consumer_offsets topics. This is provided
      * when the component is started.
      */
@@ -382,7 +397,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         GroupConfigManager groupConfigManager,
         Persister persister,
         Timer timer,
-        PartitionMetadataClient partitionMetadataClient
+        PartitionMetadataClient partitionMetadataClient,
+        Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin,
+        Time time
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
@@ -397,6 +414,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .map(ConsumerGroupPartitionAssignor::name)
             .collect(Collectors.toSet());
         this.partitionMetadataClient = partitionMetadataClient;
+        this.topologyDescriptionManager = new TopologyDescriptionManager(
+            streamsGroupTopologyDescriptionPlugin,
+            time
+        );
     }
 
     /**
@@ -608,6 +629,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 new StreamsGroupHeartbeatResult(
                     new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
                     Map.of(),
+                    -1,
+                    -1,
                     -1
                 )
             );
@@ -624,15 +647,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setErrorCode(apiError.error().code())
                         .setErrorMessage(apiError.message()),
                     Map.of(),
+                    -1,
+                    -1,
                     -1
                 )
             );
         }
 
+        final String heartbeatGroupId = request.groupId();
         return runtime.scheduleWriteOperation(
             "streams-group-heartbeat",
-            topicPartitionFor(request.groupId()),
+            topicPartitionFor(heartbeatGroupId),
             coordinator -> coordinator.streamsGroupHeartbeat(context, request)
+        ).thenApply(result -> topologyDescriptionManager.maybeSetTopologyDescriptionRequired(result, heartbeatGroupId)
         ).exceptionally(exception -> handleOperationException(
             "streams-group-heartbeat",
             request,
@@ -643,6 +670,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setErrorCode(error.code())
                         .setErrorMessage(message),
                     Map.of(),
+                    -1,
+                    -1,
                     -1
                 ),
             log

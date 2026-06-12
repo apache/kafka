@@ -92,6 +92,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -473,6 +474,8 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             future.get()
@@ -505,6 +508,8 @@ public class GroupCoordinatorServiceTest {
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData(),
                 Map.of(),
+                -1,
+                -1,
                 -1
             )
         ));
@@ -514,7 +519,7 @@ public class GroupCoordinatorServiceTest {
             request
         );
 
-        assertEquals(new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), -1), future.get(5, TimeUnit.SECONDS));
+        assertEquals(new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), -1, -1, -1), future.get(5, TimeUnit.SECONDS));
     }
 
     private static Stream<Arguments> testStreamsGroupHeartbeatWithExceptionSource() {
@@ -574,6 +579,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(expectedErrorCode)
                     .setErrorMessage(expectedErrorMessage),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             future.get(5, TimeUnit.SECONDS)
@@ -596,6 +603,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("TaskOffsets are not supported yet."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -611,6 +620,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("TaskEndOffsets are not supported yet."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -626,6 +637,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("WarmupTasks are not supported yet."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -641,6 +654,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Regular expressions for source topics are not supported yet."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -675,6 +690,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("MemberId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -690,6 +707,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("MemberId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -706,6 +725,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("GroupId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -722,6 +743,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("GroupId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -739,6 +762,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("RebalanceTimeoutMs must be provided in first request."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -757,6 +782,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("ActiveTasks must be empty when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -776,6 +803,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("StandbyTasks must be empty when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -796,6 +825,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("WarmupTasks must be empty when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -817,6 +848,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Topology must be non-null when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -839,6 +872,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("RackId can't be empty."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -858,6 +893,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("InstanceId can't be null."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -881,6 +918,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("MemberEpoch is -3, but must be greater than or equal to -2."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -900,6 +939,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Topology can only be provided when (re-)joining."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -923,6 +964,8 @@ public class GroupCoordinatorServiceTest {
                     .setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code())
                     .setErrorMessage("Changelog topic changelog_topic_with_fixed_partition must have an undefined partition count, but it is set to 3."),
                 Map.of(),
+                -1,
+                -1,
                 -1
             ),
             service.streamsGroupHeartbeat(
@@ -5922,6 +5965,7 @@ public class GroupCoordinatorServiceTest {
         private Persister persister = new NoOpStatePersister();
         private MetadataImage metadataImage = null;
         private PartitionMetadataClient partitionMetadataClient = null;
+        private Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin = Optional.empty();
 
         GroupCoordinatorService build() {
             return build(false);
@@ -5934,6 +5978,7 @@ public class GroupCoordinatorServiceTest {
                     .build();
             }
 
+            MockTimer mockTimer = new MockTimer();
             var service = new GroupCoordinatorService(
                 logContext,
                 config,
@@ -5941,8 +5986,10 @@ public class GroupCoordinatorServiceTest {
                 metrics,
                 configManager,
                 persister,
-                new MockTimer(),
-                partitionMetadataClient
+                mockTimer,
+                partitionMetadataClient,
+                streamsGroupTopologyDescriptionPlugin,
+                mockTimer.time()
             );
 
             if (serviceStartup) {
