@@ -19,16 +19,22 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -239,6 +245,91 @@ public class GroupSpecBuilderTest {
                 Map.of()
             ),
             builder.build()
+        );
+    }
+
+    @Test
+    public void testAssignorOffload() {
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 6)
+            .buildCoordinatorMetadataImage();
+
+        Map<String, ConsumerGroupMember> members = new HashMap<>(Map.of(
+            "member-1", new ConsumerGroupMember.Builder("member-1")
+                .setSubscribedTopicRegex("foo*")
+                .build()
+        ));
+
+        Map<String, Assignment> targetAssignment = new HashMap<>(Map.of(
+            "member-1", new Assignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2)
+            ))
+        ));
+
+        Map<Integer, String> fooInvertedTargetAssignment = new HashMap<>(Map.of(
+            1, "member-1",
+            2, "member-1"
+        ));
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>(Map.of(
+            fooTopicId, fooInvertedTargetAssignment
+        ));
+
+        Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>(Map.of(
+            "foo*", new ResolvedRegularExpression(
+                Set.of("foo"),
+                10L,
+                12345L
+            )
+        ));
+
+        Set<Integer> fooAssignablePartitions = new HashSet<>(List.of(1, 2, 3));
+        Map<Uuid, Set<Integer>> topicAssignablePartitions = new HashMap<>(Map.of(
+            fooTopicId, fooAssignablePartitions
+        ));
+
+        GroupSpec groupSpec = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
+            .withMembers(members)
+            .withSubscriptionType(HOMOGENEOUS)
+            .withTargetAssignment(targetAssignment)
+            .withInvertedTargetAssignment(invertedTargetAssignment)
+            .withMetadataImage(metadataImage)
+            .withResolvedRegularExpressions(resolvedRegularExpressions)
+            .withTopicAssignablePartitionsMap(topicAssignablePartitions)
+            .withAssignorOffload(true)
+            .build();
+
+        // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
+        members.clear();
+        targetAssignment.clear();
+        fooInvertedTargetAssignment.clear();
+        invertedTargetAssignment.clear();
+        resolvedRegularExpressions.clear();
+        fooAssignablePartitions.clear();
+        topicAssignablePartitions.clear();
+
+        assertEquals(
+            new GroupSpecImpl(
+                // members
+                Map.of("member-1", new MemberSubscriptionAndAssignmentImpl(
+                    Optional.empty(),
+                    Optional.empty(),
+                    new TopicIds(
+                        // resolvedRegularExpressions
+                        Set.of("foo"),
+                        new TopicIds.CachedTopicResolver(metadataImage)
+                    ),
+                    // targetAssignment
+                    new Assignment(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2)))
+                )),
+                HOMOGENEOUS,
+                // invertedTargetAssignment
+                Map.of(fooTopicId, Map.of(1, "member-1", 2, "member-1")),
+                // topicAssignablePartitionsMap
+                Optional.of(Map.of(fooTopicId, Set.of(1, 2, 3)))
+            ),
+            groupSpec
         );
     }
 }
