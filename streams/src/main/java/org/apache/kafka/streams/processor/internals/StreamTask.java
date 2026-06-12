@@ -306,6 +306,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 processorContext.initialize();
                 if (!eosEnabled) {
                     maybeCheckpoint(true);
+                } else {
+                    // Deleting checkpoint file written during restoration before transition to RUNNING state (KAFKA-20685)
+                    try {
+                        stateMgr.deleteCheckPointFileIfEOSEnabled();
+                        log.debug("Deleted check point file upon completing restoration with EOS enabled");
+                    } catch (final IOException ioe) {
+                        log.error("Encountered error while deleting the checkpoint file upon completing restoration", ioe);
+                    }
                 }
 
                 transitionTo(State.RUNNING);

@@ -3058,6 +3058,40 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldDeleteCheckpointFileAfterRestorationWhenExactlyOnceEnabled() throws IOException {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
+
+        task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true, processorStateManager);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        verify(processorStateManager).deleteCheckPointFileIfEOSEnabled();
+    }
+
+    @Test
+    public void shouldNotDeleteCheckpointFileAfterRestorationWhenAtLeastOnceEnabled() throws IOException {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
+
+        task = createStatefulTask(createConfig(AT_LEAST_ONCE, "100"), true, processorStateManager);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        verify(processorStateManager, never()).deleteCheckPointFileIfEOSEnabled();
+    }
+
+    @Test
+    public void shouldStillCompleteRestorationWhenCheckpointFileDeletionFails() throws IOException {
+        final ProcessorStateManager processorStateManager = mockStateManager();
+        recordCollector = mock(RecordCollectorImpl.class);
+        doThrow(new IOException("KABOOM!")).when(processorStateManager).deleteCheckPointFileIfEOSEnabled();
+
+        task = createStatefulTask(createConfig(EXACTLY_ONCE_V2, "100"), true, processorStateManager);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+        assertEquals(RUNNING, task.state());
+    }
+
+    @Test
     public void punctuateShouldNotHandleFailProcessingExceptionAndThrowStreamsException() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
