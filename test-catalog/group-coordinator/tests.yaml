@@ -334,6 +334,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testClassicGroupSyncToConsumerGroupWithIllegalGeneration
 - testClassicGroupSyncToConsumerGroupWithInconsistentGroupProtocol
 - testClassicGroupSyncToConsumerGroupWithUnknownMemberId
+- testClassicMemberJoinToConsumerGroupWithDisabledMigrationPolicy
 - testCombineInitMaps
 - testCompleteDeleteShareGroupOffsets
 - testCompleteDeleteShareGroupOffsetsEmptyResult

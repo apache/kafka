@@ -135,7 +135,9 @@ org.apache.kafka.server.common.MetadataVersionTest:
 - assertLatestProductionIsProduction
 - testDirectoryAssignmentSupported
 - testFeatureLevels
+- testFromShortVersionString
 - testFromVersionString
+- testFromVersionStringUnstableDisabled
 - testIsDelegationTokenSupported
 - testIsElrSupported
 - testListOffsetsValueVersion
