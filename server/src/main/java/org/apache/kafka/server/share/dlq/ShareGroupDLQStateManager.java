@@ -239,16 +239,6 @@ public class ShareGroupDLQStateManager {
         private int dlqDestinationPartition;
         private ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
 
-        // Maps DLQ'ed offsets to the actual records read from the log.
-        // The lifecycle of this map is linked to that of the ProduceRequestHandler, which
-        // completes when the PRODUCE request succeeds or completely fails.
-        // Since we know that the record data is not going to change,
-        // by virtue of the append only log, we needn't populate it repeatedly
-        // for the same PRODUCE request. This map is filled lazily when
-        // first PRODUCE RPC is sent and reused in case of retriable errors,
-        // making log reads efficient.
-        private Map<Long, Record> originalRecordData;
-
         public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
         public static final String HEADER_DLQ_ERRORS_PARTITION = "__dlq.errors.partition";
         public static final String HEADER_DLQ_ERRORS_OFFSET = "__dlq.errors.offset";
@@ -379,19 +369,17 @@ public class ShareGroupDLQStateManager {
         }
 
         public ProduceRequestData.TopicProduceData topicProduceData() {
-            maybeFetchRecordData();
+            Map<Long, Record> originalRecordData = maybeFetchRecordData();
 
             List<SimpleRecord> simpleRecords = new ArrayList<>();
             for (long i = param.firstOffset(); i <= param.lastOffset(); i++) {
                 long timestamp = time.hiResClockMs();
                 ByteBuffer key = null;
                 ByteBuffer value = null;
-                if (originalRecordData != null) {
-                    Record record = originalRecordData.get(i);
-                    if (record != null) {
-                        key = record.hasKey() ? record.key() : null;
-                        value = record.hasValue() ? record.value() : null;
-                    }
+                Record record = originalRecordData.get(i);
+                if (record != null) {
+                    key = record.hasKey() ? record.key() : null;
+                    value = record.hasValue() ? record.value() : null;
                 }
                 simpleRecords.add(new SimpleRecord(timestamp, key, value, headers(i)));
             }
@@ -699,81 +687,71 @@ public class ShareGroupDLQStateManager {
             }
         }
 
-        private void maybeFetchRecordData() {
-            if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
-                // A non-null originalRecordData indicates that the data for the offsets was
-                // already fetched at a previous time. This could happen in case there was
-                // a retriable exception in a previous produce request, and it is being re-sent.
-                // This optimization will help in reducing LogReader.read calls. Note that an
-                // empty (but non-null) map means a previous fetch found no records in range
-                // (e.g. all offsets compacted away), so we still skip re-fetching in that case.
-                if (originalRecordData != null) {
-                    return;
-                }
-
-                long startTime = time.hiResClockMs();
-                TopicIdPartition tp = param.topicIdPartition();
-
-                FetchParams fetchParams = new FetchParams(
-                    FetchRequest.CONSUMER_REPLICA_ID,           // -1, reading as a consumer
-                    -1,                                         // replicaEpoch
-                    0L,                                         // maxWaitMs - don't block
-                    1,                                          // minBytes
-                    DLQ_MAX_FETCH_BYTES,                        // maxBytes
-                    FetchIsolation.HIGH_WATERMARK,              // committed only
-                    Optional.empty()                            // clientMetadata
-                );
-
-                long nextOffset = param.firstOffset();
-                long endOffset = param.lastOffset();
-                int recordCount = (int) (param.lastOffset() - param.firstOffset() + 1);
-
-                Map<Long, Record> recordMap = new HashMap<>(recordCount);
-                LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
-                LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
-                maxBytesMap.put(tp, DLQ_MAX_FETCH_BYTES);
-
-                // We are fetching data for one TopicIdPartition only. Hence, there
-                // is no need to keep recreating the maxBytes map, and we can re-use a
-                // single copy. In similar vein, we needn't clear the offsets map
-                // either and just update the value corresponding to the TopicIdPartition
-                // key in offsets map within the while loop.
-                while (nextOffset <= endOffset) {
-                    offsets.put(tp, nextOffset);
-
-                    LinkedHashMap<TopicIdPartition, LogReadResult> result =
-                        logReader.read(fetchParams, Set.of(tp), offsets, maxBytesMap);
-
-                    LogReadResult res = result.get(param.topicIdPartition());
-                    if (res == null || res.error().code() != Errors.NONE.code()) {
-                        log.warn("Unable to fetch actual record at offset {} for handler {}.", nextOffset, this);
-                        return;
-                    }
-
-                    res.info().delayedRemoteStorageFetch.ifPresent(data -> log.info(
-                        "Some offset data in is in remote storage. Skipping it."));
-
-                    boolean continueFetch = false;
-                    for (RecordBatch batch : res.info().records.batches()) {
-                        for (Record record : batch) {
-                            if (record.offset() < param.firstOffset()) continue;
-                            if (record.offset() > param.lastOffset()) {
-                                log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
-                                    recordCount, param.firstOffset(), this);
-                                originalRecordData = recordMap;
-                                return;
-                            }
-                            recordMap.put(record.offset(), record);
-                            nextOffset = record.offset() + 1;
-                            continueFetch = true;
-                        }
-                    }
-                    if (!continueFetch) break; // no more records available (reached HWM/LEO)
-                }
-                log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
-                    recordCount, param.firstOffset(), this);
-                originalRecordData = recordMap;
+        private Map<Long, Record> maybeFetchRecordData() {
+            if (!cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
+                return Map.of();
             }
+            long startTime = time.hiResClockMs();
+            TopicIdPartition tp = param.topicIdPartition();
+
+            FetchParams fetchParams = new FetchParams(
+                FetchRequest.CONSUMER_REPLICA_ID,           // -1, reading as a consumer
+                -1,                                         // replicaEpoch
+                0L,                                         // maxWaitMs - don't block
+                1,                                          // minBytes
+                DLQ_MAX_FETCH_BYTES,                        // maxBytes
+                FetchIsolation.HIGH_WATERMARK,              // committed only
+                Optional.empty()                            // clientMetadata
+            );
+
+            long nextOffset = param.firstOffset();
+            long endOffset = param.lastOffset();
+            int recordCount = (int) (param.lastOffset() - param.firstOffset() + 1);
+
+            Map<Long, Record> recordMap = new HashMap<>(recordCount);
+            LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
+            LinkedHashMap<TopicIdPartition, Integer> maxBytesMap = new LinkedHashMap<>();
+            maxBytesMap.put(tp, DLQ_MAX_FETCH_BYTES);
+
+            // We are fetching data for one TopicIdPartition only. Hence, there
+            // is no need to keep recreating the maxBytes map, and we can re-use a
+            // single copy. In similar vein, we needn't clear the offsets map
+            // either and just update the value corresponding to the TopicIdPartition
+            // key in offsets map within the while loop.
+            while (nextOffset <= endOffset) {
+                offsets.put(tp, nextOffset);
+
+                LinkedHashMap<TopicIdPartition, LogReadResult> result =
+                    logReader.read(fetchParams, Set.of(tp), offsets, maxBytesMap);
+
+                LogReadResult res = result.get(param.topicIdPartition());
+                if (res == null || res.error().code() != Errors.NONE.code()) {
+                    log.warn("Unable to fetch actual record at offset {} for handler {}.", nextOffset, this);
+                    return Map.of();
+                }
+
+                res.info().delayedRemoteStorageFetch.ifPresent(data -> log.info(
+                    "Some offset data in is in remote storage. Skipping it."));
+
+                boolean continueFetch = false;
+                for (RecordBatch batch : res.info().records.batches()) {
+                    for (Record record : batch) {
+                        if (record.offset() < param.firstOffset()) continue;
+                        if (record.offset() > param.lastOffset()) {
+                            log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
+                                recordCount, param.firstOffset(), this);
+                            return Collections.unmodifiableMap(recordMap);
+                        }
+                        recordMap.put(record.offset(), record);
+                        nextOffset = record.offset() + 1;
+                        continueFetch = true;
+                    }
+                }
+                if (!continueFetch) break; // no more records available (reached HWM/LEO)
+            }
+            log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
+                recordCount, param.firstOffset(), this);
+            return Collections.unmodifiableMap(recordMap);
         }
     }
 
