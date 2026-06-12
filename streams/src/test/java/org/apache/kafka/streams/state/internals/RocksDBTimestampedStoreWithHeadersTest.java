@@ -1046,4 +1046,50 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         // Verify no execution info was collected
         assertTrue(result.getExecutionInfo().isEmpty(), "Expected no execution info to be collected");
     }
+
+    // KAFKA-20456 regression: both RocksDBTimestampedStoreWithHeaders open paths
+    // (openFromDefaultStore and openFromTimestampedStore) independently call
+    // offsetsCFOptions(); the returned ColumnFamilyOptions must be released on close().
+
+    @Test
+    public void shouldCloseOffsetsCfOptionsAfterOpenFromDefaultStore() {
+        prepareKeyValueStoreWithMultipleKeys();
+        assertOffsetsCfOptionsClosedAfterStoreClose();
+    }
+
+    @Test
+    public void shouldCloseOffsetsCfOptionsAfterOpenFromTimestampedStore() {
+        prepareTimestampedStore();
+        assertOffsetsCfOptionsClosedAfterStoreClose();
+    }
+
+    private void assertOffsetsCfOptionsClosedAfterStoreClose() {
+        final CapturingOffsetsHeadersStore capturingStore = new CapturingOffsetsHeadersStore();
+        rocksDBStore = capturingStore;
+        rocksDBStore.init(context, rocksDBStore);
+
+        final ColumnFamilyOptions captured = capturingStore.capturedOffsetsOptions;
+        assertNotNull(captured, "offsetsCFOptions should have been invoked during init");
+        assertTrue(captured.isOwningHandle(),
+                "offsets CF options should own its native handle while store is open");
+
+        rocksDBStore.close();
+
+        assertFalse(captured.isOwningHandle(),
+                "offsets CF options native handle should be released by close()");
+    }
+
+    private static final class CapturingOffsetsHeadersStore extends RocksDBTimestampedStoreWithHeaders {
+        ColumnFamilyOptions capturedOffsetsOptions;
+
+        CapturingOffsetsHeadersStore() {
+            super(DB_NAME, METRICS_SCOPE);
+        }
+
+        @Override
+        protected ColumnFamilyOptions offsetsCFOptions() {
+            capturedOffsetsOptions = super.offsetsCFOptions();
+            return capturedOffsetsOptions;
+        }
+    }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
@@ -125,6 +126,7 @@ public class StreamsMembershipManagerTest {
     public void setup() {
         membershipManager = new StreamsMembershipManager(
             GROUP_ID,
+            Optional.empty(),
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"),
             time,
@@ -1155,7 +1157,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testLeaveGroupOnCloseWhenNotInGroup() {
-        testLeaveGroupWhenNotInGroup(membershipManager::leaveGroupOnClose);
+        testLeaveGroupWhenNotInGroup(() -> membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT));
     }
 
     @Test
@@ -1231,7 +1233,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testLeaveGroupOnCloseWhenNotInGroupAndFenced() {
-        testLeaveGroupOnCloseWhenNotInGroupAndFenced(membershipManager::leaveGroupOnClose);
+        testLeaveGroupOnCloseWhenNotInGroupAndFenced(() -> membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT));
     }
 
     private void testLeaveGroupOnCloseWhenNotInGroupAndFenced(final Supplier<CompletableFuture<Void>> leaveGroup) {
@@ -1274,7 +1276,8 @@ public class StreamsMembershipManagerTest {
         verifyInStatePrepareLeaving(membershipManager);
         final CompletableFuture<Void> onGroupLeftBeforeRevocationCallback = membershipManager.leaveGroup();
         assertEquals(onGroupLeft, onGroupLeftBeforeRevocationCallback);
-        final CompletableFuture<Void> onGroupLeftOnCloseBeforeRevocationCallback = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeftOnCloseBeforeRevocationCallback = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
         assertEquals(onGroupLeft, onGroupLeftOnCloseBeforeRevocationCallback);
         onTasksRevokedCallbackExecuted.complete(null);
         verify(memberStateListener).onGroupAssignmentUpdated(Set.of());
@@ -1315,7 +1318,8 @@ public class StreamsMembershipManagerTest {
 
         acknowledging(onTasksAssignedCallbackExecutedSetup);
 
-        final CompletableFuture<Void> onGroupLeft = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeft = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
 
         assertFalse(onGroupLeft.isDone());
         verifyInStateLeaving(membershipManager);
@@ -1324,7 +1328,8 @@ public class StreamsMembershipManagerTest {
         verify(backgroundEventHandler, never()).add(any(StreamsOnTasksRevokedCallbackNeededEvent.class));
         final CompletableFuture<Void> onGroupLeftBeforeHeartbeatRequestGenerated = membershipManager.leaveGroup();
         assertEquals(onGroupLeft, onGroupLeftBeforeHeartbeatRequestGenerated);
-        final CompletableFuture<Void> onGroupLeftOnCloseBeforeHeartbeatRequestGenerated = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeftOnCloseBeforeHeartbeatRequestGenerated = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
         assertEquals(onGroupLeft, onGroupLeftOnCloseBeforeHeartbeatRequestGenerated);
         assertFalse(onGroupLeft.isDone());
         membershipManager.onHeartbeatRequestGenerated();
@@ -1380,6 +1385,45 @@ public class StreamsMembershipManagerTest {
     }
 
     @Test
+    public void testLeaveGroupOnCloseWithRemainInGroupSkipsLeaveHeartbeat() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+                activeTasks, Set.of(), Set.of());
+        acknowledging(onTasksAssignedCallbackExecuted);
+
+        final CompletableFuture<Void> onGroupLeft =
+            membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+
+        assertFalse(onGroupLeft.isDone());
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, membershipManager.leaveGroupOperation());
+        verify(backgroundEventHandler, never()).add(any(StreamsOnTasksRevokedCallbackNeededEvent.class));
+
+        membershipManager.onHeartbeatRequestSkipped();
+
+        assertTrue(onGroupLeft.isDone());
+        assertFalse(onGroupLeft.isCompletedExceptionally());
+        verifyInStateUnsubscribed(membershipManager);
+        verify(subscriptionState).unsubscribe();
+    }
+
+    @Test
+    public void testLeaveGroupOnCloseWithRemainInGroupWhenNotInGroup() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+
+        final CompletableFuture<Void> onGroupLeft =
+            membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+
+        assertTrue(onGroupLeft.isDone());
+        assertFalse(onGroupLeft.isCompletedExceptionally());
+    }
+
+    @Test
     public void testOnHeartbeatRequestSkippedWhenInLeaving() {
         setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
         final Set<StreamsRebalanceData.TaskId> activeTasksSetup = Set.of(
@@ -1402,6 +1446,70 @@ public class StreamsMembershipManagerTest {
         assertTrue(future.isDone());
         assertFalse(future.isCancelled());
         assertFalse(future.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testLeaveGroupEpochIsStaticMemberEpochForStaticMember() {
+        final StreamsMembershipManager staticMember = new StreamsMembershipManager(
+            GROUP_ID,
+            Optional.of("instance-1"),
+            streamsRebalanceData, subscriptionState, backgroundEventHandler,
+            new LogContext("test"), time, new Metrics(time)
+        );
+        assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH, staticMember.leaveGroupEpoch());
+    }
+
+    @Test
+    public void testLeaveGroupEpochIsDynamicMemberEpochForStaticMemberWithLeaveGroupOperation() {
+        final StreamsMembershipManager staticMember = new StreamsMembershipManager(
+            GROUP_ID,
+            Optional.of("instance-1"),
+            streamsRebalanceData, subscriptionState, backgroundEventHandler,
+            new LogContext("test"), time, new Metrics(time)
+        );
+        staticMember.registerStateListener(memberStateListener);
+        staticMember.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, staticMember.leaveGroupEpoch());
+    }
+
+    @Test
+    public void testLeaveGroupEpochIsStaticMemberEpochForStaticMemberWithRemainInGroup() {
+        final StreamsMembershipManager staticMember = new StreamsMembershipManager(
+            GROUP_ID,
+            Optional.of("instance-1"),
+            streamsRebalanceData, subscriptionState, backgroundEventHandler,
+            new LogContext("test"), time, new Metrics(time)
+        );
+        staticMember.registerStateListener(memberStateListener);
+        staticMember.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH, staticMember.leaveGroupEpoch());
+    }
+
+    @Test
+    public void testIsLeavingGroupReturnsTrueForStaticMemberWithRemainInGroupOperation() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
+        final StreamsMembershipManager staticMember = new StreamsMembershipManager(
+            GROUP_ID,
+            Optional.of("instance-1"),
+            streamsRebalanceData, subscriptionState, backgroundEventHandler,
+            new LogContext("test"), time, new Metrics(time)
+        );
+        staticMember.registerStateListener(memberStateListener);
+        staticMember.onSubscriptionUpdated();
+        staticMember.onConsumerPoll();
+        assertEquals(MemberState.JOINING, staticMember.state());
+        staticMember.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        assertEquals(MemberState.LEAVING, staticMember.state());
+        assertTrue(staticMember.isLeavingGroup());
+    }
+
+    @Test
+    public void testIsLeavingGroupReturnsFalseForDynamicMemberWithRemainInGroupOperation() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
+        joining();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertFalse(membershipManager.isLeavingGroup());
     }
 
     @Test

@@ -90,11 +90,6 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.TXN_OFFSET_COMMIT, toVersion = 5)
     public void testConstructor(short version) {
-        var errorsMap = Map.of(
-            new TopicPartition(topicOne, partitionOne), Errors.NOT_COORDINATOR,
-            new TopicPartition(topicTwo, partitionTwo), Errors.NOT_COORDINATOR
-        );
-
         List<TxnOffsetCommitRequestTopic> expectedTopics = List.of(
             new TxnOffsetCommitRequestTopic()
                 .setName(topicOne)
@@ -124,7 +119,6 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
         var response = request.getErrorResponse(throttleTimeMs, Errors.NOT_COORDINATOR.exception());
 
-        assertEquals(errorsMap, response.errors());
         assertEquals(Map.of(Errors.NOT_COORDINATOR, 2), response.errorCounts());
         assertEquals(throttleTimeMs, response.throttleTimeMs());
     }
@@ -175,7 +169,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
         assertEquals(expectedResponseData, TxnOffsetCommitRequest.getErrorResponse(data, Errors.UNKNOWN_MEMBER_ID));
 
-        var request = TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build();
+        var request = TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true).build();
         var response = request.getErrorResponse(throttleTimeMs, Errors.UNKNOWN_MEMBER_ID.exception());
         assertEquals(expectedResponseData.setThrottleTimeMs(throttleTimeMs), response.data());
     }
@@ -211,10 +205,10 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
         if (version >= 6) {
             assertThrows(UnsupportedVersionException.class,
-                () -> TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build(version));
+                () -> TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true).build(version));
         } else {
             assertDoesNotThrow(
-                () -> TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build(version));
+                () -> TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true).build(version));
         }
     }
 
@@ -236,11 +230,11 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
                             .setCommittedOffset(0L)))));
 
         if (version >= 6) {
-            var request = TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build(version);
+            var request = TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true).build(version);
             assertEquals(data, request.data());
         } else {
             assertThrows(UnsupportedVersionException.class,
-                () -> TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true, true).build(version));
+                () -> TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(data, true).build(version));
         }
     }
 
@@ -266,29 +260,17 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     public void testForTopicIdsOrNamesCapsAtTransactionV1WhenTransactionV2IsDisabled() {
         var builder = TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(
             new TxnOffsetCommitRequestData(),
-            false,
-            true
+            false
         );
         assertEquals(TxnOffsetCommitRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2, builder.latestAllowedVersion());
     }
 
     @Test
-    public void testForTopicIdsOrNamesUsesLatestStableVersionWhenUnstableIsDisabled() {
+    public void testForTopicIdsOrNamesUsesLatestVersionWhenTransactionV2IsEnabled() {
         var builder = TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(
             new TxnOffsetCommitRequestData(),
-            true,
-            false
-        );
-        assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(false), builder.latestAllowedVersion());
-    }
-
-    @Test
-    public void testForTopicIdsOrNamesUsesLatestUnstableVersionWhenUnstableIsEnabled() {
-        var builder = TxnOffsetCommitRequest.Builder.forTopicIdsOrNames(
-            new TxnOffsetCommitRequestData(),
-            true,
             true
         );
-        assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(true), builder.latestAllowedVersion());
+        assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(), builder.latestAllowedVersion());
     }
 }

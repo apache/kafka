@@ -36,6 +36,8 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.quota.ReplicaQuota;
+import org.apache.kafka.server.share.LogReader;
+import org.apache.kafka.server.share.PartitionMetadataProvider;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
@@ -2420,6 +2422,8 @@ public class DelayedShareFetchTest {
     static class DelayedShareFetchBuilder {
         private ShareFetch shareFetch = mock(ShareFetch.class);
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
+        private LogReader logReader = mock(LogReader.class);
+        private PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
         private BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
         private LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = mock(LinkedHashMap.class);
         private PartitionMaxBytesStrategy partitionMaxBytesStrategy = mock(PartitionMaxBytesStrategy.class);
@@ -2435,6 +2439,8 @@ public class DelayedShareFetchTest {
 
         DelayedShareFetchBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
+            this.logReader = new ReplicaManagerLogReader(replicaManager);
+            this.metadataProvider = new ReplicaManagerPartitionMetadataProvider(replicaManager);
             return this;
         }
 
@@ -2481,6 +2487,8 @@ public class DelayedShareFetchTest {
             return new DelayedShareFetch(
                 shareFetch,
                 replicaManager,
+                logReader,
+                metadataProvider,
                 exceptionHandler,
                 sharePartitions,
                 partitionMaxBytesStrategy,

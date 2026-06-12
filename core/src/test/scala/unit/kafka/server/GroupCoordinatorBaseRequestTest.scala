@@ -262,7 +262,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
      partition: Int,
      offset: Long,
      expectedError: Errors,
-     version: Short = ApiKeys.TXN_OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+     version: Short = ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
   ): Unit = {
     val request = TxnOffsetCommitRequest.Builder.forTopicNames(
       new TxnOffsetCommitRequestData()

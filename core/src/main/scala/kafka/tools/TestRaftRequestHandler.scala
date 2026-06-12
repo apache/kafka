@@ -58,7 +58,7 @@ class TestRaftRequestHandler(
         error(s"Unexpected error handling request ${request.requestDesc(true)} " +
           s"with context ${request.context}", e)
         val errorResponse = request.body(classOf[AbstractRequest]).getErrorResponse(e)
-        requestChannel.sendResponse(request, errorResponse, None)
+        requestChannel.sendResponse(request, errorResponse)
     } finally {
       // The local completion time may be set while processing the request. Only record it if it's unset.
       if (request.apiLocalCompleteTimeNanos < 0)
@@ -67,7 +67,7 @@ class TestRaftRequestHandler(
   }
 
   private def handleApiVersions(request: Request): Unit = {
-    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(0, request.header.apiVersion() < 4), None)
+    requestChannel.sendResponse(request, apiVersionManager.apiVersionResponse(0, request.header.apiVersion() < 4))
   }
 
   private def handleVote(request: Request): Unit = {
@@ -109,7 +109,7 @@ class TestRaftRequestHandler(
       } else {
         buildResponse(response)
       }
-      requestChannel.sendResponse(request, res, None)
+      requestChannel.sendResponse(request, res)
     })
   }
 

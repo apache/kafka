@@ -36,6 +36,14 @@ import java.util.Optional;
 public interface MetadataUpdater extends Closeable {
 
     /**
+     * Gets the current cluster id without blocking.
+     * @return the cluster id, or null if unknown
+     */
+    default String clusterId() {
+        return null;
+    }
+
+    /**
      * Gets the current cluster info without blocking.
      */
     List<Node> fetchNodes();

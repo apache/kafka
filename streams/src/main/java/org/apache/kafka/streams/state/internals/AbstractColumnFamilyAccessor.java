@@ -99,11 +99,16 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     public void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
         // Only persist the closed state if the store was previously open.
         // After an unclean shutdown, RocksDB may still be running background recovery,
-        // causing accessor.put() to block.
-        if (storeOpen.compareAndSet(true, false)) {
-            accessor.put(offsetColumnFamilyHandle, statusKey, closedState);
+        // causing accessor.put() to block. The put can also throw if RocksDB is in a
+        // failed state (e.g. during an EOSv2 fencing cascade); the handle close must
+        // still happen, otherwise the native ColumnFamilyHandle leaks every cycle.
+        try {
+            if (storeOpen.compareAndSet(true, false)) {
+                accessor.put(offsetColumnFamilyHandle, statusKey, closedState);
+            }
+        } finally {
+            offsetColumnFamilyHandle.close();
         }
-        offsetColumnFamilyHandle.close();
     }
 
     @Override
@@ -115,6 +120,11 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
         return null;
     }
 
+
+    // Visible for testing
+    ColumnFamilyHandle offsetColumnFamilyHandle() {
+        return offsetColumnFamilyHandle;
+    }
 
     private void wipeOffsets(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
         try (final RocksIterator iter = accessor.newIterator(offsetColumnFamilyHandle)) {
