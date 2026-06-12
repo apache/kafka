@@ -1526,9 +1526,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * consumer, but it is lost for partitions that are revoked. Which partitions are revoked depends
      * on the group protocol in use (see {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG}):
      * <ul>
-     * <li>Classic group protocol: eager assignors (e.g., {@link RangeAssignor},
+     * <li>Classic group protocol: the behavior depends on the assignor configured in
+     * {@link ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG}: eager assignors (e.g., {@link RangeAssignor},
      * {@link RoundRobinAssignor}) revoke all partitions on every rebalance (pause state is
-     * not preserved); cooperative assignor (e.g., {@link CooperativeStickyAssignor}) only revokes
+     * not preserved); cooperative assignors (e.g., {@link CooperativeStickyAssignor}) only revoke the
      * partitions that are reassigned to another consumer (pause state preserved for partitions that remain
      * assigned)</li>
      * <li>Consumer group protocol (KIP-848): only revokes partitions that are reassigned to another consumer
