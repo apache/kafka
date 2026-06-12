@@ -20,12 +20,14 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
+import org.apache.kafka.coordinator.group.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -176,6 +178,54 @@ public class GroupSpecBuilderTest {
                 Map.of()
             ),
             builder.build()
+        );
+    }
+
+    @Test
+    public void testAssignorOffload() {
+        String fooSubtopologyId = Uuid.randomUuid().toString();
+
+        Map<String, String> assignmentConfigs = new HashMap<>(Map.of(
+            "num.standby.replicas", "1"
+        ));
+
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member-1")
+            .setProcessId("processId")
+            .setClientTags(Map.of())
+            .setInstanceId(null)
+            .setRackId(null)
+            .build();
+        Map<String, StreamsGroupMember> members = new HashMap<>(Map.of(
+            "member-1", member
+        ));
+
+        Map<String, TasksTuple> targetAssignment = new HashMap<>(Map.of(
+            "member-1", mkTasksTuple(TaskRole.ACTIVE,
+                mkTasks(fooSubtopologyId, 1, 2)
+            )
+        ));
+
+        GroupSpec groupSpec = new GroupSpecBuilder(assignmentConfigs)
+            .withMembers(members)
+            .withTargetAssignment(targetAssignment)
+            .withAssignorOffload(true)
+            .build();
+
+        // Modifications after the GroupSpec has been built should not be visible in the GroupSpec.
+        assignmentConfigs.clear();
+        members.clear();
+        targetAssignment.clear();
+
+        assertEquals(
+            new GroupSpecImpl(
+                // members and targetAssignment
+                Map.of("member-1", createAssignmentMemberSpec(member, mkTasksTuple(TaskRole.ACTIVE,
+                    mkTasks(fooSubtopologyId, 1, 2)
+                ))),
+                // assignmentConfigs
+                Map.of("num.standby.replicas", "1")
+            ),
+            groupSpec
         );
     }
 }

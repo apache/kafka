@@ -46,6 +46,13 @@ public class GroupSpecBuilder {
     private Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment = Map.of();
 
     /**
+     * Whether the {@link GroupSpec} produced by {@link GroupSpecBuilder#build()} will be used on a
+     * background thread. When {@code true}, {@link GroupSpecBuilder#build()} takes copies of any
+     * mutable collections, so that subsequent changes are not visible to the assignor.
+     */
+    private boolean assignorOffload;
+
+    /**
      * Constructs the object.
      */
     public GroupSpecBuilder(
@@ -98,6 +105,20 @@ public class GroupSpecBuilder {
     }
 
     /**
+     * Sets whether the {@link GroupSpec} produced by {@link GroupSpecBuilder#build()} will be used
+     * on a background thread. When {@code true}, {@link GroupSpecBuilder#build()} takes copies of
+     * any mutable collections, so that subsequent changes are not visible to the assignor.
+     *
+     * @param assignorOffload Whether the produced {@link GroupSpec} will be consumed on a
+     *                        background thread.
+     * @return This object.
+     */
+    public GroupSpecBuilder withAssignorOffload(boolean assignorOffload) {
+        this.assignorOffload = assignorOffload;
+        return this;
+    }
+
+    /**
      * Builds the {@link GroupSpec} to be passed to the assignor.
      *
      * @return The {@link GroupSpec} describing the members and their existing assignments.
@@ -110,6 +131,11 @@ public class GroupSpecBuilder {
             member,
             targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY)
         )));
+
+        Map<String, String> assignmentConfigs = this.assignmentConfigs;
+        if (assignorOffload) {
+            assignmentConfigs = Map.copyOf(assignmentConfigs);
+        }
 
         return new GroupSpecImpl(
             Collections.unmodifiableMap(memberSpecs),
