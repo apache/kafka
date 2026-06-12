@@ -56,6 +56,7 @@ import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -164,7 +165,7 @@ class ShareGroupDLQStateManagerTest {
             // without having to thread a custom metrics mock through the builder.
             return new ShareGroupDLQStateManager(
                 client != null ? client : new MockClient(MOCK_TIME),
-                cacheHelper != null ? cacheHelper : happyCacheHelper(DEFAULT_LEADER),
+                cacheHelper != null ? cacheHelper : cacheHelper(DEFAULT_LEADER),
                 time,
                 timer != null ? timer : mockTimer,
                 shareGroupMetrics != null ? shareGroupMetrics : mockMetrics,
@@ -188,7 +189,13 @@ class ShareGroupDLQStateManagerTest {
         );
     }
 
-    private static ShareGroupDLQMetadataCacheHelper happyCacheHelper(Node leader) {
+    /**
+     * Util method to populate DLQ metadata cache with sensible defaults.
+     *
+     * @param leader Node representing leader node for DLQ partition.
+     * @return Populated DLQ cache helper object.
+     */
+    private static ShareGroupDLQMetadataCacheHelper cacheHelper(Node leader) {
         ShareGroupDLQMetadataCacheHelper helper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(helper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(helper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
@@ -283,22 +290,29 @@ class ShareGroupDLQStateManagerTest {
     }
 
     private static void assertKeyValue(Record record, byte[] expectedData, boolean isKey) {
-        if (isKey && !record.hasKey()) {
-            fail("record key not found");
-        }
-
-        if (!isKey && !record.hasValue()) {
-            fail("record value not found");
-        }
-
-        byte[] actualChunk = new byte[expectedData.length];
-        if (isKey) {
-            record.key().get(actualChunk);
+        if (expectedData == null) {
+            if (isKey) {
+                assertFalse(record.hasKey());
+            } else {
+                assertFalse(record.hasValue());
+            }
         } else {
-            record.value().get(actualChunk);
-        }
+            if (isKey && !record.hasValue()) {
+                fail("record key not found");
+            }
 
-        assertArrayEquals(expectedData, actualChunk);
+            if (!isKey && !record.hasValue()) {
+                fail("record value not found");
+            }
+
+            byte[] actualChunk = new byte[expectedData.length];
+            if (isKey) {
+                record.key().get(actualChunk);
+            } else {
+                record.value().get(actualChunk);
+            }
+            assertArrayEquals(expectedData, actualChunk);
+        }
     }
 
     // ---- Constructor null-check tests ----
@@ -1240,7 +1254,7 @@ class ShareGroupDLQStateManagerTest {
 
         client.prepareResponseFrom(body -> true, null, DEFAULT_LEADER);
 
-        stateManager = builder().withClient(client).withCacheHelper(happyCacheHelper(DEFAULT_LEADER)).build();
+        stateManager = builder().withClient(client).withCacheHelper(cacheHelper(DEFAULT_LEADER)).build();
 
         Future<Boolean> done = executor.submit(() -> {
             long start = System.currentTimeMillis();
@@ -1450,7 +1464,7 @@ class ShareGroupDLQStateManagerTest {
     // --- DLQ record with copy record enabled ---
 
     @Test
-    public void testHappyPathWithDLQRecordCopyEnabled() throws Exception {
+    public void testDLQRecordCopyEnabled() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
         List<ProduceRequest> capturedProduces = new ArrayList<>();
         client.prepareResponseFrom(
@@ -1489,8 +1503,7 @@ class ShareGroupDLQStateManagerTest {
         when(logReader.read(any(), anySet(), any(), any()))
             .thenReturn(readResultMap);
 
-
-        ShareGroupDLQMetadataCacheHelper cacheHelper = happyCacheHelper(DEFAULT_LEADER);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
         stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
         stateManager.start();
@@ -1512,7 +1525,143 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
-    public void testErrorPathWithDLQRecordCopyEnabled() throws Exception {
+    public void testDLQRecordCopyEnabledWithPartialLogReaderRecords() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();   // 3 offset requested
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+        LogReader logReader = mock(LogReader.class);
+        LogReadResult readResult1 = mock(LogReadResult.class);
+        when(readResult1.error()).thenReturn(Errors.NONE);
+        // Return 2 records only
+        when(readResult1.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)
+            )
+        ));
+        LogReadResult readResult2 = mock(LogReadResult.class);
+        when(readResult2.error()).thenReturn(Errors.NONE);
+        // Next read contains the 3rd offset as well
+        when(readResult2.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
+            )
+        ));
+
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap1 = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap2 = new LinkedHashMap<>();
+        readResultMap1.put(param.topicIdPartition(), readResult1);
+        readResultMap2.put(param.topicIdPartition(), readResult2);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(readResultMap1)
+            .thenReturn(readResultMap2);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), Arrays.asList(keyData1, keyData2, keyData3), Arrays.asList(valueData1, valueData2, valueData3))
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledWithMultipleLogReaderIterations() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();   // 3 offsets requested
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        LogReader logReader = mock(LogReader.class);
+        LogReadResult readResult = mock(LogReadResult.class);
+        when(readResult.error()).thenReturn(Errors.NONE);
+        // Return 2 records only
+        when(readResult.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)
+            )
+        ));
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+        readResultMap.put(param.topicIdPartition(), readResult);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(readResultMap);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), Arrays.asList(keyData1, keyData2, null), Arrays.asList(valueData1, valueData2, null))
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledWithErrorOnLogRead() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
         List<ProduceRequest> capturedProduces = new ArrayList<>();
         client.prepareResponseFrom(
@@ -1536,7 +1685,7 @@ class ShareGroupDLQStateManagerTest {
         when(logReader.read(any(), anySet(), any(), any()))
             .thenReturn(readResultMap);
 
-        ShareGroupDLQMetadataCacheHelper cacheHelper = happyCacheHelper(DEFAULT_LEADER);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
         stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
         stateManager.start();

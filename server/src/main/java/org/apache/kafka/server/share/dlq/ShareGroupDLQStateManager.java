@@ -719,39 +719,46 @@ public class ShareGroupDLQStateManager {
             // either and just update the value corresponding to the TopicIdPartition
             // key in offsets map within the while loop.
             while (nextOffset <= endOffset) {
-                offsets.put(tp, nextOffset);
+                long readFrom = nextOffset; // offset requested for this iteration
+                offsets.put(tp, readFrom);
 
                 LinkedHashMap<TopicIdPartition, LogReadResult> result =
                     logReader.read(fetchParams, Set.of(tp), offsets, maxBytesMap);
 
                 LogReadResult res = result.get(param.topicIdPartition());
                 if (res == null || res.error().code() != Errors.NONE.code()) {
-                    log.warn("Unable to fetch actual record at offset {} for handler {}.", nextOffset, this);
+                    log.warn("Unable to fetch actual record at offset {} for handler {}.", readFrom, this);
                     return Map.of();
                 }
 
                 res.info().delayedRemoteStorageFetch.ifPresent(data -> log.info(
                     "Some offset data in is in remote storage. Skipping it."));
 
-                boolean continueFetch = false;
                 for (RecordBatch batch : res.info().records.batches()) {
                     for (Record record : batch) {
-                        if (record.offset() < param.firstOffset()) continue;
+                        // A fetch can return a batch whose base offset is below the requested
+                        // offset, so skip any record at or before the read position to avoid
+                        // re-processing and dragging nextOffset backwards.
+                        if (record.offset() < readFrom) continue;
                         if (record.offset() > param.lastOffset()) {
                             log.trace("Preempted log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
                                 recordCount, param.firstOffset(), this);
-                            return Collections.unmodifiableMap(recordMap);
+                            return Map.copyOf(recordMap);
                         }
                         recordMap.put(record.offset(), record);
-                        nextOffset = record.offset() + 1;
-                        continueFetch = true;
+                        nextOffset = Math.max(nextOffset, record.offset() + 1); // never moves backwards
                     }
                 }
-                if (!continueFetch) break; // no more records available (reached HWM/LEO)
+
+                // If the read position did not advance this iteration we have made no progress
+                // (reached HWM/LEO or only stale records were returned). Bail out to guarantee
+                // termination rather than re-fetching the same offset forever.
+                if (nextOffset <= readFrom) break;
             }
             log.trace("Full log fetch took {} ms for {} records starting at {} for {}", time.hiResClockMs() - startTime,
                 recordCount, param.firstOffset(), this);
-            return Collections.unmodifiableMap(recordMap);
+            log.info("Total offsets fetched: {}, Records found: {}", recordCount, recordMap.size());
+            return Map.copyOf(recordMap);
         }
     }
 
