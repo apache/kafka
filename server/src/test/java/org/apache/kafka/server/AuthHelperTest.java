@@ -162,6 +162,69 @@ public class AuthHelperTest {
     }
 
     @Test
+    public void testFilterByAuthorizedIsResilientToMismatchedAuthorizeResults() throws UnknownHostException {
+        AclOperation operation = AclOperation.WRITE;
+        ResourceType resourceType = ResourceType.TOPIC;
+        RequestHeader requestHeader = new RequestHeader(ApiKeys.PRODUCE, ApiKeys.PRODUCE.latestVersion(), "", 0);
+        RequestContext requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost(),
+            KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+
+        // A single distinct resource produces a single action, but a misbehaving authorizer may return
+        // a result list of a different size. The original Scala implementation used `zip`, which tolerated
+        // this by truncating to the shorter sequence. Verify we keep that behavior instead of failing with
+        // IndexOutOfBoundsException.
+        when(authorizer.authorize(ArgumentMatchers.eq(requestContext), ArgumentMatchers.any()))
+            .thenReturn(List.of(AuthorizationResult.ALLOWED, AuthorizationResult.DENIED));
+
+        Set<String> result = new AuthHelper(Optional.of(authorizerPlugin)).filterByAuthorized(
+            requestContext, operation, resourceType, List.of("topic-1"), s -> s);
+
+        assertEquals(Set.of("topic-1"), result);
+    }
+
+    @Test
+    public void testPartitionByAuthorized() throws UnknownHostException {
+        AclOperation operation = AclOperation.DESCRIBE;
+        ResourceType resourceType = ResourceType.TOPIC;
+        RequestHeader requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion(), "", 0);
+        RequestContext requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost(),
+            KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+
+        when(authorizer.authorize(ArgumentMatchers.eq(requestContext), ArgumentMatchers.any()))
+            .thenAnswer(invocation -> {
+                List<Action> actions = invocation.getArgument(1);
+                return actions.stream().map(action -> {
+                    String name = action.resourcePattern().name();
+                    if (name.equals("topic-1") || name.equals("topic-3"))
+                        return AuthorizationResult.ALLOWED;
+                    else
+                        return AuthorizationResult.DENIED;
+                }).toList();
+            });
+
+        AuthHelper.PartitionResult<String> result = new AuthHelper(Optional.of(authorizerPlugin)).partitionByAuthorized(
+            requestContext, operation, resourceType, List.of("topic-1", "topic-2", "topic-3"), s -> s);
+
+        // The original input order should be preserved within each partition.
+        assertEquals(List.of("topic-1", "topic-3"), result.authorized());
+        assertEquals(List.of("topic-2"), result.unauthorized());
+    }
+
+    @Test
+    public void testPartitionByAuthorizedWithoutAuthorizer() {
+        List<String> resources = List.of("topic-1", "topic-2", "topic-3");
+        // The request context is unused when there is no authorizer, so it can be null here.
+        AuthHelper.PartitionResult<String> result = new AuthHelper(Optional.empty()).partitionByAuthorized(
+            null, AclOperation.DESCRIBE, ResourceType.TOPIC, resources, s -> s);
+
+        // Without an authorizer everything is authorized.
+        assertEquals(resources, result.authorized());
+        assertTrue(result.unauthorized().isEmpty());
+    }
+
+    @Test
     public void testComputeDescribeClusterResponseV1WithUnknownEndpointType() throws UnknownHostException {
         AuthHelper authHelper = new AuthHelper(Optional.of(authorizerPlugin));
         Request request = newMockDescribeClusterRequest(

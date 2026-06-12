@@ -794,7 +794,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val partitionResult = authHelper.partitionByAuthorized(request.context,
-        DESCRIBE, TOPIC, offsetRequest.topics.asScala.toSeq.asJava, (t: ListOffsetsRequestData.ListOffsetsTopic) => t.name)
+        DESCRIBE, TOPIC, offsetRequest.topics, (t: ListOffsetsRequestData.ListOffsetsTopic) => t.name)
     val authorizedRequestInfo = partitionResult.authorized.asScala
     val unauthorizedRequestInfo = partitionResult.unauthorized.asScala
 

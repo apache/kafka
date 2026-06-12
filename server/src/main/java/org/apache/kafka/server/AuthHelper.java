@@ -100,7 +100,9 @@ public class AuthHelper {
                 .toList();
             List<AuthorizationResult> results = authorizer.get().get().authorize(request.context(), actions);
             authorizedOps = new HashSet<>();
-            for (int i = 0; i < results.size(); i++) {
+            // Pair up each result with its action, ignoring any extra entries if the sizes differ.
+            int count = Math.min(results.size(), supportedOps.size());
+            for (int i = 0; i < count; i++) {
                 if (results.get(i) == AuthorizationResult.ALLOWED) {
                     authorizedOps.add(supportedOps.get(i));
                 }
@@ -160,7 +162,9 @@ public class AuthHelper {
             .toList();
         List<AuthorizationResult> results = authorizer.get().get().authorize(requestContext, actions);
         Set<String> authorized = new HashSet<>();
-        for (int i = 0; i < results.size(); i++) {
+        // Pair up each result with its resource name, ignoring any extra entries if the sizes differ.
+        int count = Math.min(results.size(), names.size());
+        for (int i = 0; i < count; i++) {
             if (results.get(i) == AuthorizationResult.ALLOWED) {
                 authorized.add(names.get(i));
             }
@@ -181,7 +185,7 @@ public class AuthHelper {
     public record PartitionResult<T>(List<T> authorized, List<T> unauthorized) {
     }
 
-    public <T> PartitionResult<T> partitionByAuthorized(
+    private <T> PartitionResult<T> partitionByAuthorized(
         RequestContext requestContext,
         AclOperation operation,
         ResourceType resourceType,
