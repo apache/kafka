@@ -96,10 +96,15 @@ public class ShareConsumerCallbackTest extends ShareConsumerTestBase {
             assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
 
             // Waiting for heartbeat to propagate the subscription change.
+            // In the worst case this can take more than 15 seconds:
+            //   Heartbeat 1 at +5 seconds sends the updated subscription and triggers an assignor run.
+            //     topic2 is not yet ready, so the assignor returns an empty assignment.
+            //   Heartbeat 2 at +10 seconds triggers another assignor run now that topic2 is assignable.
+            //   Heartbeat 3 at +15 seconds receives the assignment with topic2.
             TestUtils.waitForCondition(() -> {
                 shareConsumer.poll(Duration.ofMillis(500));
                 return partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.containsKey(tp2);
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records from the updated subscription");
+            }, 20_000, 100L, () -> "Failed to consume records from the updated subscription");
 
             // Verifying if the callback was invoked without exceptions for the partitions for both topics.
             assertFalse(partitionExceptionMap.containsKey(tp));
