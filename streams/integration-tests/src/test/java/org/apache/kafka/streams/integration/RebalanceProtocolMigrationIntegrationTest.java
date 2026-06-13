@@ -80,6 +80,27 @@ public class RebalanceProtocolMigrationIntegrationTest {
         }
     }
 
+    public static class WithAssignorOffloadDisabledTest extends RebalanceProtocolMigrationIntegrationTest {
+        @Override
+        protected Properties brokerConfig() {
+            final Properties props = new Properties();
+            props.putAll(super.brokerConfig());
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+            return props;
+        }
+    }
+
+    public static class WithAssignmentBatchingAndAssignorOffloadDisabledTest extends RebalanceProtocolMigrationIntegrationTest {
+        @Override
+        protected Properties brokerConfig() {
+            final Properties props = new Properties();
+            props.putAll(super.brokerConfig());
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0");
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+            return props;
+        }
+    }
+
     @BeforeEach
     public void setup(final TestInfo testInfo) throws Exception {
         cluster = new EmbeddedKafkaCluster(1, brokerConfig());
