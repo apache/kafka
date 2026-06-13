@@ -306,6 +306,19 @@ public class KTableTransformValuesTest {
     }
 
     @Test
+    public void shouldGetStoreNamesFromParentAndExtraStoresIfNotMaterialized() {
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null, new String[]{"store3", "store4"});
+
+        when(parent.valueGetterSupplier()).thenReturn(parentGetterSupplier);
+        when(parentGetterSupplier.storeNames()).thenReturn(new String[]{"store1", "store2"});
+
+        final String[] storeNames = transformValues.view().storeNames();
+
+        assertThat(storeNames, is(new String[]{"store1", "store2", "store3", "store4"}));
+    }
+
+    @Test
     public void shouldGetQueryableStoreNameIfMaterialized() {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);

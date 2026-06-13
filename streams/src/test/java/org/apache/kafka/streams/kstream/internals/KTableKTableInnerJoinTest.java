@@ -29,16 +29,21 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -66,6 +71,56 @@ public class KTableKTableInnerJoinTest {
         Materialized.with(Serdes.Integer(), Serdes.String());
     private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
+
+    @Test
+    public void shouldJoinAfterUnmaterializedTransformValuesWithExtraStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final StoreBuilder<KeyValueStore<Integer, String>> transformerStore = Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("transformer-store"),
+            Serdes.Integer(),
+            Serdes.String()
+        );
+        builder.addStateStore(transformerStore);
+
+        final KTable<Integer, String> transformed = builder
+            .table(topic1, consumed, materialized)
+            .transformValues(
+                () -> new ValueTransformerWithKey<>() {
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        context.getStateStore(transformerStore.name());
+                    }
+
+                    @Override
+                    public String transform(final Integer readOnlyKey, final String value) {
+                        return value;
+                    }
+
+                    @Override
+                    public void close() {}
+                },
+                Materialized.with(Serdes.Integer(), Serdes.String()),
+                transformerStore.name()
+            );
+
+        transformed
+            .join(transformed, (value1, value2) -> value1)
+            .toStream()
+            .to(output);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(
+                    topic1,
+                    Serdes.Integer().serializer(),
+                    Serdes.String().serializer(),
+                    Instant.ofEpochMilli(0L),
+                    Duration.ZERO
+                );
+
+            inputTopic.pipeInput(1, "A");
+        }
+    }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
