@@ -40,6 +40,21 @@ object ShareGroupHeartbeatRequestTest {
   ))
   class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends ShareGroupHeartbeatRequestTest(cluster) {
   }
+
+  @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false"),
+    new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
+  ))
+  class WithAssignorOffloadDisabledTest(cluster: ClusterInstance) extends ShareGroupHeartbeatRequestTest(cluster) {
+  }
+
+  @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false"),
+    new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
+  ))
+  class WithAssignmentBatchingAndAssignorOffloadDisabledTest(cluster: ClusterInstance) extends ShareGroupHeartbeatRequestTest(cluster) {
+  }
 }
 
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
@@ -49,6 +64,10 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   protected def isShareAssignmentBatchingEnabled: Boolean = {
     cluster.brokers.values.stream.allMatch(b => b.config.groupCoordinatorConfig.shareGroupAssignmentIntervalMs > 0)
+  }
+
+  protected def isShareAssignorOffloadEnabled: Boolean = {
+    cluster.brokers.values.stream.allMatch(b => b.config.groupCoordinatorConfig.shareGroupAssignorOffloadEnable)
   }
 
   @ClusterTest(
@@ -100,12 +119,32 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
         shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
       }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
-      var expectedMemberEpoch = 2
+      var expectedMemberEpoch = if (isShareAssignorOffloadEnabled) 1 else 2
 
       // Verify the response.
       assertNotNull(shareGroupHeartbeatResponse.data.memberId)
       assertEquals(expectedMemberEpoch, shareGroupHeartbeatResponse.data.memberEpoch)
       assertEquals(new ShareGroupHeartbeatResponseData.Assignment(), shareGroupHeartbeatResponse.data.assignment)
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isShareAssignorOffloadEnabled) {
+        shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+          new ShareGroupHeartbeatRequestData()
+            .setGroupId("grp")
+            .setMemberId(shareGroupHeartbeatResponse.data.memberId)
+            .setMemberEpoch(shareGroupHeartbeatResponse.data.memberEpoch)
+        ).build()
+        TestUtils.waitUntilTrue(() => {
+          shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+          shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+            shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch
+        }, msg = s"Did not receive initial assignment. Last response $shareGroupHeartbeatResponse.")
+
+        // Verify the response. The assignment is unchanged.
+        expectedMemberEpoch += 1
+        assertEquals(expectedMemberEpoch, shareGroupHeartbeatResponse.data.memberEpoch)
+        assertNull(shareGroupHeartbeatResponse.data.assignment)
+      }
 
       // Create the topic.
       val topicId = TestUtils.createTopicWithAdminRaw(
@@ -200,7 +239,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
         shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
       }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
-      var expectedMemberEpoch = 2
+      var expectedMemberEpoch = if (isShareAssignorOffloadEnabled) 1 else 2
 
       // Verify the response for member 1.
       val memberId1 = shareGroupHeartbeatResponse.data.memberId
@@ -208,6 +247,27 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       assertNotNull(memberId1)
       assertEquals(expectedMemberEpoch, memberEpoch1)
       assertEquals(new ShareGroupHeartbeatResponseData.Assignment(), shareGroupHeartbeatResponse.data.assignment)
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isShareAssignorOffloadEnabled) {
+        shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+          new ShareGroupHeartbeatRequestData()
+            .setGroupId("grp")
+            .setMemberId(memberId1)
+            .setMemberEpoch(memberEpoch1)
+        ).build()
+        TestUtils.waitUntilTrue(() => {
+          shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+          shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+            shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch
+        }, msg = s"Did not receive initial assignment. Last response $shareGroupHeartbeatResponse.")
+
+        // Verify the response for member 1. The assignment is unchanged.
+        expectedMemberEpoch += 1
+        memberEpoch1 = shareGroupHeartbeatResponse.data.memberEpoch
+        assertEquals(expectedMemberEpoch, memberEpoch1)
+        assertNull(shareGroupHeartbeatResponse.data.assignment)
+      }
 
       // The second member request to join the group.
       shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
@@ -222,7 +282,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       TestUtils.waitUntilTrue(() => {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
         shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
-          (!isShareAssignmentBatchingEnabled || shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch)
+          (if (isShareAssignmentBatchingEnabled || isShareAssignorOffloadEnabled) shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch else true)
       }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
       expectedMemberEpoch += 1
 
@@ -369,7 +429,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
         shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
       }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
-      var expectedMemberEpoch = 2
+      var expectedMemberEpoch = if (isShareAssignorOffloadEnabled) 1 else 2
 
       // Verify the response for member.
       val memberId = shareGroupHeartbeatResponse.data.memberId
@@ -377,6 +437,27 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       assertNotNull(memberId)
       assertEquals(expectedMemberEpoch, memberEpoch)
       assertEquals(new ShareGroupHeartbeatResponseData.Assignment(), shareGroupHeartbeatResponse.data.assignment)
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isShareAssignorOffloadEnabled) {
+        shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+          new ShareGroupHeartbeatRequestData()
+            .setGroupId("grp")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+        ).build()
+        TestUtils.waitUntilTrue(() => {
+          shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+          shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+            shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch
+        }, msg = s"Did not receive initial assignment. Last response $shareGroupHeartbeatResponse.")
+
+        // Verify the response for member. The assignment is unchanged.
+        expectedMemberEpoch += 1
+        memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
+        assertEquals(expectedMemberEpoch, memberEpoch)
+        assertNull(shareGroupHeartbeatResponse.data.assignment)
+      }
 
       // Create the topic.
       val topicId = TestUtils.createTopicWithAdminRaw(
@@ -446,7 +527,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
       TestUtils.waitUntilTrue(() => {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
-        (!isShareAssignmentBatchingEnabled || shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch)
+        (if (isShareAssignmentBatchingEnabled || isShareAssignorOffloadEnabled) shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch else true)
       }, msg = s"Could not rejoin the group successfully. Last response $shareGroupHeartbeatResponse.")
       expectedMemberEpoch += 1
 
@@ -492,7 +573,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
         shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
       }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
-      var expectedMemberEpoch = 2
+      var expectedMemberEpoch = if (isShareAssignorOffloadEnabled) 1 else 2
 
       // Verify the response for member.
       val memberId = shareGroupHeartbeatResponse.data.memberId
@@ -500,6 +581,28 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       assertNotNull(memberId)
       assertEquals(expectedMemberEpoch, memberEpoch)
       assertEquals(new ShareGroupHeartbeatResponseData.Assignment(), shareGroupHeartbeatResponse.data.assignment)
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isShareAssignorOffloadEnabled) {
+        shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+          new ShareGroupHeartbeatRequestData()
+            .setGroupId("grp")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+        ).build()
+        TestUtils.waitUntilTrue(() => {
+          shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+          shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+            shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch
+        }, msg = s"Did not receive initial assignment. Last response $shareGroupHeartbeatResponse.")
+
+        // Verify the response. The assignment is unchanged.
+        expectedMemberEpoch += 1
+        memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
+        assertEquals(expectedMemberEpoch, memberEpoch)
+        assertNull(shareGroupHeartbeatResponse.data.assignment)
+      }
+
       // Create the topic foo.
       val fooTopicId = TestUtils.createTopicWithAdminRaw(
         admin = admin,
@@ -672,7 +775,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
           shareGroupHeartbeatResponse.data.assignment.topicPartitions.containsAll(expectedAssignment.topicPartitions)
       }, msg = s"Could not update partitions assignment for topic foo. Last response $shareGroupHeartbeatResponse.")
 
-      if (isShareAssignmentBatchingEnabled) {
+      if (isShareAssignmentBatchingEnabled || isShareAssignorOffloadEnabled) {
         // Verify the response. Reconciliation filters out the assignment for deleted topic foo before the next assignment.
         memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
         assertEquals(expectedMemberEpoch, memberEpoch)
@@ -816,8 +919,28 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       val memberId = shareGroupHeartbeatResponse.data.memberId
       var memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
       assertNotNull(memberId)
-      assertEquals(2, memberEpoch)
+      assertEquals(if (isShareAssignorOffloadEnabled) 1 else 2, memberEpoch)
       assertEquals(new ShareGroupHeartbeatResponseData.Assignment(), shareGroupHeartbeatResponse.data.assignment)
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isShareAssignorOffloadEnabled) {
+        shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+          new ShareGroupHeartbeatRequestData()
+            .setGroupId("grp")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+        ).build()
+        TestUtils.waitUntilTrue(() => {
+          shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+          shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+            shareGroupHeartbeatResponse.data.memberEpoch > 1
+        }, msg = s"Did not receive initial assignment. Last response $shareGroupHeartbeatResponse.")
+
+        // Verify the response. The assignment is unchanged.
+        memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
+        assertEquals(2, memberEpoch)
+        assertNull(shareGroupHeartbeatResponse.data.assignment)
+      }
 
       // Create the topic.
       val fooId = TestUtils.createTopicWithAdminRaw(
@@ -983,7 +1106,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
         shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
       }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
-      var expectedMemberEpoch = 2
+      var expectedMemberEpoch = if (isShareAssignorOffloadEnabled) 1 else 2
 
       // Verify the response for member.
       val memberId = shareGroupHeartbeatResponse.data.memberId
@@ -991,6 +1114,28 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       assertNotNull(memberId)
       assertEquals(expectedMemberEpoch, memberEpoch)
       assertEquals(new ShareGroupHeartbeatResponseData.Assignment(), shareGroupHeartbeatResponse.data.assignment)
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isShareAssignorOffloadEnabled) {
+        shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+          new ShareGroupHeartbeatRequestData()
+            .setGroupId("grp")
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch)
+        ).build()
+        TestUtils.waitUntilTrue(() => {
+          shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+          shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+            shareGroupHeartbeatResponse.data.memberEpoch > expectedMemberEpoch
+        }, msg = s"Did not receive initial assignment. Last response $shareGroupHeartbeatResponse.")
+
+        // Verify the response. The assignment is unchanged.
+        expectedMemberEpoch += 1
+        memberEpoch = shareGroupHeartbeatResponse.data.memberEpoch
+        assertEquals(expectedMemberEpoch, memberEpoch)
+        assertNull(shareGroupHeartbeatResponse.data.assignment)
+      }
+
       // Create the topic.
       val fooId = TestUtils.createTopicWithAdminRaw(
         admin = admin,
@@ -1094,7 +1239,26 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
       // Verify initial join success.
       assertNotNull(shareGroupHeartbeatResponse.data.memberId)
-      assertEquals(2, shareGroupHeartbeatResponse.data.memberEpoch)
+      assertEquals(if (isShareAssignorOffloadEnabled) 1 else 2, shareGroupHeartbeatResponse.data.memberEpoch)
+
+      // When assignor offload is enabled, the initial assignment is available in a later heartbeat.
+      if (isShareAssignorOffloadEnabled) {
+        shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+          new ShareGroupHeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setMemberEpoch(shareGroupHeartbeatResponse.data.memberEpoch)
+        ).build()
+        TestUtils.waitUntilTrue(() => {
+          shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+          shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+            shareGroupHeartbeatResponse.data.memberEpoch > 1
+        }, msg = s"Did not receive initial assignment. Last response $shareGroupHeartbeatResponse.")
+
+        // Verify the response. The assignment is unchanged.
+        assertEquals(2, shareGroupHeartbeatResponse.data.memberEpoch)
+        assertNull(shareGroupHeartbeatResponse.data.assignment)
+      }
 
       // Create the topic to trigger partition assignment.
       val topicId = TestUtils.createTopicWithAdminRaw(
