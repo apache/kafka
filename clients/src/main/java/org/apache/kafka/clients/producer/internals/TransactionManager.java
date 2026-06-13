@@ -486,6 +486,12 @@ public class TransactionManager {
                 "(currentState= " + currentState + ")");
         }
 
+        if (!isTransactionV2Enabled()) {
+            TransactionalRequestResult result = new TransactionalRequestResult("sendShareAcknowledgementsToTransaction");
+            result.fail(new UnsupportedVersionException("Transactional share acknowledgements require transaction.version 2 or newer."));
+            return result;
+        }
+
         log.debug("Begin staging share acks {} for share group {} to transaction", acknowledgements, groupMetadata);
         if (acknowledgements.acknowledgements().isEmpty()) {
             TransactionalRequestResult result = new TransactionalRequestResult("sendShareAcknowledgementsToTransaction");

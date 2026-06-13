@@ -1300,7 +1300,7 @@ public class TransactionManagerTest {
     public void testTxnShareAcknowledgeCompletesWhenPartitionErrorsAreNone() {
         TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
 
-        doInitTransactions();
+        doInitTransactionsWithTransactionV2();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
@@ -1315,11 +1315,35 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testTxnShareAcknowledgeRequiresTransactionV2() {
+        TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
+
+        TransactionalRequestResult initResult = transactionManager.initializeTransactions(false);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(transactionManager::hasProducerId);
+        initResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
+        assertFalse(transactionManager.isTransactionV2Enabled());
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
+            shareAcknowledgements(tip),
+            new ShareGroupMetadata(consumerGroupId, memberId, generationId));
+
+        assertTrue(sendAcksResult.isCompleted());
+        assertFalse(sendAcksResult.isSuccessful());
+        assertInstanceOf(UnsupportedVersionException.class, sendAcksResult.error());
+        assertTrue(client.requests().isEmpty());
+        assertFalse(transactionManager.hasError());
+    }
+
+    @Test
     public void testTxnShareAcknowledgeCompletesAfterAllPartitionRequests() {
         TopicIdPartition tip0 = new TopicIdPartition(TOPIC_ID, tp0);
         TopicIdPartition tip1 = new TopicIdPartition(TOPIC_ID, tp1);
 
-        doInitTransactions();
+        doInitTransactionsWithTransactionV2();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
@@ -1344,7 +1368,7 @@ public class TransactionManagerTest {
     public void testUnknownMemberIdInTxnShareAcknowledgePartitionResponse() {
         TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
 
-        doInitTransactions();
+        doInitTransactionsWithTransactionV2();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
@@ -1365,7 +1389,7 @@ public class TransactionManagerTest {
     public void testInvalidRecordStateInTxnShareAcknowledgePartitionResponseIsAbortable() {
         TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
 
-        doInitTransactions();
+        doInitTransactionsWithTransactionV2();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
@@ -1386,7 +1410,7 @@ public class TransactionManagerTest {
     public void testProducerFencedInTxnShareAcknowledgePartitionResponse() {
         TopicIdPartition tip = new TopicIdPartition(TOPIC_ID, tp0);
 
-        doInitTransactions();
+        doInitTransactionsWithTransactionV2();
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendAcksResult = transactionManager.sendShareAcknowledgementsToTransaction(
@@ -4702,6 +4726,12 @@ public class TransactionManagerTest {
 
     private void doInitTransactions() {
         doInitTransactions(producerId, epoch);
+    }
+
+    private void doInitTransactionsWithTransactionV2() {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        doInitTransactions();
+        assertTrue(transactionManager.isTransactionV2Enabled());
     }
 
     private void doInitTransactions(long producerId, short epoch) {

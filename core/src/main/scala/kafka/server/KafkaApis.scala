@@ -4428,12 +4428,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     ShareVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort))
   }
 
+  private def isTransactionV2Enabled: Boolean = {
+    TransactionVersion.fromFeatureLevel(
+      metadataCache.features.finalizedFeatures.getOrDefault(TransactionVersion.FEATURE_NAME, 0.toShort)
+    ).supportsEpochBump
+  }
+
   private def isShareGroupProtocolEnabled: Boolean = {
     shareVersion().supportsShareGroups
   }
 
   private def isTransactionalShareAcknowledgeEnabled: Boolean = {
-    shareVersion().supportsTransactionalShareAcknowledge
+    shareVersion().supportsTransactionalShareAcknowledge && isTransactionV2Enabled
   }
 
   /**

@@ -241,7 +241,8 @@ class KafkaApisTest extends Logging {
 
   def initializeMetadataCacheWithShareGroupsEnabled(
     enableShareGroups: Boolean = true,
-    shareVersion: ShareVersion = ShareVersion.SV_1
+    shareVersion: ShareVersion = ShareVersion.SV_1,
+    transactionVersion: Option[TransactionVersion] = None
   ): MetadataCache = {
     val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
     val delta = new MetadataDelta.Builder()
@@ -260,6 +261,12 @@ class KafkaApisTest extends Logging {
       delta.replay(new FeatureLevelRecord()
         .setName(ShareVersion.FEATURE_NAME)
         .setFeatureLevel(ShareVersion.SV_0.featureLevel())
+      )
+    }
+    transactionVersion.foreach { version =>
+      delta.replay(new FeatureLevelRecord()
+        .setName(TransactionVersion.FEATURE_NAME)
+        .setFeatureLevel(version.featureLevel())
       )
     }
     cache.setImage(delta.apply(MetadataProvenance.EMPTY))
@@ -340,6 +347,45 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testTxnShareAcknowledgeReturnsUnsupportedVersionBeforeTransactionVersionTwo(): Unit = {
+    val transactionalId = "transactional-id"
+    val groupId = "group"
+    val memberId = "member-id"
+    val producerId = 10L
+    val producerEpoch = 2.toShort
+    val topic = "foo"
+    val topicId = Uuid.randomUuid
+    val sourcePartition = 1
+
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3,
+      transactionVersion = Some(TransactionVersion.TV_1)
+    )
+    addTopicToMetadataCache(topic, 2, topicId = topicId)
+
+    val request = buildRequest(txnShareAcknowledgeRequest(
+      transactionalId,
+      groupId,
+      producerId,
+      producerEpoch,
+      memberId,
+      topicId,
+      sourcePartition,
+      5L,
+      6L,
+      AcknowledgeType.ACCEPT.id))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+
+    val response = verifyNoThrottling[TxnShareAcknowledgeResponse](request)
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, response.data.errorCode)
+    verify(txnCoordinator, never()).handleAddPartitionsToTransaction(any(), anyLong(), anyShort(), any(), any(), any(), any())
+    verify(addPartitionsToTxnManager, never()).addOrVerifyTransaction(any(), anyLong(), anyShort(), any(), any(), any())
+    verify(sharePartitionManager, never()).acknowledgeTransactional(any(), any(), anyLong(), anyShort(), any())
+  }
+
+  @Test
   def testTxnShareAcknowledgeRegistersShareStatePartitionBeforeStaging(): Unit = {
     val transactionalId = "transactional-id"
     val groupId = "group"
@@ -352,7 +398,10 @@ class KafkaApisTest extends Logging {
     val shareStatePartitionId = 7
     val requestLocal = RequestLocal.withThreadConfinedCaching
 
-    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(shareVersion = ShareVersion.SV_3)
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3,
+      transactionVersion = Some(TransactionVersion.TV_2)
+    )
     addTopicToMetadataCache(topic, 2, topicId = topicId)
 
     val tip = new TopicIdPartition(topicId, new TopicPartition(topic, sourcePartition))
@@ -420,7 +469,10 @@ class KafkaApisTest extends Logging {
     val topicId = Uuid.randomUuid
     val sourcePartition = 1
 
-    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(shareVersion = ShareVersion.SV_3)
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3,
+      transactionVersion = Some(TransactionVersion.TV_2)
+    )
     addTopicToMetadataCache(topic, 2, topicId = topicId)
 
     val request = buildRequest(txnShareAcknowledgeRequest(
@@ -465,7 +517,10 @@ class KafkaApisTest extends Logging {
     val shareStatePartitionId = 7
     val requestLocal = RequestLocal.withThreadConfinedCaching
 
-    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(shareVersion = ShareVersion.SV_3)
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3,
+      transactionVersion = Some(TransactionVersion.TV_2)
+    )
     addTopicToMetadataCache(topic, 2, topicId = topicId)
 
     val tip = new TopicIdPartition(topicId, new TopicPartition(topic, sourcePartition))
@@ -516,7 +571,10 @@ class KafkaApisTest extends Logging {
     val topicId = Uuid.randomUuid
     val sourcePartition = 1
 
-    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(shareVersion = ShareVersion.SV_3)
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3,
+      transactionVersion = Some(TransactionVersion.TV_2)
+    )
 
     val request = buildRequest(txnShareAcknowledgeRequest(
       transactionalId,
@@ -557,7 +615,10 @@ class KafkaApisTest extends Logging {
     val shareStatePartitionId = 7
     val requestLocal = RequestLocal.withThreadConfinedCaching
 
-    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(shareVersion = ShareVersion.SV_3)
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3,
+      transactionVersion = Some(TransactionVersion.TV_2)
+    )
     addTopicToMetadataCache(authorizedTopic, 1, topicId = authorizedTopicId)
     addTopicToMetadataCache(deniedTopic, 2, topicId = deniedTopicId)
 
