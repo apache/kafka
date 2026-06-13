@@ -3754,7 +3754,10 @@ class KafkaApisTest extends Logging {
   @Test
   def testWriteTxnMarkersRoutesShareStateMarkerToShareCoordinator(): Unit = {
     val shareStatePartition = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, 0)
-    val (_, request) = createWriteTxnMarkersRequest(util.List.of(shareStatePartition))
+    val (_, request) = createWriteTxnMarkersRequest(
+      util.List.of(shareStatePartition),
+      TransactionVersion.TV_2.featureLevel()
+    )
     val affectedTip = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("source-topic", 3))
     val affectedSharePartition = SharePartitionKey.getInstance("share-group", affectedTip)
 
@@ -3766,7 +3769,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
+      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
     )).thenReturn(CompletableFuture.completedFuture[util.Set[SharePartitionKey]](util.Set.of(affectedSharePartition)))
 
     kafkaApis = createKafkaApis()
@@ -3778,7 +3781,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
+      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
     )
     verify(replicaManager, never()).appendRecords(
       anyLong,
@@ -3804,11 +3807,15 @@ class KafkaApisTest extends Logging {
     "COORDINATOR_NOT_AVAILABLE",
     "COORDINATOR_LOAD_IN_PROGRESS",
     "NOT_COORDINATOR",
-    "REQUEST_TIMED_OUT"
+    "REQUEST_TIMED_OUT",
+    "UNSUPPORTED_VERSION"
   ))
   def testWriteTxnMarkersShareCoordinatorErrorTranslation(error: Errors): Unit = {
     val shareStatePartition = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, 0)
-    val (_, request) = createWriteTxnMarkersRequest(util.List.of(shareStatePartition))
+    val (_, request) = createWriteTxnMarkersRequest(
+      util.List.of(shareStatePartition),
+      TransactionVersion.TV_2.featureLevel()
+    )
 
     when(replicaManager.onlinePartition(shareStatePartition))
       .thenReturn(Some(mock(classOf[Partition])))
@@ -3818,7 +3825,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
+      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
     )).thenReturn(CompletableFuture.failedFuture[util.Set[SharePartitionKey]](error.exception()))
 
     kafkaApis = createKafkaApis()
@@ -10866,9 +10873,12 @@ class KafkaApisTest extends Logging {
     assertEquals(ListOffsetsResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
   }
 
-  private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
+  private def createWriteTxnMarkersRequest(
+    partitions: util.List[TopicPartition],
+    transactionVersion: Short = TransactionVersion.TV_1.featureLevel()
+  ) = {
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      util.List.of(new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions, TransactionVersion.TV_1.featureLevel()))).build()
+      util.List.of(new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions, transactionVersion))).build()
     (writeTxnMarkersRequest, buildRequest(writeTxnMarkersRequest))
   }
 

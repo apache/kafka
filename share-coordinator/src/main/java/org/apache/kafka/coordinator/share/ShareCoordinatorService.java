@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
@@ -57,6 +58,7 @@ import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ShareVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
@@ -1021,6 +1023,12 @@ public class ShareCoordinatorService implements ShareCoordinator {
         if (!tp.topic().equals(Topic.SHARE_GROUP_STATE_TOPIC_NAME)) {
             return CompletableFuture.failedFuture(new IllegalStateException(
                 "Completing a transaction for " + tp + " is not expected"
+            ));
+        }
+
+        if (transactionVersion < TransactionVersion.TV_2.featureLevel()) {
+            return CompletableFuture.failedFuture(new UnsupportedVersionException(
+                "Transactional share markers require transaction.version 2 or newer."
             ));
         }
 
