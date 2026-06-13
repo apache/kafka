@@ -41,6 +41,21 @@ object ShareGroupHeartbeatRequestTest {
   ))
   class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends ShareGroupHeartbeatRequestTest(cluster) {
   }
+
+  @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false"),
+    new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
+  ))
+  class WithAssignorOffloadDisabledTest(cluster: ClusterInstance) extends ShareGroupHeartbeatRequestTest(cluster) {
+  }
+
+  @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false"),
+    new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
+  ))
+  class WithAssignmentBatchingAndAssignorOffloadDisabledTest(cluster: ClusterInstance) extends ShareGroupHeartbeatRequestTest(cluster) {
+  }
 }
 
 @Timeout(120)
