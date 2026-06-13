@@ -65,6 +65,10 @@ Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS v
 
 Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.
 
+## Streams API changes in 4.4.0
+
+`org.apache.kafka.streams.CloseOptions.GroupMembershipOperation` adds a new `DEFAULT` value, which is now the default for `CloseOptions`. Under the classic protocol, `DEFAULT` keeps the existing behavior — the consumer remains in the group on close. Under the streams protocol (`group.protocol=streams`), `DEFAULT` adapts to the membership type: dynamic members leave the group on close, while static members remain in the group until session timeout. `LEAVE_GROUP` and `REMAIN_IN_GROUP` continue to force the corresponding behavior regardless of protocol. More details can be found in [KIP-1284](https://cwiki.apache.org/confluence/x/1ow8G).
+
 ## Streams API changes in 4.3.0
 
 **Note:** Kafka Streams 4.3.0 contains a critical native memory leak in the RocksDB state store layer ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616)). The `ColumnFamilyOptions` for the offsets column family is not closed, and column family handles can leak on close-path exceptions, which under cascading task closes (e.g., rebalances or error-triggered recoveries) leads to unbounded off-heap memory growth and eventual OOM. Users running Kafka Streams should consider upgrading directly to 4.3.1, which includes the fix for it.
