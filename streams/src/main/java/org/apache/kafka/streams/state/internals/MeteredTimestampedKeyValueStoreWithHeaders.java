@@ -20,6 +20,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -78,6 +79,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     extends MeteredKeyValueStore<K, ValueTimestampHeaders<V>>
     implements TimestampedKeyValueStoreWithHeaders<K, V> {
+
+    private static final Serializer<byte[]> BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
 
     MeteredTimestampedKeyValueStoreWithHeaders(
         final KeyValueStore<Bytes, byte[]> inner,
@@ -586,7 +589,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     ) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
-        return prefixScanInternal(wrapped(), prefix, prefixKeySerializer);
+        final byte[] keyBytes = prefixKeySerializer.serialize(null, internalContext.headers(), prefix);
+        return prefixScanInternal(wrapped(), keyBytes, BYTE_ARRAY_SERIALIZER);
     }
 
     private <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScanInternal(
