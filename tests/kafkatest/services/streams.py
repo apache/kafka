@@ -655,6 +655,33 @@ class StaticMemberTestService(StreamsTestBaseService):
         return cfg.render()
 
 
+class StaticMemberPersistentProcessIdTestService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, group_instance_id, num_threads, group_protocol):
+        super(StaticMemberPersistentProcessIdTestService, self).__init__(test_context,
+                                                                         kafka,
+                                                                         "org.apache.kafka.streams.tests.StaticMemberPersistentProcessIdTestClient",
+                                                                         "")
+        self.INPUT_TOPIC = None
+        self.GROUP_INSTANCE_ID = group_instance_id
+        self.GROUP_PROTOCOL = group_protocol
+        self.NUM_THREADS = num_threads
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.state_dir,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.NUM_THREADS: self.NUM_THREADS,
+                      streams_property.GROUP_PROTOCOL: self.GROUP_PROTOCOL,
+                      consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
+                      consumer_property.SESSION_TIMEOUT_MS: 60000, # set longer session timeout for static member test
+                      'input.topic': self.INPUT_TOPIC,
+                      "acceptable.recovery.lag": "9223372036854775807" # enable a one-shot assignment
+                      }
+
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+
 class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
         super(CooperativeRebalanceUpgradeService, self).__init__(test_context,
