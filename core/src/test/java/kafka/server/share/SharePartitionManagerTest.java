@@ -3255,6 +3255,40 @@ public class SharePartitionManagerTest {
         Mockito.verify(sp2).applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT);
     }
 
+    @Test
+    public void testInvalidateSharePartitionsRemovesOnlyAffectedSharePartition() {
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
+        SharePartitionKey key1 = new SharePartitionKey("grp", tp1);
+        SharePartitionKey key2 = new SharePartitionKey("grp", tp2);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+        SharePartitionListener listener1 = mock(SharePartitionListener.class);
+        SharePartitionListener listener2 = mock(SharePartitionListener.class);
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        when(sp1.listener()).thenReturn(listener1);
+        when(sp2.listener()).thenReturn(listener2);
+
+        SharePartitionCache partitionCache = new SharePartitionCache();
+        partitionCache.put(key1, sp1);
+        partitionCache.put(key2, sp2);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withPartitionCache(partitionCache)
+            .withBrokerTopicStats(brokerTopicStats)
+            .build();
+
+        sharePartitionManager.invalidateSharePartitions(Set.of(key1));
+
+        assertNull(partitionCache.get(key1));
+        assertEquals(sp2, partitionCache.get(key2));
+        Mockito.verify(sp1).markFenced();
+        Mockito.verify(sp2, Mockito.never()).markFenced();
+        Mockito.verify(replicaManager).removeListener(tp1.topicPartition(), listener1);
+        Mockito.verify(replicaManager, Mockito.never()).removeListener(tp2.topicPartition(), listener2);
+    }
+
     private Timer systemTimerReaper() {
         return new SystemTimerReaper(
             TIMER_NAME_PREFIX + "-test-reaper",

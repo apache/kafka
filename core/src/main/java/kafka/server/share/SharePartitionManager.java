@@ -401,6 +401,11 @@ public class SharePartitionManager implements AutoCloseable {
             .toArray(CompletableFuture[]::new));
     }
 
+    public void invalidateSharePartitions(Set<SharePartitionKey> sharePartitionKeys) {
+        sharePartitionKeys.forEach(sharePartitionKey ->
+            removeSharePartitionFromCache(sharePartitionKey, partitionCache, replicaManager));
+    }
+
     /**
      * The release session method is used to release the session for the memberId of respective group.
      * The method post removing session also releases acquired records for the respective member.

@@ -1830,8 +1830,15 @@ class KafkaApis(val requestChannel: RequestChannel,
               marker.coordinatorEpoch,
               marker.transactionResult,
               markerTransactionVersion
-            ).whenComplete { (_, exception) =>
-              val error = if (exception == null) {
+            ).whenComplete { (affectedSharePartitions, exception) =>
+              val markerError = if (exception == null) {
+                if (affectedSharePartitions != null && !affectedSharePartitions.isEmpty) {
+                  try {
+                    sharePartitionManager.invalidateSharePartitions(affectedSharePartitions)
+                  } catch {
+                    case t: Throwable => error(s"Failed to invalidate share partition caches for transaction marker on $partition", t)
+                  }
+                }
                 Errors.NONE
               } else {
                 Errors.forException(exception) match {
@@ -1841,7 +1848,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                     error
                 }
               }
-              addResultAndMaybeComplete(partition, error)
+              addResultAndMaybeComplete(partition, markerError)
             }
           } else {
             // Otherwise, the regular appendRecords path is used for all the non __consumer_offsets

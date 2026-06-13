@@ -3755,6 +3755,8 @@ class KafkaApisTest extends Logging {
   def testWriteTxnMarkersRoutesShareStateMarkerToShareCoordinator(): Unit = {
     val shareStatePartition = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, 0)
     val (_, request) = createWriteTxnMarkersRequest(util.List.of(shareStatePartition))
+    val affectedTip = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("source-topic", 3))
+    val affectedSharePartition = SharePartitionKey.getInstance("share-group", affectedTip)
 
     when(replicaManager.onlinePartition(shareStatePartition))
       .thenReturn(Some(mock(classOf[Partition])))
@@ -3765,7 +3767,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
-    )).thenReturn(CompletableFuture.completedFuture[util.Set[SharePartitionKey]](util.Set.of()))
+    )).thenReturn(CompletableFuture.completedFuture[util.Set[SharePartitionKey]](util.Set.of(affectedSharePartition)))
 
     kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
@@ -3791,6 +3793,7 @@ class KafkaApisTest extends Logging {
       any()
     )
     verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
+    verify(sharePartitionManager).invalidateSharePartitions(ArgumentMatchers.eq(util.Set.of(affectedSharePartition)))
 
     val response = verifyNoThrottling[WriteTxnMarkersResponse](request)
     assertEquals(Errors.NONE, response.errorsByProducerId.get(1L).get(shareStatePartition))
@@ -3841,6 +3844,7 @@ class KafkaApisTest extends Logging {
       any()
     )
     verify(sharePartitionManager, never()).applyTxnMarker(anyLong, anyShort, any())
+    verify(sharePartitionManager, never()).invalidateSharePartitions(any())
     val response = verifyNoThrottling[WriteTxnMarkersResponse](request)
     assertEquals(expectedError, response.errorsByProducerId.get(1L).get(shareStatePartition))
   }
