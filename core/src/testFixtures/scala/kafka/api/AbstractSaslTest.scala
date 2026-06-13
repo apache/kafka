@@ -17,6 +17,5 @@ package kafka.api
  * Separate class required to overcome issues related to usage of scala trait in java code.
  * @see SaslClientsWithInvalidCredentialsTest
  */
-abstract class AbstractSaslTest extends IntegrationTestHarness with SaslSetup {
+abstract class AbstractSaslTest extends IntegrationTestHarness with SaslSetupFixtures {
 }
-
