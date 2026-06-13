@@ -230,7 +230,7 @@ public class RecordAccumulator {
      * @param partitionInfo The built-in partitioner's partition info
      * @param deque The partition queue
      * @param nowMs The current time, in milliseconds
-     * @param cluster THe cluster metadata
+     * @param cluster The cluster metadata
      * @return 'true' if partition changed and we need to get new partition info and retry,
      *         'false' otherwise
      */
@@ -510,7 +510,7 @@ public class RecordAccumulator {
     }
 
     /**
-     * Split the big batch that has been rejected and reenqueue the split batches in to the accumulator.
+     * Split the big batch that has been rejected and reenqueue the split batches into the accumulator.
      * @return the number of split batches.
      */
     public int splitAndReenqueue(ProducerBatch bigBatch) {

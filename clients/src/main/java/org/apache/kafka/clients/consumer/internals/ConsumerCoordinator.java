@@ -509,7 +509,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @param timer Timer bounding how long this method can block
      * @param waitForJoinGroup Boolean flag indicating if we should wait until re-join group completes
      * @throws KafkaException if the rebalance callback throws an exception
-     * @return true iff the operation succeeded
+     * @return true if the operation succeeded
      */
     public boolean poll(Timer timer, boolean waitForJoinGroup) {
         maybeUpdateSubscriptionMetadata();
@@ -1413,7 +1413,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                     if (ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
                                         exception = new RebalanceInProgressException("Offset commit cannot be completed since the " +
                                             "consumer member's old generation is fenced by its group instance id, it is possible that " +
-                                            "this consumer has already participated another rebalance and got a new generation");
+                                            "this consumer has already participated in another rebalance and got a new generation");
                                     } else {
                                         exception = new CommitFailedException();
                                     }

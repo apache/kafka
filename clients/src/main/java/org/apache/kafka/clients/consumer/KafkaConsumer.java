@@ -430,7 +430,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *
  * <p>
  * Partitions with transactional messages will include commit or abort markers which indicate the result of a transaction.
- * There markers are not returned to applications, yet have an offset in the log. As a result, applications reading from
+ * These markers are not returned to applications, yet have an offset in the log. As a result, applications reading from
  * topics with transactional messages will see gaps in the consumed offsets. These missing messages would be the transaction
  * markers, and they are filtered out for consumers in both isolation levels. Additionally, applications using
  * {@code read_committed} consumers may also see gaps due to aborted transactions, since those messages would not
