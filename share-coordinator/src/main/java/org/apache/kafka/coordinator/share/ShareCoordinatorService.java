@@ -1006,7 +1006,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public CompletableFuture<Void> completeTransaction(
+    public CompletableFuture<Set<SharePartitionKey>> completeTransaction(
         TopicPartition tp,
         long producerId,
         short producerEpoch,

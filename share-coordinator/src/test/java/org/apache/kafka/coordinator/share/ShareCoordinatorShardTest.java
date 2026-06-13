@@ -1888,13 +1888,14 @@ class ShareCoordinatorShardTest {
     public void testCompleteTransactionCommitAcceptFinalizesPendingAck() {
         replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
 
-        CoordinatorResult<Void, CoordinatorRecord> result = shard.completeTransaction(
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
             PRODUCER_ID,
             PRODUCER_EPOCH,
             TransactionResult.COMMIT
         );
 
         assertEquals(1, result.records().size());
+        assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
         ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
         assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_ACKNOWLEDGED, (short) 1)), offset.stateBatches());
         assertEquals(3, offset.deliveryCompleteCount());
@@ -1907,13 +1908,14 @@ class ShareCoordinatorShardTest {
     public void testCompleteTransactionCommitRejectUsesStagedFinalState() {
         replayPendingShareState(ACKNOWLEDGE_TYPE_REJECT, DELIVERY_STATE_ARCHIVING, PRODUCER_EPOCH);
 
-        CoordinatorResult<Void, CoordinatorRecord> result = shard.completeTransaction(
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
             PRODUCER_ID,
             PRODUCER_EPOCH,
             TransactionResult.COMMIT
         );
 
         assertEquals(1, result.records().size());
+        assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
         ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
         assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_ARCHIVING, (short) 1)), offset.stateBatches());
         assertEquals(0, offset.deliveryCompleteCount());
@@ -1923,13 +1925,14 @@ class ShareCoordinatorShardTest {
     public void testCompleteTransactionAbortMakesPendingAckAvailable() {
         replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
 
-        CoordinatorResult<Void, CoordinatorRecord> result = shard.completeTransaction(
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
             PRODUCER_ID,
             PRODUCER_EPOCH,
             TransactionResult.ABORT
         );
 
         assertEquals(1, result.records().size());
+        assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
         ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
         assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_AVAILABLE, (short) 1)), offset.stateBatches());
         assertEquals(0, offset.deliveryCompleteCount());
@@ -1938,33 +1941,35 @@ class ShareCoordinatorShardTest {
     @Test
     public void testCompleteTransactionDuplicateMarkerIsIdempotent() {
         replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
-        CoordinatorResult<Void, CoordinatorRecord> firstResult = shard.completeTransaction(
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> firstResult = shard.completeTransaction(
             PRODUCER_ID,
             PRODUCER_EPOCH,
             TransactionResult.COMMIT
         );
         shard.replay(1L, PRODUCER_ID, PRODUCER_EPOCH, firstResult.records().get(0));
 
-        CoordinatorResult<Void, CoordinatorRecord> duplicateResult = shard.completeTransaction(
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> duplicateResult = shard.completeTransaction(
             PRODUCER_ID,
             PRODUCER_EPOCH,
             TransactionResult.COMMIT
         );
 
         assertTrue(duplicateResult.records().isEmpty());
+        assertTrue(duplicateResult.response().isEmpty());
     }
 
     @Test
     public void testCompleteTransactionStaleProducerEpochDoesNotMutatePendingAck() {
         replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
 
-        CoordinatorResult<Void, CoordinatorRecord> result = shard.completeTransaction(
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
             PRODUCER_ID,
             (short) (PRODUCER_EPOCH - 1),
             TransactionResult.COMMIT
         );
 
         assertTrue(result.records().isEmpty());
+        assertTrue(result.response().isEmpty());
         assertEquals(
             List.of(new PersisterStateBatch(
                 10,

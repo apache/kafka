@@ -118,15 +118,16 @@ class ShareCoordinatorServiceTest {
             mock(PartitionWriter.class)
         );
         TopicPartition topicPartition = new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0);
+        SharePartitionKey affectedKey = SharePartitionKey.getInstance("group", Uuid.randomUuid(), 0);
         when(runtime.scheduleWriteOperation(
             eq("complete-share-transaction"),
             eq(topicPartition),
             any()
-        )).thenReturn(CompletableFuture.completedFuture(null));
+        )).thenReturn(CompletableFuture.completedFuture(Set.of(affectedKey)));
 
         service.startup(() -> 1);
 
-        assertEquals(null, service.completeTransaction(
+        assertEquals(Set.of(affectedKey), service.completeTransaction(
             topicPartition,
             100L,
             (short) 3,

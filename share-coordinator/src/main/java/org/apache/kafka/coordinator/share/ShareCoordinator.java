@@ -36,6 +36,7 @@ import org.apache.kafka.server.share.SharePartitionKey;
 
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntSupplier;
 
@@ -108,7 +109,7 @@ public interface ShareCoordinator {
      */
     CompletableFuture<InitializeShareGroupStateResponseData> initializeState(RequestContext context, InitializeShareGroupStateRequestData request);
 
-    CompletableFuture<Void> completeTransaction(
+    CompletableFuture<Set<SharePartitionKey>> completeTransaction(
         TopicPartition tp,
         long producerId,
         short producerEpoch,

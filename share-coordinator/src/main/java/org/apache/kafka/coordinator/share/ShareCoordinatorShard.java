@@ -311,12 +311,13 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         CoordinatorShard.super.replayEndTransactionMarker(producerId, producerEpoch, result);
     }
 
-    public CoordinatorResult<Void, CoordinatorRecord> completeTransaction(
+    public CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> completeTransaction(
         long producerId,
         short producerEpoch,
         TransactionResult result
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
+        Set<SharePartitionKey> affectedKeys = new HashSet<>();
         long timestamp = time.milliseconds();
 
         for (Map.Entry<SharePartitionKey, ShareGroupOffset> entry : shareStateMap.entrySet()) {
@@ -345,6 +346,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
 
             if (hasMatchingPendingBatch) {
+                affectedKeys.add(key);
                 records.add(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
                     key.groupId(),
                     key.topicId(),
@@ -363,7 +365,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
         }
 
-        return new CoordinatorResult<>(records, null);
+        return new CoordinatorResult<>(records, affectedKeys);
     }
 
     private boolean isMatchingPendingBatch(PersisterStateBatch batch, long producerId, short producerEpoch) {

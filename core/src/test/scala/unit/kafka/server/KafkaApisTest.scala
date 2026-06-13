@@ -3765,7 +3765,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
-    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+    )).thenReturn(CompletableFuture.completedFuture[util.Set[SharePartitionKey]](util.Set.of()))
 
     kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
@@ -3816,7 +3816,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
-    )).thenReturn(CompletableFuture.failedFuture[Void](error.exception()))
+    )).thenReturn(CompletableFuture.failedFuture[util.Set[SharePartitionKey]](error.exception()))
 
     kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
