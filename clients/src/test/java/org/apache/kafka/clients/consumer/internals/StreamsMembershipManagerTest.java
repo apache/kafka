@@ -1543,6 +1543,56 @@ public class StreamsMembershipManagerTest {
     }
 
     @Test
+    public void testStaticMemberRemainInGroupUsesStaticLeaveEpochOnClose() {
+        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
+        MemberState expectedState = MemberState.LEAVING;
+        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
+        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
+    }
+
+    @Test
+    public void testStaticMemberDefaultUsesLeaveGroupStaticMemberEpochOnClose() {
+        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.DEFAULT;
+        MemberState expectedState = MemberState.LEAVING;
+        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
+        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
+    }
+
+    @Test
+    public void testStaticMemberLeaveGroupUsesLeaveGroupEpochOnClose() {
+        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+        MemberState expectedState = MemberState.LEAVING;
+        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
+    }
+
+    private void verifyStaticMemberLeaveOnClose(
+        CloseOptions.GroupMembershipOperation membershipOperation,
+        MemberState expectedMemberState,
+        int expectedMemberEpoch
+    ) {
+        final Metrics localMetrics = new Metrics(time);
+        StreamsMembershipManager membershipManagerWithStaticMember = new StreamsMembershipManager(
+            GROUP_ID,
+            Optional.of("instance-1"),
+            streamsRebalanceData,
+            subscriptionState,
+            backgroundEventHandler,
+            new LogContext("test"),
+            time,
+            localMetrics
+        );
+        membershipManagerWithStaticMember.registerStateListener(memberStateListener);
+        joining(membershipManagerWithStaticMember);
+
+        CompletableFuture<Void> onGroupLeft = membershipManagerWithStaticMember.leaveGroupOnClose(membershipOperation);
+
+        assertEquals(expectedMemberState, membershipManagerWithStaticMember.state());
+        assertEquals(expectedMemberEpoch, membershipManagerWithStaticMember.memberEpoch());
+        assertFalse(onGroupLeft.isDone());
+    }
+
+    @Test
     public void testOnHeartbeatSuccessWhenInUnsubscribeLeaveNotInProgress() {
         membershipManager.onHeartbeatSuccess(makeHeartbeatResponseWithActiveTasks(
             SUBTOPOLOGY_ID_0, List.of(PARTITION_0),
@@ -2686,6 +2736,12 @@ public class StreamsMembershipManagerTest {
         membershipManager.onSubscriptionUpdated();
         membershipManager.onConsumerPoll();
         verifyInStateJoining(membershipManager);
+    }
+
+    private void joining(StreamsMembershipManager givenMembershipManager) {
+        givenMembershipManager.onSubscriptionUpdated();
+        givenMembershipManager.onConsumerPoll();
+        verifyInStateJoining(givenMembershipManager);
     }
 
     private void reconcile(final StreamsGroupHeartbeatResponse response) {

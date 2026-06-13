@@ -1329,6 +1329,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         names = {
             "INVALID_REQUEST",
             "GROUP_MAX_SIZE_REACHED",
+            "UNRELEASED_INSTANCE_ID",
             "UNSUPPORTED_VERSION",
             "STREAMS_INVALID_TOPOLOGY",
             "STREAMS_INVALID_TOPOLOGY_EPOCH",
@@ -1457,6 +1458,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Errors.GROUP_MAX_SIZE_REACHED,
             Errors.FENCED_MEMBER_EPOCH,
             Errors.UNKNOWN_MEMBER_ID,
+            Errors.UNRELEASED_INSTANCE_ID,
             Errors.UNSUPPORTED_VERSION,
             Errors.STREAMS_INVALID_TOPOLOGY,
             Errors.STREAMS_INVALID_TOPOLOGY_EPOCH,
@@ -1491,6 +1493,30 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(GROUP_ID, streamsRequest.data().groupId());
         assertEquals(MEMBER_ID, streamsRequest.data().memberId());
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, streamsRequest.data().memberEpoch());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CloseOptions.GroupMembershipOperation.class, names = {"DEFAULT", "REMAIN_IN_GROUP"})
+    public void testPollOnCloseWhenStaticMemberIsLeaving(final CloseOptions.GroupMembershipOperation operation) {
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+        when(membershipManager.isLeavingGroup()).thenReturn(true);
+        when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+        when(membershipManager.groupId()).thenReturn(GROUP_ID);
+        when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+        when(membershipManager.memberEpoch()).thenReturn(LEAVE_GROUP_STATIC_MEMBER_EPOCH);
+
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.pollOnClose(time.milliseconds());
+
+        assertEquals(1, result.unsentRequests.size());
+        final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+        StreamsGroupHeartbeatRequest streamsRequest =
+            (StreamsGroupHeartbeatRequest) networkRequest.requestBuilder().build();
+
+        assertEquals(GROUP_ID, streamsRequest.data().groupId());
+        assertEquals(MEMBER_ID, streamsRequest.data().memberId());
+        assertEquals(LEAVE_GROUP_STATIC_MEMBER_EPOCH, streamsRequest.data().memberEpoch());
+        assertEquals(INSTANCE_ID, streamsRequest.data().instanceId());
     }
 
     @Test
