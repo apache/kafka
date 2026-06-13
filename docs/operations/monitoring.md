@@ -136,7 +136,7 @@ Request rate
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=RequestsPerSec,request={Produce|FetchConsumer|FetchFollower},version=([0-9]+)
+kafka.network:type=RequestMetrics,name=RequestsPerSec,request=([-.\w]+),version=([0-9]+)
 </td>  
 <td>
 
@@ -227,7 +227,7 @@ Temporary memory size in bytes
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=TemporaryMemoryBytes,request={Produce|Fetch}
+kafka.network:type=RequestMetrics,name=TemporaryMemoryBytes,request=([-.\w]+)
 </td>  
 <td>
 
@@ -240,7 +240,7 @@ Message conversion time
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=MessageConversionsTimeMs,request={Produce|Fetch}
+kafka.network:type=RequestMetrics,name=MessageConversionsTimeMs,request=([-.\w]+)
 </td>  
 <td>
 
@@ -486,7 +486,7 @@ kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount
 Ineligible pending replica deletes
 </td>  
 <td>
-
+x
 kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount
 </td>  
 <td>
@@ -682,7 +682,7 @@ Request total time
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=TotalTimeMs,request={Produce|FetchConsumer|FetchFollower}
+kafka.network:type=RequestMetrics,name=TotalTimeMs,request=([-.\w]+)
 </td>  
 <td>
 
@@ -695,7 +695,7 @@ Time the request waits in the request queue
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=RequestQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}
+kafka.network:type=RequestMetrics,name=RequestQueueTimeMs,request=([-.\w]+)
 </td>  
 <td>
 
@@ -708,7 +708,7 @@ Time the request is processed at the leader
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=LocalTimeMs,request={Produce|FetchConsumer|FetchFollower}
+kafka.network:type=RequestMetrics,name=LocalTimeMs,request=([-.\w]+)
 </td>  
 <td>
 
@@ -721,7 +721,7 @@ Time the request waits for the follower
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=RemoteTimeMs,request={Produce|FetchConsumer|FetchFollower}
+kafka.network:type=RequestMetrics,name=RemoteTimeMs,request=([-.\w]+)
 </td>  
 <td>
 
@@ -734,7 +734,7 @@ Time the request waits in the response queue
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=ResponseQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}
+kafka.network:type=RequestMetrics,name=ResponseQueueTimeMs,request=([-.\w]+)
 </td>  
 <td>
 
@@ -747,7 +747,7 @@ Time to send the response
 </td>  
 <td>
 
-kafka.network:type=RequestMetrics,name=ResponseSendTimeMs,request={Produce|FetchConsumer|FetchFollower}
+kafka.network:type=RequestMetrics,name=ResponseSendTimeMs,request=([-.\w]+)
 </td>  
 <td>
 
