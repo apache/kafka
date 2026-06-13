@@ -459,6 +459,106 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testTxnShareAcknowledgeRegistersAllShareStatePartitionsBeforeStaging(): Unit = {
+    val transactionalId = "transactional-id"
+    val groupId = "group"
+    val memberId = "member-id"
+    val producerId = 10L
+    val producerEpoch = 2.toShort
+    val topic = "foo"
+    val topicId = Uuid.randomUuid
+    val sourcePartition0 = 1
+    val sourcePartition1 = 2
+    val shareStatePartitionId0 = 7
+    val shareStatePartitionId1 = 8
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3,
+      transactionVersion = Some(TransactionVersion.TV_2)
+    )
+    addTopicToMetadataCache(topic, 3, topicId = topicId)
+
+    val tip0 = new TopicIdPartition(topicId, new TopicPartition(topic, sourcePartition0))
+    val tip1 = new TopicIdPartition(topicId, new TopicPartition(topic, sourcePartition1))
+    val shareStatePartition0 = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, shareStatePartitionId0)
+    val shareStatePartition1 = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, shareStatePartitionId1)
+    when(shareCoordinator.partitionFor(ArgumentMatchers.eq(SharePartitionKey.getInstance(groupId, tip0))))
+      .thenReturn(shareStatePartitionId0)
+    when(shareCoordinator.partitionFor(ArgumentMatchers.eq(SharePartitionKey.getInstance(groupId, tip1))))
+      .thenReturn(shareStatePartitionId1)
+
+    val addPartitionsCallback: ArgumentCaptor[AddPartitionsToTxnManager.AppendCallback] =
+      ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
+    doNothing().when(addPartitionsToTxnManager).addOrVerifyTransaction(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(producerId),
+      ArgumentMatchers.eq(producerEpoch),
+      ArgumentMatchers.eq(util.Set.of(shareStatePartition0, shareStatePartition1)),
+      addPartitionsCallback.capture(),
+      ArgumentMatchers.eq(AddPartitionsToTxnManager.TransactionSupportedOperation.ADD_PARTITION)
+    )
+
+    val acknowledgeBatchesCaptor: ArgumentCaptor[util.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]] =
+      ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]])
+    when(sharePartitionManager.acknowledgeTransactional(
+      ArgumentMatchers.eq(memberId),
+      ArgumentMatchers.eq(groupId),
+      ArgumentMatchers.eq(producerId),
+      ArgumentMatchers.eq(producerEpoch),
+      acknowledgeBatchesCaptor.capture()
+    )).thenReturn(CompletableFuture.completedFuture(
+      util.Map.of(
+        tip0, ShareAcknowledgeResponse.partitionResponse(tip0, Errors.NONE),
+        tip1, ShareAcknowledgeResponse.partitionResponse(tip1, Errors.NONE)
+      )
+    ))
+
+    val requestPartition0 = new TxnShareAcknowledgeRequestData.TxnShareAcknowledgePartition()
+      .setPartitionIndex(sourcePartition0)
+      .setAcknowledgementBatches(util.List.of(
+        new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeBatch()
+          .setFirstOffset(5L)
+          .setLastOffset(6L)
+          .setAcknowledgeTypes(util.List.of(AcknowledgeType.ACCEPT.id))))
+    val requestPartition1 = new TxnShareAcknowledgeRequestData.TxnShareAcknowledgePartition()
+      .setPartitionIndex(sourcePartition1)
+      .setAcknowledgementBatches(util.List.of(
+        new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeBatch()
+          .setFirstOffset(7L)
+          .setLastOffset(8L)
+          .setAcknowledgeTypes(util.List.of(AcknowledgeType.ACCEPT.id))))
+    val requestData = new TxnShareAcknowledgeRequestData()
+      .setTransactionalId(transactionalId)
+      .setGroupId(groupId)
+      .setProducerId(producerId)
+      .setProducerEpoch(producerEpoch)
+      .setMemberId(memberId)
+      .setMemberEpoch(1)
+      .setTopics(util.List.of(
+        new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeTopic()
+          .setTopicId(topicId)
+          .setPartitions(util.List.of(requestPartition0, requestPartition1))
+      ))
+    val request = buildRequest(new TxnShareAcknowledgeRequest.Builder(requestData).build(0.toShort))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, requestLocal)
+    verify(sharePartitionManager, never()).acknowledgeTransactional(any(), any(), anyLong(), anyShort(), any())
+
+    addPartitionsCallback.getValue.complete(util.Map.of(
+      shareStatePartition0, Errors.NONE,
+      shareStatePartition1, Errors.NONE
+    ))
+
+    val response = verifyNoThrottling[TxnShareAcknowledgeResponse](request)
+    assertEquals(Errors.NONE.code, response.data.errorCode)
+    assertEquals(Errors.NONE.code, txnShareAcknowledgePartitionError(response, topicId, sourcePartition0))
+    assertEquals(Errors.NONE.code, txnShareAcknowledgePartitionError(response, topicId, sourcePartition1))
+    assertEquals(util.Set.of(tip0, tip1), acknowledgeBatchesCaptor.getValue.keySet)
+  }
+
+  @Test
   def testTxnShareAcknowledgeStaleMemberEpochDoesNotRegisterParticipant(): Unit = {
     val transactionalId = "transactional-id"
     val groupId = "group"
