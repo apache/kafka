@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -654,6 +655,37 @@ public class SubscriptionStateTest {
                 Optional.of(broker1), Optional.of(10))));
         assertTrue(state.hasValidPosition(tp0));
         assertFalse(state.awaitingValidation(tp0));
+    }
+
+    @Test
+    public void testAllConsumedUsesLatestAvailableLeaderEpoch() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state.assignFromUser(Set.of(tp0));
+
+        state.seekValidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
+                new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10))));
+        Map<TopicPartition, OffsetAndMetadata> consumed = state.allConsumed();
+        assertEquals(Optional.of(10), consumed.get(tp0).leaderEpoch());
+
+        state.seekValidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(12),
+                new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(10))));
+        consumed = state.allConsumed();
+        assertEquals(Optional.of(12), consumed.get(tp0).leaderEpoch());
+
+        state.seekValidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
+                Metadata.LeaderAndEpoch.noLeaderOrEpoch()));
+        consumed = state.allConsumed();
+        assertEquals(Optional.of(5), consumed.get(tp0).leaderEpoch());
+
+        state.seekValidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.empty(),
+                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(10))));
+        consumed = state.allConsumed();
+        assertEquals(Optional.of(10), consumed.get(tp0).leaderEpoch());
+
+        state.seekValidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.empty(),
+                Metadata.LeaderAndEpoch.noLeaderOrEpoch()));
+        consumed = state.allConsumed();
+        assertEquals(Optional.empty(), consumed.get(tp0).leaderEpoch());
     }
 
     @Test
