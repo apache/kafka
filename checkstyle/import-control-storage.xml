@@ -27,7 +27,6 @@
     <allow pkg="javax.management" />
     <allow pkg="org.slf4j" />
     <allow pkg="org.junit" />
-    <allow pkg="org.hamcrest" />
     <allow pkg="org.mockito" />
     <allow pkg="org.opentest4j" />
     <allow pkg="java.security" />

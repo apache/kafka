@@ -2500,7 +2500,6 @@ project(':storage') {
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
     testImplementation project(':transaction-coordinator')
-    testImplementation libs.hamcrest
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -2693,7 +2692,7 @@ project(':tools') {
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':connect:api')
     testImplementation project(':connect:runtime')
-    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation testFixtures(project(':connect:runtime'))
     testImplementation project(':storage:storage-api').sourceSets.main.output
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
@@ -3776,6 +3775,8 @@ project(':connect:json') {
 }
 
 project(':connect:runtime') {
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     swagger
   }
@@ -3825,6 +3826,19 @@ project(':connect:runtime') {
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation
     swagger libs.jakartaServletApi
     swagger libs.jaxrs2Jakarta
+
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':core')
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation project(':server')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation project(':group-coordinator')
+    testFixturesImplementation project(':test-common:test-common-runtime')
+    testFixturesImplementation libs.jettyClient
+    testFixturesImplementation libs.jacksonDatabind
+    testFixturesImplementation libs.jakartaRsApi
+    testFixturesImplementation libs.slf4jApi
+    testFixturesImplementation libs.junitJupiter
 
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
@@ -3956,7 +3970,7 @@ project(':connect:file') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':connect:runtime')
-    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation testFixtures(project(':connect:runtime'))
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation testFixtures(project(':server-common'))
@@ -4060,7 +4074,7 @@ project(':connect:mirror') {
     testImplementation libs.bndlib
     testImplementation libs.mockitoCore
     testImplementation testFixtures(project(':clients'))
-    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation testFixtures(project(':connect:runtime'))
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':raft')
@@ -4195,6 +4209,7 @@ gradle.projectsEvaluated {
     'share-coordinator': ':share-coordinator',
     'metadata': ':metadata',
     'raft': ':raft',
+    'connect/runtime': ':connect:runtime',
     'core': ':core',
   ]
   allprojects { proj ->
