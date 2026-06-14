@@ -448,7 +448,6 @@ public class TestPlugins {
                 try (InputStream in = jarFile.getInputStream(entry)) {
                     Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
                 }
-                dest.toFile().deleteOnExit();
             }
         }
         return tmpDir;
