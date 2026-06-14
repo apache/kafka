@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.PartitionInfo;
@@ -43,8 +44,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerDeserializer.UPDATE_CONSUMER_COUNT;
 import static org.apache.kafka.clients.ClientsTestUtils.TestClusterResourceListenerSerializer.UPDATE_PRODUCER_COUNT;
@@ -52,6 +55,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -273,6 +277,25 @@ public class ClientsTestUtils {
             sendRecord(producer, tp, startingTimestamp, i, -1);
         }
         producer.flush();
+    }
+
+    public static void sendRecordsAndVerify(
+        Producer<Object, Object> producer,
+        String topic,
+        int partition,
+        int numRecords,
+        int startOffset
+    ) {
+        long now = System.currentTimeMillis();
+        var futures = IntStream.range(0, numRecords).mapToObj(i -> producer.send(new ProducerRecord<>(topic, partition, now,
+            String.format("key%d", i).getBytes(), String.format("value%d", i).getBytes()))).toList();
+        IntStream.range(0, numRecords).forEach(i -> {
+            RecordMetadata metadata = assertDoesNotThrow(() -> futures.get(i).get(30L, TimeUnit.SECONDS));
+            assertEquals(topic, metadata.topic());
+            assertEquals(partition, metadata.partition());
+            assertEquals(startOffset + i, metadata.offset());
+            assertEquals(now, metadata.timestamp());
+        });
     }
 
     public static void awaitAssignment(

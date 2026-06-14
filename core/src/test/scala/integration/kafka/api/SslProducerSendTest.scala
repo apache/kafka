@@ -21,6 +21,9 @@ import kafka.utils.TestUtils
 
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
+// PlaintextProducerSendTest was reconstructed using Java.
+// However, ClusterTest doesn't support broker security protocol for now,
+// so TODO: SslProducerSendTest is left here and should be migrated after the feature is supported.
 class SslProducerSendTest extends BaseProducerSendTest {
   override protected def securityProtocol = SecurityProtocol.SSL
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))

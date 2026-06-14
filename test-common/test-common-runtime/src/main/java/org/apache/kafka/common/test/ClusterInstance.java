@@ -24,6 +24,7 @@ import kafka.server.KafkaBroker;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -330,6 +331,15 @@ public interface ClusterInstance {
             admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment)));
             int partitions = replicaAssignment.size();
             waitTopicCreation(topicName, partitions);
+        }
+    }
+
+    default void createPartitions(Map<String, NewPartitions> newPartitions) throws InterruptedException {
+        try (Admin admin = admin()) {
+            admin.createPartitions(newPartitions);
+            for (Map.Entry<String, NewPartitions> entry : newPartitions.entrySet()) {
+                waitTopicCreation(entry.getKey(), entry.getValue().totalCount());
+            }
         }
     }
 
