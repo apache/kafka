@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -199,6 +200,22 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
+        // PoC (KIP-1356): serve raw KeyQuery from the persistent store so that the header-aware
+        // IQv2 query forwarded by MeteredTimestampedKeyValueStoreWithHeaders keeps working after the
+        // record cache has been flushed (a cache miss falls through to this layer). The returned bytes
+        // are the serialized ValueTimestampHeaders; the metered store performs the header-aware
+        // deserialization. Other query types remain unsupported for now.
+        if (query instanceof KeyQuery) {
+            return StoreQueryUtils.handleBasicQueries(
+                query,
+                positionBound,
+                config,
+                this,
+                position,
+                context
+            );
+        }
+
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 

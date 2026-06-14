@@ -27,6 +27,7 @@ import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.junit.jupiter.api.Test;
@@ -981,17 +982,17 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
     }
 
     @Test
-    public void shouldReturnUnknownQueryTypeForQuery() {
+    public void shouldReturnUnknownQueryTypeForUnsupportedQuery() {
         // Initialize the store
         rocksDBStore.init(context, rocksDBStore);
 
-        // Create a query
-        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
+        // RangeQuery is not (yet) supported by this store; only KeyQuery is wired (KIP-1356 PoC).
+        final RangeQuery<Bytes, byte[]> query = RangeQuery.withNoBounds();
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false);
 
         // Execute query
-        final QueryResult<byte[]> result = rocksDBStore.query(query, positionBound, config);
+        final QueryResult<KeyValueIterator<Bytes, byte[]>> result = rocksDBStore.query(query, positionBound, config);
 
         // Verify result indicates unknown query type
         assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
@@ -1002,6 +1003,27 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         );
 
         // Verify position is set
+        assertNotNull(result.getPosition(), "Expected position to be set");
+    }
+
+    @Test
+    public void shouldHandleKeyQuery() {
+        // Initialize the store
+        rocksDBStore.init(context, rocksDBStore);
+
+        // Store raw (serialized ValueTimestampHeaders) bytes for a key.
+        final Bytes key = new Bytes("test-key".getBytes());
+        final byte[] storedBytes = "headers+timestamp+value".getBytes();
+        rocksDBStore.put(key, storedBytes);
+
+        // KIP-1356 PoC: KeyQuery is now served by this store (rather than UNKNOWN_QUERY_TYPE),
+        // returning the raw stored bytes (the metered store performs header-aware deserialization).
+        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
+        final QueryResult<byte[]> result =
+            rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess(), "Expected KeyQuery to succeed");
+        assertArrayEquals(storedBytes, result.getResult(), "Expected the raw stored bytes to be returned");
         assertNotNull(result.getPosition(), "Expected position to be set");
     }
 
