@@ -36,6 +36,7 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.TimestampedKeyQuery;
+import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -90,6 +91,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
             mkEntry(
                 TimestampedKeyQuery.class,
                 (query, positionBound, config, store) -> runTimestampedKeyQuery(query, positionBound, config)
+            ),
+            mkEntry(
+                TimestampedKeyWithHeadersQuery.class,
+                (query, positionBound, config, store) -> runTimestampedKeyWithHeadersQuery(query, positionBound, config)
             ),
             mkEntry(
                 RangeQuery.class,
@@ -373,6 +378,37 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                     : ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp());
             final QueryResult<ValueAndTimestamp<V>> typedQueryResult =
                 InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, valueAndTimestamp);
+            result = (QueryResult<R>) typedQueryResult;
+        } else {
+            // the generic type doesn't matter, since failed queries have no result set.
+            result = (QueryResult<R>) rawResult;
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runTimestampedKeyWithHeadersQuery(
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config
+    ) {
+        final QueryResult<R> result;
+        final TimestampedKeyWithHeadersQuery<K, V> typedKeyQuery = (TimestampedKeyWithHeadersQuery<K, V>) query;
+
+        // PoC limitation: typedKeyQuery.isSkipCache() is intentionally NOT propagated to the raw
+        // KeyQuery below. CachingKeyValueStore only honors skipCache when it is set on the forwarded
+        // KeyQuery, so for now skipCache() is a no-op for this query type (the existing
+        // runTimestampedKeyQuery has the same gap). Out of scope for this PoC; would be wired by
+        // calling rawKeyQuery.skipCache() when typedKeyQuery.isSkipCache() is true.
+        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
+        final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
+        if (rawResult.isSuccess()) {
+            // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
+            final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
+            final ValueTimestampHeaders<V> valueTimestampHeaders = deserializer.apply(rawResult.getResult());
+            // Unlike runTimestampedKeyQuery, the headers are kept rather than discarded.
+            final QueryResult<ValueTimestampHeaders<V>> typedQueryResult =
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, valueTimestampHeaders);
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
