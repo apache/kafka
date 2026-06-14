@@ -36,6 +36,7 @@ import java.util.HashMap;
 import javax.security.sasl.SaslException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -47,6 +48,7 @@ public class ScramSaslServerTest {
 
     private ScramFormatter formatter;
     private ScramSaslServer saslServer;
+    private ScramServerCallbackHandler callbackHandler;
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -55,7 +57,7 @@ public class ScramSaslServerTest {
         CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
-        ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
+        callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
         saslServer = new ScramSaslServer(mechanism, new HashMap<>(), callbackHandler);
     }
 
@@ -69,6 +71,15 @@ public class ScramSaslServerTest {
     public void authorizationIdEqualsAuthenticationId() throws Exception {
         byte[] nextChallenge = saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_A));
         assertTrue(nextChallenge.length > 0, "Next challenge is empty");
+    }
+
+    @Test
+    public void factoryCreatesServerWithNullServerName() throws Exception {
+        ScramSaslServer.ScramSaslServerFactory factory = new ScramSaslServer.ScramSaslServerFactory();
+        assertNotNull(factory.createSaslServer(ScramMechanism.SCRAM_SHA_256.mechanismName(), "kafka", null,
+                new HashMap<>(), callbackHandler));
+        assertNotNull(factory.createSaslServer(ScramMechanism.SCRAM_SHA_512.mechanismName(), "kafka", null,
+                new HashMap<>(), callbackHandler));
     }
 
     @Test

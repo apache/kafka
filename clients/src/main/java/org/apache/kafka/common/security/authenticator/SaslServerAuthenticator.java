@@ -61,6 +61,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.kerberos.KerberosError;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.plain.internals.PlainSaslServer;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.Time;
@@ -206,7 +208,7 @@ public class SaslServerAuthenticator implements Authenticator {
         } else {
             try {
                 saslServer = SecurityManagerCompatibility.get().callAs(subject, () ->
-                    Sasl.createSaslServer(saslMechanism, "kafka", serverAddress().getHostName(), configs, callbackHandler));
+                    Sasl.createSaslServer(saslMechanism, "kafka", serverName(saslMechanism), configs, callbackHandler));
                 if (saslServer == null) {
                     throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism);
                 }
@@ -214,6 +216,18 @@ public class SaslServerAuthenticator implements Authenticator {
                 throw new SaslException("Kafka Server failed to create a SaslServer to interact with a client during session authentication with server mechanism " + saslMechanism, e.getCause());
             }
         }
+    }
+
+    private String serverName(String mechanism) {
+        if (usesUnboundServerName(mechanism))
+            return null;
+        return serverAddress().getHostName();
+    }
+
+    private static boolean usesUnboundServerName(String mechanism) {
+        return PlainSaslServer.PLAIN_MECHANISM.equals(mechanism) ||
+                ScramMechanism.isScram(mechanism) ||
+                OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(mechanism);
     }
 
     private SaslServer createSaslKerberosServer(final AuthenticateCallbackHandler saslServerCallbackHandler, final Map<String, ?> configs, Subject subject) throws IOException {
