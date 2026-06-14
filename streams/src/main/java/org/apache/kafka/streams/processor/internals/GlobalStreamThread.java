@@ -382,7 +382,8 @@ public class GlobalStreamThread extends Thread {
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                config
+                config,
+                this::inErrorState
             );
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
@@ -427,6 +428,11 @@ public class GlobalStreamThread extends Thread {
                     "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",
                     recoverableException
                 );
+            }
+
+            if (inErrorState()) {
+                closeStateConsumer(stateConsumer, false);
+                return null;
             }
 
             setState(RUNNING);
@@ -475,8 +481,15 @@ public class GlobalStreamThread extends Thread {
     public void shutdown() {
         // one could call shutdown() multiple times, so ignore subsequent calls
         // if already shutting down or dead
-        setState(PENDING_SHUTDOWN);
+        final boolean wakeupBootstrap;
+        synchronized (stateLock) {
+            wakeupBootstrap = (state == State.CREATED);
+            setState(PENDING_SHUTDOWN);
+        }
         initializationLatch.countDown();
+        if (wakeupBootstrap) {
+            globalConsumer.wakeup();
+        }
     }
 
     public Map<MetricName, Metric> consumerMetrics() {

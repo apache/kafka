@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 import java.io.File;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class GlobalStateManagerStub implements GlobalStateManager {
@@ -49,9 +50,9 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {}
 
     @Override
-    public Set<String> initialize() {
+    public Optional<Set<String>> initialize() {
         initialized = true;
-        return storeNames;
+        return Optional.of(storeNames);
     }
 
     @Override

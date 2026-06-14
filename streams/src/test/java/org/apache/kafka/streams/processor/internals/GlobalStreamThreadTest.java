@@ -25,6 +25,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -56,6 +57,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
@@ -241,6 +245,64 @@ public class GlobalStreamThreadTest {
             "Thread never started.");
 
         globalStreamThread.shutdown();
+    }
+
+    @Test
+    @Timeout(value = 30000, unit = TimeUnit.MILLISECONDS)
+    public void shouldShutdownDuringBootstrap() throws Exception {
+        initializeConsumer();
+        mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 1_000_000L));
+
+        final ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            final Future<?> shutdownFuture = executor.submit(() -> {
+                try {
+                    TestUtils.waitForCondition(
+                        () -> stateRestoreListener.storeNameCalledStates.containsKey(MockStateRestoreListener.RESTORE_START),
+                        10 * 1000L,
+                        "Bootstrap restore never started.");
+                } catch (final Exception e) {
+                    throw new RuntimeException(e);
+                }
+                globalStreamThread.shutdown();
+            });
+
+            startAndSwallowError();
+            shutdownFuture.get();
+            globalStreamThread.join();
+        } finally {
+            executor.shutdown();
+        }
+
+        assertEquals(DEAD, globalStreamThread.state());
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnStartupIfWakeupOccursWithoutShutdown() throws Exception {
+        final MockConsumer<byte[], byte[]> wakeupOnPartitionsFor = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name()) {
+            @Override
+            public List<PartitionInfo> partitionsFor(final String topic) {
+                throw new WakeupException();
+            }
+        };
+        globalStreamThread = new GlobalStreamThread(
+            builder.rewriteTopology(config).buildGlobalStateTopology(),
+            config,
+            wakeupOnPartitionsFor,
+            new StateDirectory(config, time, true, false),
+            0,
+            new StreamsMetricsImpl(new Metrics(), "test-client", time),
+            time,
+            "clientId",
+            stateRestoreListener,
+            e -> { }
+        );
+
+        final StreamsException e = assertThrows(StreamsException.class, () -> globalStreamThread.start());
+        assertThat(e.getCause(), instanceOf(WakeupException.class));
+
+        globalStreamThread.join();
+        assertFalse(globalStreamThread.stillRunning());
     }
 
     @Test
