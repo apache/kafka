@@ -21,7 +21,6 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
@@ -31,6 +30,7 @@ public class PersisterStateBatchCombiner {
     private final long startOffset;
     private TreeSet<PersisterStateBatch> sortedBatches;
     private List<PersisterStateBatch> finalBatchList;   // final list is built here
+    private final List<PersisterStateBatch> nonOverlappingBuffer = new ArrayList<>();   // reused per findMergeCandidatePair call
 
     public PersisterStateBatchCombiner(
         List<PersisterStateBatch> batchesSoFar,
@@ -180,27 +180,27 @@ public class PersisterStateBatchCombiner {
         }
         Iterator<PersisterStateBatch> iter = sortedBatches.iterator();
         PersisterStateBatch prev = iter.next();
-        List<PersisterStateBatch> nonOverlapping = new LinkedList<>();
+        nonOverlappingBuffer.clear();
         while (iter.hasNext()) {
             PersisterStateBatch candidate = iter.next();
             if (candidate.firstOffset() <= prev.lastOffset() || // overlap
                 prev.lastOffset() + 1 == candidate.firstOffset() && compareBatchDeliveryInfo(prev, candidate) == 0) {  // contiguous
-                updateBatchContainers(nonOverlapping);
+                updateBatchContainers(nonOverlappingBuffer);
                 return new MergeCandidatePair(
                     prev,
                     candidate
                 );
             }
-            nonOverlapping.add(prev);
+            nonOverlappingBuffer.add(prev);
             prev = candidate;
         }
 
-        updateBatchContainers(nonOverlapping);
+        updateBatchContainers(nonOverlappingBuffer);
         return MergeCandidatePair.EMPTY;
     }
 
     private void updateBatchContainers(List<PersisterStateBatch> nonOverlappingBatches) {
-        nonOverlappingBatches.forEach(sortedBatches::remove);
+        sortedBatches.removeAll(nonOverlappingBatches);
         finalBatchList.addAll(nonOverlappingBatches);
     }
 
