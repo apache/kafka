@@ -1159,6 +1159,15 @@ public class SharePartition {
                 Optional<Throwable> memberCheck = validateAcknowledgementBatchMemberId(memberId, inFlightBatch);
                 if (memberCheck.isPresent()) return memberCheck.get();
 
+                if ((!checkForFullMatch(inFlightBatch, batch.firstOffset(), batch.lastOffset())
+                        || batch.acknowledgeTypes().size() > 1
+                        || checkForStartOffsetWithinBatch(inFlightBatch.firstOffset(), inFlightBatch.lastOffset()))
+                    && inFlightBatch.batchState() == RecordState.ACQUIRED) {
+                    inFlightBatch.maybeInitializeOffsetStateUpdate();
+                }
+            }
+
+            if (inFlightBatch.offsetState() == null) {
                 byte ackType = ackTypeMap.get(batch.firstOffset());
                 RecordState stagedDeliveryState = recordStateWithDlq(ackType);
                 if (inFlightBatch.batchState() == RecordState.TX_PENDING) {
@@ -1374,29 +1383,17 @@ public class SharePartition {
     }
 
     private RecordState finalStateForTxnMarker(InFlightState state, TransactionResult result) {
-        if (result == TransactionResult.ABORT) {
-            return RecordState.AVAILABLE;
-        }
-        if (state.stagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE) {
-            return RecordState.forId(state.stagedDeliveryState());
-        }
-        if (state.stagedAckType() == AcknowledgeType.ACCEPT.id) {
-            return RecordState.ACKNOWLEDGED;
-        }
-        return shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+        return result == TransactionResult.ABORT ? RecordState.AVAILABLE :
+            state.stagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE ? RecordState.forId(state.stagedDeliveryState()) :
+                state.stagedAckType() == AcknowledgeType.ACCEPT.id ? RecordState.ACKNOWLEDGED :
+                    shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
     }
 
     private RecordState finalStateForTxnMarker(InFlightBatch batch, TransactionResult result) {
-        if (result == TransactionResult.ABORT) {
-            return RecordState.AVAILABLE;
-        }
-        if (batch.batchStagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE) {
-            return RecordState.forId(batch.batchStagedDeliveryState());
-        }
-        if (batch.batchStagedAckType() == AcknowledgeType.ACCEPT.id) {
-            return RecordState.ACKNOWLEDGED;
-        }
-        return shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
+        return result == TransactionResult.ABORT ? RecordState.AVAILABLE :
+            batch.batchStagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE ? RecordState.forId(batch.batchStagedDeliveryState()) :
+                batch.batchStagedAckType() == AcknowledgeType.ACCEPT.id ? RecordState.ACKNOWLEDGED :
+                    shareGroupDlqEnableSupplier.get() ? RecordState.ARCHIVING : RecordState.ARCHIVED;
     }
 
     private InFlightState applyTxnMarkerToBatch(
