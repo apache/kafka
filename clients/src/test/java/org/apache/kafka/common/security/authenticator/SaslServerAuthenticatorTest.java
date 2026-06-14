@@ -54,6 +54,8 @@ import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
@@ -62,8 +64,10 @@ import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.Socket;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -79,11 +83,13 @@ import javax.security.sasl.SaslServer;
 
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_256;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -299,12 +305,60 @@ public class SaslServerAuthenticatorTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512", "OAUTHBEARER"})
+    public void testBuiltInNonGssapiSaslServerCreationUsesUnboundServerName(String mechanism) throws Exception {
+        SaslServer saslServer = mock(SaslServer.class);
+        Socket socket = mock(Socket.class);
+        TransportLayer transportLayer = mockTransportLayer(socket, InetAddress.getLoopbackAddress(), InetAddress.getLoopbackAddress());
+        ArgumentCaptor<String> serverNameCaptor = ArgumentCaptor.forClass(String.class);
+
+        try (
+            MockedStatic<Sasl> sasl = Mockito.mockStatic(Sasl.class, invocation -> saslServer);
+            MockedStatic<?> ignored = mockKafkaPrincipal("[principal-type]", "[principal-name]")
+        ) {
+            SaslServerAuthenticator authenticator = setupAuthenticator(configsForMechanism(mechanism), transportLayer,
+                    mechanism, new DefaultChannelMetadataRegistry());
+
+            mockRequest(saslHandshakeRequest(mechanism), transportLayer);
+            authenticator.authenticate();
+
+            sasl.verify(() -> Sasl.createSaslServer(eq(mechanism), eq("kafka"), serverNameCaptor.capture(),
+                    anyMap(), any()));
+            assertNull(serverNameCaptor.getValue());
+            verify(socket, never()).getLocalAddress();
+        }
+    }
+
+    @Test
+    public void testCustomNonGssapiSaslServerCreationPreservesServerName() throws Exception {
+        String mechanism = "CUSTOM-MECHANISM";
+        String serverName = "broker.example.com";
+        SaslServer saslServer = mock(SaslServer.class);
+        InetAddress serverAddress = mock(InetAddress.class);
+        when(serverAddress.getHostName()).thenReturn(serverName);
+
+        TransportLayer transportLayer = mockTransportLayer(mock(Socket.class), InetAddress.getLoopbackAddress(), serverAddress);
+
+        try (
+            MockedStatic<Sasl> sasl = Mockito.mockStatic(Sasl.class, invocation -> saslServer);
+            MockedStatic<?> ignored = mockKafkaPrincipal("[principal-type]", "[principal-name]")
+        ) {
+            SaslServerAuthenticator authenticator = setupAuthenticator(configsForMechanism(mechanism), transportLayer,
+                    mechanism, new DefaultChannelMetadataRegistry());
+
+            mockRequest(saslHandshakeRequest(mechanism), transportLayer);
+            authenticator.authenticate();
+
+            sasl.verify(() -> Sasl.createSaslServer(eq(mechanism), eq("kafka"), eq(serverName), anyMap(), any()));
+            verify(serverAddress).getHostName();
+        }
+    }
+
     private SaslServerAuthenticator getSaslServerAuthenticatorForOAuth(String mechanism, TransportLayer transportLayer, Time time, Long maxReauth) {
-        Map<String, ?> configs = Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
-                Collections.singletonList(mechanism));
         ChannelMetadataRegistry metadataRegistry = new DefaultChannelMetadataRegistry();
 
-        return setupAuthenticator(configs, transportLayer, mechanism, metadataRegistry, time, maxReauth);
+        return setupAuthenticator(configsForMechanism(mechanism), transportLayer, mechanism, metadataRegistry, time, maxReauth);
     }
 
     private MockedStatic<?> mockSaslServer(SaslServer saslServer, String mechanism, Time time, Duration tokenExpirationDuration) throws SaslException {
@@ -371,8 +425,16 @@ public class SaslServerAuthenticatorTest {
     }
 
     private TransportLayer mockTransportLayer() throws IOException {
-        TransportLayer transportLayer = mock(TransportLayer.class, Answers.RETURNS_DEEP_STUBS);
-        when(transportLayer.socketChannel().socket().getInetAddress()).thenReturn(InetAddress.getLoopbackAddress());
+        return mockTransportLayer(mock(Socket.class), InetAddress.getLoopbackAddress(), InetAddress.getLoopbackAddress());
+    }
+
+    private TransportLayer mockTransportLayer(Socket socket, InetAddress clientAddress, InetAddress serverAddress) throws IOException {
+        TransportLayer transportLayer = mock(TransportLayer.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        when(transportLayer.socketChannel()).thenReturn(socketChannel);
+        when(socketChannel.socket()).thenReturn(socket);
+        when(socket.getInetAddress()).thenReturn(clientAddress);
+        when(socket.getLocalAddress()).thenReturn(serverAddress);
         when(transportLayer.write(any(ByteBuffer[].class))).thenReturn(Long.MAX_VALUE);
         return transportLayer;
     }
@@ -438,6 +500,11 @@ public class SaslServerAuthenticatorTest {
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, connectionsMaxReauthMsByMechanism,
                 metadataRegistry, time, version -> apiVersionsResponse);
+    }
+
+    private Map<String, ?> configsForMechanism(String mechanism) {
+        return Collections.singletonMap(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+                Collections.singletonList(mechanism));
     }
 
 }
