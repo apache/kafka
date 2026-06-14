@@ -2698,7 +2698,6 @@ project(':tools') {
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
-    testRuntimeOnly libs.hamcrest
   }
 
   javadoc {
