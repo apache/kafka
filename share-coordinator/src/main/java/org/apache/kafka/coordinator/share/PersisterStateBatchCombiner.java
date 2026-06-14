@@ -212,31 +212,32 @@ public class PersisterStateBatchCombiner {
      * the part after it is preserved.
      */
     private void pruneBatches() {
-        if (startOffset != -1) {
-            List<PersisterStateBatch> retainedBatches = new ArrayList<>(combinedBatchList.size());
-            combinedBatchList.forEach(batch -> {
-                if (batch.lastOffset() < startOffset) {
-                    // batch is expired, skip current iteration
-                    // -------
-                    //         | -> start offset
-                    return;
-                }
-
-                if (batch.firstOffset() >= startOffset) {
-                    // complete batch is valid
-                    //    ---------
-                    //  | -> start offset
-                    retainedBatches.add(batch);
-                } else {
-                    // start offset intersects batch
-                    //   ---------
-                    //       |     -> start offset
-                    retainedBatches.add(new PersisterStateBatch(startOffset, batch.lastOffset(), batch.deliveryState(), batch.deliveryCount()));
-                }
-            });
-            // update the instance variable
-            combinedBatchList = retainedBatches;
+        if (startOffset == -1 || combinedBatchList.isEmpty()) {
+            return;
         }
+        List<PersisterStateBatch> retainedBatches = new ArrayList<>(combinedBatchList.size());
+        combinedBatchList.forEach(batch -> {
+            if (batch.lastOffset() < startOffset) {
+                // batch is expired, skip current iteration
+                // -------
+                //         | -> start offset
+                return;
+            }
+
+            if (batch.firstOffset() >= startOffset) {
+                // complete batch is valid
+                //    ---------
+                //  | -> start offset
+                retainedBatches.add(batch);
+            } else {
+                // start offset intersects batch
+                //   ---------
+                //       |     -> start offset
+                retainedBatches.add(new PersisterStateBatch(startOffset, batch.lastOffset(), batch.deliveryState(), batch.deliveryCount()));
+            }
+        });
+        // update the instance variable
+        combinedBatchList = retainedBatches;
     }
 
     private void handleSameStateMerge(PersisterStateBatch prev, PersisterStateBatch candidate) {
