@@ -728,6 +728,27 @@ class RequestQuotaTest extends BaseRequestTest {
               .setGroupId("test-share-group")
               .setMemberId(Uuid.randomUuid().toString))
 
+        case ApiKeys.TXN_SHARE_ACKNOWLEDGE =>
+          val batch = new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeBatch()
+            .setFirstOffset(0)
+            .setLastOffset(0)
+            .setAcknowledgeTypes(util.List.of(java.lang.Byte.valueOf(1.toByte)))
+          val partition = new TxnShareAcknowledgeRequestData.TxnShareAcknowledgePartition()
+            .setPartitionIndex(tp.partition)
+            .setAcknowledgementBatches(util.List.of(batch))
+          val topic = new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeTopic()
+            .setTopicId(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID))
+            .setPartitions(util.List.of(partition))
+          new TxnShareAcknowledgeRequest.Builder(
+            new TxnShareAcknowledgeRequestData()
+              .setTransactionalId("test-transactional-id")
+              .setGroupId("test-share-group")
+              .setProducerId(1L)
+              .setProducerEpoch(0.toShort)
+              .setMemberId(Uuid.randomUuid().toString)
+              .setMemberEpoch(1)
+              .setTopics(util.List.of(topic)))
+
         case ApiKeys.ADD_RAFT_VOTER =>
           new AddRaftVoterRequest.Builder(new AddRaftVoterRequestData())
 
