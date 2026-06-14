@@ -111,7 +111,8 @@ public class PersisterStateBatchCombiner {
             sortedBatches.remove(prev);
             sortedBatches.remove(candidate);
 
-            if (compareBatchDeliveryInfo(candidate, prev) == 0) {  // same state and overlap or contiguous
+            int cmp = compareBatchDeliveryInfo(candidate, prev);
+            if (cmp == 0) {  // same state and overlap or contiguous
                 // overlap and same state (prev.firstOffset <= candidate.firstOffset) due to sort
                 // covers:
                 // case:        1        2          3            4          5           6          7 (contiguous)
