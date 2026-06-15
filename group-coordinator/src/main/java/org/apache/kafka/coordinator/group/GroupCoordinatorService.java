@@ -100,9 +100,9 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
-import org.apache.kafka.coordinator.group.streams.StreamGroupTopologyDescriptionManager;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionManager;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsDelta;
@@ -365,7 +365,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * the service delegates into — heartbeat post-processing, the push RPC, and the
      * pre-tombstone hook on DeleteGroups.
      */
-    private final StreamGroupTopologyDescriptionManager streamGroupTopologyDescriptionManager;
+    private final StreamsGroupTopologyDescriptionManager streamsGroupTopologyDescriptionManager;
 
     /**
      * The number of partitions of the __consumer_offsets topics. This is provided
@@ -414,7 +414,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .map(ConsumerGroupPartitionAssignor::name)
             .collect(Collectors.toSet());
         this.partitionMetadataClient = partitionMetadataClient;
-        this.streamGroupTopologyDescriptionManager = new StreamGroupTopologyDescriptionManager(
+        this.streamsGroupTopologyDescriptionManager = new StreamsGroupTopologyDescriptionManager(
             streamsGroupTopologyDescriptionPlugin,
             time
         );
@@ -650,7 +650,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "streams-group-heartbeat",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.streamsGroupHeartbeat(context, request)
-        ).thenApply(result -> streamGroupTopologyDescriptionManager.maybeSetTopologyDescriptionRequired(result, request.groupId())
+        ).thenApply(result -> streamsGroupTopologyDescriptionManager.maybeSetTopologyDescriptionRequired(result, request.groupId(), context.requestVersion())
         ).exceptionally(exception -> handleOperationException(
             "streams-group-heartbeat",
             request,
@@ -2396,7 +2396,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         log.info("Shutting down.");
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
-        Utils.closeQuietly(streamGroupTopologyDescriptionManager, "streams group topology description manager");
+        Utils.closeQuietly(streamsGroupTopologyDescriptionManager, "streams group topology description manager");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
         Utils.closeQuietly(groupConfigManager, "group config manager");
         log.info("Shutdown complete.");

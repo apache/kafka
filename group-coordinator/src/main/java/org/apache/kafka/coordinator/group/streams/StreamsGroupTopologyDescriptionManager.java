@@ -36,11 +36,11 @@ import java.util.Optional;
  * {@code FailedDescriptionTopologyEpoch} fields on each streams group drive convergence
  * after a restart.
  */
-public class StreamGroupTopologyDescriptionManager implements AutoCloseable {
+public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
     private final StreamsGroupTopologyDescriptionBackoff backoff;
 
-    public StreamGroupTopologyDescriptionManager(
+    public StreamsGroupTopologyDescriptionManager(
         Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
         Time time
     ) {
@@ -73,18 +73,25 @@ public class StreamGroupTopologyDescriptionManager implements AutoCloseable {
      * broker should set {@code TopologyDescriptionRequired=true} on the response, and
      * arming the per-group back-off when it does.
      *
-     * <p>The flag is set when the topology description plugin is configured, the group
-     * has resolved to a topology epoch, that epoch is neither stored nor permanently
-     * failed at the plugin, no back-off is in effect for this epoch, and the response
-     * does not carry a {@code STALE_TOPOLOGY} status (the member would just be told to
-     * catch up first). When the response already carries an error code we leave it
-     * alone.
+     * <p>The flag is set when the request is at a version that carries the field
+     * ({@code TopologyDescriptionRequired} arrives at v1), the topology description plugin
+     * is configured, the group has resolved to a topology epoch, that epoch is neither
+     * stored nor permanently failed at the plugin, no back-off is in effect for this
+     * epoch, and the response does not carry a {@code STALE_TOPOLOGY} status (the member
+     * would just be told to catch up first). When the response already carries an error
+     * code we leave it alone.
+     *
+     * <p>The version gate is intentional: a v0 client cannot deserialize the flag, so
+     * arming the back-off for it would accumulate entries that grow exponentially while
+     * the flag itself gets dropped at serialization — wasting heap on a per-group basis
+     * for clients that will never push.
      */
     public StreamsGroupHeartbeatResult maybeSetTopologyDescriptionRequired(
         StreamsGroupHeartbeatResult result,
-        String groupId
+        String groupId,
+        int apiVersion
     ) {
-        if (plugin.isEmpty()) {
+        if (apiVersion < 1 || plugin.isEmpty()) {
             return result;
         }
         StreamsGroupHeartbeatResponseData response = result.data();

@@ -245,6 +245,25 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testHeartbeatSkipsFlagOnV0Request() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-heartbeat"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), 5, -1, -1)));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 0), validHeartbeatRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
     public void testShutdownClosesPlugin() throws Exception {
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         GroupCoordinatorService service = buildService(mockRuntime(), Optional.of(plugin), true);
