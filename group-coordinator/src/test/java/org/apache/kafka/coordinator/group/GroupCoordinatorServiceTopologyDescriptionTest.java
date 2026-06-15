@@ -188,6 +188,11 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         verify(plugin, times(1)).setTopology(eq("foo"), eq(3), any());
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("streams-group-set-stored-topology-epoch"), eq(GROUP_TP), any());
+
+        // Back-off must be cleared on success: a subsequent heartbeat at the same epoch
+        // (stored still lags in this mock-only world because the metadata-record write
+        // is captured but not replayed) should set the flag again.
+        assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
     }
 
     @Test
@@ -246,6 +251,75 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             eq("streams-group-set-stored-topology-epoch"), any(), any());
         verify(runtime, never()).scheduleWriteOperation(
             eq("streams-group-set-failed-topology-epoch"), any(), any());
+
+        // Back-off must be armed on transient failure: a subsequent heartbeat at the same
+        // epoch is suppressed rather than re-soliciting immediately.
+        assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
+    }
+
+    @Test
+    public void testUpdateBackoffArmedWhenStoredEpochWriteFailsAfterPluginSuccess() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-description-validate"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-set-stored-topology-epoch"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.failedFuture(new RuntimeException("write failed")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        // The exceptionally branch translates the write failure into an error response.
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.errorCode());
+        verify(plugin, times(1)).setTopology(eq("foo"), eq(3), any());
+
+        // Plugin succeeded, write failed. BackoffAction defaulted to ARM and the thenApply
+        // that would have set CLEAR never ran, so whenComplete armed the back-off.
+        assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
+    }
+
+    @Test
+    public void testUpdatePluginReturnsNullFutureIsTreatedAsPermanentFailure() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any())).thenReturn(null);
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-description-validate"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-set-failed-topology-epoch"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), response.errorCode());
+        assertEquals("Topology description plugin failed.", response.errorMessage());
+        // Treated as permanent failure: FailedDescriptionTopologyEpoch is written.
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("streams-group-set-failed-topology-epoch"), eq(GROUP_TP), any());
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("streams-group-set-stored-topology-epoch"), any(), any());
     }
 
     @Test
@@ -441,5 +515,36 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .setStandbyTasks(List.of())
             .setWarmupTasks(List.of())
             .setTopology(new StreamsGroupHeartbeatRequestData.Topology());
+    }
+
+    /**
+     * Drive a heartbeat through the service after an update test and report whether the
+     * topology-description-required flag was set on the response. Used to observe the
+     * back-off state behaviourally: the flag is set iff the back-off window is not in
+     * effect for the given epoch, so the assertion stands in for "back-off cleared" vs
+     * "back-off armed".
+     */
+    private static boolean heartbeatTopologyDescriptionRequired(
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
+        GroupCoordinatorService service,
+        int currentEpoch,
+        int storedEpoch,
+        int failedEpoch
+    ) throws Exception {
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-heartbeat"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(new StreamsGroupHeartbeatResult(
+            new StreamsGroupHeartbeatResponseData(),
+            Map.of(),
+            currentEpoch,
+            storedEpoch,
+            failedEpoch
+        )));
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), validHeartbeatRequest()
+        ).get(5, TimeUnit.SECONDS);
+        return result.data().topologyDescriptionRequired();
     }
 }

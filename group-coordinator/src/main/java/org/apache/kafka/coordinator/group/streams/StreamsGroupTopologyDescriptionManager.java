@@ -30,9 +30,9 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescri
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
@@ -139,33 +139,6 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
-     * Reject the request synchronously when no plugin is configured or the request fails
-     * basic structural validation. Returns the response to send back to the client, or
-     * empty when the request is accepted for further processing. The caller is expected
-     * to have already short-circuited on a non-active coordinator.
-     */
-    public Optional<StreamsGroupTopologyDescriptionUpdateResponseData> preCheckTopologyDescriptionUpdate(
-        StreamsGroupTopologyDescriptionUpdateRequestData request
-    ) {
-        if (plugin.isEmpty()) {
-            return Optional.of(errorResponse(
-                Errors.UNSUPPORTED_VERSION,
-                "The broker has no streams group topology description plugin configured."
-            ));
-        }
-        if (request.memberId() == null || request.memberId().isEmpty()) {
-            return Optional.of(errorResponse(Errors.INVALID_REQUEST, "MemberId can't be empty."));
-        }
-        if (request.groupId() == null || request.groupId().isEmpty()) {
-            return Optional.of(errorResponse(Errors.INVALID_REQUEST, "GroupId can't be empty."));
-        }
-        if (request.topologyDescription() == null) {
-            return Optional.of(errorResponse(Errors.INVALID_REQUEST, "TopologyDescription can't be null."));
-        }
-        return Optional.empty();
-    }
-
-    /**
      * Drive the push chain: validate the (group, member), convert the wire payload, call
      * the plugin, persist the outcome, and centralize back-off state mutations in a
      * single {@code whenComplete}.
@@ -260,19 +233,24 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     ) {
         final CompletableFuture<Void> pluginFuture;
         try {
-            pluginFuture = plugin.setTopology(groupId, pushedEpoch, description);
-        } catch (Throwable t) {
-            // A synchronous throw from the plugin is treated as a permanent failure with a
-            // generic client-visible message.
-            return CompletableFuture.completedFuture(PluginOutcome.permanent(t.getMessage()));
+            pluginFuture = Objects.requireNonNull(plugin.setTopology(groupId, pushedEpoch, description),
+                "Plugin returned null future from setTopology.");
+        } catch (Exception e) {
+            // A synchronous throw or a null future both violate the SPI contract —
+            // implementations must signal failures by completing the future exceptionally.
+            // Treat either as a permanent failure with a stable, generic client-visible
+            // message so we don't forward an unbounded or null exception message that
+            // could leak plugin internals, and so a misbehaving plugin doesn't NPE the
+            // chain and degenerate into back-off-with-doubling instead of the
+            // permanent-failure handling it should get.
+            return CompletableFuture.completedFuture(
+                PluginOutcome.permanent("Topology description plugin failed."));
         }
         return pluginFuture.handle((unused, throwable) -> {
             if (throwable == null) {
                 return PluginOutcome.success();
             }
-            Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
-                ? throwable.getCause()
-                : throwable;
+            Throwable cause = Errors.maybeUnwrapException(throwable);
             if (cause instanceof StreamsTopologyDescriptionPermanentFailureException) {
                 return PluginOutcome.permanent(cause.getMessage());
             }

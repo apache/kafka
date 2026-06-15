@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
@@ -688,9 +689,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
-        return topologyDescriptionManager.preCheckTopologyDescriptionUpdate(request)
-            .map(CompletableFuture::completedFuture)
-            .orElseGet(() -> topologyDescriptionManager.handleSetTopology(request)
+        try {
+            throwIfStreamsGroupTopologyDescriptionUpdateInvalid(request);
+        } catch (Throwable ex) {
+            ApiError apiError = ApiError.fromThrowable(ex);
+            return CompletableFuture.completedFuture(new StreamsGroupTopologyDescriptionUpdateResponseData()
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message())
+            );
+        }
+
+        return streamsGroupTopologyDescriptionManager.handleSetTopology(request)
             .exceptionally(exception -> handleOperationException(
                 "streams-group-topology-description-update",
                 request,
@@ -699,7 +708,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .setErrorCode(error.code())
                     .setErrorMessage(message),
                 log
-            )));
+            ));
+    }
+
+    private void throwIfStreamsGroupTopologyDescriptionUpdateInvalid(
+        StreamsGroupTopologyDescriptionUpdateRequestData request
+    ) throws InvalidRequestException, UnsupportedVersionException {
+        if (!streamsGroupTopologyDescriptionManager.isPluginConfigured()) {
+            throw new UnsupportedVersionException(
+                "The broker has no streams group topology description plugin configured.");
+        }
+        throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
+        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
+        throwIfNull(request.topologyDescription(), "TopologyDescription can't be null.");
     }
 
     /**
