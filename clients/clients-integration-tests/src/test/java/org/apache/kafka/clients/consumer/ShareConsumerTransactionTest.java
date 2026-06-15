@@ -99,6 +99,49 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
         }
     }
 
+    @ClusterTest
+    public void testTransactionalShareAckAbortAccept() throws Exception {
+        String groupId = "txn-share-abort-accept";
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-abort-accept-producer");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 groupId,
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin admin = createAdminClient()) {
+
+            producer.send(record("first")).get();
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+            assertEquals(0L, record.offset());
+            assertEquals("first", new String(record.value(), StandardCharsets.UTF_8));
+
+            ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+            shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+            ShareAcknowledgements acknowledgements = shareConsumer.acknowledgementsForTransaction();
+            assertFalse(acknowledgements.isEmpty());
+            TopicIdPartition acknowledgedPartition = acknowledgements.acknowledgements().keySet().iterator().next();
+            assertEquals(tp, acknowledgedPartition.topicPartition());
+
+            transactionalProducer.initTransactions();
+            transactionalProducer.partitionsFor(tp.topic());
+            transactionalProducer.beginTransaction();
+            transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+            transactionalProducer.abortTransaction();
+
+            verifySharePartitionLag(admin, groupId, tp, 1L);
+            ConsumerRecords<byte[], byte[]> redeliveredRecords = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> redeliveredRecord = redeliveredRecords.iterator().next();
+            assertEquals(0L, redeliveredRecord.offset());
+            assertEquals("first", new String(redeliveredRecord.value(), StandardCharsets.UTF_8));
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
     private Producer<byte[], byte[]> createTransactionalProducer(String transactionalId) {
         return createProducer(Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId,
