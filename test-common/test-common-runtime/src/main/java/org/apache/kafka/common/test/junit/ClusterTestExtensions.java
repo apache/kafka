@@ -108,6 +108,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private static final String ATTACH_LISTENER_THREAD_PREFIX = "Attach Listener";
     private static final String PROCESS_REAPER_THREAD_PREFIX = "process reaper";
     private static final String RMI_THREAD_PREFIX = "RMI";
+    // The following three thread prefixes are spawned by MockOAuth2Server (which uses OkHttp's MockWebServer
+    // internally) in ClientOAuthIntegrationTest.
     private static final String MOCK_WEB_SERVER_THREAD_PREFIX = "MockWebServer";
     private static final String KEEP_ALIVE_TIMER_THREAD_PREFIX = "Keep-Alive-Timer";
     private static final String POOL_THREAD_PREFIX = "pool-";
