@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This exception is thrown when a remote storage operation cannot proceed because the remote storage is not ready.
  * This may occur in situations where the remote storage (or) metadata layer is initializing, unreachable,
@@ -24,6 +26,7 @@ package org.apache.kafka.server.log.remote.storage;
  * Instances of this exception indicate that the error is retriable, and the operation might
  * succeed if attempted again when the remote storage (or) metadata layer becomes operational.
  */
+@InterfaceAudience.Public
 public class RemoteStorageNotReadyException extends RetriableRemoteStorageException {
 
     public RemoteStorageNotReadyException(String message) {

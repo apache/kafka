@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Represents an exception that indicates a retriable error occurred during remote storage operations.
  * This exception is thrown when an operation against a remote storage system has failed due to transient
  * or temporary issues, and the operation has a reasonable chance of succeeding if retried.
  */
+@InterfaceAudience.Public
 public class RetriableRemoteStorageException extends RemoteStorageException {
 
     private static final long serialVersionUID = 1L;

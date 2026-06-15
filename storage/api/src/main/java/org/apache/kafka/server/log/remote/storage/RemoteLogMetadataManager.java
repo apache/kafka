@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This interface provides storing and fetching remote log segment metadata with strongly consistent semantics.
  * <p>
@@ -52,6 +53,7 @@ import java.util.concurrent.CompletableFuture;
  * The following tags are automatically added to all metrics registered: <code>config</code> set to
  * <code>remote.log.metadata.manager.class.name</code>, and <code>class</code> set to the RemoteLogMetadataManager class name.
  */
+@InterfaceAudience.Public
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**

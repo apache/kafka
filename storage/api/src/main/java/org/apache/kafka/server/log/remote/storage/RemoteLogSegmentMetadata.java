@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * It describes the metadata about a topic partition's remote log segment in the remote storage. This is uniquely
  * represented with {@link RemoteLogSegmentId}.
@@ -34,6 +35,7 @@ import java.util.TreeMap;
  * updated by applying {@link RemoteLogSegmentMetadataUpdate} for the respective {@link RemoteLogSegmentId} of the
  * {@code RemoteLogSegmentMetadata}.
  */
+@InterfaceAudience.Public
 public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
 
     /**

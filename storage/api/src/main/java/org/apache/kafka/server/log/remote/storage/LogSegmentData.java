@@ -21,11 +21,13 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This represents all the required data and indexes for a specific log segment that needs to be stored in the remote
  * storage. This is passed with {@link RemoteStorageManager#copyLogSegmentData(RemoteLogSegmentMetadata, LogSegmentData)}
  * while copying a specific log segment to the remote storage.
  */
+@InterfaceAudience.Public
 public class LogSegmentData {
 
     private final Path logSegment;

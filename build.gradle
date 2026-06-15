@@ -737,15 +737,27 @@ subprojects {
 
 kafkaPublicApiChecker {
 
-    // NEW: Add all project JARs for @InterfaceAudience.Public scanning
-    projectJarFiles.from(
-        jar.archiveFile,                    // Main JAR
-        // Add other relevant JARs if needed
+    // Jars produced by this project — the surface that's actually validated.
+    projectJarFiles.from(jar.archiveFile)
+
+    // Sibling Kafka modules this project depends on (direct or transitive). Their classes
+    // are merged into the scanned surface so cross-module @InterfaceAudience.Public references
+    // resolve, but they don't contribute to this module's MISSING_JAVADOC or cascade
+    // iteration — each module checks its own surface.
+    referenceJarFiles.from(
+        configurations.compileClasspath.incoming.artifactView {
+            // Resolve project deps to their assembled JAR (not the classes-dir variant Gradle
+            // picks by default for compile-classpath), so the scanner only sees real jars.
+            attributes {
+                attribute(org.gradle.api.attributes.LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+                          objects.named(org.gradle.api.attributes.LibraryElements,
+                                        org.gradle.api.attributes.LibraryElements.JAR))
+            }
+            componentFilter { it instanceof org.gradle.api.artifacts.component.ProjectComponentIdentifier }
+        }.files
     )
 
-    // NEW: Enable/disable dual validation
     enforceJavadocConsistency = true
-
     enabled = true
     failOnViolation = true
 }

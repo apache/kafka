@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This enum indicates the deletion state of the remote topic partition. This will be based on the action executed on this
  * partition by the remote log service implementation.
@@ -46,6 +47,7 @@ import java.util.stream.Collectors;
  * </PRE>
  * </P>
  */
+@InterfaceAudience.Public
 public enum RemotePartitionDeleteState {
 
     /**

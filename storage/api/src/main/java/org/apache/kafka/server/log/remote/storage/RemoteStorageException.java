@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Exception thrown when there is a remote storage error. This can be used as the base exception by implementors of
  * {@link RemoteStorageManager} or {@link RemoteLogMetadataManager} to create extended exceptions.
  */
+@InterfaceAudience.Public
 public class RemoteStorageException extends Exception {
     private static final long serialVersionUID = 1L;
 

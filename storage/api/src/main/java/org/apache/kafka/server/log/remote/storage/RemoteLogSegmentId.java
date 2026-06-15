@@ -21,11 +21,13 @@ import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This class represents a universally unique identifier associated to a topic partition's log segment. This will be
  * regenerated for every attempt of copying a specific log segment in {@link RemoteStorageManager#copyLogSegmentData(RemoteLogSegmentMetadata, LogSegmentData)}.
  * Once it is stored in remote storage, it is used to access that segment later from remote log metadata storage.
  */
+@InterfaceAudience.Public
 public class RemoteLogSegmentId {
 
     private final TopicIdPartition topicIdPartition;

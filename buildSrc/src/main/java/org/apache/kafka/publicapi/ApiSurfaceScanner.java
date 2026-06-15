@@ -26,8 +26,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -54,13 +56,61 @@ final class ApiSurfaceScanner {
 
     private ApiSurfaceScanner() {}
 
-    /** Scan the given jars and return an immutable surface. */
-    static ApiSurface scan(List<File> projectJars) throws IOException {
+    /**
+     * Scan the project's own jars and any reference jars (sibling Kafka modules it depends on)
+     * and return an immutable surface.
+     *
+     * <p>Reference-jar classes contribute to {@link ApiSurface#factsOf} lookups and the
+     * membership set behind {@link ApiSurface#isEffectivelyPublic} so cross-module
+     * {@code @Public} references resolve correctly, but they do NOT take part in this
+     * project's MISSING_JAVADOC iteration or cascade iteration — each module checks its
+     * own surface.
+     */
+    static ApiSurface scan(List<File> projectJars, List<File> referenceJars) throws IOException {
         ApiSurface.Builder surface = ApiSurface.builder();
         Map<String, ClassFacts> byBinaryName = new HashMap<>();
+        Set<String> ownedDottedNames = new HashSet<>();
 
-        // Pass 1 — read facts for every in-scope class.
-        for (File jar : projectJars) {
+        // Pass 1 — read facts for every in-scope class. Project-owned classes get tracked so
+        // pass 2 can keep them out of reference-only iteration sets.
+        scanJars(projectJars, byBinaryName, surface, ownedDottedNames::add);
+        scanJars(referenceJars, byBinaryName, surface, name -> { });
+
+        // Pass 2 — resolve inheritance and populate the surface's derived sets. Deprecated
+        // classes are out of scope on both validation sides; the surface answers
+        // {@link ApiSurface#isDeprecated} directly from the per-class facts so no separate
+        // deprecated set is needed here.
+        for (ClassFacts facts : byBinaryName.values()) {
+            if (facts.isDeprecated()) continue;
+            boolean owned = ownedDottedNames.contains(facts.dottedName());
+            if (facts.isPublic() && owned) {
+                surface.addDirectPublic(facts);
+            }
+            if (resolveEffectiveAudience(facts.binaryName(), byBinaryName) == DirectAudience.PUBLIC) {
+                // Membership set — both owned and reference classes count, so cross-module
+                // @Public references resolve.
+                surface.markEffectivelyPublic(facts);
+                // Cascade only runs on owned externally-visible classes — private nested
+                // classes inherit @Public under the Hadoop model but their methods/ctors aren't
+                // reachable to consumers, and reference jars are validated by their own module.
+                if (facts.isExternallyVisible() && owned) {
+                    surface.addEffectivePublic(facts);
+                }
+            }
+        }
+
+        return surface.build();
+    }
+
+    /** Backwards-compatible overload for callers that don't need reference jars (consumer-side scan). */
+    static ApiSurface scan(List<File> projectJars) throws IOException {
+        return scan(projectJars, java.util.Collections.emptyList());
+    }
+
+    private static void scanJars(List<File> jars, Map<String, ClassFacts> byBinaryName,
+                                 ApiSurface.Builder surface,
+                                 java.util.function.Consumer<String> markOwned) throws IOException {
+        for (File jar : jars) {
             try (JarFile jarFile = new JarFile(jar)) {
                 Enumeration<JarEntry> entries = jarFile.entries();
                 while (entries.hasMoreElements()) {
@@ -76,35 +126,17 @@ final class ApiSurfaceScanner {
                     // but would otherwise inherit @Public from an enclosing class under the
                     // Hadoop-style inheritance rule and trip cascade checks.
                     if (isSyntheticOrAnonymous(binaryName)) continue;
+                    // First jar wins for cross-jar duplicates — project jars are scanned first
+                    // so they keep ownership over a class also present in a reference jar.
+                    if (byBinaryName.containsKey(binaryName)) continue;
 
                     ClassFacts facts = readClassFacts(jarFile, entry, binaryName);
                     byBinaryName.put(binaryName, facts);
                     surface.recordClass(facts, jar);
+                    markOwned.accept(facts.dottedName());
                 }
             }
         }
-
-        // Pass 2 — resolve inheritance and populate the surface's derived sets. Deprecated
-        // classes are out of scope on both validation sides; the surface answers
-        // {@link ApiSurface#isDeprecated} directly from the per-class facts so no separate
-        // deprecated set is needed here.
-        for (ClassFacts facts : byBinaryName.values()) {
-            if (facts.isDeprecated()) continue;
-            if (facts.isPublic()) {
-                surface.addDirectPublic(facts);
-            }
-            if (resolveEffectiveAudience(facts.binaryName(), byBinaryName) == DirectAudience.PUBLIC) {
-                surface.markEffectivelyPublic(facts);
-                // Cascade only runs on externally-visible classes — a private nested class
-                // technically inherits @Public from its outer under the Hadoop model, but its
-                // methods/ctors are unreachable to consumers and shouldn't be cascade-checked.
-                if (facts.isExternallyVisible()) {
-                    surface.addEffectivePublic(facts);
-                }
-            }
-        }
-
-        return surface.build();
     }
 
     /** Read a class file's bytecode facts via ASM (jar-entry variant). */

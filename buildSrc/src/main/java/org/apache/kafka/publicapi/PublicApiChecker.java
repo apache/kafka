@@ -39,11 +39,22 @@ public class PublicApiChecker {
     private final ApiSurface surface;
 
     /**
-     * @param kafkaJars  jars containing {@code org.apache.kafka.*} classes — scanned once into an
-     *                   in-memory {@link ApiSurface} so subsequent lookups are pure map gets.
+     * @param projectJars   jars produced by the project being checked. Their classes drive
+     *                      the MISSING_JAVADOC iteration and are cascade-checked for method
+     *                      signature leaks.
+     * @param referenceJars jars from sibling Kafka modules this project depends on. Their
+     *                      classes contribute to the {@code @InterfaceAudience.Public}
+     *                      membership set so cross-module references resolve, but they don't
+     *                      take part in this project's own javadoc consistency or cascade
+     *                      iteration (each module checks its own surface).
      */
+    public PublicApiChecker(List<File> projectJars, List<File> referenceJars) throws IOException {
+        this.surface = ApiSurfaceScanner.scan(projectJars, referenceJars);
+    }
+
+    /** Convenience for the consumer-side scanner: no separate reference jars needed. */
     public PublicApiChecker(List<File> kafkaJars) throws IOException {
-        this.surface = ApiSurfaceScanner.scan(kafkaJars);
+        this(kafkaJars, java.util.Collections.emptyList());
     }
 
     /**

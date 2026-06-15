@@ -25,6 +25,7 @@ public class KafkaPublicApiCheckerPlugin implements Plugin<Project> {
                 task.getFailOnViolation().set(extension.getFailOnViolation());
                 task.getJavadocJarPath().set(extension.getJavadocJarPath());
                 task.getProjectJarFiles().from(extension.getProjectJarFiles());
+                task.getReferenceJarFiles().from(extension.getReferenceJarFiles());
                 task.getEnforceJavadocConsistency().set(extension.getEnforceJavadocConsistency());
                 task.getReportFile().set(extension.getReportFile());
             });

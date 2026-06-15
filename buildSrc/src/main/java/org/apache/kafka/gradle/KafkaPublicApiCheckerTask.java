@@ -31,6 +31,7 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
     private final Property<Boolean> failOnViolation = getProject().getObjects().property(Boolean.class);
     private final RegularFileProperty javadocJarPath = getProject().getObjects().fileProperty();
     private final ConfigurableFileCollection projectJarFiles = getProject().getObjects().fileCollection();
+    private final ConfigurableFileCollection referenceJarFiles = getProject().getObjects().fileCollection();
     private final Property<Boolean> enforceJavadocConsistency = getProject().getObjects().property(Boolean.class);
     private final RegularFileProperty reportFile = getProject().getObjects().fileProperty();
 
@@ -64,7 +65,9 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
             if (projectJarFiles.getFiles().isEmpty()) {
                 throw new GradleException("Project JAR file not found: " + jarFile.getAbsolutePath());
             }
-            PublicApiChecker checker = new PublicApiChecker(new ArrayList<>(projectJarFiles.getFiles()));
+            PublicApiChecker checker = new PublicApiChecker(
+                new ArrayList<>(projectJarFiles.getFiles()),
+                new ArrayList<>(referenceJarFiles.getFiles()));
             CheckResult result = checker.checkPublicApiConsistency(jarFile);
             List<PublicApiViolation> violations = result.violations();
             List<PublicApiViolation> suppressions = result.suppressions();
@@ -145,6 +148,12 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
     @Optional
     public ConfigurableFileCollection getProjectJarFiles() {
         return projectJarFiles;
+    }
+
+    @InputFiles
+    @Optional
+    public ConfigurableFileCollection getReferenceJarFiles() {
+        return referenceJarFiles;
     }
 
     @Input

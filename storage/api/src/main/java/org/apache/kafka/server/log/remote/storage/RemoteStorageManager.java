@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.io.Closeable;
@@ -49,6 +50,7 @@ import java.util.Optional;
  * {@link RemoteStorageException} should be thrown. This distinction allows RemoteLogManager to
  * handle retries gracefully and report metrics accurately.
  */
+@InterfaceAudience.Public
 public interface RemoteStorageManager extends Configurable, Closeable {
 
     /**

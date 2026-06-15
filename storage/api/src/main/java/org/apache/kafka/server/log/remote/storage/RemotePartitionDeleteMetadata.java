@@ -20,10 +20,12 @@ import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This class represents the metadata about the remote partition. It can be created/updated with {@link RemoteLogMetadataManager#putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata)}.
  * Possible state transitions are mentioned at {@link RemotePartitionDeleteState}.
  */
+@InterfaceAudience.Public
 public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
 
     private final TopicIdPartition topicIdPartition;

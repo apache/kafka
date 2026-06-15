@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This enum indicates the state of the remote log segment. This will be based on the action executed on this
  * segment by the remote log service implementation.
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
  *                  +-----------------------+
  * </pre>
  */
+@InterfaceAudience.Public
 public enum RemoteLogSegmentState {
 
     /**

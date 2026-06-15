@@ -17,6 +17,7 @@ public class KafkaPublicApiCheckerExtension {
     private final Property<Boolean> failOnViolation;
     private final RegularFileProperty javadocJarPath;
     private final ConfigurableFileCollection projectJarFiles;
+    private final ConfigurableFileCollection referenceJarFiles;
     private final Property<Boolean> enforceJavadocConsistency;
     private final ListProperty<String> includePackages;
     private final ListProperty<String> excludePackages;
@@ -32,6 +33,8 @@ public class KafkaPublicApiCheckerExtension {
         this.javadocJarPath = project.getObjects().fileProperty();
 
         this.projectJarFiles = project.getObjects().fileCollection();
+
+        this.referenceJarFiles = project.getObjects().fileCollection();
 
         this.enforceJavadocConsistency = project.getObjects().property(Boolean.class);
         this.enforceJavadocConsistency.convention(true);
@@ -88,6 +91,15 @@ public class KafkaPublicApiCheckerExtension {
 
     public ConfigurableFileCollection getProjectJarFiles() {
         return projectJarFiles;
+    }
+
+    /**
+     * Jars of sibling Kafka modules this project depends on. Their classes are merged into the
+     * scanned surface so cross-module {@code @InterfaceAudience.Public} references resolve, but
+     * they don't contribute to this module's own javadoc-consistency or cascade iteration.
+     */
+    public ConfigurableFileCollection getReferenceJarFiles() {
+        return referenceJarFiles;
     }
 
     public Property<Boolean> getEnforceJavadocConsistency() {
