@@ -21,10 +21,8 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.PriorityQueue;
+import java.util.TreeMap;
 
 /**
  * Combines an existing list of {@link PersisterStateBatch} entries with a list of newly produced
@@ -34,15 +32,16 @@ import java.util.PriorityQueue;
  * <p>The merge is performed by an event-driven sweep-line over the union of both inputs. Each
  * input batch contributes one BEGIN event at {@code firstOffset} and one END event at
  * {@code lastOffset + 1}. Events are processed in offset order (END before BEGIN at the same
- * offset). A max-priority queue tracks the currently active batches; the heap-top defines the
+ * offset). A counted ordered map tracks the currently active priorities; the first key defines the
  * {@code (state, count)} that wins on the current sub-range. Successive sub-ranges with identical
  * {@code (state, count)} are coalesced on the fly.
  *
- * <p>Complexity: {@code O((n + k) log n)} where {@code n} is the total number of input batches
- * and {@code k} is the number of overlap transitions encountered.
+ * <p>Complexity: {@code O((n + k) log p)} where {@code n} is the total number of input batches,
+ * {@code k} is the number of overlap transitions encountered, and {@code p} is the number of
+ * distinct {@code (deliveryState, deliveryCount)} priorities.
  */
 public class PersisterStateBatchCombiner {
-    private static final Comparator<PersisterStateBatch> PRIORITY_DESC = (a, b) -> {
+    private static final Comparator<BatchPriority> PRIORITY_DESC = (a, b) -> {
         int cmpCount = Short.compare(b.deliveryCount(), a.deliveryCount());
         if (cmpCount != 0) {
             return cmpCount;
@@ -112,8 +111,9 @@ public class PersisterStateBatchCombiner {
         Event[] events = new Event[n * 2];
         for (int i = 0; i < n; i++) {
             PersisterStateBatch b = batches.get(i);
-            events[i * 2] = new Event(b.firstOffset(), true, b);
-            events[i * 2 + 1] = new Event(b.lastOffset() + 1, false, b);
+            BatchPriority priority = BatchPriority.from(b);
+            events[i * 2] = new Event(b.firstOffset(), true, priority);
+            events[i * 2 + 1] = new Event(b.lastOffset() + 1, false, priority);
         }
         // END (isBegin=false) sorts before BEGIN (isBegin=true) at the same offset so that
         // contiguous same-state ranges meeting at offset X collapse to a single emit.
@@ -125,12 +125,10 @@ public class PersisterStateBatchCombiner {
             return Boolean.compare(e1.isBegin, e2.isBegin);
         });
 
-        PriorityQueue<PersisterStateBatch> active = new PriorityQueue<>(PRIORITY_DESC);
-        Map<PersisterStateBatch, Integer> removed = new HashMap<>();
-
+        TreeMap<BatchPriority, Integer> active = new TreeMap<>(PRIORITY_DESC);
         List<PersisterStateBatch> out = new ArrayList<>();
         long openFrom = -1;
-        PersisterStateBatch openWinner = null;
+        BatchPriority openWinner = null;
 
         int i = 0;
         while (i < events.length) {
@@ -145,30 +143,28 @@ public class PersisterStateBatchCombiner {
             while (i < events.length && events[i].offset == offset) {
                 Event e = events[i++];
                 if (e.isBegin) {
-                    active.offer(e.batch);
+                    active.merge(e.priority, 1, Integer::sum);
                 } else {
-                    removed.merge(e.batch, 1, Integer::sum);
+                    decrement(active, e.priority);
                 }
             }
 
-            // Refresh heap-top, lazily evicting dead batches.
-            while (!active.isEmpty() && removed.containsKey(active.peek())) {
-                PersisterStateBatch expired = active.poll();
-                int remaining = removed.get(expired) - 1;
-                if (remaining == 0) {
-                    removed.remove(expired);
-                } else {
-                    removed.put(expired, remaining);
-                }
-            }
-
-            openWinner = active.peek();
+            openWinner = active.isEmpty() ? null : active.firstKey();
             openFrom = offset;
         }
         return out;
     }
 
-    private void appendCoalesced(List<PersisterStateBatch> out, long from, long to, PersisterStateBatch winner) {
+    private void decrement(TreeMap<BatchPriority, Integer> active, BatchPriority priority) {
+        int count = active.get(priority);
+        if (count == 1) {
+            active.remove(priority);
+        } else {
+            active.put(priority, count - 1);
+        }
+    }
+
+    private void appendCoalesced(List<PersisterStateBatch> out, long from, long to, BatchPriority winner) {
         if (!out.isEmpty()) {
             PersisterStateBatch tail = out.get(out.size() - 1);
             if (tail.lastOffset() + 1 == from
@@ -182,6 +178,12 @@ public class PersisterStateBatchCombiner {
         out.add(new PersisterStateBatch(from, to, winner.deliveryState(), winner.deliveryCount()));
     }
 
-    private record Event(long offset, boolean isBegin, PersisterStateBatch batch) {
+    private record BatchPriority(short deliveryCount, byte deliveryState) {
+        private static BatchPriority from(PersisterStateBatch batch) {
+            return new BatchPriority(batch.deliveryCount(), batch.deliveryState());
+        }
+    }
+
+    private record Event(long offset, boolean isBegin, BatchPriority priority) {
     }
 }
