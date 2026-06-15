@@ -907,6 +907,8 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testPartitionsForAuthenticationFailure
 - testPartitionsForNonExistingTopic
 - testPause
+- testPauseFlagPreservedForRetainedPartitionAcrossRebalance
+- testPauseFlagPreservedForRetainedPartitionOnManualAssignmentChange
 - testPollAuthenticationFailure
 - testPollIdleRatio
 - testPollReturnsRecords
@@ -1239,6 +1241,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testOffsetsForTimesTimeoutException
 - testOffsetsForTimesWithZeroTimeout
 - testPartitionsAssignedEventSendsErrorWhenApplyAssignmentFails
+- testPauseFlagPreservedForRetainedPartitionAcrossRebalance
 - testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight
 - testPollDoesNotWaitForReconciliationCheckIfNoPendingReconciliation
 - testPollThrowsInterruptExceptionIfInterrupted
