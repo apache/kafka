@@ -208,7 +208,7 @@ public class AclControlManager {
             if (!cidrSupported) {
                 throw new UnsupportedVersionException(
                     "CIDR-based ACL host patterns require metadata version " +
-                    MetadataVersion.IBP_4_4_IV0 + " or higher.");
+                    MetadataVersion.IBP_4_4_IV1 + " or higher.");
             }
             try {
                 CidrUtils.validate(host);
