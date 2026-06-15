@@ -532,6 +532,66 @@ public class StreamsConfigTest {
         }
     }
 
+    @Test
+    public void shouldLogErrorAndIgnoreUserOverrideOfGroupId() {
+        props.put(consumerPrefix(ConsumerConfig.GROUP_ID_CONFIG), "user-group-id");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+            assertEquals(groupId, mainConfigs.get(ConsumerConfig.GROUP_ID_CONFIG),
+                    "Streams should force group.id to the application id and ignore the user override");
+
+            final long errorCount = appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'group.id' found"))
+                    .count();
+            assertEquals(1, errorCount, "Should log exactly one error for the group.id override");
+        }
+    }
+
+    @Test
+    public void shouldLogErrorAndIgnoreUserOverrideOfPartitionAssignmentStrategy() {
+        props.put(consumerPrefix(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG), "com.example.MyAssignor");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+            assertEquals(StreamsPartitionAssignor.class.getName(),
+                    mainConfigs.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    "Streams should force its own partition assignor and ignore the user override");
+
+            final long errorCount = appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'partition.assignment.strategy' found"))
+                    .count();
+            assertEquals(1, errorCount, "Should log exactly one error for the partition.assignment.strategy override");
+        }
+    }
+
+    @Test
+    public void shouldNotLogErrorWhenUserDoesNotOverrideControlledConfigs() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+            // Building each client's configs must not warn about configs the user never set. This guards
+            // against comparing a Streams-seeded default (e.g. auto.offset.reset="earliest") against the
+            // value Streams forces on the restore/global consumers.
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+            streamsConfig.getRestoreConsumerConfigs(clientId);
+            streamsConfig.getGlobalConsumerConfigs(clientId);
+
+            final long errorCount = appender.getMessages().stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified"))
+                    .count();
+            assertEquals(0, errorCount, "Should not log a controlled-config error when the user overrides nothing");
+        }
+    }
 
     @Test
     public void shouldSupportNonPrefixedAdminConfigs() {
