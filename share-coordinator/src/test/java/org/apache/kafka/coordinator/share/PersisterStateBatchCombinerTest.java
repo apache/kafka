@@ -135,6 +135,34 @@ public class PersisterStateBatchCombinerTest {
                     .addBatch(120, 130, 2, 1)
                     .build(),
                 -1
+            ),
+
+            new BatchTestHolder(
+                "Duplicate state-2 batches ending before a later state-0 batch do not fill the gap.",
+                BatchTestHolder.singleBatch(0, 5, 2, 1),
+                BatchTestHolder.multiBatch()
+                    .addBatch(0, 5, 2, 1)
+                    .addBatch(11, 15, 0, 1)
+                    .build(),
+                BatchTestHolder.multiBatch()
+                    .addBatch(0, 5, 2, 1)
+                    .addBatch(11, 15, 0, 1)
+                    .build(),
+                -1
+            ),
+
+            new BatchTestHolder(
+                "Duplicate state-0 batches ending before a later state-0 batch do not fill the gap.",
+                BatchTestHolder.singleBatch(0, 5, 0, 1),
+                BatchTestHolder.multiBatch()
+                    .addBatch(0, 5, 0, 1)
+                    .addBatch(11, 15, 0, 1)
+                    .build(),
+                BatchTestHolder.multiBatch()
+                    .addBatch(0, 5, 0, 1)
+                    .addBatch(11, 15, 0, 1)
+                    .build(),
+                -1
             )
         );
     }
