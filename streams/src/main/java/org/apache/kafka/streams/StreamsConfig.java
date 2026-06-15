@@ -1919,6 +1919,20 @@ public class StreamsConfig extends AbstractConfig {
         return String.valueOf(userValue).equals(String.valueOf(streamsDefault));
     }
 
+    /** Set a config that Streams controls, warning if the user tried to set a different value. */
+    private void enforceConfig(final Map<String, Object> props,
+                               final String config,
+                               final Object streamsValue,
+                               final String clientType) {
+        final Object userValue = props.get(config);
+        if (userValue != null && !userValue.equals(streamsValue)) {
+            log.error("Unexpected user-specified {} config '{}' found. User setting ({}) will be ignored "
+                            + "and the Streams default setting ({}) will be used.",
+                    clientType, config, userValue, streamsValue);
+        }
+        props.put(config, streamsValue);
+    }
+
     private void verifyMaxInFlightRequestPerConnection(final Object maxInFlightRequests) {
         if (maxInFlightRequests != null) {
             final int maxInFlightRequestsAsInteger;
@@ -1969,7 +1983,7 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
 
         // add group id, client id with stream client id prefix, and group instance id
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        enforceConfig(consumerProps, ConsumerConfig.GROUP_ID_CONFIG, groupId, "consumer");
         consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         final String groupInstanceId = (String) consumerProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
         // Suffix each thread consumer with thread.id to enforce uniqueness of group.instance.id.
@@ -1978,6 +1992,7 @@ public class StreamsConfig extends AbstractConfig {
         }
 
         // add configs required for stream partition assignor
+        enforceConfig(consumerProps, ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName(), "consumer");
         consumerProps.put(UPGRADE_FROM_CONFIG, getString(UPGRADE_FROM_CONFIG));
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
@@ -1985,7 +2000,6 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(ACCEPTABLE_RECOVERY_LAG_CONFIG, getLong(ACCEPTABLE_RECOVERY_LAG_CONFIG));
         consumerProps.put(MAX_WARMUP_REPLICAS_CONFIG, getInt(MAX_WARMUP_REPLICAS_CONFIG));
         consumerProps.put(PROBING_REBALANCE_INTERVAL_MS_CONFIG, getLong(PROBING_REBALANCE_INTERVAL_MS_CONFIG));
-        consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName());
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
         consumerProps.put(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, getInt(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
         consumerProps.put(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, getString(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
