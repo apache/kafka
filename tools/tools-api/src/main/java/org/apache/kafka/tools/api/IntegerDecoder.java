@@ -18,9 +18,11 @@ package org.apache.kafka.tools.api;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The integer decoder translates bytes into integers.
  */
+@InterfaceAudience.Public
 public class IntegerDecoder implements Decoder<Integer> {
     @Override
     public Integer fromBytes(byte[] bytes) {

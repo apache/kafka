@@ -18,9 +18,11 @@ package org.apache.kafka.tools.api;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The long decoder translates bytes into longs.
  */
+@InterfaceAudience.Public
 public class LongDecoder implements Decoder<Long> {
     @Override
     public Long fromBytes(byte[] bytes) {

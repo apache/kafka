@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.tools.api;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The default implementation does nothing, just returns the same byte array it takes in.
  */
+@InterfaceAudience.Public
 public class DefaultDecoder implements Decoder<byte[]> {
     @Override
     public byte[] fromBytes(byte[] bytes) {

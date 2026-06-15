@@ -24,12 +24,14 @@ import java.io.InputStream;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Typical implementations of this interface convert data from an `InputStream` received via `readRecords` into a
  * iterator of `ProducerRecord` instance. Note that implementations must have a public nullary constructor.
  *
  * This is used by the `org.apache.kafka.tools.ConsoleProducer`.
  */
+@InterfaceAudience.Public
 public interface RecordReader extends Closeable, Configurable {
 
     default void configure(Map<String, ?> configs) {}

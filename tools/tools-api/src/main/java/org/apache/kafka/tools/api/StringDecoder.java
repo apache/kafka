@@ -18,9 +18,11 @@ package org.apache.kafka.tools.api;
 
 import java.nio.charset.StandardCharsets;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The string decoder translates bytes into strings. It uses UTF8 by default.
  */
+@InterfaceAudience.Public
 public class StringDecoder implements Decoder<String> {
     @Override
     public String fromBytes(byte[] bytes) {
