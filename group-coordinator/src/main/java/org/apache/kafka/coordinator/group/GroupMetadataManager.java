@@ -2009,7 +2009,7 @@ public class GroupMetadataManager {
                 ByteBuffer.wrap(protocols.iterator().next().metadata())
             );
         } catch (SchemaException e) {
-            throw new IllegalStateException("Malformed embedded consumer protocol in subscription deserialization.");
+            throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception("Malformed embedded consumer protocol in subscription deserialization.");
         }
     }
 
