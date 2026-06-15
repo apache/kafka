@@ -245,6 +245,15 @@ org.apache.kafka.server.FetchSessionTest:
 - testToForgetPartitions
 - testUpdateAndGenerateResponseData
 - testZeroSizeFetchSession
+org.apache.kafka.server.ForwardingManagerTest:
+- testFailedAuthentication
+- testForwardingManagerMetricsOnComplete
+- testForwardingManagerMetricsOnTimeout
+- testForwardingTimeoutAfterRetry
+- testForwardingTimeoutWaitingForControllerDiscovery
+- testResponseCorrelationIdMismatch
+- testUnsupportedVersionFromNetworkClient
+- testUnsupportedVersions
 org.apache.kafka.server.KRaftClusterTest:
 - testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir
 - testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir
