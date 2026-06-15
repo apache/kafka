@@ -19,9 +19,11 @@ package org.apache.kafka.coordinator.group.api.assignor;
 import java.util.Map;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The partition assignment for a consumer group.
  */
+@InterfaceAudience.Public
 public class GroupAssignment {
     /**
      * The member assignments keyed by member id.

@@ -21,9 +21,11 @@ import org.apache.kafka.common.Uuid;
 import java.util.Optional;
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Interface representing the subscription metadata for a group member.
  */
+@InterfaceAudience.Public
 public interface MemberSubscription {
     /**
      * Gets the rack Id if present.

@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.api.assignor;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Server-side partition assignor used by the GroupCoordinator.
  */
+@InterfaceAudience.Public
 public interface PartitionAssignor {
     /**
      * Unique name for this assignor.

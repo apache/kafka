@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.api.assignor;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The subscription type followed by a consumer group.
  */
+@InterfaceAudience.Public
 public enum SubscriptionType {
     /**
      * A homogeneous subscription type means that all the members

@@ -21,9 +21,11 @@ import org.apache.kafka.common.Uuid;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The partition assignment for a consumer group member.
  */
+@InterfaceAudience.Public
 public interface MemberAssignment {
     /**
      * @return The assigned partitions keyed by topic Ids.

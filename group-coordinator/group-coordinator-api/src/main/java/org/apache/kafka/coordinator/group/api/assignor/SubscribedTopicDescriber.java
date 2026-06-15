@@ -20,10 +20,12 @@ import org.apache.kafka.common.Uuid;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The subscribed topic describer is used by the {@link PartitionAssignor}
  * to obtain topic and partition metadata of the subscribed topics.
  */
+@InterfaceAudience.Public
 public interface SubscribedTopicDescriber {
     /**
      * The number of partitions for the given topic Id.

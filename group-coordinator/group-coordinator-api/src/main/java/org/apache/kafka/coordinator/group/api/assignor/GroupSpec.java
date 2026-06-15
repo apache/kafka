@@ -20,9 +20,11 @@ import org.apache.kafka.common.Uuid;
 
 import java.util.Collection;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The group metadata specifications required to compute the target assignment.
  */
+@InterfaceAudience.Public
 public interface GroupSpec {
     /**
      * @return All the member Ids of the consumer group.
