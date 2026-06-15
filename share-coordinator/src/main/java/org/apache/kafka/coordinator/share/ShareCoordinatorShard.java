@@ -58,6 +58,7 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetricsShard;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
@@ -316,6 +317,15 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         short producerEpoch,
         TransactionResult result
     ) {
+        return completeTransaction(producerId, producerEpoch, result, TransactionVersion.TV_1.featureLevel());
+    }
+
+    public CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> completeTransaction(
+        long producerId,
+        short producerEpoch,
+        TransactionResult result,
+        short transactionVersion
+    ) {
         List<CoordinatorRecord> records = new ArrayList<>();
         Set<SharePartitionKey> affectedKeys = new HashSet<>();
         long timestamp = time.milliseconds();
@@ -328,7 +338,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             boolean hasMatchingPendingBatch = false;
 
             for (PersisterStateBatch batch : currentState.stateBatches()) {
-                if (isMatchingPendingBatch(batch, producerId, producerEpoch)) {
+                if (isMatchingPendingBatch(batch, producerId, producerEpoch, transactionVersion)) {
                     byte finalState = finalDeliveryState(batch, result);
                     finalizedBatches.add(new PersisterStateBatch(
                         batch.firstOffset(),
@@ -368,10 +378,18 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return new CoordinatorResult<>(records, affectedKeys);
     }
 
-    private boolean isMatchingPendingBatch(PersisterStateBatch batch, long producerId, short producerEpoch) {
+    private boolean isMatchingPendingBatch(
+        PersisterStateBatch batch,
+        long producerId,
+        short producerEpoch,
+        short transactionVersion
+    ) {
+        short expectedStagedProducerEpoch = transactionVersion >= TransactionVersion.TV_2.featureLevel() ?
+            (short) (producerEpoch - 1) :
+            producerEpoch;
         return batch.deliveryState() == DELIVERY_STATE_TX_PENDING
             && batch.stagedProducerId() == producerId
-            && batch.stagedProducerEpoch() == producerEpoch;
+            && batch.stagedProducerEpoch() == expectedStagedProducerEpoch;
     }
 
     private byte finalDeliveryState(PersisterStateBatch batch, TransactionResult result) {

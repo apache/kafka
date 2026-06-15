@@ -55,6 +55,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
@@ -1902,6 +1903,24 @@ class ShareCoordinatorShardTest {
 
         shard.replay(1L, PRODUCER_ID, PRODUCER_EPOCH, result.records().get(0));
         assertEquals(offset, shard.getShareStateMapValue(SHARE_PARTITION_KEY));
+    }
+
+    @Test
+    public void testCompleteTransactionCommitAcceptMatchesTransactionV2BumpedProducerEpoch() {
+        replayPendingShareState(ACKNOWLEDGE_TYPE_ACCEPT, DELIVERY_STATE_ACKNOWLEDGED, PRODUCER_EPOCH);
+
+        CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
+            PRODUCER_ID,
+            (short) (PRODUCER_EPOCH + 1),
+            TransactionResult.COMMIT,
+            TransactionVersion.TV_2.featureLevel()
+        );
+
+        assertEquals(1, result.records().size());
+        assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
+        ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
+        assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_ACKNOWLEDGED, (short) 1)), offset.stateBatches());
+        assertEquals(3, offset.deliveryCompleteCount());
     }
 
     @Test

@@ -1035,7 +1035,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         return runtime.scheduleWriteOperation(
             "complete-share-transaction",
             tp,
-            coordinator -> coordinator.completeTransaction(producerId, producerEpoch, result)
+            coordinator -> coordinator.completeTransaction(producerId, producerEpoch, result, transactionVersion)
         );
     }
 
