@@ -59,6 +59,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -77,6 +79,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.Time;
@@ -98,9 +101,14 @@ import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionBackoff;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionConverter;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsDelta;
@@ -143,6 +151,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 
@@ -175,6 +184,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private Persister persister;
         private Optional<Plugin<Authorizer>> authorizerPlugin;
         private PartitionMetadataClient partitionMetadataClient;
+        private Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin = Optional.empty();
 
         public Builder(
             int nodeId,
@@ -234,6 +244,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withStreamsGroupTopologyDescriptionPlugin(
+            Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin
+        ) {
+            this.streamsGroupTopologyDescriptionPlugin = streamsGroupTopologyDescriptionPlugin;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             requireNonNull(config, "Config must be set.");
             requireNonNull(writer, "Writer must be set.");
@@ -246,12 +263,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
             requireNonNull(persister, "Persister must be set.");
             requireNonNull(authorizerPlugin, "Authorizer must be set.");
             requireNonNull(partitionMetadataClient, "PartitionMetadataClient must be set.");
+            requireNonNull(streamsGroupTopologyDescriptionPlugin, "StreamsGroupTopologyDescriptionPlugin must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
+            // The back-off is constructed here (not inside the service constructor) so the
+            // shard-builder supplier closure can capture a reference to it and wire the
+            // streams-group removal listener that fires from GroupMetadataManager when a
+            // streams group is tombstoned, expired, or unloaded.
+            StreamsGroupTopologyDescriptionBackoff streamsGroupTopologyDescriptionBackoff =
+                new StreamsGroupTopologyDescriptionBackoff(time);
+
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
                 new GroupCoordinatorShard.Builder(config, groupConfigManager)
+                    .withStreamsGroupRemovalListener(streamsGroupTopologyDescriptionBackoff::clear)
                     .withAuthorizerPlugin(authorizerPlugin);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
@@ -297,7 +323,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 groupConfigManager,
                 persister,
                 timer,
-                partitionMetadataClient
+                partitionMetadataClient,
+                streamsGroupTopologyDescriptionPlugin,
+                streamsGroupTopologyDescriptionBackoff
             );
         }
     }
@@ -353,6 +381,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final PartitionMetadataClient partitionMetadataClient;
 
     /**
+     * The streams group topology description plugin. Empty when the broker config
+     * {@code group.streams.topology.description.plugin.class} is unset, which
+     * disables the feature.
+     */
+    private final Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin;
+
+    /**
+     * In-memory per-group back-off that throttles re-soliciting a topology description push.
+     * Only consulted when {@link #streamsGroupTopologyDescriptionPlugin} is present.
+     */
+    private final StreamsGroupTopologyDescriptionBackoff streamsGroupTopologyDescriptionBackoff;
+
+    /**
      * The number of partitions of the __consumer_offsets topics. This is provided
      * when the component is started.
      */
@@ -382,7 +423,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         GroupConfigManager groupConfigManager,
         Persister persister,
         Timer timer,
-        PartitionMetadataClient partitionMetadataClient
+        PartitionMetadataClient partitionMetadataClient,
+        Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin,
+        StreamsGroupTopologyDescriptionBackoff streamsGroupTopologyDescriptionBackoff
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
@@ -397,6 +440,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .map(ConsumerGroupPartitionAssignor::name)
             .collect(Collectors.toSet());
         this.partitionMetadataClient = partitionMetadataClient;
+        this.streamsGroupTopologyDescriptionPlugin = streamsGroupTopologyDescriptionPlugin;
+        this.streamsGroupTopologyDescriptionBackoff = streamsGroupTopologyDescriptionBackoff;
     }
 
     /**
@@ -608,6 +653,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 new StreamsGroupHeartbeatResult(
                     new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
                     Map.of(),
+                    -1,
+                    -1,
                     -1
                 )
             );
@@ -624,15 +671,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setErrorCode(apiError.error().code())
                         .setErrorMessage(apiError.message()),
                     Map.of(),
+                    -1,
+                    -1,
                     -1
                 )
             );
         }
 
+        final String heartbeatGroupId = request.groupId();
         return runtime.scheduleWriteOperation(
             "streams-group-heartbeat",
-            topicPartitionFor(request.groupId()),
+            topicPartitionFor(heartbeatGroupId),
             coordinator -> coordinator.streamsGroupHeartbeat(context, request)
+        ).thenApply(result -> maybeSetTopologyDescriptionRequired(result, heartbeatGroupId)
         ).exceptionally(exception -> handleOperationException(
             "streams-group-heartbeat",
             request,
@@ -643,11 +694,233 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setErrorCode(error.code())
                         .setErrorMessage(message),
                     Map.of(),
+                    -1,
+                    -1,
                     -1
                 ),
             log
         ));
     }
+
+    /**
+     * Post-processes a successful streams group heartbeat result by deciding whether the
+     * broker should set {@code TopologyDescriptionRequired=true} on the response, and
+     * arming the per-group back-off when it does.
+     *
+     * <p>The flag is set when the topology description plugin is configured, the group
+     * has resolved to a topology epoch, that epoch is neither stored nor permanently
+     * failed at the plugin, no back-off is in effect for this epoch, and the response
+     * does not carry a {@code STALE_TOPOLOGY} status (the member would just be told to
+     * catch up first). When the response already carries an error code we leave it
+     * alone.
+     */
+    private StreamsGroupHeartbeatResult maybeSetTopologyDescriptionRequired(
+        StreamsGroupHeartbeatResult result,
+        String groupId
+    ) {
+        if (streamsGroupTopologyDescriptionPlugin.isEmpty()) {
+            return result;
+        }
+        StreamsGroupHeartbeatResponseData response = result.data();
+        if (response.errorCode() != Errors.NONE.code()) {
+            return result;
+        }
+        int currentEpoch = result.currentTopologyEpoch();
+        if (currentEpoch < 0
+            || result.storedDescriptionTopologyEpoch() == currentEpoch
+            || result.failedDescriptionTopologyEpoch() == currentEpoch
+            || responseHasStaleTopology(response)) {
+            return result;
+        }
+        // Atomic check-and-arm: only set the flag if the back-off window is not already
+        // in effect for this epoch, so two concurrent heartbeats for the same group cannot
+        // both arm the back-off and double the window beyond its intended length.
+        if (streamsGroupTopologyDescriptionBackoff.armIfNotActive(groupId, currentEpoch)) {
+            response.setTopologyDescriptionRequired(true);
+        }
+        return result;
+    }
+
+    private static boolean responseHasStaleTopology(StreamsGroupHeartbeatResponseData response) {
+        if (response.status() == null) {
+            return false;
+        }
+        byte staleCode = Status.STALE_TOPOLOGY.code();
+        return response.status().stream().anyMatch(s -> s.statusCode() == staleCode);
+    }
+
+    /**
+     * See {@link GroupCoordinator#streamsGroupTopologyDescriptionUpdate(AuthorizableRequestContext, StreamsGroupTopologyDescriptionUpdateRequestData)}.
+     */
+    @Override
+    public CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> streamsGroupTopologyDescriptionUpdate(
+        AuthorizableRequestContext context,
+        StreamsGroupTopologyDescriptionUpdateRequestData request
+    ) {
+        Optional<StreamsGroupTopologyDescriptionUpdateResponseData> earlyResponse =
+            preCheckTopologyDescriptionUpdate(request);
+        if (earlyResponse.isPresent()) {
+            return CompletableFuture.completedFuture(earlyResponse.get());
+        }
+
+        final String groupId = request.groupId();
+        final String memberId = request.memberId();
+        final int pushedEpoch = request.topologyEpoch();
+        final TopicPartition tp = topicPartitionFor(groupId);
+        final StreamsGroupTopologyDescriptionPlugin plugin = streamsGroupTopologyDescriptionPlugin.get();
+
+        // Validate group + member first, so a fenced caller gets UNKNOWN_MEMBER_ID rather than
+        // an INVALID_REQUEST surfaced from converting a malformed payload. Only after the member
+        // is confirmed do we convert the wire payload, hand it to the plugin, and persist the
+        // outcome. Back-off state is mutated in a single whenComplete to centralize the
+        // permanent-vs-transient-vs-success accounting in one place. The chain carries the
+        // terminal disposition through a holder so whenComplete can act on it without having
+        // to reason about the response shape.
+        final AtomicReference<BackoffAction> backoffAction = new AtomicReference<>(BackoffAction.ARM);
+        return runtime.scheduleReadOperation(
+            "streams-group-topology-description-validate",
+            tp,
+            (coordinator, lastCommittedOffset) -> {
+                coordinator.validateStreamsGroupMember(groupId, memberId, lastCommittedOffset);
+                return null;
+            }
+        ).thenApply(__ -> StreamsGroupTopologyDescriptionConverter.fromRequest(request.topologyDescription())
+        ).thenCompose(description -> invokePluginSetTopology(plugin, groupId, pushedEpoch, description)
+        ).thenCompose(pluginOutcome -> switch (pluginOutcome.kind()) {
+            case SUCCESS -> runtime.scheduleWriteOperation(
+                "streams-group-set-stored-topology-epoch",
+                tp,
+                coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, false)
+            ).thenApply(unused -> {
+                backoffAction.set(BackoffAction.CLEAR);
+                return new StreamsGroupTopologyDescriptionUpdateResponseData();
+            });
+            case PERMANENT -> runtime.scheduleWriteOperation(
+                "streams-group-set-failed-topology-epoch",
+                tp,
+                coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, true)
+            ).thenApply(unused -> {
+                backoffAction.set(BackoffAction.CLEAR);
+                return topologyDescriptionUpdateErrorResponse(
+                    Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message());
+            });
+            case TRANSIENT -> CompletableFuture.completedFuture(topologyDescriptionUpdateErrorResponse(
+                Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message()));
+        }).whenComplete((response, throwable) -> {
+            // Success and permanent failure both terminate re-solicitation at this epoch
+            // (success advances StoredDescriptionTopologyEpoch, permanent ratchets
+            // FailedDescriptionTopologyEpoch), so the back-off entry is dropped. Transient
+            // failures and any post-plugin failure — including a metadata-record write that
+            // failed after a successful plugin call — leave the action at ARM so the next
+            // heartbeat does not immediately re-solicit; the idempotent re-push then closes
+            // the gap, matching the KIP-1331 invariant.
+            if (backoffAction.get() == BackoffAction.CLEAR) {
+                streamsGroupTopologyDescriptionBackoff.clear(groupId);
+            } else {
+                streamsGroupTopologyDescriptionBackoff.armOrExtend(groupId, pushedEpoch);
+            }
+        }).exceptionally(exception -> handleOperationException(
+            "streams-group-topology-description-update",
+            request,
+            exception,
+            GroupCoordinatorService::topologyDescriptionUpdateErrorResponse,
+            log
+        ));
+    }
+
+    private static StreamsGroupTopologyDescriptionUpdateResponseData topologyDescriptionUpdateErrorResponse(
+        Errors error,
+        String message
+    ) {
+        return new StreamsGroupTopologyDescriptionUpdateResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(message);
+    }
+
+    /**
+     * Reject the request synchronously when the coordinator is not active, no plugin is
+     * configured, or the request fails basic validation. Returns the response to send back
+     * to the client, or empty when the request is accepted for further processing.
+     */
+    private Optional<StreamsGroupTopologyDescriptionUpdateResponseData> preCheckTopologyDescriptionUpdate(
+        StreamsGroupTopologyDescriptionUpdateRequestData request
+    ) {
+        if (!isActive.get()) {
+            return Optional.of(topologyDescriptionUpdateErrorResponse(Errors.COORDINATOR_NOT_AVAILABLE, null));
+        }
+        if (streamsGroupTopologyDescriptionPlugin.isEmpty()) {
+            return Optional.of(topologyDescriptionUpdateErrorResponse(
+                Errors.UNSUPPORTED_VERSION,
+                "The broker has no streams group topology description plugin configured."
+            ));
+        }
+        if (request.memberId() == null || request.memberId().isEmpty()) {
+            return Optional.of(topologyDescriptionUpdateErrorResponse(
+                Errors.INVALID_REQUEST, "MemberId can't be empty."
+            ));
+        }
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return Optional.of(topologyDescriptionUpdateErrorResponse(
+                Errors.INVALID_REQUEST, "GroupId can't be empty."
+            ));
+        }
+        if (request.topologyDescription() == null) {
+            return Optional.of(topologyDescriptionUpdateErrorResponse(
+                Errors.INVALID_REQUEST, "TopologyDescription can't be null."
+            ));
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Calls the plugin's {@code setTopology} and folds the result into a {@link PluginOutcome}.
+     * The future never completes exceptionally — the outcome carries the failure category.
+     */
+    private static CompletableFuture<PluginOutcome> invokePluginSetTopology(
+        StreamsGroupTopologyDescriptionPlugin plugin,
+        String groupId,
+        int pushedEpoch,
+        StreamsGroupTopologyDescription description
+    ) {
+        final CompletableFuture<Void> pluginFuture;
+        try {
+            pluginFuture = plugin.setTopology(groupId, pushedEpoch, description);
+        } catch (Throwable t) {
+            // A synchronous throw from the plugin is treated as a permanent failure with a
+            // generic client-visible message.
+            return CompletableFuture.completedFuture(PluginOutcome.permanent(t.getMessage()));
+        }
+        return pluginFuture.handle((unused, throwable) -> {
+            if (throwable == null) {
+                return PluginOutcome.success();
+            }
+            Throwable cause = throwable instanceof CompletionException && throwable.getCause() != null
+                ? throwable.getCause()
+                : throwable;
+            if (cause instanceof StreamsTopologyDescriptionPermanentFailureException) {
+                return PluginOutcome.permanent(cause.getMessage());
+            }
+            return PluginOutcome.transientFailure(cause.getMessage());
+        });
+    }
+
+    private record PluginOutcome(Kind kind, String message) {
+        enum Kind { SUCCESS, PERMANENT, TRANSIENT }
+
+        static PluginOutcome success() {
+            return new PluginOutcome(Kind.SUCCESS, null);
+        }
+
+        static PluginOutcome permanent(String message) {
+            return new PluginOutcome(Kind.PERMANENT, message);
+        }
+
+        static PluginOutcome transientFailure(String message) {
+            return new PluginOutcome(Kind.TRANSIENT, message);
+        }
+    }
+
+    private enum BackoffAction { CLEAR, ARM }
 
     /**
      * Validates the ShareGroupHeartbeat request.
@@ -1434,9 +1707,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     return CompletableFuture.completedFuture(deletableGroupResults);
                 }
 
-                return handleDeleteGroups(context, topicPartition, retainedGroupIds)
-                    .whenComplete((resp, __) -> resp.forEach(result -> deletableGroupResults.add(result.duplicate())))
-                    .thenApply(__ -> deletableGroupResults);
+                return deleteStreamsGroupTopologyDescriptions(topicPartition, retainedGroupIds)
+                    .thenCompose(streamsErrMap -> {
+                        List<String> afterStreams = filterStreamsTopologyErrors(
+                            streamsErrMap, retainedGroupIds, deletableGroupResults, context.requestVersion());
+                        if (afterStreams.isEmpty()) {
+                            return CompletableFuture.completedFuture(deletableGroupResults);
+                        }
+                        return handleDeleteGroups(context, topicPartition, afterStreams)
+                            .whenComplete((resp, __) -> resp.forEach(result -> deletableGroupResults.add(result.duplicate())))
+                            .thenApply(__ -> deletableGroupResults);
+                    });
             });
             // deleteShareGroups has its own exceptionally block, so we don't need one here.
 
@@ -1493,6 +1774,114 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // Let us invoke the standard procedure of any non-share
         // groups or successfully deleted share groups remaining.
         return groupSet.stream().toList();
+    }
+
+    /**
+     * Call {@code plugin.deleteTopology} for every retained group id that is a streams
+     * group carrying a stored topology description. Returns a per-group map of failures
+     * keyed by group id; groups absent from the map either had no plugin state or the
+     * plugin call succeeded. Empty (no-op) when no plugin is configured.
+     */
+    private CompletableFuture<Map<String, ApiError>> deleteStreamsGroupTopologyDescriptions(
+        TopicPartition topicPartition,
+        List<String> groupIds
+    ) {
+        if (streamsGroupTopologyDescriptionPlugin.isEmpty()) {
+            return CompletableFuture.completedFuture(Map.of());
+        }
+        final StreamsGroupTopologyDescriptionPlugin plugin = streamsGroupTopologyDescriptionPlugin.get();
+        return runtime.scheduleReadOperation(
+            "streams-group-topology-pre-delete",
+            topicPartition,
+            (coordinator, lastCommittedOffset) ->
+                coordinator.streamsGroupsWithStoredTopologyDescription(groupIds, lastCommittedOffset)
+        ).thenCompose(groupsWithStored -> {
+            if (groupsWithStored.isEmpty()) {
+                return CompletableFuture.completedFuture(Map.<String, ApiError>of());
+            }
+            Map<String, CompletableFuture<Throwable>> calls = new HashMap<>(groupsWithStored.size());
+            for (String groupId : groupsWithStored) {
+                CompletableFuture<Throwable> outcome;
+                try {
+                    outcome = plugin.deleteTopology(groupId).handle((unused, throwable) -> throwable);
+                } catch (Throwable t) {
+                    outcome = CompletableFuture.completedFuture(t);
+                }
+                calls.put(groupId, outcome);
+            }
+            CompletableFuture<?>[] all = calls.values().toArray(new CompletableFuture<?>[0]);
+            return CompletableFuture.allOf(all).thenApply(unused -> {
+                Map<String, ApiError> failures = new HashMap<>();
+                calls.forEach((groupId, throwableFuture) -> {
+                    Throwable t = throwableFuture.join();
+                    if (t != null) {
+                        Throwable cause = t instanceof CompletionException && t.getCause() != null
+                            ? t.getCause() : t;
+                        log.warn("Topology description plugin failed to delete topology for streams group {}.",
+                            groupId, cause);
+                        streamsGroupTopologyDescriptionBackoff.clear(groupId);
+                        failures.put(groupId, new ApiError(Errors.GROUP_DELETION_FAILED, cause.getMessage()));
+                    } else {
+                        streamsGroupTopologyDescriptionBackoff.clear(groupId);
+                    }
+                });
+                return failures;
+            });
+        }).exceptionally(exception -> {
+            // A failure to read the streams group state (NOT_COORDINATOR etc.) is treated
+            // the same as a plugin failure: every retained group is held back from
+            // tombstoning so the caller can retry. The downstream chain prefers the more
+            // specific error from the runtime over GROUP_DELETION_FAILED.
+            Errors error = Errors.forException(exception);
+            Map<String, ApiError> failures = new HashMap<>();
+            for (String groupId : groupIds) {
+                failures.put(groupId, new ApiError(error, exception.getMessage()));
+            }
+            return failures;
+        });
+    }
+
+    /**
+     * Move plugin failures into {@code deletableGroupResults} and return the group ids
+     * that should still proceed to tombstoning.
+     *
+     * <p>Per KIP-1331, {@code GROUP_DELETION_FAILED} and the per-group {@code ErrorMessage}
+     * field were introduced in DeleteGroups v3. For older clients we downgrade the error to
+     * {@code UNKNOWN_SERVER_ERROR} with no message — matching the convention used by KIP-1043
+     * for new error codes that pre-existing request versions cannot interpret. Errors that
+     * predate this KIP (e.g. NOT_COORDINATOR surfaced from the runtime via the exceptionally
+     * branch above) are passed through unchanged.
+     */
+    private static List<String> filterStreamsTopologyErrors(
+        Map<String, ApiError> streamsErrMap,
+        List<String> groupIds,
+        DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults,
+        int requestVersion
+    ) {
+        if (streamsErrMap.isEmpty()) {
+            return groupIds;
+        }
+        List<String> retained = new ArrayList<>(groupIds.size() - streamsErrMap.size());
+        for (String groupId : groupIds) {
+            ApiError err = streamsErrMap.get(groupId);
+            if (err == null) {
+                retained.add(groupId);
+            } else {
+                Errors effectiveError = err.error();
+                String effectiveMessage = err.message();
+                if (effectiveError == Errors.GROUP_DELETION_FAILED && requestVersion < 3) {
+                    effectiveError = Errors.UNKNOWN_SERVER_ERROR;
+                    effectiveMessage = null;
+                }
+                deletableGroupResults.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                        .setErrorCode(effectiveError.code())
+                        .setErrorMessage(effectiveMessage)
+                );
+            }
+        }
+        return retained;
     }
 
     private CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> handleDeleteGroups(
