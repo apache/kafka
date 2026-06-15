@@ -113,6 +113,28 @@ public class PersisterStateBatchCombinerTest {
                 List.of(),
                 List.of(),
                 120
+            ),
+
+            new BatchTestHolder(
+                "Null current and new batches are treated as empty.",
+                null,
+                null,
+                List.of(),
+                -1
+            ),
+
+            new BatchTestHolder(
+                "Duplicate equal batches ending before a later batch do not fill the gap.",
+                BatchTestHolder.singleBatch(100, 110, 0, 1),
+                BatchTestHolder.multiBatch()
+                    .addBatch(100, 110, 0, 1)
+                    .addBatch(120, 130, 2, 1)
+                    .build(),
+                BatchTestHolder.multiBatch()
+                    .addBatch(100, 110, 0, 1)
+                    .addBatch(120, 130, 2, 1)
+                    .build(),
+                -1
             )
         );
     }

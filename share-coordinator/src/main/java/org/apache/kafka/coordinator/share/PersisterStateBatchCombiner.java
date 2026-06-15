@@ -21,10 +21,10 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
-import java.util.Set;
 
 /**
  * Combines an existing list of {@link PersisterStateBatch} entries with a list of newly produced
@@ -126,7 +126,7 @@ public class PersisterStateBatchCombiner {
         });
 
         PriorityQueue<PersisterStateBatch> active = new PriorityQueue<>(PRIORITY_DESC);
-        Set<PersisterStateBatch> removed = new HashSet<>();
+        Map<PersisterStateBatch, Integer> removed = new HashMap<>();
 
         List<PersisterStateBatch> out = new ArrayList<>();
         long openFrom = -1;
@@ -147,13 +147,19 @@ public class PersisterStateBatchCombiner {
                 if (e.isBegin) {
                     active.offer(e.batch);
                 } else {
-                    removed.add(e.batch);
+                    removed.merge(e.batch, 1, Integer::sum);
                 }
             }
 
             // Refresh heap-top, lazily evicting dead batches.
-            while (!active.isEmpty() && removed.contains(active.peek())) {
-                removed.remove(active.poll());
+            while (!active.isEmpty() && removed.containsKey(active.peek())) {
+                PersisterStateBatch expired = active.poll();
+                int remaining = removed.get(expired) - 1;
+                if (remaining == 0) {
+                    removed.remove(expired);
+                } else {
+                    removed.put(expired, remaining);
+                }
             }
 
             openWinner = active.peek();
