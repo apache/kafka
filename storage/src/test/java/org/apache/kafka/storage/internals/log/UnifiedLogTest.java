@@ -92,6 +92,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.RandomAccessFile;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -6004,5 +6005,46 @@ public class UnifiedLogTest {
         assertTrue(exception.getMessage().contains("smaller than the last seen epoch"));
         assertTrue(exception.getMessage().contains(String.valueOf(originalEpoch)));
         assertTrue(exception.getMessage().contains(String.valueOf(bumpedEpoch)));
+    }
+
+    @Test
+    public void testLogLoaderRebuildsPreAllocatedTimeIndexViaRecoverSegment() throws IOException {
+        Properties logProps = new Properties();
+        logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "1200");
+        logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1");
+        LogConfig logConfig = new LogConfig(logProps);
+        UnifiedLog log = createLog(logDir, logConfig);
+
+        int numRecords = 5;
+        for (int i = 1; i <= numRecords; i++)
+            log.appendAsLeader(singletonRecords("record".getBytes(), i * 1000L), 0);
+
+        log.close();
+
+        // Corrupt the time index: expand to maxIndexSize bytes with all-zeros content.
+        File timeIndexFile = new File(logDir, "00000000000000000000.timeindex");
+        try (RandomAccessFile raf = new RandomAccessFile(timeIndexFile, "rw")) {
+            raf.setLength(0);
+            raf.setLength(1200);
+        }
+
+        // Verify pre-condition: the index reports full (entries == maxEntries) with an empty last slot.
+        try (TimeIndex preAllocatedIndex = new TimeIndex(timeIndexFile, 0L, 1200)) {
+            assertEquals(preAllocatedIndex.maxEntries(), preAllocatedIndex.entries());
+            assertEquals(0L, preAllocatedIndex.lastEntry().timestamp());
+        }
+
+        // Reload: LogLoader sanity-checks the segment, hits CorruptIndexException, and rebuilds via recoverSegment.
+        UnifiedLog reloadedLog = createLog(logDir, logConfig);
+
+        TimeIndex reloadedTimeIndex = reloadedLog.activeSegment().timeIndex();
+        assertTrue(reloadedTimeIndex.entries() < reloadedTimeIndex.maxEntries(),
+            "Time index entries must be less than maxEntries after recovery");
+        assertTrue(reloadedTimeIndex.lastEntry().timestamp() > 0L,
+            "Time index must have real timestamps after recovery");
+        assertEquals(numRecords, reloadedLog.logEndOffset(),
+            "Log end offset must be preserved after recovery");
+
+        reloadedLog.close();
     }
 }

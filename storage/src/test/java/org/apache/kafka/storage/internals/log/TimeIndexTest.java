@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -200,6 +201,27 @@ public class TimeIndexTest {
         File file = TestUtils.tempFile();
         file.delete();
         return file;
+    }
+
+    @Test
+    public void testSanityCheckDetectsPreAllocatedNeverWrittenIndex() throws IOException {
+        idx.close();
+        File file = nonExistentTempFile();
+        try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
+            raf.setLength(maxEntries * 12);
+        }
+
+        try (TimeIndex corruptIdx = new TimeIndex(file, baseOffset, maxEntries * 12)) {
+            assertEquals(maxEntries, corruptIdx.entries());
+            assertThrows(CorruptIndexException.class, corruptIdx::sanityCheck);
+        }
+    }
+
+    @Test
+    public void testSanityCheckPassesForLegitimatelyFullIndex() {
+        appendEntries(maxEntries - 1);
+        idx.maybeAppend(maxEntries * 10, maxEntries * 10 + baseOffset, true);
+        idx.sanityCheck(); // should not throw
     }
 
 }

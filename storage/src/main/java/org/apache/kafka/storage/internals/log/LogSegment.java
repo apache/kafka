@@ -183,9 +183,11 @@ public class LogSegment implements Closeable {
             // Resize the time index file to 0 if it is newly created.
             if (timeIndexFileNewlyCreated)
                 timeIndex().resize(0);
-            // Sanity checks for time index and offset index are skipped because
-            // we will recover the segments above the recovery point in recoverLog()
-            // in any case so sanity checking them here is redundant.
+            // A time index left at its pre-allocated size with no valid entries causes
+            // BufferOverflowException on the next roll. Checking it here triggers LogLoader
+            // to rebuild the index from the log. The offset index is not checked because a
+            // pre-allocated offset index does not cause failures on roll.
+            timeIndex().sanityCheck();
             txnIndex.sanityCheck();
         } else
             throw new NoSuchFileException("Offset index file " + offsetIndexFile().getAbsolutePath() + " does not exist");

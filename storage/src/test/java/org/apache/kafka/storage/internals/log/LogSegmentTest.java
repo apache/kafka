@@ -931,4 +931,25 @@ public class LogSegmentTest {
             }
         }
     }
+
+    @Test
+    public void testSanityCheckDetectsCorruptTimeIndex() throws Exception {
+        try (LogSegment seg = createSegment(0)) {
+            for (int i = 0; i < 5; i++) {
+                seg.append(i, v1Records(i, String.valueOf(i)));
+            }
+            File timeIndexFile = seg.timeIndexFile();
+            seg.close();
+
+            try (RandomAccessFile raf = new RandomAccessFile(timeIndexFile, "rw")) {
+                int size = (int) raf.length();
+                raf.seek(0);
+                raf.write(new byte[size]);
+            }
+
+            try (LogSegment reopened = LogTestUtils.createSegment(0, logDir, 10, Time.SYSTEM)) {
+                assertThrows(CorruptIndexException.class, () -> reopened.sanityCheck(false));
+            }
+        }
+    }
 }
