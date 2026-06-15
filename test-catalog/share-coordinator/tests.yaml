@@ -1,3 +1,8 @@
+org.apache.kafka.coordinator.share.PersisterStateBatchCombinerStressTest:
+- alternatingStateBatchesAreNotMerged
+- manyContiguousSameStateBatchesCoalesceIntoOne
+- manyShuffledSameStateBatchesCoalesceIntoOne
+- resultIsSortedDisjointCoverage
 org.apache.kafka.coordinator.share.PersisterStateBatchCombinerTest:
 - testStateBatchCombineComplexCases
 - testStateBatchCombineCornerCases
