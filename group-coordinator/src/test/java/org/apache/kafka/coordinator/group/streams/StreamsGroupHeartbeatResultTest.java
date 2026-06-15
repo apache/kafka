@@ -25,7 +25,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsGroupHeartbeatResultTest {
 
@@ -75,6 +74,5 @@ public class StreamsGroupHeartbeatResultTest {
     public void testNullDataIsRejected() {
         assertThrows(NullPointerException.class,
             () -> new StreamsGroupHeartbeatResult(null, Map.of(), -1, -1, -1));
-        assertTrue(true);
     }
 }

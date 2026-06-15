@@ -57,7 +57,10 @@ public class StreamsGroupTopologyDescriptionBackoff {
      * Atomic check-and-arm. Returns true if no window was in effect and a new one was
      * armed, false if a window was already active and nothing changed. Used on the
      * heartbeat path to fold the "check + arm" pair into a single compute so two
-     * concurrent heartbeats for the same group cannot both arm the back-off.
+     * concurrent heartbeats for the same group cannot both arm the back-off, and to
+     * preserve the exponential chain when the previous window has expired without a
+     * push reaching the coordinator (e.g. the client never sent one, or the push was
+     * lost in flight before {@link #armOrExtend} could run).
      */
     public boolean armIfNotActive(String groupId, int topologyEpoch) {
         final long now = time.milliseconds();
@@ -69,6 +72,13 @@ public class StreamsGroupTopologyDescriptionBackoff {
                 return existing;
             }
             armed[0] = true;
+            // Re-arm: continue the exponential chain at the same epoch (the previous
+            // window expired without a push completing); reset to INITIAL_DELAY_MS on
+            // an epoch advance, which implicitly drops the prior history.
+            if (existing != null && existing.topologyEpoch() == topologyEpoch) {
+                long nextDelay = Math.min(existing.currentDelayMs() * 2, MAX_DELAY_MS);
+                return new Entry(topologyEpoch, nextDelay, now + nextDelay);
+            }
             return new Entry(topologyEpoch, INITIAL_DELAY_MS, now + INITIAL_DELAY_MS);
         });
         return armed[0];

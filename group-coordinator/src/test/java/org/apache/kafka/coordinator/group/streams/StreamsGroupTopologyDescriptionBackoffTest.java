@@ -127,4 +127,26 @@ public class StreamsGroupTopologyDescriptionBackoffTest {
         assertEquals(StreamsGroupTopologyDescriptionBackoff.INITIAL_DELAY_MS,
             backoff.entry("g").currentDelayMs());
     }
+
+    @Test
+    public void testArmIfNotActiveDoublesAfterExpiredWindowAtSameEpoch() {
+        // Heartbeats keep re-soliciting the same epoch because the client never
+        // pushed (or the push was lost). The exponential chain must continue across
+        // those re-arms instead of resetting to INITIAL_DELAY_MS every cycle.
+        MockTime time = new MockTime();
+        StreamsGroupTopologyDescriptionBackoff backoff = new StreamsGroupTopologyDescriptionBackoff(time);
+
+        long expected = StreamsGroupTopologyDescriptionBackoff.INITIAL_DELAY_MS;
+        assertTrue(backoff.armIfNotActive("g", 1));
+        assertEquals(expected, backoff.entry("g").currentDelayMs());
+
+        for (int i = 0; i < 20; i++) {
+            time.sleep(backoff.entry("g").currentDelayMs());
+            assertTrue(backoff.armIfNotActive("g", 1));
+            expected = Math.min(expected * 2, StreamsGroupTopologyDescriptionBackoff.MAX_DELAY_MS);
+            assertEquals(expected, backoff.entry("g").currentDelayMs(), "iteration " + i);
+        }
+        assertEquals(StreamsGroupTopologyDescriptionBackoff.MAX_DELAY_MS,
+            backoff.entry("g").currentDelayMs());
+    }
 }

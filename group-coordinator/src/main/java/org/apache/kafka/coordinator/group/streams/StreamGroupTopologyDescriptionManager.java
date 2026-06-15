@@ -36,16 +36,29 @@ import java.util.Optional;
  * {@code FailedDescriptionTopologyEpoch} fields on each streams group drive convergence
  * after a restart.
  */
-public class TopologyDescriptionManager {
+public class StreamGroupTopologyDescriptionManager implements AutoCloseable {
     private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
     private final StreamsGroupTopologyDescriptionBackoff backoff;
 
-    public TopologyDescriptionManager(
+    public StreamGroupTopologyDescriptionManager(
         Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
         Time time
     ) {
         this.plugin = plugin;
         this.backoff = new StreamsGroupTopologyDescriptionBackoff(time);
+    }
+
+    /**
+     * Release plugin-side resources. The plugin is instantiated by the service via
+     * {@code config.getConfiguredInstance(...)}, so the service owns it and must close
+     * it on shutdown to avoid leaking threads, network clients, etc. across broker
+     * restart cycles.
+     */
+    @Override
+    public void close() throws Exception {
+        if (plugin.isPresent()) {
+            plugin.get().close();
+        }
     }
 
     /**

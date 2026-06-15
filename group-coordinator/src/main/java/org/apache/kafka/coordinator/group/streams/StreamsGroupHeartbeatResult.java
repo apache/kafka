@@ -53,4 +53,13 @@ public record StreamsGroupHeartbeatResult(
         Objects.requireNonNull(data);
         creatableTopics = Collections.unmodifiableMap(Objects.requireNonNull(creatableTopics));
     }
+
+    /**
+     * Convenience constructor for failure-fast paths that do not resolve a group: no
+     * internal topics to create, and all three epoch fields set to -1 so the service-layer
+     * gate sees nothing to do.
+     */
+    public StreamsGroupHeartbeatResult(StreamsGroupHeartbeatResponseData data) {
+        this(data, Map.of(), -1, -1, -1);
+    }
 }

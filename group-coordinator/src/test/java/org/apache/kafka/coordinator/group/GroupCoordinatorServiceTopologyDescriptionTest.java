@@ -48,6 +48,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -69,7 +71,15 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
         boolean startup
     ) {
-        MockTimer timer = new MockTimer();
+        return buildService(runtime, plugin, startup, new MockTimer());
+    }
+
+    private static GroupCoordinatorService buildService(
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
+        Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
+        boolean startup,
+        MockTimer timer
+    ) {
         MockTime time = timer.time();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -106,6 +116,53 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         ).get(5, TimeUnit.SECONDS);
 
         assertTrue(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatArmSuppressReSolicitCycle() throws Exception {
+        // End-to-end exercise of the arm → suppress → re-solicit cycle through the
+        // service + TopologyDescriptionManager. Backoff primitive tests cover this in
+        // isolation; this asserts the contract holds when the heartbeat write
+        // result is fed into maybeSetTopologyDescriptionRequired.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        // Each call must yield a fresh response so mutations from the previous call do not
+        // bleed through. thenReturn would hand back the same instance to every invocation
+        // and the second heartbeat would observe topologyDescriptionRequired carried over
+        // from the first, masking the suppression we want to assert.
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-heartbeat"),
+            eq(GROUP_TP),
+            any()
+        )).thenAnswer(invocation -> CompletableFuture.completedFuture(
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), 5, -1, -1)));
+
+        MockTimer timer = new MockTimer();
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, timer);
+
+        // 1. First heartbeat — back-off idle. Manager arms it and sets the flag.
+        StreamsGroupHeartbeatResult firstResult = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), validHeartbeatRequest()
+        ).get(5, TimeUnit.SECONDS);
+        assertTrue(firstResult.data().topologyDescriptionRequired());
+
+        // 2. Second heartbeat — back-off window still active. Manager suppresses the flag.
+        StreamsGroupHeartbeatResult secondResult = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), validHeartbeatRequest()
+        ).get(5, TimeUnit.SECONDS);
+        assertFalse(secondResult.data().topologyDescriptionRequired());
+
+        // 3. Advance MockTime past the back-off window. INITIAL_DELAY_MS is 30s — the
+        // value lives in StreamsGroupTopologyDescriptionBackoff as a package-private
+        // constant; sleeping a comfortable margin past it keeps this test independent
+        // of the exact delay while still asserting "past the initial window".
+        timer.time().sleep(60_000L);
+
+        // 4. Third heartbeat — window expired. Manager re-arms and sets the flag again.
+        StreamsGroupHeartbeatResult thirdResult = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), validHeartbeatRequest()
+        ).get(5, TimeUnit.SECONDS);
+        assertTrue(thirdResult.data().topologyDescriptionRequired());
     }
 
     @Test
@@ -185,6 +242,14 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         ).get(5, TimeUnit.SECONDS);
 
         assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testShutdownClosesPlugin() throws Exception {
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        GroupCoordinatorService service = buildService(mockRuntime(), Optional.of(plugin), true);
+        service.shutdown();
+        verify(plugin, times(1)).close();
     }
 
     private static StreamsGroupHeartbeatRequestData validHeartbeatRequest() {
