@@ -19,7 +19,7 @@ package kafka.server
 
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.cluster.Partition
-import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
+import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.share.SharePartitionManager
@@ -84,7 +84,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
-import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.coordinator.transaction.{InitProducerIdResult, TransactionLogConfig}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MetadataCacheFixtures, MockConfigRepository}
 import org.apache.kafka.network.{Request, Session}
@@ -1811,7 +1811,7 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(expectedProducerIdAndEpoch),
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
-      )).thenAnswer(_ => responseCallback.getValue.apply(InitProducerIdResult(producerId, epoch, Errors.PRODUCER_FENCED)))
+      )).thenAnswer(_ => responseCallback.getValue.apply(new InitProducerIdResult(producerId, epoch, Errors.PRODUCER_FENCED)))
       val kafkaApis = createKafkaApis()
       try {
         kafkaApis.handleInitProducerIdRequest(request, requestLocal)
@@ -2055,7 +2055,7 @@ class KafkaApisTest extends Logging {
       any(),
       responseCallback.capture(),
       ArgumentMatchers.eq(requestLocal)
-    )).thenAnswer(_ => responseCallback.getValue.apply(InitProducerIdResult(15L, 0.toShort, Errors.NONE)))
+    )).thenAnswer(_ => responseCallback.getValue.apply(new InitProducerIdResult(15L, 0.toShort, Errors.NONE)))
 
     kafkaApis.handleInitProducerIdRequest(request, requestLocal)
 
