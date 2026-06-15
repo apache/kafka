@@ -16,25 +16,25 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.api.AbstractSaslTest;
-import kafka.security.JaasTestUtils;
-
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.clients.admin.AlterUserScramCredentialsResult;
+import org.apache.kafka.clients.admin.ScramCredentialInfo;
+import org.apache.kafka.clients.admin.ScramMechanism;
+import org.apache.kafka.clients.admin.UserScramCredentialUpsertion;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.metadata.storage.Formatter;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.function.Executable;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,120 +42,78 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
-import scala.Option;
-import scala.Some$;
-import scala.collection.Seq;
-import scala.jdk.javaapi.CollectionConverters;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_MECHANISM;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = SASL_ENABLED_MECHANISMS_CONFIG, value = "PLAIN,SCRAM-SHA-256"),
+        @ClusterConfigProperty(key = ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, value = "true"),
+    }
+)
+public class SaslClientsWithInvalidCredentialsTest {
+
     private static final String TOPIC = "topic";
-    public static final int NUM_PARTITIONS = 1;
-    public static final int BROKER_COUNT = 1;
-    public static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
-    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS =  CollectionConverters.asScala(List.of(KAFKA_CLIENT_SASL_MECHANISM)).toSeq();
+    private static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
+    private static final String SCRAM_USER = "scram-user";
+    private static final String SCRAM_PASSWORD = "scram-user-secret";
+    private static final String KAFKA_CLIENT_SASL_JAAS_CONFIG =
+        "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"" + SCRAM_USER + "\" password=\"" + SCRAM_PASSWORD + "\";";
 
-    private Consumer<byte[], byte[]> createConsumer() {
-        return createConsumer(
-            new ByteArrayDeserializer(),
-            new ByteArrayDeserializer(),
-            new Properties(),
-            CollectionConverters.asScala(Set.<String>of()).toList()
-        );
+    private final ClusterInstance cluster;
+
+    public SaslClientsWithInvalidCredentialsTest(ClusterInstance cluster) {
+        this.cluster = cluster;
     }
 
-    @Override
-    public SecurityProtocol securityProtocol() {
-        return SecurityProtocol.SASL_PLAINTEXT;
+    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
+    public void testConsumerGroupServiceWithAuthenticationFailureWithClassicGroupProtocol() throws Exception {
+        testConsumerGroupServiceWithAuthenticationFailure(GroupProtocol.CLASSIC);
     }
 
-    @Override
-    public Option<Properties> serverSaslProperties() {
-        return Some$.MODULE$.apply(kafkaServerSaslProperties(KAFKA_SERVER_SASL_MECHANISMS, KAFKA_CLIENT_SASL_MECHANISM));
+    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
+    public void testConsumerGroupServiceWithAuthenticationFailureWithConsumerGroupProtocol() throws Exception {
+        testConsumerGroupServiceWithAuthenticationFailure(GroupProtocol.CONSUMER);
     }
 
-    @Override
-    public Option<Properties> clientSaslProperties() {
-        return Some$.MODULE$.apply(kafkaClientSaslProperties(KAFKA_CLIENT_SASL_MECHANISM, false));
+    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
+    public void testConsumerGroupServiceWithAuthenticationSuccessWithClassicGroupProtocol() throws Exception {
+        testConsumerGroupServiceWithAuthenticationSuccess(GroupProtocol.CLASSIC);
     }
 
-    @Override
-    public int brokerCount() {
-        return 1;
+    @ClusterTest(brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT)
+    public void testConsumerGroupServiceWithAuthenticationSuccessWithConsumerGroupProtocol() throws Exception {
+        testConsumerGroupServiceWithAuthenticationSuccess(GroupProtocol.CONSUMER);
     }
 
-    @Override
-    public void configureSecurityBeforeServersStart(TestInfo testInfo) {
-        super.configureSecurityBeforeServersStart(testInfo);
-    }
-
-    @Override
-    public void addFormatterSettings(Formatter formatter) {
-        formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ");
-        formatter.setScramArguments(List.of("SCRAM-SHA-256=[name=" + JaasTestUtils.KAFKA_SCRAM_ADMIN +
-            ",password=" + JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD + "]"));
-    }
-
-    @Override
-    public Admin createPrivilegedAdminClient() {
-        return createAdminClient(bootstrapServers(listenerName()), securityProtocol(), trustStoreFile(), clientSaslProperties(),
-            KAFKA_CLIENT_SASL_MECHANISM, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD);
-    }
-
-    @BeforeEach
-    @Override
-    public void setUp(TestInfo testInfo) {
-        startSasl(jaasSections(KAFKA_SERVER_SASL_MECHANISMS,
-            Some$.MODULE$.apply(KAFKA_CLIENT_SASL_MECHANISM),
-            JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME));
-        String superuserLoginContext = jaasAdminLoginModule(KAFKA_CLIENT_SASL_MECHANISM, Option.empty());
-        this.superuserClientConfig().put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext);
-        super.setUp(testInfo);
-        try (Admin admin = createPrivilegedAdminClient()) {
-            admin.createTopics(List.of(
-                new NewTopic(TOPIC, NUM_PARTITIONS, (short) BROKER_COUNT))).all().
-                    get(5, TimeUnit.MINUTES);
-        } catch (ExecutionException | InterruptedException | TimeoutException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @AfterEach
-    @Override
-    public void tearDown() {
-        super.tearDown();
-        closeSasl();
-    }
-
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
-    @MethodSource("getTestGroupProtocolParametersAll")
-    public void testConsumerGroupServiceWithAuthenticationFailure(String groupProtocol) throws Exception {
+    private void testConsumerGroupServiceWithAuthenticationFailure(GroupProtocol groupProtocol) throws Exception {
+        cluster.createTopic(TOPIC, 1, (short) 1);
         try (
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-            Consumer<byte[], byte[]> consumer = createConsumer()
+            KafkaConsumer<byte[], byte[]> consumer = createScramConsumer(groupProtocol)
         ) {
             consumer.subscribe(List.of(TOPIC));
             verifyAuthenticationException(consumerGroupService::listGroups);
         }
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
-    @MethodSource("getTestGroupProtocolParametersAll")
-    public void testConsumerGroupServiceWithAuthenticationSuccess(String groupProtocol) throws Exception {
-        createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
+    private void testConsumerGroupServiceWithAuthenticationSuccess(GroupProtocol groupProtocol) throws Exception {
+        cluster.createTopic(TOPIC, 1, (short) 1);
+        createScramCredential(SCRAM_USER, SCRAM_PASSWORD);
         try (
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-            Consumer<byte[], byte[]> consumer = createConsumer()
+            KafkaConsumer<byte[], byte[]> consumer = createScramConsumer(groupProtocol)
         ) {
             consumer.subscribe(List.of(TOPIC));
 
@@ -167,16 +125,45 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
                     return false;
                 }
             }, "failed to poll data with authentication");
-            assertEquals(1, consumerGroupService.listConsumerGroups().size());
+
+            TestUtils.waitForCondition(
+                () -> consumerGroupService.listConsumerGroups().size() == 1,
+                "failed to find consumer group after successful poll"
+            );
         }
+    }
+
+    private void createScramCredential(String user, String password) throws ExecutionException, InterruptedException {
+        try (Admin admin = cluster.admin()) {
+            AlterUserScramCredentialsResult result = admin.alterUserScramCredentials(List.of(
+                new UserScramCredentialUpsertion(user,
+                    new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), password)
+            ));
+            result.all().get();
+        }
+    }
+
+    private KafkaConsumer<byte[], byte[]> createScramConsumer(GroupProtocol groupProtocol) {
+        Properties props = new Properties();
+        props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
+        props.put(SASL_MECHANISM, KAFKA_CLIENT_SASL_MECHANISM);
+        props.put(SASL_JAAS_CONFIG, KAFKA_CLIENT_SASL_JAAS_CONFIG);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group");
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        return new KafkaConsumer<>(props);
     }
 
     private ConsumerGroupCommand.ConsumerGroupService prepareConsumerGroupService() throws IOException {
         File propsFile = TestUtils.tempFile(
             "security.protocol=SASL_PLAINTEXT\n" +
-            "sasl.mechanism=" + KAFKA_CLIENT_SASL_MECHANISM);
+            "sasl.mechanism=" + KAFKA_CLIENT_SASL_MECHANISM + "\n" +
+            "sasl.jaas.config=" + KAFKA_CLIENT_SASL_JAAS_CONFIG);
 
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()),
+        String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(),
             "--describe",
             "--group", "test.group",
             "--command-config", propsFile.getAbsolutePath()};
