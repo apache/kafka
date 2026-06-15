@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -176,10 +177,10 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    String.format("Option %s takes the options %s or %s", deleteOpt, groupOpt, allGroupsOpt));
+                    String.format(Locale.ROOT, "Option %s takes the options %s or %s", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(allGroupsOpt) && options.has(groupOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    String.format("Option %s takes either %s or %s, not both.", deleteOpt, groupOpt, allGroupsOpt));
+                    String.format(Locale.ROOT, "Option %s takes either %s or %s, not both.", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + deleteOpt + " does not take the option: " + topicOpt);

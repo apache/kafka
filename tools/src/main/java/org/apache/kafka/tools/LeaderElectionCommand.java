@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -165,7 +166,7 @@ public class LeaderElectionCommand {
             String partitionsAsString = succeeded.stream()
                 .map(TopicPartition::toString)
                 .collect(Collectors.joining(", "));
-            System.out.println(String.format("Successfully completed leader election (%s) for partitions %s",
+            System.out.println(String.format(Locale.ROOT, "Successfully completed leader election (%s) for partitions %s",
                 electionType, partitionsAsString));
         }
 
@@ -173,15 +174,15 @@ public class LeaderElectionCommand {
             String partitionsAsString = noop.stream()
                 .map(TopicPartition::toString)
                 .collect(Collectors.joining(", "));
-            System.out.println(String.format("Valid replica already elected for partitions %s", partitionsAsString));
+            System.out.println(String.format(Locale.ROOT, "Valid replica already elected for partitions %s", partitionsAsString));
         }
 
         if (!failed.isEmpty()) {
             AdminCommandFailedException rootException =
-                new AdminCommandFailedException(String.format("%s replica(s) could not be elected", failed.size()));
+                new AdminCommandFailedException(String.format(Locale.ROOT, "%s replica(s) could not be elected", failed.size()));
             failed.forEach((key, value) -> {
                 System.out.println(
-                        String.format(
+                        String.format(Locale.ROOT, 
                                 "Error completing leader election (%s) for partition: %s: %s",
                                 electionType,
                                 key,
@@ -238,7 +239,7 @@ public class LeaderElectionCommand {
             .collect(Collectors.toSet());
 
         if (duplicatePartitions.size() > 0) {
-            throw new AdminOperationException(String.format(
+            throw new AdminOperationException(String.format(Locale.ROOT, 
                 "Replica election data contains duplicate partitions: %s", String.join(",", duplicatePartitions.toString()))
             );
         }
@@ -384,12 +385,12 @@ public class LeaderElectionCommand {
             }
             // --partition if and only if --topic is used
             if (options.has(topic) && !options.has(partition)) {
-                throw new AdminCommandFailedException(String.format("Missing required option(s): %s",
+                throw new AdminCommandFailedException(String.format(Locale.ROOT, "Missing required option(s): %s",
                     partition.options().get(0)));
             }
 
             if (!options.has(topic) && options.has(partition)) {
-                throw new AdminCommandFailedException(String.format("Option %s is only allowed if %s is used",
+                throw new AdminCommandFailedException(String.format(Locale.ROOT, "Option %s is only allowed if %s is used",
                     partition.options().get(0),
                     topic.options().get(0)
                 ));
