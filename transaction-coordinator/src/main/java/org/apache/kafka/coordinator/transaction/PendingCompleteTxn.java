@@ -22,13 +22,4 @@ public record PendingCompleteTxn(
     TransactionMetadata txnMetadata,
     TxnTransitMetadata newMetadata
 ) {
-
-    @Override
-    public String toString() {
-        return "PendingCompleteTxn(" +
-            "transactionalId=" + transactionalId + ", " +
-            "coordinatorEpoch=" + coordinatorEpoch + ", " +
-            "txnMetadata=" + txnMetadata + ", " +
-            "newMetadata=" + newMetadata + ")";
-    }
 }
