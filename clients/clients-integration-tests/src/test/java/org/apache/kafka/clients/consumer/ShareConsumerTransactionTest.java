@@ -31,11 +31,13 @@ import org.junit.jupiter.api.Timeout;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Timeout(1200)
 @ClusterTestDefaults(
@@ -178,6 +180,56 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
 
             verifySharePartitionLag(admin, groupId, tp, 0L);
             assertEquals(0, shareConsumer.poll(Duration.ofMillis(500)).count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testTransactionalShareAckCommitSubsetAccept() throws Exception {
+        String groupId = "txn-share-commit-subset-accept";
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-commit-subset-accept-producer");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 groupId,
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin admin = createAdminClient()) {
+
+            producer.send(record("zero")).get();
+            producer.send(record("one")).get();
+            producer.send(record("two")).get();
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 3);
+            ConsumerRecord<byte[], byte[]> targetRecord = null;
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                if (record.offset() == 1L) {
+                    targetRecord = record;
+                    break;
+                }
+            }
+            assertNotNull(targetRecord);
+            assertEquals("one", new String(targetRecord.value(), StandardCharsets.UTF_8));
+
+            ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+            TopicIdPartition acknowledgedPartition = new TopicIdPartition(tpId, tp);
+            ShareAcknowledgements acknowledgements = new ShareAcknowledgements(Map.of(
+                acknowledgedPartition,
+                List.of(new ShareAcknowledgementBatch(1L, 1L, List.of(AcknowledgeType.ACCEPT.id)))
+            ));
+            ShareAcknowledgementBatch batch = acknowledgements.acknowledgements().get(acknowledgedPartition).get(0);
+            assertEquals(1L, batch.firstOffset());
+            assertEquals(1L, batch.lastOffset());
+
+            transactionalProducer.initTransactions();
+            transactionalProducer.partitionsFor(tp.topic());
+            transactionalProducer.beginTransaction();
+            transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+            transactionalProducer.commitTransaction();
+
+            verifySharePartitionLag(admin, groupId, tp, 2L);
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
