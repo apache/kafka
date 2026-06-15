@@ -494,9 +494,14 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testCoalesceProduceRequestsWithSingleHandlerProducesOneTopicOnePartition
 - testConstructorRejectsNullCacheHelper
 - testConstructorRejectsNullClient
+- testConstructorRejectsNullLogReader
 - testConstructorRejectsNullShareGroupMetrics
 - testConstructorRejectsNullTime
 - testConstructorRejectsNullTimer
+- testDLQRecordCopyEnabled
+- testDLQRecordCopyEnabledWithErrorOnLogRead
+- testDLQRecordCopyEnabledWithMultipleLogReaderIterations
+- testDLQRecordCopyEnabledWithPartialLogReaderRecords
 - testDlqCreateTopicFatalErrorFailsFuture
 - testDlqCreateTopicNoClusterNodesFailsFuture
 - testDlqCreateTopicPartialFailuresThenSucceeds
