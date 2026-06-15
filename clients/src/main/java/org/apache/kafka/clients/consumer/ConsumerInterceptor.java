@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A plugin interface that allows you to intercept (and possibly mutate) records received by the consumer. A primary use-case
  * is for third-party components to hook into the consumer applications for custom monitoring, logging, etc.
@@ -42,6 +43,7 @@ import java.util.Map;
  * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the interceptor to register metrics. The following tags are automatically added to
  * all metrics registered: <code>config</code> set to <code>interceptor.classes</code>, and <code>class</code> set to the ConsumerInterceptor class name.
  */
+@InterfaceAudience.Public
 public interface ConsumerInterceptor<K, V> extends Configurable, AutoCloseable {
 
     /**

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class BooleanSerializer implements Serializer<Boolean> {
 
     private static final byte TRUE = 0x01;

@@ -29,8 +29,8 @@ public class PublicApiCheckerTest {
     private PublicApiChecker checker;
 
     @BeforeEach
-    void setUp() {
-        checker = new PublicApiChecker(getClass().getClassLoader());
+    void setUp() throws IOException {
+        checker = new PublicApiChecker(List.of());
     }
 
     @Test
@@ -173,11 +173,13 @@ public class PublicApiCheckerTest {
         List<File> projectJars = new ArrayList<>();
         projectJars.add(projectJar);
 
-        List<PublicApiViolation> violations = checker.checkPublicApiConsistency(javadocJar, projectJars);
+        PublicApiChecker integrationChecker = new PublicApiChecker(projectJars);
+        CheckResult result = integrationChecker.checkPublicApiConsistency(javadocJar);
 
-        // Should find violations due to class loading issues (mocked environment)
-        // The exact number depends on implementation, but should not crash
-        assertNotNull(violations);
+        // Should not crash; exact violation count depends on the mocked environment.
+        assertNotNull(result);
+        assertNotNull(result.violations());
+        assertNotNull(result.suppressions());
     }
 
     // Helper methods for creating mock JAR files

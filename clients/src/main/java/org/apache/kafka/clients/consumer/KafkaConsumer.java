@@ -28,6 +28,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.WakeupException;
@@ -536,6 +537,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
  */
+@InterfaceAudience.Public
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final ConsumerDelegateCreator CREATOR = new ConsumerDelegateCreator();

@@ -19,11 +19,13 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A request to delete a SASL/SCRAM credential for a user.
  *
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554: Add Broker-side SCRAM Config API</a>
  */
+@InterfaceAudience.Public
 public class UserScramCredentialDeletion extends UserScramCredentialAlteration {
     private final ScramMechanism mechanism;
 

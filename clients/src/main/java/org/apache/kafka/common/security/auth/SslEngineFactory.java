@@ -25,6 +25,7 @@ import java.util.Set;
 
 import javax.net.ssl.SSLEngine;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Plugin interface for allowing creation of <code>SSLEngine</code> object in a custom way.
  * For example, you can use this to customize loading your key material and trust material needed for <code>SSLContext</code>.
@@ -32,6 +33,7 @@ import javax.net.ssl.SSLEngine;
  * to be replaced with a custom provider. In scenarios where only the configuration mechanism for SSL engines
  * need to be updated, this interface provides a convenient method for overriding the default implementation.
  */
+@InterfaceAudience.Public
 public interface SslEngineFactory extends Configurable, Closeable {
 
     /**

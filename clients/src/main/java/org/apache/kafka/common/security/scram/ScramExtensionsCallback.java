@@ -21,10 +21,12 @@ import java.util.Map;
 import javax.security.auth.callback.Callback;
 
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Optional callback used for SCRAM mechanisms if any extensions need to be set
  * in the SASL/SCRAM exchange.
  */
+@InterfaceAudience.Public
 public class ScramExtensionsCallback implements Callback {
     private Map<String, String> extensions = Map.of();
 

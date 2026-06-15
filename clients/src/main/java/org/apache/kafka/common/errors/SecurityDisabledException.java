@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An error indicating that security is disabled on the broker.
  */
+@InterfaceAudience.Public
 public class SecurityDisabledException extends ApiException {
     private static final long serialVersionUID = 1L;
 

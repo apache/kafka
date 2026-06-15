@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.metrics;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A Stat is a quantity such as average, max, etc that is computed off the stream of updates to a sensor
  */
+@InterfaceAudience.Public
 public interface Stat {
 
     /**

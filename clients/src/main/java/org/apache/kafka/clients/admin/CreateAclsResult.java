@@ -23,9 +23,11 @@ import org.apache.kafka.common.acl.AclBinding;
 import java.util.Collection;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#createAcls(Collection)} call.
  */
+@InterfaceAudience.Public
 public class CreateAclsResult {
     private final Map<AclBinding, KafkaFuture<Void>> futures;
 

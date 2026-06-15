@@ -23,6 +23,7 @@ import java.util.StringJoiner;
 
 import javax.security.auth.Subject;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A simple immutable value object class holding customizable SASL extensions.
  *
@@ -46,6 +47,7 @@ import javax.security.auth.Subject;
  *
  * See <a href="https://issues.apache.org/jira/browse/KAFKA-14062">KAFKA-14062</a> for more detail.
  */
+@InterfaceAudience.Public
 public class SaslExtensions {
     private final Map<String, String> extensionsMap;
 

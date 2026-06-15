@@ -27,9 +27,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A detailed description of a single topic in the cluster.
  */
+@InterfaceAudience.Public
 public class TopicDescription {
     private final String name;
     private final boolean internal;

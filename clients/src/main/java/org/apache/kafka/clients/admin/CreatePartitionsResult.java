@@ -21,9 +21,11 @@ import org.apache.kafka.common.KafkaFuture;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#createPartitions(Map)} call.
  */
+@InterfaceAudience.Public
 public class CreatePartitionsResult {
 
     private final Map<String, KafkaFuture<Void>> values;

@@ -18,6 +18,8 @@ package org.apache.kafka.common.metrics.stats;
 
 import java.util.Arrays;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class Histogram {
 
     private final BinScheme binScheme;

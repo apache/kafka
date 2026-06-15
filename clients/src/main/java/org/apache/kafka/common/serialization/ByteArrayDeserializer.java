@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class ByteArrayDeserializer implements Deserializer<byte[]> {
 
     @Override

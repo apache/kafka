@@ -26,9 +26,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link KafkaAdminClient#describeTopics(Collection)} call.
  */
+@InterfaceAudience.Public
 public class DescribeTopicsResult {
     private final Map<Uuid, KafkaFuture<TopicDescription>> topicIdFutures;
     private final Map<String, KafkaFuture<TopicDescription>> nameFutures;

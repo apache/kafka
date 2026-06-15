@@ -23,9 +23,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This class is used to describe the state of the quorum received in DescribeQuorumResponse.
  */
+@InterfaceAudience.Public
 public class QuorumInfo {
     private final int leaderId;
     private final long leaderEpoch;

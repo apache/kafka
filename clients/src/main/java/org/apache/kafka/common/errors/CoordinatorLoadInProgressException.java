@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * In the context of the group coordinator, the broker returns this error code for any coordinator request if
  * it is still loading the group metadata (e.g. after a leader change for that group metadata topic partition).
@@ -24,6 +26,7 @@ package org.apache.kafka.common.errors;
  * request with the same transactional id, or if the transaction cache is currently being populated from the transaction
  * log.
  */
+@InterfaceAudience.Public
 public class CoordinatorLoadInProgressException extends RetriableException {
 
     private static final long serialVersionUID = 1L;

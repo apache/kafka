@@ -20,9 +20,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Configuration values for metrics
  */
+@InterfaceAudience.Public
 public class MetricConfig {
 
     public static final int DEFAULT_NUM_SAMPLES = 2;

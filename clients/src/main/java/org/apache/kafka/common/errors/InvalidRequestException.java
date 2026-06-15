@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Thrown when a request breaks basic wire protocol rules.
  * This most likely occurs because of a request being malformed by the client library or
  * the message was sent to an incompatible broker.
  */
+@InterfaceAudience.Public
 public class InvalidRequestException extends ApiException {
 
     private static final long serialVersionUID = 1L;

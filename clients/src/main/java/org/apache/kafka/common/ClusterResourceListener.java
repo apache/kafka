@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A callback interface that users can implement when they wish to get notified about changes in the Cluster metadata.
  * <p>
@@ -44,6 +46,7 @@ package org.apache.kafka.common;
  * <p>
  * {@link org.apache.kafka.common.metrics.MetricsReporter} : The {@link ClusterResourceListener#onUpdate(ClusterResource)} method will be invoked during the bootup of the Kafka broker. The reporter may receive metric events from the network layer before this method is invoked.
  */
+@InterfaceAudience.Public
 public interface ClusterResourceListener {
     /**
      * A callback method that a user can implement to get updates for {@link ClusterResource}.

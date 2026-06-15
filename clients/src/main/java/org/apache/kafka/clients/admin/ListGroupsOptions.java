@@ -22,9 +22,11 @@ import org.apache.kafka.common.GroupType;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#listGroups()}.
  */
+@InterfaceAudience.Public
 public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 
     private Set<GroupState> groupStates = Set.of();

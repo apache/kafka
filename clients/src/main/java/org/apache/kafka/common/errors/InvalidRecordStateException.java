@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Thrown when the acknowledgement of delivery of a record could not be completed because the record
  * state is invalid.
  */
+@InterfaceAudience.Public
 public class InvalidRecordStateException extends ApiException {
 
     private static final long serialVersionUID = 1L;

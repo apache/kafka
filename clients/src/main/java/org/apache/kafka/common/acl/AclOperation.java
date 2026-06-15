@@ -20,6 +20,7 @@ package org.apache.kafka.common.acl;
 import java.util.HashMap;
 import java.util.Locale;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Represents an operation which an ACL grants or denies permission to perform.
  *
@@ -37,6 +38,7 @@ import java.util.Locale;
  * <li><code>ALLOW ALTER_CONFIGS</code> implies <code>ALLOW DESCRIBE_CONFIGS</code>
  * </ul>
  */
+@InterfaceAudience.Public
 public enum AclOperation {
     /**
      * Represents any AclOperation which this client cannot understand, perhaps because this

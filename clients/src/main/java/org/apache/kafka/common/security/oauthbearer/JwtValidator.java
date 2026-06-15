@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfigurable;
 
 
@@ -46,6 +47,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBeare
  *                         contents and verify the signature
  */
 
+@InterfaceAudience.Public
 public interface JwtValidator extends OAuthBearerConfigurable {
 
     /**

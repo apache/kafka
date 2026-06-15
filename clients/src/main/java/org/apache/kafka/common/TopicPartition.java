@@ -19,9 +19,11 @@ package org.apache.kafka.common;
 import java.io.Serializable;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A topic name and partition number
  */
+@InterfaceAudience.Public
 public final class TopicPartition implements Serializable {
     private static final long serialVersionUID = -613627415771699627L;
 

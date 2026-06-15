@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This is the Exception thrown when we are aborting any undrained batches during
  * a transaction which is aborted without any underlying cause - which likely means that the user chose to abort.
  */
+@InterfaceAudience.Public
 public class TransactionAbortedException extends ApiException {
 
     private static final long serialVersionUID = 1L;

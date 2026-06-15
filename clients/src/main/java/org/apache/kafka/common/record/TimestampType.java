@@ -18,9 +18,11 @@ package org.apache.kafka.common.record;
 
 import java.util.NoSuchElementException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The timestamp type of the records.
  */
+@InterfaceAudience.Public
 public enum TimestampType {
     NO_TIMESTAMP_TYPE(-1, "NoTimestampType"), CREATE_TIME(0, "CreateTime"), LOG_APPEND_TIME(1, "LogAppendTime");
 

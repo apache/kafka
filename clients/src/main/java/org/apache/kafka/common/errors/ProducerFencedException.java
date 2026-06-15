@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This fatal exception indicates that another producer with the same <code>transactional.id</code> has been
  * started. It is only possible to have one producer instance with a <code>transactional.id</code> at any
  * given time, and the latest one to be started "fences" the previous instances so that they can no longer
  * make transactional requests. When you encounter this exception, you must close the producer instance.
  */
+@InterfaceAudience.Public
 public class ProducerFencedException extends ApplicationRecoverableException {
 
     public ProducerFencedException(String msg) {

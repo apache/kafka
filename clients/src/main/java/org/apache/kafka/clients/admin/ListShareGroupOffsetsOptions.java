@@ -18,8 +18,10 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)}.
  */
+@InterfaceAudience.Public
 public class ListShareGroupOffsetsOptions extends AbstractOptions<ListShareGroupOffsetsOptions> {
 }

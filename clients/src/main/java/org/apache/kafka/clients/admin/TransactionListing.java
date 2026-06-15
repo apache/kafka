@@ -18,6 +18,8 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class TransactionListing {
     private final String transactionalId;
     private final long producerId;

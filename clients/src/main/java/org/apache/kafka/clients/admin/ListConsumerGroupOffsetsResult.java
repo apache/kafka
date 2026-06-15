@@ -28,11 +28,13 @@ import java.util.Map.Entry;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#listConsumerGroupOffsets(Map)} and
  * {@link Admin#listConsumerGroupOffsets(String)} call.
  * <p>
  */
+@InterfaceAudience.Public
 public class ListConsumerGroupOffsetsResult {
 
     final Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures;

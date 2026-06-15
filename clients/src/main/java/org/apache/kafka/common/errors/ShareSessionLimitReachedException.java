@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates that a new share session could not be opened because the limit of share sessions has been reached.
  */
+@InterfaceAudience.Public
 public class ShareSessionLimitReachedException extends RetriableException {
 
     private static final long serialVersionUID = 1L;

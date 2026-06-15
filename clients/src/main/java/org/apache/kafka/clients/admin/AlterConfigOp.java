@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A class representing an alter configuration entry containing name, value and operation type.
  * <p>
@@ -41,6 +42,7 @@ import java.util.stream.Collectors;
  * new AlterConfigOp(new ConfigEntry(loggerName, "DEBUG"), OpType.SET)
  * </pre>
  */
+@InterfaceAudience.Public
 public class AlterConfigOp {
 
     public enum OpType {

@@ -21,9 +21,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A class representing a configuration entry containing name, value and additional metadata.
  */
+@InterfaceAudience.Public
 public class ConfigEntry {
 
     private final String name;

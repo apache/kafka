@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class DescribeProducersResult {
 
     private final Map<TopicPartition, KafkaFuture<PartitionProducerState>> futures;

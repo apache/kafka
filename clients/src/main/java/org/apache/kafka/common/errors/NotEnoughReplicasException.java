@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Number of insync replicas for the partition is lower than min.insync.replicas
  */
+@InterfaceAudience.Public
 public class NotEnoughReplicasException extends RetriableException {
     private static final long serialVersionUID = 1L;
 

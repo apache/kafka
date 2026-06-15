@@ -22,9 +22,11 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#deleteShareGroups(Collection, DeleteShareGroupsOptions)} call.
  */
+@InterfaceAudience.Public
 public class DeleteShareGroupsResult {
     private final Map<String, KafkaFuture<Void>> futures;
 

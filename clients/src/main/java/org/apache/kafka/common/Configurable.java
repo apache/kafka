@@ -18,9 +18,11 @@ package org.apache.kafka.common;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A Mix-in style interface for classes that are instantiated by reflection and need to take configuration parameters
  */
+@InterfaceAudience.Public
 public interface Configurable {
 
     /**

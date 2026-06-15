@@ -27,9 +27,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A detailed description of a single classic group in the cluster.
  */
+@InterfaceAudience.Public
 public class ClassicGroupDescription {
     private final String groupId;
     private final String protocol;

@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The client has attempted to perform an operation on an invalid topic.
  * For example the topic name is too long, contains invalid characters etc.
@@ -27,6 +28,7 @@ import java.util.Set;
  *
  * @see UnknownTopicOrPartitionException
  */
+@InterfaceAudience.Public
 public class InvalidTopicException extends InvalidConfigurationException {
     private static final long serialVersionUID = 1L;
 

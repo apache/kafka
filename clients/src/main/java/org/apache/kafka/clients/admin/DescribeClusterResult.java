@@ -24,9 +24,11 @@ import org.apache.kafka.common.acl.AclOperation;
 import java.util.Collection;
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link KafkaAdminClient#describeCluster()} call.
  */
+@InterfaceAudience.Public
 public class DescribeClusterResult {
     private final KafkaFuture<Collection<Node>> nodes;
     private final KafkaFuture<Node> controller;

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.AllowedPaths;
@@ -39,6 +40,7 @@ import java.util.stream.Stream;
  * files in a directory given by the path parameter.
  * Property values are taken from the file contents corresponding to each key.
  */
+@InterfaceAudience.Public
 public class DirectoryConfigProvider implements ConfigProvider {
 
     private static final Logger log = LoggerFactory.getLogger(DirectoryConfigProvider.class);

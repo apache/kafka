@@ -19,9 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#createPartitions(Map)}.
  */
+@InterfaceAudience.Public
 public class CreatePartitionsOptions extends AbstractOptions<CreatePartitionsOptions> {
 
     private boolean validateOnly = false;

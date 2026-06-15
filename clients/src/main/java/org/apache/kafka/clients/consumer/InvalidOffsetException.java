@@ -21,12 +21,14 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Thrown when the offset for a set of partitions is invalid (either undefined or out of range),
  * and no reset policy has been configured.
  * @see NoOffsetForPartitionException
  * @see OffsetOutOfRangeException
  */
+@InterfaceAudience.Public
 public abstract class InvalidOffsetException extends KafkaException {
 
     /**

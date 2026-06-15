@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -174,6 +175,7 @@ import java.util.Set;
  * reassigned to another consumer will be revoked. That is the preferred assignor for newer cluster. See
  * {@link ConsumerPartitionAssignor.RebalanceProtocol} for a detailed explanation of cooperative rebalancing.
  */
+@InterfaceAudience.Public
 public class StickyAssignor extends AbstractStickyAssignor {
     public static final String STICKY_ASSIGNOR_NAME = "sticky";
 

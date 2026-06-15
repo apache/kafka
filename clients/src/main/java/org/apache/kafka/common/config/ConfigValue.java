@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class ConfigValue {
 
     private final String name;

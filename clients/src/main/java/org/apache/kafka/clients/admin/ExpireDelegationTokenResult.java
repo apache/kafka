@@ -19,9 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link KafkaAdminClient#expireDelegationToken(byte[], ExpireDelegationTokenOptions)} call.
  */
+@InterfaceAudience.Public
 public class ExpireDelegationTokenResult {
     private final KafkaFuture<Long> expiryTimestamp;
 

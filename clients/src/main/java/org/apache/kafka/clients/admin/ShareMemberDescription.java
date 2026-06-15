@@ -20,9 +20,11 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A detailed description of a single share group member in the cluster.
  */
+@InterfaceAudience.Public
 public class ShareMemberDescription {
     private final String memberId;
     private final Optional<String> rackId;

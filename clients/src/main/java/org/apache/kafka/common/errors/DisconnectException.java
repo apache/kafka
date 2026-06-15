@@ -17,9 +17,12 @@
 package org.apache.kafka.common.errors;
 
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Server disconnected before a request could be completed.
  */
+@InterfaceAudience.Public
 public class DisconnectException extends RetriableException {
     public static final DisconnectException INSTANCE = new DisconnectException();
 

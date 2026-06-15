@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Broker returns this error if a request could not be processed because the broker is not the leader
  * or follower for a topic partition. This could be a transient exception during leader elections and
@@ -24,6 +26,7 @@ package org.apache.kafka.common.errors;
  * satisfied by a leader or follower, this exception indicates that the broker is not a replica
  * of the topic partition.
  */
+@InterfaceAudience.Public
 public class NotLeaderOrFollowerException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;

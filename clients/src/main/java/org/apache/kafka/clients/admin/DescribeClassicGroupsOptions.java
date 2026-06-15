@@ -19,9 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Collection;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#describeClassicGroups(Collection, DescribeClassicGroupsOptions)}.
  */
+@InterfaceAudience.Public
 public class DescribeClassicGroupsOptions extends AbstractOptions<DescribeClassicGroupsOptions> {
     private boolean includeAuthorizedOperations;
 

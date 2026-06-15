@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import java.util.Locale;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Enum representing the supported consumer group protocols.
  * <ul>
@@ -25,6 +26,7 @@ import java.util.Locale;
  *     <li>{@link #CONSUMER} - The Consumer rebalance protocol (KIP-848)</li>
  * </ul>
  */
+@InterfaceAudience.Public
 public enum GroupProtocol {
     /** Classic group protocol.  */
     CLASSIC("CLASSIC"),

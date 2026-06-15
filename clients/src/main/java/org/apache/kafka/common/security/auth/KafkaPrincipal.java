@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.auth;
 
 import java.security.Principal;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -40,6 +41,7 @@ import static java.util.Objects.requireNonNull;
  *    authorizer which is capable of using the additional group information.
  * </ol>
  */
+@InterfaceAudience.Public
 public class KafkaPrincipal implements Principal {
     public static final String USER_TYPE = "User";
     public static final KafkaPrincipal ANONYMOUS = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "ANONYMOUS");

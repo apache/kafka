@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.header;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A header is a key-value pair.
  */
+@InterfaceAudience.Public
 public interface Header {
 
     /**

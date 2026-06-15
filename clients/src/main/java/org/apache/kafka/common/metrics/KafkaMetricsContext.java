@@ -20,9 +20,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An implementation of MetricsContext, it encapsulates required metrics context properties for Kafka services and clients
  */
+@InterfaceAudience.Public
 public class KafkaMetricsContext implements MetricsContext {
     /**
      * Client or Service's contextLabels map.

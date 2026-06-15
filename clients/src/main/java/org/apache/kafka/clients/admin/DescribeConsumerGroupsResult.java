@@ -24,9 +24,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link KafkaAdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}} call.
  */
+@InterfaceAudience.Public
 public class DescribeConsumerGroupsResult {
 
     private final Map<String, KafkaFuture<ConsumerGroupDescription>> futures;

@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates that a request timed out.
  */
+@InterfaceAudience.Public
 public class TimeoutException extends RetriableException {
 
     private static final long serialVersionUID = 1L;

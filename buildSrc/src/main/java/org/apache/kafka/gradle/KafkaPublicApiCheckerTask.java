@@ -1,11 +1,11 @@
 package org.apache.kafka.gradle;
 
+import org.apache.kafka.publicapi.CheckResult;
 import org.apache.kafka.publicapi.PublicApiChecker;
 import org.apache.kafka.publicapi.PublicApiViolation;
 import org.apache.kafka.publicapi.ViolationReporter;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
-import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.ListProperty;
@@ -20,9 +20,7 @@ import org.gradle.api.tasks.TaskAction;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Gradle task for checking public API consistency in Kafka codebase.
@@ -61,45 +59,34 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
         }
 
         getLogger().info("Checking public API consistency in: {}", jarFile.getAbsolutePath());
-        Configuration compileClasspath = getProject().getConfigurations().getByName("compileClasspath");
 
         try {
-
-            // Collect all JAR files for class loader (javadoc JAR + project JARs)
-            List<File> allJarFiles = new ArrayList<>();
-            allJarFiles.add(jarFile);
-            allJarFiles.addAll(projectJarFiles.getFiles());
-            allJarFiles.addAll(compileClasspath.getFiles());
-
-            // Create class loader with all JAR files
-            ClassLoader classLoader = PublicApiChecker.createClassLoader(allJarFiles);
-
-            PublicApiChecker checker = new PublicApiChecker(classLoader);
-
-            // Use new dual validation approach
-            List<PublicApiViolation> violations;
             if (projectJarFiles.getFiles().isEmpty()) {
-                throw  new GradleException("Project JAR file not found: " + jarFile.getAbsolutePath());
-            } else {
-                // Use dual validation
-                violations = checker.checkPublicApiConsistency(jarFile, new ArrayList<>(projectJarFiles.getFiles()));
+                throw new GradleException("Project JAR file not found: " + jarFile.getAbsolutePath());
             }
+            PublicApiChecker checker = new PublicApiChecker(new ArrayList<>(projectJarFiles.getFiles()));
+            CheckResult result = checker.checkPublicApiConsistency(jarFile);
+            List<PublicApiViolation> violations = result.violations();
+            List<PublicApiViolation> suppressions = result.suppressions();
 
             // Generate report
             ViolationReporter reporter = new ViolationReporter();
             File report = reportFile.get().getAsFile();
-            reporter.writeTextReport(violations, report);
+            reporter.writeTextReport(violations, suppressions, report);
 
             // Also write JSON report
             File jsonReport = new File(report.getParentFile(),
                 report.getName().replace(".txt", ".json"));
-            reporter.writeJsonReport(violations, jsonReport);
+            reporter.writeJsonReport(violations, suppressions, jsonReport);
 
             // Print summary to console
-            reporter.printToConsole(violations, true);
+            reporter.printToConsole(violations, suppressions, true);
 
             getLogger().info("Public API check completed. Report written to: {}", report.getAbsolutePath());
 
+            if (!suppressions.isEmpty()) {
+                getLogger().lifecycle("⚠️  {} suppression(s) honoured — see report for justifications.", suppressions.size());
+            }
             if (!violations.isEmpty()) {
                 String message = String.format("Found %d public API violations. See report: %s",
                     violations.size(), report.getAbsolutePath());

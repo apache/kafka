@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.metrics;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An upper or lower bound for metrics
  */
+@InterfaceAudience.Public
 public final class Quota {
 
     private final boolean upper;

@@ -23,9 +23,11 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The classic group state.
  */
+@InterfaceAudience.Public
 public enum ClassicGroupState {
     UNKNOWN("Unknown"),
     PREPARING_REBALANCE("PreparingRebalance"),

@@ -20,10 +20,12 @@ import org.apache.kafka.common.MetricName;
 
 import java.util.LinkedHashMap;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This allows plugins to register metrics and sensors.
  * Any metrics registered by the plugin are automatically removed when the plugin  closed.
  */
+@InterfaceAudience.Public
 public interface PluginMetrics {
 
     /**

@@ -23,9 +23,11 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 
 import java.util.Collection;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link KafkaAdminClient#describeAcls(AclBindingFilter)} call.
  */
+@InterfaceAudience.Public
 public class DescribeAclsResult {
     private final KafkaFuture<Collection<AclBinding>> future;
 

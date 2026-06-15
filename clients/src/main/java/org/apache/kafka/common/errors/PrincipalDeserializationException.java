@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Exception used to indicate a kafka principal deserialization failure during request forwarding.
  */
+@InterfaceAudience.Public
 public class PrincipalDeserializationException extends ApiException {
 
     private static final long serialVersionUID = 1L;

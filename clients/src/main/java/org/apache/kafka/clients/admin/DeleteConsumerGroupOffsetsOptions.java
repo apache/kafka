@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for the {@link Admin#deleteConsumerGroupOffsets(String, Set)} call.
  */
+@InterfaceAudience.Public
 public class DeleteConsumerGroupOffsetsOptions extends AbstractOptions<DeleteConsumerGroupOffsetsOptions> {
 
 }

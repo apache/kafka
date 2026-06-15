@@ -18,6 +18,7 @@ package org.apache.kafka.common.errors;
 
 import javax.net.ssl.SSLException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This exception indicates that SASL authentication has failed.
  * On authentication failure, clients abort the operation requested and raise one
@@ -32,6 +33,7 @@ import javax.net.ssl.SSLException;
  *   <li>{@link SslAuthenticationException} if SSL handshake failed due to any {@link SSLException}.</li>
  * </ul>
  */
+@InterfaceAudience.Public
 public class AuthenticationException extends InvalidConfigurationException {
 
     private static final long serialVersionUID = 1L;

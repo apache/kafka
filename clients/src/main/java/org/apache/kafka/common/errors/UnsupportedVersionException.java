@@ -18,6 +18,7 @@ package org.apache.kafka.common.errors;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates that a request API or version needed by the client is not supported by the broker. This is
  * typically a fatal error as Kafka clients will downgrade request versions as needed except in cases where
@@ -28,6 +29,7 @@ import java.util.Map;
  * is raised from {@link org.apache.kafka.clients.consumer.KafkaConsumer#offsetsForTimes(Map)}, it would
  * be possible to revert to alternative logic to set the consumer's position.
  */
+@InterfaceAudience.Public
 public class UnsupportedVersionException extends InvalidConfigurationException {
     private static final long serialVersionUID = 1L;
 

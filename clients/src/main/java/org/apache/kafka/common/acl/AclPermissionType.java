@@ -20,9 +20,11 @@ package org.apache.kafka.common.acl;
 import java.util.HashMap;
 import java.util.Locale;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Represents whether an ACL grants or denies permissions.
  */
+@InterfaceAudience.Public
 public enum AclPermissionType {
     /**
      * Represents any AclPermissionType which this client cannot understand,

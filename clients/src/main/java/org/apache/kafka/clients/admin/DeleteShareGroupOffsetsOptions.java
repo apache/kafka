@@ -18,8 +18,10 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)}.
  */
+@InterfaceAudience.Public
 public class DeleteShareGroupOffsetsOptions extends AbstractOptions<DeleteShareGroupOffsetsOptions> {
 }

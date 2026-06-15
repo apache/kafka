@@ -20,9 +20,11 @@ package org.apache.kafka.clients.admin;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Describes new partitions for a particular topic in a call to {@link Admin#createPartitions(Map)}.
  */
+@InterfaceAudience.Public
 public class NewPartitions {
 
     private final int totalCount;

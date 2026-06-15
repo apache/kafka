@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Thrown when a request is made for a log directory that is not present on the broker
  */
+@InterfaceAudience.Public
 public class LogDirNotFoundException extends ApiException {
 
     private static final long serialVersionUID = 1L;

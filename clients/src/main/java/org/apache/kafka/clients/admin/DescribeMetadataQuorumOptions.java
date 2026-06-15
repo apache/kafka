@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.clients.admin;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#describeMetadataQuorum(DescribeMetadataQuorumOptions)}
  */
+@InterfaceAudience.Public
 public class DescribeMetadataQuorumOptions extends AbstractOptions<DescribeMetadataQuorumOptions> {
 
 }

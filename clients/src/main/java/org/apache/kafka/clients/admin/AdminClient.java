@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import java.util.Map;
 import java.util.Properties;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The base class for in-built admin clients.
  *
@@ -27,6 +28,7 @@ import java.util.Properties;
  *
  * This class may be removed in a later release, but has not been marked as deprecated to avoid unnecessary noise.
  */
+@InterfaceAudience.Public
 public abstract class AdminClient implements Admin {
 
     /**

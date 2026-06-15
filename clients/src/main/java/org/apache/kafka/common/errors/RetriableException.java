@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A retriable exception is a transient exception that if retried may succeed.
  */
+@InterfaceAudience.Public
 public abstract class RetriableException extends ApiException {
 
     private static final long serialVersionUID = 1L;

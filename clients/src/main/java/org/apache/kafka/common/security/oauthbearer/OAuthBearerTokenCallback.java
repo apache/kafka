@@ -20,6 +20,7 @@ import java.util.Objects;
 
 import javax.security.auth.callback.Callback;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A {@code Callback} for use by the {@code SaslClient} and {@code Login}
  * implementations when they require an OAuth 2 bearer token. Callback handlers
@@ -29,6 +30,7 @@ import javax.security.auth.callback.Callback;
  * 2.0 Authorization Framework</a>. Callback handlers should communicate other
  * problems by raising an {@code IOException}.
  */
+@InterfaceAudience.Public
 public class OAuthBearerTokenCallback implements Callback {
     private OAuthBearerToken token = null;
     private String errorCode = null;

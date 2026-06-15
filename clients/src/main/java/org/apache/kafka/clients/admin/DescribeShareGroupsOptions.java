@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Collection;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#describeShareGroups(Collection, DescribeShareGroupsOptions)}.
  */
+@InterfaceAudience.Public
 public class DescribeShareGroupsOptions extends AbstractOptions<DescribeShareGroupsOptions> {
     private boolean includeAuthorizedOperations;
 

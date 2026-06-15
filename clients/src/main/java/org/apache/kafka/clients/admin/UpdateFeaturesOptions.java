@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link AdminClient#updateFeatures(Map, UpdateFeaturesOptions)}.
  */
+@InterfaceAudience.Public
 public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
     private boolean validateOnly = false;
 

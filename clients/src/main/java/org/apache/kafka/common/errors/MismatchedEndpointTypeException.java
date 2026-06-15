@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class MismatchedEndpointTypeException extends ApiException {
     public MismatchedEndpointTypeException(String message) {
         super(message);

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class IntegerSerializer implements Serializer<Integer> {
     public byte[] serialize(String topic, Integer data) {
         if (data == null)

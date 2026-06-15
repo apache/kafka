@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Authentication mechanism does not support the requested function.
  */
+@InterfaceAudience.Public
 public class UnsupportedByAuthenticationException extends ApiException {
     private static final long serialVersionUID = 1L;
 

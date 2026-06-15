@@ -19,9 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}
  */
+@InterfaceAudience.Public
 public class AlterPartitionReassignmentsOptions extends AbstractOptions<AlterPartitionReassignmentsOptions> {
 
     private boolean allowReplicationFactorChange = true;

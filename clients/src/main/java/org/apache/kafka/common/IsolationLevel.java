@@ -18,6 +18,8 @@ package org.apache.kafka.common;
 
 import java.util.Locale;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public enum IsolationLevel {
     READ_UNCOMMITTED((byte) 0), READ_COMMITTED((byte) 1);
 

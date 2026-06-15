@@ -22,6 +22,7 @@ import java.io.Closeable;
 import java.io.PrintStream;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This interface allows to define Formatters that can be used to parse and format records read by a
  *  Consumer instance for display.
@@ -31,6 +32,7 @@ import java.util.Map;
  * __transaction_state and the MirrorMaker2 topics.
  *
  */
+@InterfaceAudience.Public
 public interface MessageFormatter extends Configurable, Closeable {
 
     /**

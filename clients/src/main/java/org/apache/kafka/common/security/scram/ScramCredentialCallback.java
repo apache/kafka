@@ -18,9 +18,11 @@ package org.apache.kafka.common.security.scram;
 
 import javax.security.auth.callback.Callback;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Callback used for SCRAM mechanisms.
  */
+@InterfaceAudience.Public
 public class ScramCredentialCallback implements Callback {
     private ScramCredential scramCredential;
 

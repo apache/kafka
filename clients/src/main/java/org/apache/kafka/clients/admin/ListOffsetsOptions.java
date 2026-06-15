@@ -20,9 +20,11 @@ import org.apache.kafka.common.IsolationLevel;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link AdminClient#listOffsets(Map)}.
  */
+@InterfaceAudience.Public
 public class ListOffsetsOptions extends AbstractOptions<ListOffsetsOptions> {
 
     private final IsolationLevel isolationLevel;

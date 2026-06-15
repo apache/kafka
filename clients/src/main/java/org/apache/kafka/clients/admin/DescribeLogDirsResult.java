@@ -24,9 +24,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#describeLogDirs(Collection)} call.
  */
+@InterfaceAudience.Public
 public class DescribeLogDirsResult {
     private final Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> futures;
 

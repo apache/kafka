@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Arrays;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Representation of a SASL/SCRAM Mechanism.
  *
@@ -29,6 +30,7 @@ import java.util.Arrays;
  * is used both for passing ScramCredentialUpsertion and for the internal
  * UserScramCredentialRecord. Do not change the type field.
  */
+@InterfaceAudience.Public
 public enum ScramMechanism {
     UNKNOWN((byte) 0),
     SCRAM_SHA_256((byte) 1),

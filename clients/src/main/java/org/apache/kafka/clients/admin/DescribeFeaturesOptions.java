@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.OptionalInt;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link AdminClient#describeFeatures(DescribeFeaturesOptions)}.
  */
+@InterfaceAudience.Public
 public class DescribeFeaturesOptions extends AbstractOptions<DescribeFeaturesOptions> {
     private OptionalInt nodeId = OptionalInt.empty();
 

@@ -20,9 +20,11 @@ package org.apache.kafka.common.quota;
 import java.util.Collection;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Describes a configuration alteration to be made to a client quota entity.
  */
+@InterfaceAudience.Public
 public class ClientQuotaAlteration {
 
     public static class Op {

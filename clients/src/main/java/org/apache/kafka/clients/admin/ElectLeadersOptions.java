@@ -21,10 +21,12 @@ import org.apache.kafka.common.ElectionType;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
+@InterfaceAudience.Public
 public final class ElectLeadersOptions extends AbstractOptions<ElectLeadersOptions> {
 }

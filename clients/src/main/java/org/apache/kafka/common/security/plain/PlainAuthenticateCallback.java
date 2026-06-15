@@ -19,11 +19,13 @@ package org.apache.kafka.common.security.plain;
 
 import javax.security.auth.callback.Callback;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /*
  * Authentication callback for SASL/PLAIN authentication. Callback handler must
  * set authenticated flag to true if the client provided password in the callback
  * matches the expected password.
  */
+@InterfaceAudience.Public
 public class PlainAuthenticateCallback implements Callback {
     private final char[] password;
     private boolean authenticated;

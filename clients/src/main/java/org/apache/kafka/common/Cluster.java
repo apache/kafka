@@ -29,9 +29,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An immutable representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
  */
+@InterfaceAudience.Public
 public final class Cluster {
 
     private final boolean isBootstrapConfigured;

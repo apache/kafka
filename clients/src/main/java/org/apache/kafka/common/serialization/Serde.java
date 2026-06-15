@@ -19,6 +19,7 @@ package org.apache.kafka.common.serialization;
 import java.io.Closeable;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The interface for wrapping a serializer and deserializer for the given data type.
  *
@@ -26,6 +27,7 @@ import java.util.Map;
  *
  * A class that implements this interface is expected to have a constructor with no parameter.
  */
+@InterfaceAudience.Public
 public interface Serde<T> extends Closeable {
 
     /**

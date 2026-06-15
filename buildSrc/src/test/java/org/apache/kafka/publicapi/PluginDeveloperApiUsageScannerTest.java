@@ -38,14 +38,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class BytecodeApiUsageScannerTest {
+class PluginDeveloperApiUsageScannerTest {
 
     @TempDir
     Path tempDir;
 
     @Test
     void scan_noRoots_returnsEmpty() throws IOException {
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(true));
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(true));
         ScanResult result = scanner.scan(Collections.emptyList());
         assertTrue(result.getViolations().isEmpty());
         assertTrue(result.getSuppressions().isEmpty());
@@ -57,7 +57,7 @@ class BytecodeApiUsageScannerTest {
                 generateConsumerReferencing("com/example/PublicConsumer", "org/apache/kafka/clients/producer/KafkaProducer"));
 
         Predicate<String> isPublic = name -> "org.apache.kafka.clients.producer.KafkaProducer".equals(name);
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(isPublic);
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(isPublic);
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
 
         assertTrue(violations.isEmpty(),
@@ -69,7 +69,7 @@ class BytecodeApiUsageScannerTest {
         File classFile = writeClassFile("com/example/InternalConsumer",
                 generateConsumerReferencing("com/example/InternalConsumer", "org/apache/kafka/internals/SecretCabal"));
 
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
 
         assertFalse(violations.isEmpty(), "Reference to an internal Kafka class must be reported");
@@ -85,7 +85,7 @@ class BytecodeApiUsageScannerTest {
         File classFile = writeClassFile("com/example/JdkConsumer",
                 generateConsumerReferencing("com/example/JdkConsumer", "java/util/HashMap"));
 
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
 
         assertTrue(violations.isEmpty(),
@@ -103,7 +103,7 @@ class BytecodeApiUsageScannerTest {
             jos.closeEntry();
         }
 
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(jar)).getViolations();
 
         assertFalse(violations.isEmpty(), "scan of jar should find the internal reference");
@@ -127,7 +127,7 @@ class BytecodeApiUsageScannerTest {
         cw.visitEnd();
         File classFile = writeClassFile("com/example/FieldHolder", cw.toByteArray());
 
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
 
         assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Hidden".equals(v.getClassName())),
@@ -142,7 +142,7 @@ class BytecodeApiUsageScannerTest {
                 MethodAnnotations.none());
         File classFile = writeClassFile("com/example/SuppressedClass", bytes);
 
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         ScanResult result = scanner.scan(List.of(classFile.getParentFile()));
 
         assertTrue(result.getViolations().isEmpty(),
@@ -163,7 +163,7 @@ class BytecodeApiUsageScannerTest {
                 MethodAnnotations.suppressOn("useIt", "intentional fallback"));
         File classFile = writeClassFile("com/example/PartiallySuppressed", bytes);
 
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
 
         // The other method ("alsoUseIt") is not suppressed -- it must still report.
@@ -181,7 +181,7 @@ class BytecodeApiUsageScannerTest {
                 MethodAnnotations.none());
         File classFile = writeClassFile("com/example/SuppressedNoReason", bytes);
 
-        BytecodeApiUsageScanner scanner = new BytecodeApiUsageScanner(always(false));
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
         List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
 
         assertTrue(violations.isEmpty(),

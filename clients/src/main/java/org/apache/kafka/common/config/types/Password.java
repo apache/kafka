@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.config.types;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A wrapper class for passwords to hide them while logging a config
  */
+@InterfaceAudience.Public
 public class Password {
 
     public static final String HIDDEN = "[hidden]";

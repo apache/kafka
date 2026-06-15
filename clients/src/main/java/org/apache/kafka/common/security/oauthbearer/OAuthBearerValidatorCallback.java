@@ -20,6 +20,7 @@ import java.util.Objects;
 
 import javax.security.auth.callback.Callback;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A {@code Callback} for use by the {@code SaslServer} implementation when it
  * needs to provide an OAuth 2 bearer token compact serialization for
@@ -32,6 +33,7 @@ import javax.security.auth.callback.Callback;
  * OAuth Extensions Error Registry</a>. Callback handlers should communicate
  * other problems by raising an {@code IOException}.
  */
+@InterfaceAudience.Public
 public class OAuthBearerValidatorCallback implements Callback {
     private final String tokenValue;
     private OAuthBearerToken token = null;

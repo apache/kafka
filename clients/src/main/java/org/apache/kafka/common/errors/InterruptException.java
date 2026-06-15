@@ -18,9 +18,11 @@ package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.KafkaException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An unchecked wrapper for InterruptedException
  */
+@InterfaceAudience.Public
 public class InterruptException extends KafkaException {
 
     private static final long serialVersionUID = 1L;

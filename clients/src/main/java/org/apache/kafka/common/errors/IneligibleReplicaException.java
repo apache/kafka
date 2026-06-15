@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class IneligibleReplicaException extends ApiException {
     public IneligibleReplicaException(String message) {
         super(message);

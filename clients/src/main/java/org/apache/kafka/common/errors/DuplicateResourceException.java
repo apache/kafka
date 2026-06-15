@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Exception thrown due to a request that illegally refers to the same resource twice
  * (for example, trying to both create and delete the same SCRAM credential for a particular user in a single request).
  */
+@InterfaceAudience.Public
 public class DuplicateResourceException extends ApiException {
 
     private static final long serialVersionUID = 1L;

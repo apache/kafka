@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for controlling the consumer close behavior.
  * <p>
@@ -29,6 +30,7 @@ import java.util.Optional;
  * when a consumer is being shut down.
  * </p>
  */
+@InterfaceAudience.Public
 public class CloseOptions {
     /**
      * Enum to specify the group membership operation upon leaving a group.

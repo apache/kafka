@@ -19,9 +19,11 @@ package org.apache.kafka.common.config;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This class holds definitions for log level configurations related to Kafka's application logging. See KIP-412 for additional information
  */
+@InterfaceAudience.Public
 public class LogLevelConfig {
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.

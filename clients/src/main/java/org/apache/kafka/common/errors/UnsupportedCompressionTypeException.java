@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The requesting client does not support the compression type of given partition.
  */
+@InterfaceAudience.Public
 public class UnsupportedCompressionTypeException extends ApiException {
 
     private static final long serialVersionUID = 1L;

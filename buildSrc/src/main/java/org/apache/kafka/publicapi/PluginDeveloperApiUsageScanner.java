@@ -49,8 +49,8 @@ import java.util.jar.JarFile;
  * any other JVM-language consumer uniformly — unlike a source-level scan, which is regex-bound
  * to .java imports.
  */
-public class BytecodeApiUsageScanner {
-    private static final Logger logger = LoggerFactory.getLogger(BytecodeApiUsageScanner.class);
+public class PluginDeveloperApiUsageScanner {
+    private static final Logger logger = LoggerFactory.getLogger(PluginDeveloperApiUsageScanner.class);
     private static final int ASM_API = Opcodes.ASM9;
 
     /** Internal-form prefix (slashes) for any class we care about checking the audience of. */
@@ -67,7 +67,7 @@ public class BytecodeApiUsageScanner {
      *                    (e.g. {@code org.apache.kafka.clients.producer.KafkaProducer}) is part
      *                    of the public API surface
      */
-    public BytecodeApiUsageScanner(Predicate<String> isPublicApi) {
+    public PluginDeveloperApiUsageScanner(Predicate<String> isPublicApi) {
         this.isPublicApi = isPublicApi;
     }
 

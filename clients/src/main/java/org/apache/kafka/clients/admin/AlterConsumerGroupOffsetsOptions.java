@@ -18,8 +18,10 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for the {@link AdminClient#alterConsumerGroupOffsets(String, Map, AlterConsumerGroupOffsetsOptions)} call.
  */
+@InterfaceAudience.Public
 public class AlterConsumerGroupOffsetsOptions extends AbstractOptions<AlterConsumerGroupOffsetsOptions> {
 }

@@ -19,9 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Collection;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#deleteTopics(Collection)}.
  */
+@InterfaceAudience.Public
 public class DeleteTopicsOptions extends AbstractOptions<DeleteTopicsOptions> {
 
     private boolean retryOnQuotaViolation = true;

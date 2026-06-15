@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This exception indicates unexpected requests prior to SASL authentication.
  * This could be due to misconfigured security, e.g. if PLAINTEXT protocol
  * is used to connect to a SASL endpoint.
  */
+@InterfaceAudience.Public
 public class IllegalSaslStateException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;

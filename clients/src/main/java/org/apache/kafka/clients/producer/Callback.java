@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.clients.producer;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A callback interface that the user can implement to allow code to execute when the request is complete. This callback
  * will generally execute in the background I/O thread so it should be fast.
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Callback {
 
     /**

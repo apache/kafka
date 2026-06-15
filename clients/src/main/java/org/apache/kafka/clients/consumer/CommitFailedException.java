@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This exception is raised when an offset commit with {@link KafkaConsumer#commitSync()} fails
  * with an unrecoverable error. This exception is generated on the client side, typically when
@@ -25,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
  * the commit cannot generally be retried because some of the partitions may have already been
  * assigned to another member in the group.
  */
+@InterfaceAudience.Public
 public class CommitFailedException extends KafkaException {
 
     private static final long serialVersionUID = 1L;

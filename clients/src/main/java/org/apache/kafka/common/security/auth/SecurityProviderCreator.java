@@ -21,9 +21,11 @@ import org.apache.kafka.common.Configurable;
 import java.security.Provider;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An interface for generating security providers.
  */
+@InterfaceAudience.Public
 public interface SecurityProviderCreator extends Configurable {
 
     /**

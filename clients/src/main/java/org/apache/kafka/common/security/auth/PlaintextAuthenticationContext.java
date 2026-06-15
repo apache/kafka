@@ -18,6 +18,8 @@ package org.apache.kafka.common.security.auth;
 
 import java.net.InetAddress;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class PlaintextAuthenticationContext implements AuthenticationContext {
     private final InetAddress clientAddress;
     private final String listenerName;

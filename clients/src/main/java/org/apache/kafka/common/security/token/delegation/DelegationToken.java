@@ -21,10 +21,12 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A class representing a delegation token.
  *
  */
+@InterfaceAudience.Public
 public class DelegationToken {
     private final TokenInformation tokenInformation;
     private final byte[] hmac;

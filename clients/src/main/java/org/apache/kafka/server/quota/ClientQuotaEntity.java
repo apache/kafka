@@ -18,11 +18,13 @@ package org.apache.kafka.server.quota;
 
 import java.util.List;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The metadata for an entity for which quota is configured. Quotas may be defined at
  * different levels and `configEntities` gives the list of config entities that define
  * the level of this quota entity.
  */
+@InterfaceAudience.Public
 public interface ClientQuotaEntity {
 
     /**

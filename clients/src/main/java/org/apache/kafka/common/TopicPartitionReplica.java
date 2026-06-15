@@ -20,9 +20,11 @@ import java.io.Serializable;
 import java.util.Objects;
 
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The topic name, partition number and the brokerId of the replica
  */
+@InterfaceAudience.Public
 public final class TopicPartitionReplica implements Serializable {
 
     private int hash = 0;

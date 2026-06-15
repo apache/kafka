@@ -18,9 +18,11 @@ package org.apache.kafka.common;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Information about a Kafka node
  */
+@InterfaceAudience.Public
 public class Node {
 
     private static final Node NO_NODE = new Node(-1, "", -1);

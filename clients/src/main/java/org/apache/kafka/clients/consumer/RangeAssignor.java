@@ -39,6 +39,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * <p>The range assignor works on a per-topic basis. For each topic, we lay out the available partitions in numeric order
  * and the consumers in lexicographic order. We then divide the number of partitions by the total number of
@@ -94,6 +95,7 @@ import java.util.stream.Collectors;
  * rebalancing when replicas are added or removed to improve consumer rack alignment.
  * </p>
  */
+@InterfaceAudience.Public
 public class RangeAssignor extends AbstractPartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
     private static final TopicPartitionComparator PARTITION_COMPARATOR = new TopicPartitionComparator();

@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.common.metrics;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A gauge metric is an instantaneous reading of a particular value.
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Gauge<T> extends MetricValueProvider<T> { }

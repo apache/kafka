@@ -20,6 +20,7 @@ import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Annotation to inform users of the intended audience of a particular package, class or method.
  * Currently the audience can be {@link Public} or {@link Private}. Audience is orthogonal to
@@ -30,6 +31,7 @@ import java.lang.annotation.RetentionPolicy;
  * (internal). External code must not depend on classes without an explicit {@link Public}
  * annotation.
  */
+@InterfaceAudience.Public
 public class InterfaceAudience {
     /**
      * Intended for end users of Apache Kafka. Classes and members marked {@code @Public} are

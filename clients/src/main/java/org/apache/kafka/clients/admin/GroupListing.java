@@ -22,9 +22,11 @@ import org.apache.kafka.common.GroupType;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A listing of a group in the cluster.
  */
+@InterfaceAudience.Public
 public class GroupListing {
     private final String groupId;
     private final Optional<GroupType> type;

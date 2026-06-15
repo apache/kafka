@@ -24,6 +24,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class DescribeTransactionsResult {
     private final Map<CoordinatorKey, KafkaFuture<TransactionDescription>> futures;
 

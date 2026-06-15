@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Exception thrown if an operation on a resource exceeds the throttling quota.
  */
+@InterfaceAudience.Public
 public class ThrottlingQuotaExceededException extends RetriableException {
     private int throttleTimeMs = 0;
 

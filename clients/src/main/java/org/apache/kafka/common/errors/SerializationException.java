@@ -18,9 +18,11 @@ package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.KafkaException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  *  Any exception during serialization in the producer
  */
+@InterfaceAudience.Public
 public class SerializationException extends KafkaException {
 
     private static final long serialVersionUID = 1L;

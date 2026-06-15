@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * In the context of the group coordinator, the broker returns this error code for metadata or offset commit
  * requests if the group metadata topic has not been created yet.
@@ -23,6 +25,7 @@ package org.apache.kafka.common.errors;
  * In the context of the transactional coordinator, this error will be returned if the underlying transactional log
  * is under replicated or if an append to the log times out.
  */
+@InterfaceAudience.Public
 public class CoordinatorNotAvailableException extends RefreshRetriableException {
     public static final CoordinatorNotAvailableException INSTANCE = new CoordinatorNotAvailableException();
 

@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This record batch is larger than the maximum allowable size
  */
+@InterfaceAudience.Public
 public class RecordBatchTooLargeException extends InvalidConfigurationException {
 
     private static final long serialVersionUID = 1L;

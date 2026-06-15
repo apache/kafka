@@ -18,11 +18,13 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#describeFeatures(DescribeFeaturesOptions)} call.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
+@InterfaceAudience.Public
 public class DescribeFeaturesResult {
 
     private final KafkaFuture<FeatureMetadata> future;

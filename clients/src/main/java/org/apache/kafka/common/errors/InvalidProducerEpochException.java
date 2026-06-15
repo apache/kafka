@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This exception indicates that the produce request sent to the partition leader
  * contains a non-matching producer epoch. When encountering this exception, user should abort the ongoing transaction
  * by calling KafkaProducer#abortTransaction which would try to send initPidRequest and reinitialize the producer
  * under the hood.
  */
+@InterfaceAudience.Public
 public class InvalidProducerEpochException extends ApplicationRecoverableException {
 
     private static final long serialVersionUID = 1L;

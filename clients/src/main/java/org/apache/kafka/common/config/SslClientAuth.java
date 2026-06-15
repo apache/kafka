@@ -20,9 +20,11 @@ package org.apache.kafka.common.config;
 import java.util.List;
 import java.util.Locale;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Describes whether the server should require or request client authentication.
  */
+@InterfaceAudience.Public
 public enum SslClientAuth {
     REQUIRED,
     REQUESTED,

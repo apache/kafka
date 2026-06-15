@@ -20,6 +20,8 @@ import java.net.InetAddress;
 
 import javax.net.ssl.SSLSession;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class SslAuthenticationContext implements AuthenticationContext {
     private final SSLSession session;
     private final InetAddress clientAddress;

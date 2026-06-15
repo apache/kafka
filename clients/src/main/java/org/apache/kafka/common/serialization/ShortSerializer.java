@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class ShortSerializer implements Serializer<Short> {
     public byte[] serialize(String topic, Short data) {
         if (data == null)

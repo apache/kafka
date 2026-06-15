@@ -23,9 +23,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link KafkaAdminClient#describeShareGroups(Collection, DescribeShareGroupsOptions)}} call.
  */
+@InterfaceAudience.Public
 public class DescribeShareGroupsResult {
 
     private final Map<String, KafkaFuture<ShareGroupDescription>> futures;

@@ -19,6 +19,7 @@ package org.apache.kafka.common;
 import java.util.Map;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.metricName(...).
  * <p>
@@ -60,6 +61,7 @@ import java.util.Objects;
  * sensor.record(messageSize);
  * }</pre>
  */
+@InterfaceAudience.Public
 public final class MetricName {
 
     private final String name;

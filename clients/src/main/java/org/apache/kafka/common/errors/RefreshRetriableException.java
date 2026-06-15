@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates that an operation failed due to outdated or invalid metadata,
  * requiring a refresh (e.g., refreshing producer metadata) before retrying the request.
  * The request can be modified or updated with fresh metadata before being retried.
  */
+@InterfaceAudience.Public
 public abstract class RefreshRetriableException extends RetriableException {
     private static final long serialVersionUID = 1L;
 

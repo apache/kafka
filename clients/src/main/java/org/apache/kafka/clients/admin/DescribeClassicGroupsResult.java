@@ -24,9 +24,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#describeClassicGroups(Collection, DescribeClassicGroupsOptions)}} call.
  */
+@InterfaceAudience.Public
 public class DescribeClassicGroupsResult {
 
     private final Map<String, KafkaFuture<ClassicGroupDescription>> futures;

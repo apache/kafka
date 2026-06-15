@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A metric tracked for monitoring purposes.
  */
+@InterfaceAudience.Public
 public interface Metric {
 
     /**

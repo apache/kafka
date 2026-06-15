@@ -31,9 +31,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A detailed description of a single consumer group in the cluster.
  */
+@InterfaceAudience.Public
 public class ConsumerGroupDescription {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;

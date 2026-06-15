@@ -22,6 +22,8 @@ import java.util.Optional;
 import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class SaslAuthenticationContext implements AuthenticationContext {
     private final SaslServer server;
     private final SecurityProtocol securityProtocol;

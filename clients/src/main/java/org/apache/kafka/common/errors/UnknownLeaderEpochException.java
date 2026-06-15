@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The request contained a leader epoch which is larger than that on the broker that received the
  * request. This can happen if the client observes a metadata update before it has been propagated
  * to all brokers. Clients need not refresh metadata before retrying.
  */
+@InterfaceAudience.Public
 public class UnknownLeaderEpochException extends RetriableException {
     private static final long serialVersionUID = 1L;
 

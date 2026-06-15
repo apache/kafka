@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The leader does not have an endpoint corresponding to the listener on which metadata was requested.
  * This could indicate a broker configuration error or a transient error when listeners are updated
@@ -23,6 +25,7 @@ package org.apache.kafka.common.errors;
  * This is currently used only for missing listeners on leader brokers, but may be used for followers
  * in future.
  */
+@InterfaceAudience.Public
 public class ListenerNotFoundException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;

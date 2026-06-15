@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /** 
  * This class allows to specify the desired offsets when using {@link KafkaAdminClient#listOffsets(Map, ListOffsetsOptions)}
  */
+@InterfaceAudience.Public
 public class OffsetSpec {
 
     public static class EarliestSpec extends OffsetSpec { }

@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of {@link Admin#describeMetadataQuorum(DescribeMetadataQuorumOptions)}
  */
+@InterfaceAudience.Public
 public class DescribeMetadataQuorumResult {
 
     private final KafkaFuture<QuorumInfo> quorumInfo;

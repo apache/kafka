@@ -20,9 +20,11 @@ import java.util.Collection;
 import java.util.Objects;
 import java.util.OptionalInt;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#describeProducers(Collection)}.
  */
+@InterfaceAudience.Public
 public class DescribeProducersOptions extends AbstractOptions<DescribeProducersOptions> {
     private OptionalInt brokerId = OptionalInt.empty();
 

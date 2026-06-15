@@ -20,11 +20,13 @@ import org.apache.kafka.common.KafkaFuture;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#updateFeatures(Map, UpdateFeaturesOptions)} call.
  *
  * The API of this class is evolving, see {@link Admin} for details.
  */
+@InterfaceAudience.Public
 public class UpdateFeaturesResult {
     private final Map<String, KafkaFuture<Void>> futures;
 

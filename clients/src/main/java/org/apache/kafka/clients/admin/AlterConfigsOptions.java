@@ -19,9 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#incrementalAlterConfigs(Map)}.
  */
+@InterfaceAudience.Public
 public class AlterConfigsOptions extends AbstractOptions<AlterConfigsOptions> {
 
     private boolean validateOnly = false;

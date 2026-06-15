@@ -20,9 +20,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A class used to represent a collection of topics. This collection may define topics by name or ID.
  */
+@InterfaceAudience.Public
 public abstract class TopicCollection {
 
     private TopicCollection() {}

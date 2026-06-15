@@ -19,9 +19,11 @@ package org.apache.kafka.clients.consumer;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A container class for offset and timestamp.
  */
+@InterfaceAudience.Public
 public final class OffsetAndTimestamp {
     private final long timestamp;
     private final long offset;

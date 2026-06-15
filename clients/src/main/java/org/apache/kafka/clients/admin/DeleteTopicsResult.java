@@ -24,9 +24,11 @@ import org.apache.kafka.common.Uuid;
 import java.util.Collection;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#deleteTopics(Collection)} call.
  */
+@InterfaceAudience.Public
 public class DeleteTopicsResult {
     private final Map<Uuid, KafkaFuture<Void>> topicIdFutures;
     private final Map<String, KafkaFuture<Void>> nameFutures;

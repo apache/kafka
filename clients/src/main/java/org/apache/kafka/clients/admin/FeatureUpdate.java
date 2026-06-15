@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Encapsulates details about an update to a finalized feature.
  */
+@InterfaceAudience.Public
 public class FeatureUpdate {
     private final short maxVersionLevel;
     private final UpgradeType upgradeType;

@@ -21,9 +21,11 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of {@link Admin#abortTransaction(AbortTransactionSpec, AbortTransactionOptions)}.
  */
+@InterfaceAudience.Public
 public class AbortTransactionResult {
     private final Map<TopicPartition, KafkaFuture<Void>> futures;
 

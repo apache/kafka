@@ -20,6 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class AbortTransactionSpec {
     private final TopicPartition topicPartition;
     private final long producerId;

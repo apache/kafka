@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.time.Duration;
 import java.util.Collection;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A callback interface that the user can implement to trigger custom actions when the set of partitions assigned to the
  * consumer changes.
@@ -139,6 +140,7 @@ import java.util.Collection;
  * @see RebalanceConsumer
  * @see ConsumerRebalanceListener
  */
+@InterfaceAudience.Public
 public interface RebalanceListener {
 
     /**

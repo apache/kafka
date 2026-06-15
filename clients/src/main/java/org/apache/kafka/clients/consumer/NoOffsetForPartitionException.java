@@ -22,10 +22,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates that there is no stored offset for a partition and no defined offset
  * reset policy.
  */
+@InterfaceAudience.Public
 public class NoOffsetForPartitionException extends InvalidOffsetException {
 
     private static final long serialVersionUID = 1L;

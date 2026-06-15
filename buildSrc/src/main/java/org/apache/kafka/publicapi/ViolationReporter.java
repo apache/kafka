@@ -71,7 +71,7 @@ public class ViolationReporter {
 
             if (!safeSuppressions.isEmpty()) {
                 writer.println("## Suppressions (" + safeSuppressions.size() + " entries)");
-                writer.println("References skipped due to @SuppressKafkaInternalApiUsage on the consumer.");
+                writer.println("Checks skipped due to @SuppressKafkaInternalApiUsage.");
                 writer.println("Each line shows the reason supplied to the annotation; review periodically.");
                 writer.println();
                 for (PublicApiViolation suppression : safeSuppressions) {
@@ -179,7 +179,7 @@ public class ViolationReporter {
         if (suppressions != null && !suppressions.isEmpty()) {
             System.out.println();
             System.out.println(cyanColor + "ℹ " + suppressions.size()
-                    + " reference(s) suppressed via @SuppressKafkaInternalApiUsage:" + resetColor);
+                    + " check(s) suppressed via @SuppressKafkaInternalApiUsage:" + resetColor);
             for (PublicApiViolation suppression : suppressions) {
                 System.out.println(cyanColor + "  " + suppression.getDescription() + resetColor);
             }

@@ -20,9 +20,11 @@ package org.apache.kafka.clients.admin;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A new partition reassignment, which can be applied via {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}.
  */
+@InterfaceAudience.Public
 public class NewPartitionReassignment {
     private final List<Integer> targetReplicas;
 

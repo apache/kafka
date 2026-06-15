@@ -25,9 +25,11 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)} call.
  */
+@InterfaceAudience.Public
 public class ListShareGroupOffsetsResult {
 
     private final Map<String, KafkaFuture<Map<TopicPartition, SharePartitionOffsetInfo>>> futures;

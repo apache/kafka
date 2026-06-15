@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The transaction coordinator returns this error code if the timeout received via the InitProducerIdRequest is larger than
  * the `transaction.max.timeout.ms` config value.
  */
+@InterfaceAudience.Public
 public class InvalidTxnTimeoutException extends ApiException {
     private static final long serialVersionUID = 1L;
 

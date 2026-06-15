@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The group state.
  * <p>
@@ -45,6 +46,7 @@ import java.util.stream.Collectors;
  *     </tbody>
  * </table>
  */
+@InterfaceAudience.Public
 public enum GroupState {
     UNKNOWN("Unknown"),
     PREPARING_REBALANCE("PreparingRebalance"),

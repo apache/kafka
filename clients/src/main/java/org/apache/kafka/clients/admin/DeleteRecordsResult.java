@@ -22,9 +22,11 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#deleteRecords(Map)} call.
  */
+@InterfaceAudience.Public
 public class DeleteRecordsResult {
 
     private final Map<TopicPartition, KafkaFuture<DeletedRecords>> futures;

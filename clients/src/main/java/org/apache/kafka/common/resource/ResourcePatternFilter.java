@@ -19,11 +19,13 @@ package org.apache.kafka.common.resource;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import static org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE;
 
 /**
  * Represents a filter that can match {@link ResourcePattern}.
  */
+@InterfaceAudience.Public
 public class ResourcePatternFilter {
     /**
      * Matches any resource pattern.

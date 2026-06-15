@@ -18,6 +18,8 @@ package org.apache.kafka.common.metrics.stats;
 
 import org.apache.kafka.common.MetricName;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class Percentile {
 
     private final MetricName name;

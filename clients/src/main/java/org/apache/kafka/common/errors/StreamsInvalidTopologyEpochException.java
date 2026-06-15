@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class StreamsInvalidTopologyEpochException extends ApiException {
     public StreamsInvalidTopologyEpochException(String message) {
         super(message);

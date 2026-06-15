@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * There is no currently available leader for the given partition (either because a leadership election is in progress
  * or because all replicas are down).
  */
+@InterfaceAudience.Public
 public class LeaderNotAvailableException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;

@@ -18,6 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * {@code ByteBufferSerializer} always {@link ByteBuffer#rewind() rewinds} the position of the input buffer to zero for
  * serialization. A manual rewind is not necessary.
@@ -27,6 +28,7 @@ import java.nio.ByteBuffer;
  * The position is also rewound back to zero before {@link #serialize(String, ByteBuffer)}
  * returns.
  */
+@InterfaceAudience.Public
 public class ByteBufferSerializer implements Serializer<ByteBuffer> {
     public byte[] serialize(String topic, ByteBuffer data) {
         if (data == null)

@@ -18,6 +18,8 @@ package org.apache.kafka.common.config;
 
 import java.util.List;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class Config {
     private final List<ConfigValue> configValues;
 

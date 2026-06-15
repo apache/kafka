@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A restricted view of a {@link Consumer} passed to {@link ConsumerRebalanceListener} callback
  * methods during a partition rebalance. This interface provides compile-time enforcement of safe
@@ -79,6 +80,7 @@ import java.util.Set;
  *
  * @see ConsumerRebalanceListener
  */
+@InterfaceAudience.Public
 public interface RebalanceConsumer {
 
     // --- Offset management ---

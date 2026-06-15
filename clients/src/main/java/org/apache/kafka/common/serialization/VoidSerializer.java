@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class VoidSerializer implements Serializer<Void> {
     @Override
     public byte[] serialize(String topic, Void data) {

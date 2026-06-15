@@ -18,6 +18,7 @@ package org.apache.kafka.common.errors;
 
 import javax.net.ssl.SSLException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This exception indicates that SSL handshake has failed. See {@link #getCause()}
  * for the {@link SSLException} that caused this failure.
@@ -29,6 +30,7 @@ import javax.net.ssl.SSLException;
  * authentication failure or server host name verification failure.
  * </p>
  */
+@InterfaceAudience.Public
 public class SslAuthenticationException extends AuthenticationException {
 
     private static final long serialVersionUID = 1L;

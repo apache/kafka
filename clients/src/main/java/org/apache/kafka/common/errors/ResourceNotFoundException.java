@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Exception thrown due to a request for a resource that does not exist.
  */
+@InterfaceAudience.Public
 public class ResourceNotFoundException extends ApiException {
 
     private static final long serialVersionUID = 1L;

@@ -96,10 +96,7 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
                 return;
             }
 
-            // Create class loader with Kafka JARs
-            ClassLoader classLoader = PublicApiChecker.createClassLoader(kafkaJars);
-
-            PublicApiChecker checker = new PublicApiChecker(classLoader);
+            PublicApiChecker checker = new PublicApiChecker(kafkaJars);
 
             // Collect class file roots (directories and any explicitly-listed jars).
             List<File> classRoots = new ArrayList<>();

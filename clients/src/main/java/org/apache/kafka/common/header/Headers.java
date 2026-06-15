@@ -17,11 +17,14 @@
 package org.apache.kafka.common.header;
 
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A mutable ordered collection of {@link Header} objects. Note that multiple headers may have the same {@link Header#key() key}.
  * <p>
  * The order of headers is preserved in the order they were added.
  */
+@InterfaceAudience.Public
 public interface Headers extends Iterable<Header> {
     
     /**

@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A misc. network-related IOException occurred when making a request. This could be because the client's metadata is
  * out of date and it is making a request to a node that is now dead.
  */
+@InterfaceAudience.Public
 public class NetworkException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;

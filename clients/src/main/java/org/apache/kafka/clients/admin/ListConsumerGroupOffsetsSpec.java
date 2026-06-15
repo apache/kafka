@@ -22,9 +22,11 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Collection;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Specification of consumer group offsets to list using {@link Admin#listConsumerGroupOffsets(java.util.Map)}.
  */
+@InterfaceAudience.Public
 public class ListConsumerGroupOffsetsSpec {
 
     private Collection<TopicPartition> topicPartitions;

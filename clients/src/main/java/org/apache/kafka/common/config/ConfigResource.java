@@ -24,9 +24,11 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A class representing resources that have configs.
  */
+@InterfaceAudience.Public
 public final class ConfigResource {
 
     /**

@@ -24,9 +24,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link AdminClient#listOffsets(Map)} call.
  */
+@InterfaceAudience.Public
 public class ListOffsetsResult {
 
     private final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures;

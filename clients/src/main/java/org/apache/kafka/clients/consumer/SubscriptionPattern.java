@@ -18,11 +18,13 @@ package org.apache.kafka.clients.consumer;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Represents a regular expression compatible with Google RE2/J, used to subscribe to topics.
  * This just keeps the String representation of the pattern, and all validations to ensure
  * it is RE2/J compatible are delegated to the broker.
  */
+@InterfaceAudience.Public
 public class SubscriptionPattern {
 
     /**

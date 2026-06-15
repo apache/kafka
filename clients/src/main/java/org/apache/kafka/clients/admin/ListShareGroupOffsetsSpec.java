@@ -22,9 +22,11 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Specification of share group offsets to list using {@link Admin#listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)}.
  */
+@InterfaceAudience.Public
 public class ListShareGroupOffsetsSpec {
 
     private Collection<TopicPartition> topicPartitions;

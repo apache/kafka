@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The <code>b64token</code> value as defined in
  * <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section
@@ -39,6 +40,7 @@ import java.util.Set;
  *      <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750
  *      Section 2.1</a>
  */
+@InterfaceAudience.Public
 public interface OAuthBearerToken {
     /**
      * The <code>b64token</code> value as defined in

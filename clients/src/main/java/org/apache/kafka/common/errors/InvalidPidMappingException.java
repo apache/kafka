@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class InvalidPidMappingException extends ApplicationRecoverableException {
     public InvalidPidMappingException(String message) {
         super(message);

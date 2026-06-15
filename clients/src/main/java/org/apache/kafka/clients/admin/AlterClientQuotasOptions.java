@@ -19,9 +19,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Collection;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#alterClientQuotas(Collection, AlterClientQuotasOptions)}.
  */
+@InterfaceAudience.Public
 public class AlterClientQuotasOptions extends AbstractOptions<AlterClientQuotasOptions> {
 
     private boolean validateOnly = false;

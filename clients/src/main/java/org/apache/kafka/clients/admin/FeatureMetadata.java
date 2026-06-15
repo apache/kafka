@@ -21,12 +21,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import static java.util.stream.Collectors.joining;
 
 /**
  * Encapsulates details about finalized as well as supported features. This is particularly useful
  * to hold the result returned by the {@link Admin#describeFeatures(DescribeFeaturesOptions)} API.
  */
+@InterfaceAudience.Public
 public class FeatureMetadata {
 
     private final Map<String, FinalizedVersionRange> finalizedFeatures;

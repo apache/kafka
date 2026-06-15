@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -48,6 +49,7 @@ import java.util.Set;
  * IMPORTANT: if upgrading from 2.3 or earlier, you must follow a specific upgrade path in order to safely turn on
  * cooperative rebalancing. See the <a href="https://kafka.apache.org/documentation/#upgrade_240_notable">upgrade guide</a> for details.
  */
+@InterfaceAudience.Public
 public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     public static final String COOPERATIVE_STICKY_ASSIGNOR_NAME = "cooperative-sticky";
 

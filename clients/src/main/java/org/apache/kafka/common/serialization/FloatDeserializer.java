@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 
 import java.nio.ByteBuffer;
 
+@InterfaceAudience.Public
 public class FloatDeserializer implements Deserializer<Float> {
     @Override
     public Float deserialize(final String topic, final byte[] data) {

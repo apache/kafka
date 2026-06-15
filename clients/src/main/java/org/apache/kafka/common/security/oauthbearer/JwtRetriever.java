@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfigurable;
 
@@ -35,6 +36,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBeare
  * @see FileJwtRetriever
  */
 
+@InterfaceAudience.Public
 public interface JwtRetriever extends OAuthBearerConfigurable {
 
     /**

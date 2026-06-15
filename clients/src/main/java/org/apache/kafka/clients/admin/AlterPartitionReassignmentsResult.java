@@ -22,9 +22,11 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}.
  */
+@InterfaceAudience.Public
 public class AlterPartitionReassignmentsResult {
     private final Map<TopicPartition, KafkaFuture<Void>> futures;
 

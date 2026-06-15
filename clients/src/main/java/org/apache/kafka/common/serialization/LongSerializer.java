@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.serialization;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class LongSerializer implements Serializer<Long> {
     public byte[] serialize(String topic, Long data) {
         if (data == null)

@@ -21,10 +21,12 @@ import org.apache.kafka.common.Uuid;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A client telemetry payload as sent by the client to the telemetry exporter. The payload is
  * exported using a {@link ClientTelemetryExporter}.
  */
+@InterfaceAudience.Public
 public interface ClientTelemetryPayload {
 
     /**

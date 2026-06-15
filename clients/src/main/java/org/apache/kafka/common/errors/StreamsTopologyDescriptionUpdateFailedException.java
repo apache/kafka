@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates that the streams group topology description plugin failed to process
  * a StreamsGroupTopologyDescriptionUpdate request. The accompanying error message
  * describes the underlying cause; the broker tracks the transient-vs-permanent
  * distinction internally and does not reflect it on the wire.
  */
+@InterfaceAudience.Public
 public class StreamsTopologyDescriptionUpdateFailedException extends ApiException {
 
     private static final long serialVersionUID = 1L;

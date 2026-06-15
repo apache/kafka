@@ -23,9 +23,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A description of the assignments of a specific share group member.
  */
+@InterfaceAudience.Public
 public class ShareMemberAssignment {
     private final Set<TopicPartition> topicPartitions;
 

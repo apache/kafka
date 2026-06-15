@@ -25,6 +25,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -57,6 +58,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_
  * where a driver thread waits for {@link #poll(Duration)} to be called by a background thread and then can safely perform
  * operations during a callback.
  */
+@InterfaceAudience.Public
 public class MockConsumer<K, V> implements Consumer<K, V> {
 
     private final Map<String, List<PartitionInfo>> partitions;

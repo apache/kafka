@@ -19,9 +19,11 @@ package org.apache.kafka.common;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The <code>ClusterResource</code> class encapsulates metadata for a Kafka cluster.
  */
+@InterfaceAudience.Public
 public class ClusterResource {
 
     private final String clusterId;

@@ -23,9 +23,11 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Resource pattern type.
  */
+@InterfaceAudience.Public
 public enum PatternType {
     /**
      * Represents any PatternType which this client cannot understand, perhaps because this client is too old.

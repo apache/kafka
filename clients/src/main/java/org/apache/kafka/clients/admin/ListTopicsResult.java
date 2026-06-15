@@ -23,9 +23,11 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#listTopics()} call.
  */
+@InterfaceAudience.Public
 public class ListTopicsResult {
     final KafkaFuture<Map<String, TopicListing>> future;
 

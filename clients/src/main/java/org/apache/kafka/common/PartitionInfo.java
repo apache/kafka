@@ -19,9 +19,11 @@ package org.apache.kafka.common;
 import java.util.Arrays;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This is used to describe per-partition state in the MetadataResponse.
  */
+@InterfaceAudience.Public
 public class PartitionInfo {
     private final String topic;
     private final int partition;

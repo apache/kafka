@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An exception that indicates that the authorizer is not ready to receive the request yet.
  */
+@InterfaceAudience.Public
 public class AuthorizerNotReadyException extends RetriableException {
     private static final long serialVersionUID = 1L;
 

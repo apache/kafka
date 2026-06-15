@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Represents a range of version levels supported by every broker in a cluster for some feature.
  */
+@InterfaceAudience.Public
 public class FinalizedVersionRange {
     private final short minVersionLevel;
 

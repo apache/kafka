@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Exception thrown if a create topics request does not satisfy the configured policy for a topic.
  */
+@InterfaceAudience.Public
 public class PolicyViolationException extends ApiException {
 
     public PolicyViolationException(String message) {

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class ElectionNotNeededException extends InvalidMetadataException {
 
     public ElectionNotNeededException(String message) {

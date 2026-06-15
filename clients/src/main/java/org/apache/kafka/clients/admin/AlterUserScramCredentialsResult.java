@@ -24,9 +24,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#alterUserScramCredentials(List)} call.
  */
+@InterfaceAudience.Public
 public class AlterUserScramCredentialsResult {
     private final Map<String, KafkaFuture<Void>> futures;
 

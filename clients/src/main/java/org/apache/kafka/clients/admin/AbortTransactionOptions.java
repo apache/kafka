@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class AbortTransactionOptions extends AbstractOptions<AbortTransactionOptions> {
 
     @Override
