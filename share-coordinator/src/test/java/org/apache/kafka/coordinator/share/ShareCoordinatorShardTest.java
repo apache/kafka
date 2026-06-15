@@ -99,6 +99,7 @@ class ShareCoordinatorShardTest {
     private static final byte DELIVERY_STATE_AVAILABLE = 0;
     private static final byte DELIVERY_STATE_ACKNOWLEDGED = 2;
     private static final byte DELIVERY_STATE_ARCHIVING = 3;
+    private static final byte DELIVERY_STATE_ARCHIVED = 4;
     private static final byte DELIVERY_STATE_TX_PENDING = 5;
     private static final byte ACKNOWLEDGE_TYPE_ACCEPT = 1;
     private static final byte ACKNOWLEDGE_TYPE_REJECT = 3;
@@ -1924,7 +1925,7 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
-    public void testCompleteTransactionCommitRejectUsesStagedFinalState() {
+    public void testCompleteTransactionCommitRejectArchivesStagedArchivingState() {
         replayPendingShareState(ACKNOWLEDGE_TYPE_REJECT, DELIVERY_STATE_ARCHIVING, PRODUCER_EPOCH);
 
         CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> result = shard.completeTransaction(
@@ -1936,8 +1937,8 @@ class ShareCoordinatorShardTest {
         assertEquals(1, result.records().size());
         assertEquals(Set.of(SHARE_PARTITION_KEY), result.response());
         ShareGroupOffset offset = groupOffset(result.records().get(0).value().message());
-        assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_ARCHIVING, (short) 1)), offset.stateBatches());
-        assertEquals(0, offset.deliveryCompleteCount());
+        assertEquals(List.of(new PersisterStateBatch(10, 12, DELIVERY_STATE_ARCHIVED, (short) 1)), offset.stateBatches());
+        assertEquals(3, offset.deliveryCompleteCount());
     }
 
     @Test
