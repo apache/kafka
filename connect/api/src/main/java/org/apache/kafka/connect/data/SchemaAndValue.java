@@ -18,9 +18,11 @@ package org.apache.kafka.connect.data;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A composite containing a {@link Schema} and associated value
  */
+@InterfaceAudience.Public
 public class SchemaAndValue {
     private final Schema schema;
     private final Object value;

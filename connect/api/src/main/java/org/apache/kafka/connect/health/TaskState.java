@@ -19,9 +19,11 @@ package org.apache.kafka.connect.health;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Describes the state, IDs, and any errors of a connector task.
  */
+@InterfaceAudience.Public
 public class TaskState extends AbstractState {
 
     private final int taskId;

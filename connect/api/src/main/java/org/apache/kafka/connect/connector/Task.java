@@ -18,6 +18,7 @@ package org.apache.kafka.connect.connector;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * <p>
  * Tasks contain the code that actually copies data to/from another system. They receive
@@ -31,6 +32,7 @@ import java.util.Map;
  * {@link org.apache.kafka.connect.sink.SinkTask}.
  * </p>
  */
+@InterfaceAudience.Public
 public interface Task {
     /**
      * Get the version of this task. Usually this should be the same as the corresponding {@link Connector} class's version.

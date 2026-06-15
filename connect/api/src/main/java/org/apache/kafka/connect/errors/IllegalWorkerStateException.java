@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates that a method has been invoked illegally or at an invalid time by a connector or task.
  */
+@InterfaceAudience.Public
 public class IllegalWorkerStateException extends ConnectException {
     public IllegalWorkerStateException(String s) {
         super(s);

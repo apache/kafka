@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import java.util.Collection;
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * <p>
  * OffsetStorageReader provides access to the offset storage used by sources. This can be used by
@@ -30,6 +31,7 @@ import java.util.Map;
  * {@link org.apache.kafka.connect.data.Schema} other than Array, Map, and Struct.
  * </p>
  */
+@InterfaceAudience.Public
 public interface OffsetStorageReader {
     /**
      * Get the offset for the specified partition. If the data isn't already available locally, this

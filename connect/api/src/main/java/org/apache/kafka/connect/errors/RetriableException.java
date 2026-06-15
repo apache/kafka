@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An exception that indicates the operation can be reattempted.
  */
+@InterfaceAudience.Public
 public class RetriableException extends ConnectException {
     public RetriableException(String s) {
         super(s);

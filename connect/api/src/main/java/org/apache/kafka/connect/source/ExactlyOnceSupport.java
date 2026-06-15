@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.source;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An enum to represent the level of support for exactly-once semantics from a source connector.
  */
+@InterfaceAudience.Public
 public enum ExactlyOnceSupport {
     /**
      * Signals that a connector supports exactly-once semantics.

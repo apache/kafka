@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.mirror;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Directional pair of clusters, where source is mirrored to target.
  */
+@InterfaceAudience.Public
 public class SourceAndTarget {
     private final String source;
     private final String target;

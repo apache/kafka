@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates an error while projecting a schema via {@link org.apache.kafka.connect.data.SchemaProjector}
  */
+@InterfaceAudience.Public
 public class SchemaProjectorException extends DataException {
     public SchemaProjectorException(String s) {
         super(s);

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.rest;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.connect.health.ConnectClusterState;
 
 import jakarta.ws.rs.core.Configurable;
@@ -27,6 +28,7 @@ import jakarta.ws.rs.core.Configurable;
  * {@link jakarta.ws.rs.core.Configurable} and cluster state {@link ConnectClusterState}. The implementation for the interface is provided
  * by the Connect framework.
  */
+@InterfaceAudience.Public
 public interface ConnectRestExtensionContext {
 
     /**

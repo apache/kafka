@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates an error while building a schema via {@link org.apache.kafka.connect.data.SchemaBuilder}
  */
+@InterfaceAudience.Public
 public class SchemaBuilderException extends DataException {
     public SchemaBuilderException(String s) {
         super(s);

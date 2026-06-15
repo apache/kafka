@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates the operation tried to create an entity that already exists.
  */
+@InterfaceAudience.Public
 public class AlreadyExistsException extends ConnectException {
     public AlreadyExistsException(String s) {
         super(s);

@@ -21,9 +21,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The type of {@link Converter} and {@link HeaderConverter}.
  */
+@InterfaceAudience.Public
 public enum ConverterType {
     KEY,
     VALUE,

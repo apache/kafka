@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.source;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * An enum to represent the level of support for connector-defined transaction boundaries.
  */
+@InterfaceAudience.Public
 public enum ConnectorTransactionBoundaries {
     /**
      * Signals that a connector can define its own transaction boundaries.

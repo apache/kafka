@@ -29,6 +29,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Convenience tool for multi-cluster environments. Wraps {@link MirrorClient}
  * <p>
@@ -40,6 +41,7 @@ import java.util.regex.Pattern;
  * </pre>
  * @see MirrorClientConfig for additional properties used by the internal MirrorClient.
  */
+@InterfaceAudience.Public
 public final class RemoteClusterUtils {
 
     // utility class

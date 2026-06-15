@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.connect.source;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Provided to source tasks to allow them to define their own producer transaction boundaries when
  * exactly-once support is enabled.
  */
+@InterfaceAudience.Public
 public interface TransactionContext {
 
     /**
