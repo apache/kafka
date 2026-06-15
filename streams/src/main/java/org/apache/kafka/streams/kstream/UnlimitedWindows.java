@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -42,6 +43,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * @see KGroupedStream#windowedBy(Windows)
  * @see TimestampExtractor
  */
+@InterfaceAudience.Public
 public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP_MS = 0L;

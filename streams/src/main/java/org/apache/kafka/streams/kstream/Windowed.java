@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result key type of a windowed stream aggregation.
  * <p>
@@ -29,6 +31,7 @@ package org.apache.kafka.streams.kstream;
  * @see KGroupedStream#windowedBy(Windows)
  * @see KGroupedStream#windowedBy(SessionWindows)
  */
+@InterfaceAudience.Public
 public class Windowed<K> {
 
     private final K key;

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state;
 
 
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.time.Instant;
@@ -29,6 +30,7 @@ import java.time.Instant;
  * @param <K>   the key type
  * @param <AGG> the aggregated value type
  */
+@InterfaceAudience.Public
 public interface ReadOnlySessionStore<K, AGG> {
 
     /**

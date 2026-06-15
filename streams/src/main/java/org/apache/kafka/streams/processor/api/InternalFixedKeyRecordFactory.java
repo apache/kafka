@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.api;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public final class InternalFixedKeyRecordFactory {
 
     private InternalFixedKeyRecordFactory() {

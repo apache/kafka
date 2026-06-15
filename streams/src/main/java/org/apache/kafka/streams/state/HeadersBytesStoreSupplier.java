@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A store supplier that can be used to create one or more "header" stores,
  * specifically, {@link HeadersBytesStore} instances.
  */
+@InterfaceAudience.Public
 public interface HeadersBytesStoreSupplier { }

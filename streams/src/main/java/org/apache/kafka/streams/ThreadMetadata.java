@@ -18,9 +18,11 @@ package org.apache.kafka.streams;
 
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Metadata of a stream thread.
  */
+@InterfaceAudience.Public
 public interface ThreadMetadata {
 
 

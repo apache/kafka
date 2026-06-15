@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A key-value pair defined for a single Kafka Streams record.
  * If the record comes directly from a Kafka topic then its key/value are defined as the message key/value.
@@ -25,6 +26,7 @@ import java.util.Objects;
  * @param <K> Key type
  * @param <V> Value type
  */
+@InterfaceAudience.Public
 public class KeyValue<K, V> {
 
     /** The key of the key-value pair. */

@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The {@code ValueJoiner} interface for joining two values into a new value of arbitrary type.
  * This is a stateless operation, i.e, {@link #apply(Object, Object)} is invoked individually for each joining
@@ -41,6 +43,7 @@ package org.apache.kafka.streams.kstream;
  * @see KTable#outerJoin(KTable, ValueJoiner)
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface ValueJoiner<V1, V2, VR> {
 
     /**

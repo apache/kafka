@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StoreQueryParameters;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.state.WindowStore;
 /**
  * Same as a {@link TimeWindowedKStream}, however, for multiple co-grouped {@link KStream KStreams}.
  */
+@InterfaceAudience.Public
 public interface TimeWindowedCogroupedKStream<K, V> {
 
     /**

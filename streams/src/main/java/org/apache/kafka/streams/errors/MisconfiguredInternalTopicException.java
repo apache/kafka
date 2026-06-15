@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class MisconfiguredInternalTopicException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

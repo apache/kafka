@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public interface StreamsUncaughtExceptionHandler {
     /**
      * Inspect the exception received in a stream thread and respond with an action.

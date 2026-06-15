@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.streams.state;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A key-(value/timestamp) store that supports put/get/delete and range queries.
  *
  * @param <K> The key type
  * @param <V> The value type
  */
+@InterfaceAudience.Public
 public interface TimestampedKeyValueStore<K, V> extends KeyValueStore<K, ValueAndTimestamp<V>> { }

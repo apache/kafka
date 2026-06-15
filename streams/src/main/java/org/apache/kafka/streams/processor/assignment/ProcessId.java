@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor.assignment;
 
 import java.util.UUID;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /** A simple wrapper around UUID that abstracts a Process ID */
+@InterfaceAudience.Public
 public class ProcessId implements Comparable<ProcessId> {
 
     private final UUID id;

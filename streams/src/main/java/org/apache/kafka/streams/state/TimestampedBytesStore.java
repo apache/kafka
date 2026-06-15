@@ -18,8 +18,10 @@ package org.apache.kafka.streams.state;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import static org.apache.kafka.clients.consumer.ConsumerRecord.NO_TIMESTAMP;
 
+@InterfaceAudience.Public
 public interface TimestampedBytesStore {
     static byte[] convertToTimestampedFormat(final byte[] plainValue) {
         if (plainValue == null) {

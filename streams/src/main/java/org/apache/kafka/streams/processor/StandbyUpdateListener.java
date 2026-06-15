@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.TopicPartition;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public interface StandbyUpdateListener {
 
     enum SuspendReason {

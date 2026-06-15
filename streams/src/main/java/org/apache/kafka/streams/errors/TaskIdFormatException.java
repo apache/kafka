@@ -17,12 +17,15 @@
 package org.apache.kafka.streams.errors;
 
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates a run time error incurred while trying parse the {@link org.apache.kafka.streams.processor.TaskId task id}
  * from the read string.
  *
  * @see org.apache.kafka.streams.processor.internals.StreamTask
  */
+@InterfaceAudience.Public
 public class TaskIdFormatException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

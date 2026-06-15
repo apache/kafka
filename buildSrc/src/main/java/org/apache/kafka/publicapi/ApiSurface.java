@@ -79,10 +79,20 @@ final class ApiSurface {
         return effectivePublicDottedNames.contains(normalize(name));
     }
 
-    /** True iff the class carries {@code @Deprecated} at the class level. */
+    /**
+     * True iff the class — or any enclosing class — carries {@code @Deprecated}. Deprecation
+     * propagates through nesting so a nested class of a {@code @Deprecated} outer is itself
+     * out of scope on both validation sides (mirrors the {@code @Public} inheritance model).
+     */
     boolean isDeprecated(String name) {
-        ClassFacts facts = factsOf(name);
-        return facts != null && facts.isDeprecated();
+        ClassFacts current = factsOf(name);
+        while (current != null) {
+            if (current.isDeprecated()) return true;
+            String enclosing = current.enclosingName();
+            if (enclosing == null) return false;
+            current = factsOf(enclosing);
+        }
+        return false;
     }
 
     private static String normalize(String name) {

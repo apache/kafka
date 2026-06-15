@@ -18,10 +18,12 @@ package org.apache.kafka.streams.processor;
 
 import java.util.Objects;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This class is used to provide the optional parameters when sending output records to downstream processor
  * using {@link ProcessorContext#forward(Object, Object, To)}.
  */
+@InterfaceAudience.Public
 public class To {
     protected String childName;
     protected long timestamp;

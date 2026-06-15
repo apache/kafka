@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The {@code ValueJoinerWithKey} interface for joining two values into a new value of arbitrary type.
  * This interface provides access to a read-only key that the user should not modify as this would lead to
@@ -45,6 +47,7 @@ package org.apache.kafka.streams.kstream;
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey, Named)
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface ValueJoinerWithKey<K1, V1, V2, VR> {
 
     /**

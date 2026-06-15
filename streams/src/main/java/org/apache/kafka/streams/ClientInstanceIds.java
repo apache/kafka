@@ -20,10 +20,12 @@ import org.apache.kafka.common.Uuid;
 
 import java.util.Map;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Encapsulates the {@code client instance id} used for metrics collection by
  * producers, consumers, and the admin client used by Kafka Streams.
  */
+@InterfaceAudience.Public
 public interface ClientInstanceIds {
     /**
      * Returns the {@code client instance id} of the admin client.

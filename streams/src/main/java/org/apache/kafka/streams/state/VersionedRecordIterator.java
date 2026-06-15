@@ -20,6 +20,7 @@ import java.io.Closeable;
 import java.util.Iterator;
 
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Iterator interface of {@link VersionedRecord VersionedRecord<V>}.
  * <p>
@@ -29,6 +30,7 @@ import java.util.Iterator;
  *
  * @param <V> Type of values
  */
+@InterfaceAudience.Public
 public interface VersionedRecordIterator<V> extends Iterator<VersionedRecord<V>>, Closeable {
 
     @Override

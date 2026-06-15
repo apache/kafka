@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
@@ -54,6 +55,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * @see KGroupedStream#windowedBy(Windows)
  * @see TimestampExtractor
  */
+@InterfaceAudience.Public
 public final class TimeWindows extends Windows<TimeWindow> {
 
     /** The size of the windows in milliseconds. */

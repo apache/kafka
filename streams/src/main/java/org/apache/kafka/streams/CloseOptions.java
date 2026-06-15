@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class CloseOptions {
     /**
      * Enum to specify the group membership operation upon closing the Kafka Streams application.

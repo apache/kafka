@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The {@code Initializer} interface for creating an initial value in aggregations.
  * {@code Initializer} is used in combination with {@link Aggregator}.
@@ -31,6 +33,7 @@ package org.apache.kafka.streams.kstream;
  * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized)
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Initializer<VAgg> {
 
     /**

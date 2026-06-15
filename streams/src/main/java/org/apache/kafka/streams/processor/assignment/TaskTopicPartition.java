@@ -21,12 +21,14 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Optional;
 import java.util.Set;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This is a simple container class used during the assignment process to distinguish
  * TopicPartitions type. Since the assignment logic can depend on the type of topic we're
  * looking at, and the rack information of the partition, this container class should have
  * everything necessary to make informed task assignment decisions.
  */
+@InterfaceAudience.Public
 public interface TaskTopicPartition {
     /**
      *

@@ -18,12 +18,14 @@ package org.apache.kafka.streams.processor;
 
 import java.time.Duration;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Cancellable interface returned in {@link org.apache.kafka.streams.processor.api.ProcessorContext#schedule(Duration, PunctuationType, Punctuator)}.
  *
  * @see Punctuator
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Cancellable {
 
     /**

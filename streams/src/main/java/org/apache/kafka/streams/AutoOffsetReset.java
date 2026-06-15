@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy.StrategyType;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 
@@ -28,6 +29,7 @@ import java.util.Optional;
  * {@link Topology#addSource(AutoOffsetReset, String, String...) adding a source processor}
  * or when creating {@link KStream} or {@link KTable} via {@link StreamsBuilder}.
  */
+@InterfaceAudience.Public
 public class AutoOffsetReset {
     protected final StrategyType offsetResetStrategy;
     protected final Optional<Duration> duration;

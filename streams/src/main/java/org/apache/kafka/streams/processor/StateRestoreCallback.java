@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.streams.processor;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Restoration logic for log-backed state stores upon restart,
  * it takes one record at a time from the logs to apply to the restoring state.
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface StateRestoreCallback {
 
     void restore(byte[] key, byte[] value);

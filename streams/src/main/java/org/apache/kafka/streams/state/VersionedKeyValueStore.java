@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -39,6 +40,7 @@ import org.apache.kafka.streams.processor.StateStore;
  * @param <K> The key type
  * @param <V> The value type
  */
+@InterfaceAudience.Public
 public interface VersionedKeyValueStore<K, V> extends StateStore {
 
     long PUT_RETURN_CODE_VALID_TO_UNDEFINED = -1L;

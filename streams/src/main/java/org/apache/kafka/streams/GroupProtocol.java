@@ -18,6 +18,8 @@ package org.apache.kafka.streams;
 
 import java.util.Locale;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public enum GroupProtocol {
     /** Classic group protocol.  */
     CLASSIC("CLASSIC"),

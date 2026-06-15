@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -57,6 +58,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.checkSupplier;
  * {@link KafkaStreams} instance that will then {@link KafkaStreams#start() begin consuming, processing, and producing
  * records}.
  */
+@InterfaceAudience.Public
 public class Topology {
 
     protected final InternalTopologyBuilder internalTopologyBuilder;

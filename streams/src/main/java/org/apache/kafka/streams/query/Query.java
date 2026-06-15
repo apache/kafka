@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.query;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Marker interface that all interactive queries must implement (see {@link
  * org.apache.kafka.streams.KafkaStreams#query(StateQueryRequest)}).
@@ -30,6 +32,7 @@ package org.apache.kafka.streams.query;
  *
  * @param <R> The type of the result returned by this query.
  */
+@InterfaceAudience.Public
 public interface Query<R> {
 
 }

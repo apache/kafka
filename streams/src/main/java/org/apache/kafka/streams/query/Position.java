@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.query;
 
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 import java.util.Collections;
@@ -41,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * reference.
  */
 @Evolving
+@InterfaceAudience.Public
 public class Position {
 
     private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> position;

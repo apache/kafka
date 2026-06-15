@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -62,6 +63,7 @@ import java.util.regex.Pattern;
  * @see KTable
  * @see GlobalKTable
  */
+@InterfaceAudience.Public
 public class StreamsBuilder {
 
     /** The actual topology that is constructed by this StreamsBuilder. */

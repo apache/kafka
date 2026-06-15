@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The {@code Branched} class is used to define the optional parameters when building branches with
  * {@link BranchedKStream}.
@@ -27,6 +28,7 @@ import java.util.function.Function;
  * @param <K> type of record key
  * @param <V> type of record value
  */
+@InterfaceAudience.Public
 public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
 
     protected final String name;

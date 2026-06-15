@@ -18,6 +18,8 @@ package org.apache.kafka.streams.errors;
 
 import java.util.List;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+@InterfaceAudience.Public
 public class MissingInternalTopicsException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

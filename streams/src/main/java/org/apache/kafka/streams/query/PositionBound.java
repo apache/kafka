@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.query;
 
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 
 import java.util.Objects;
@@ -27,6 +28,7 @@ import java.util.Objects;
  * specified bound. "Unbounded" places no restrictions on the current location of the partition.
  */
 @Evolving
+@InterfaceAudience.Public
 public class PositionBound {
 
     private final Position position;

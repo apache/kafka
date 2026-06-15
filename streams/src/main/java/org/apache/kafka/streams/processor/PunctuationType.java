@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor;
 
 import java.time.Duration;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Controls what notion of time is used for punctuation scheduled via
  * {@link org.apache.kafka.streams.processor.api.ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule}:
@@ -31,6 +32,7 @@ import java.time.Duration;
  *   by how long an iteration of the processing loop takes to complete</li>
  * </ul>
  */
+@InterfaceAudience.Public
 public enum PunctuationType {
    STREAM_TIME,
    WALL_CLOCK_TIME,

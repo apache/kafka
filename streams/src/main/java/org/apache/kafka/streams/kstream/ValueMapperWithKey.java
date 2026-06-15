@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The {@code ValueMapperWithKey} interface for mapping a value to a new value of arbitrary type.
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
@@ -39,6 +41,7 @@ package org.apache.kafka.streams.kstream;
  */
 
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface ValueMapperWithKey<K, V, VR> {
 
     /**

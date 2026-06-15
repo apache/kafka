@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.streams.errors;
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Indicates that Kafka Streams is in state {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING} and thus
  * cannot be queried by default. You can retry to query after the rebalance finished. As an alternative, you can also query
  * (potentially stale) state stores during a rebalance via {@link org.apache.kafka.streams.StoreQueryParameters#enableStaleStores()}.
  */
 @SuppressWarnings("unused")
+@InterfaceAudience.Public
 public class StreamsRebalancingException extends InvalidStateStoreException {
 
     private static final long serialVersionUID = 1L;

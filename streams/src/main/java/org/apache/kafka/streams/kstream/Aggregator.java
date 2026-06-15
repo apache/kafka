@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.kstream;
 
 
+
+import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The {@code Aggregator} interface for aggregating values of the given key.
  * This is a generalization of {@link Reducer} and allows to have different types for input value and aggregation
@@ -39,6 +41,7 @@ package org.apache.kafka.streams.kstream;
  * @see Reducer
  */
 @FunctionalInterface
+@InterfaceAudience.Public
 public interface Aggregator<K, V, VAgg> {
 
     /**
