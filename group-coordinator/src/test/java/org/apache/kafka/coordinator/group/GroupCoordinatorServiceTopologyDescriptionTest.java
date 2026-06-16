@@ -40,6 +40,7 @@ import org.apache.kafka.server.util.timer.MockTimer;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -553,6 +554,38 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), validHeartbeatRequest()
         ).get(5, TimeUnit.SECONDS);
 
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
+    public void testHeartbeatDecorationFailurePreservesCommittedResponse() throws Exception {
+        // If maybeSetTopologyDescriptionRequired throws while decorating an
+        // already-committed successful heartbeat (for example, because the response carries
+        // an unexpected shape such as a null Status element), the service must NOT translate
+        // that into an error response — the broker-side state change has already happened,
+        // so we return the committed result as-is and let the next heartbeat retry.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        // Construct a heartbeat result where responseHasStaleTopology will NPE on the null
+        // status element. errorCode is NONE so we exercise the success path.
+        StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
+            .setStatus(Collections.singletonList(null));
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-heartbeat"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new StreamsGroupHeartbeatResult(response, Map.of(), 5, -1, -1)));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT), validHeartbeatRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        // No error translation: the response carries NONE and the original status, the flag
+        // is left unset because decoration could not complete.
+        assertEquals(Errors.NONE.code(), result.data().errorCode());
         assertFalse(result.data().topologyDescriptionRequired());
     }
 

@@ -4469,16 +4469,15 @@ public class GroupMetadataManager {
             .setMemberEpoch(memberEpoch)
             .setStatus(List.of());
 
+        // Leave/fence paths use StreamsGroupHeartbeatResult.withoutEpochContext: the departing
+        // member will never push a topology description, so the service-layer post-processing
+        // sees epochs of -1 and short-circuits. Without this the manager would arm a back-off
+        // window for a member that is on its way out, delaying push solicitation for the rest
+        // of the group.
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
             log.info("[GroupId {}][MemberId {}] Member {} left the streams group.", groupId, memberId, memberId);
-            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(
-                response,
-                Map.of(),
-                group.currentTopologyEpoch(),
-                group.storedDescriptionTopologyEpoch(),
-                group.failedDescriptionTopologyEpoch()
-            ));
+            return streamsGroupFenceMember(group, member, StreamsGroupHeartbeatResult.withoutEpochContext(response));
         } else {
             StreamsGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -4490,13 +4489,7 @@ public class GroupMetadataManager {
             } else {
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} left the streams group.",
                     group.groupId(), memberId, memberId, instanceId);
-                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(
-                    response,
-                    Map.of(),
-                    group.currentTopologyEpoch(),
-                    group.storedDescriptionTopologyEpoch(),
-                    group.failedDescriptionTopologyEpoch()
-                ));
+                return streamsGroupFenceMember(group, member, StreamsGroupHeartbeatResult.withoutEpochContext(response));
             }
         }
     }
@@ -4563,15 +4556,12 @@ public class GroupMetadataManager {
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .setStatus(List.of());
 
+        // Static-leave is a departing path: a member that will not push at this epoch,
+        // so we use the withoutEpochContext factory to skip the heartbeat post-processing
+        // and avoid arming the back-off on its behalf.
         return new CoordinatorResult<>(
             List.of(record),
-            new StreamsGroupHeartbeatResult(
-                response,
-                Map.of(),
-                group.currentTopologyEpoch(),
-                group.storedDescriptionTopologyEpoch(),
-                group.failedDescriptionTopologyEpoch()
-            )
+            StreamsGroupHeartbeatResult.withoutEpochContext(response)
         );
     }
 

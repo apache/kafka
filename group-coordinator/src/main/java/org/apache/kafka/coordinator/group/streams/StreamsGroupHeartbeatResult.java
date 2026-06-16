@@ -55,11 +55,25 @@ public record StreamsGroupHeartbeatResult(
     }
 
     /**
-     * Convenience constructor for failure-fast paths that do not resolve a group: no
-     * internal topics to create, and all three epoch fields set to -1 so the service-layer
-     * gate sees nothing to do.
+     * Build a heartbeat result that bypasses the service-layer topology post-processing.
+     * Used at two distinct call sites:
+     *
+     * <ul>
+     *   <li>Failure-fast paths in {@code GroupCoordinatorService#streamsGroupHeartbeat}
+     *       — broker not active, request validation rejected, runtime error translated
+     *       by {@code handleOperationException}. The group is not resolved, so there is
+     *       no epoch context to track.</li>
+     *   <li>Departing-member paths in {@code GroupMetadataManager} (leave or fence).
+     *       The group exists but the member will not push a topology description, so
+     *       attaching the live epoch would arm a back-off window on its behalf and
+     *       delay solicitation for the rest of the group.</li>
+     * </ul>
+     *
+     * <p>All three epoch fields are set to -1, causing
+     * {@code maybeSetTopologyDescriptionRequired} to short-circuit before arming the
+     * back-off or setting the {@code TopologyDescriptionRequired} flag.
      */
-    public StreamsGroupHeartbeatResult(StreamsGroupHeartbeatResponseData data) {
-        this(data, Map.of(), -1, -1, -1);
+    public static StreamsGroupHeartbeatResult withoutEpochContext(StreamsGroupHeartbeatResponseData data) {
+        return new StreamsGroupHeartbeatResult(data, Map.of(), -1, -1, -1);
     }
 }
