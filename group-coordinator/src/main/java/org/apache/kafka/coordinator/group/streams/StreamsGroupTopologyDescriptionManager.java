@@ -1,0 +1,234 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.coordinator.group.streams;
+
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
+import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
+
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Broker-level component that owns the streams-group topology description plugin
+ * reference and the per-group re-solicitation back-off. The chain that drives a push
+ * RPC (validate → convert → plugin → metadata write → back-off mutation) lives on
+ * {@code GroupCoordinatorService}; this class exposes the building blocks (plugin
+ * invocation, back-off mutations) and the heartbeat-path gate, but does not assemble
+ * the chain itself.
+ *
+ * <p>This class is broker-level (one instance per {@code GroupCoordinatorService}); the
+ * back-off map is keyed by {@code groupId} and shared across all partitions hosted on the
+ * broker. State here is intentionally non-timeline and non-replayed: it is rebuilt from
+ * scratch on broker restart, and the persisted {@code StoredDescriptionTopologyEpoch} /
+ * {@code FailedDescriptionTopologyEpoch} fields on each streams group drive
+ * convergence after a restart.
+ */
+public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
+    private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
+    private final StreamsGroupTopologyDescriptionBackoff backoff;
+
+    public StreamsGroupTopologyDescriptionManager(
+        Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
+        Time time
+    ) {
+        this.plugin = plugin;
+        this.backoff = new StreamsGroupTopologyDescriptionBackoff(time);
+    }
+
+    /**
+     * Release plugin-side resources. The plugin is instantiated by the service via
+     * {@code config.getConfiguredInstance(...)}, so the service owns it and must close
+     * it on shutdown to avoid leaking threads, network clients, etc. across broker
+     * restart cycles.
+     */
+    @Override
+    public void close() throws Exception {
+        if (plugin.isPresent()) {
+            plugin.get().close();
+        }
+    }
+
+    /**
+     * @return true if a topology description plugin is configured on this broker.
+     */
+    public boolean isPluginConfigured() {
+        return plugin.isPresent();
+    }
+
+    /**
+     * Post-processes a successful streams group heartbeat result by deciding whether the
+     * broker should set {@code TopologyDescriptionRequired=true} on the response, and
+     * arming the per-group back-off when it does.
+     *
+     * <p>The flag is set when the request is at a version that carries the field
+     * ({@code TopologyDescriptionRequired} arrives at v1), the topology description plugin
+     * is configured, the group has resolved to a topology epoch, that epoch is neither
+     * stored nor permanently failed at the plugin, no back-off is in effect for this
+     * epoch, and the response does not carry a {@code STALE_TOPOLOGY} status (the member
+     * would just be told to catch up first). When the response already carries an error
+     * code we leave it alone.
+     *
+     * <p>The version gate is intentional: a v0 client cannot deserialize the flag, so
+     * arming the back-off for it would accumulate entries that grow exponentially while
+     * the flag itself gets dropped at serialization — wasting heap on a per-group basis
+     * for clients that will never push.
+     */
+    public StreamsGroupHeartbeatResult maybeSetTopologyDescriptionRequired(
+        StreamsGroupHeartbeatResult result,
+        String groupId,
+        int apiVersion
+    ) {
+        if (apiVersion < 1 || plugin.isEmpty()) {
+            return result;
+        }
+        StreamsGroupHeartbeatResponseData response = result.data();
+        if (response.errorCode() != Errors.NONE.code()) {
+            return result;
+        }
+        int currentEpoch = result.currentTopologyEpoch();
+        if (currentEpoch < 0
+            || result.storedDescriptionTopologyEpoch() == currentEpoch
+            || result.failedDescriptionTopologyEpoch() == currentEpoch
+            || responseHasStaleTopology(response)) {
+            return result;
+        }
+        // Atomic check-and-arm: only set the flag if the back-off window is not already
+        // in effect for this epoch, so two concurrent heartbeats for the same group cannot
+        // both arm the back-off and double the window beyond its intended length.
+        if (backoff.armIfNotActive(groupId, currentEpoch)) {
+            response.setTopologyDescriptionRequired(true);
+        }
+        return result;
+    }
+
+    /**
+     * Call {@code plugin.setTopology} and fold the result into a {@link PluginOutcome}.
+     * The returned future never completes exceptionally — the outcome carries the
+     * failure category so the caller can dispatch on it without try/catch on the
+     * future. A synchronous throw from the plugin (which violates the SPI contract) is
+     * mapped to a permanent failure with a generic message rather than forwarding the
+     * raw exception text, and a {@code null} returned future is treated the same way.
+     */
+    public CompletableFuture<PluginOutcome> invokeSetTopology(
+        String groupId,
+        int topologyEpoch,
+        StreamsGroupTopologyDescription description
+    ) {
+        if (plugin.isEmpty()) {
+            return CompletableFuture.completedFuture(
+                PluginOutcome.permanent("Topology description plugin failed."));
+        }
+        final CompletableFuture<Void> pluginFuture;
+        try {
+            pluginFuture = Objects.requireNonNull(
+                plugin.get().setTopology(groupId, topologyEpoch, description));
+        } catch (Exception e) {
+            // A synchronous throw violates the SPI contract — implementations must signal
+            // failures by completing the future exceptionally. Treat it as a permanent
+            // failure with a stable, generic client-visible message so we don't forward
+            // an unbounded or null exception message that could leak plugin internals.
+            return CompletableFuture.completedFuture(
+                PluginOutcome.permanent("Topology description plugin failed."));
+        }
+        return pluginFuture.handle((unused, throwable) -> {
+            if (throwable == null) {
+                return PluginOutcome.success();
+            }
+            // CompletionException / ExecutionException can legally carry a null cause; if a
+            // plugin completes its future with one of those (rare but legal),
+            // maybeUnwrapException returns null. Treat that as a transient failure with a
+            // generic message rather than NPE-ing inside this handle and losing the
+            // transient/permanent classification downstream.
+            Throwable cause = Errors.maybeUnwrapException(throwable);
+            if (cause == null) {
+                return PluginOutcome.transientFailure("Plugin failure (no cause).");
+            }
+            if (cause instanceof StreamsTopologyDescriptionPermanentFailureException) {
+                return PluginOutcome.permanent(cause.getMessage());
+            }
+            return PluginOutcome.transientFailure(cause.getMessage());
+        });
+    }
+
+    /**
+     * Arm or extend the back-off window for a group at the given topology epoch.
+     * Delegates to {@link StreamsGroupTopologyDescriptionBackoff#armOrExtend}.
+     */
+    public void armBackoff(String groupId, int topologyEpoch) {
+        backoff.armOrExtend(groupId, topologyEpoch);
+    }
+
+    /**
+     * Drop the back-off entry for a group at the given topology epoch. Epoch-scoped so a
+     * late post-plugin callback at an old epoch cannot wipe a window a concurrent
+     * heartbeat armed at the advanced epoch. Delegates to
+     * {@link StreamsGroupTopologyDescriptionBackoff#clear}.
+     */
+    public void clearBackoff(String groupId, int topologyEpoch) {
+        backoff.clear(groupId, topologyEpoch);
+    }
+
+    /**
+     * Drop the back-off entry for a group unconditionally. Used by paths that remove the
+     * group entirely (explicit DeleteGroups, periodic cleanup of naturally-expired
+     * groups, post-plugin write failing with GroupIdNotFoundException). Delegates to
+     * {@link StreamsGroupTopologyDescriptionBackoff#clearGroup}.
+     */
+    public void clearBackoffGroup(String groupId) {
+        backoff.clearGroup(groupId);
+    }
+
+    // Visible for testing.
+    StreamsGroupTopologyDescriptionBackoff backoff() {
+        return backoff;
+    }
+
+    private static boolean responseHasStaleTopology(StreamsGroupHeartbeatResponseData response) {
+        if (response.status() == null) {
+            return false;
+        }
+        byte staleCode = Status.STALE_TOPOLOGY.code();
+        return response.status().stream().anyMatch(s -> s.statusCode() == staleCode);
+    }
+
+    /**
+     * Outcome of a {@code plugin.setTopology} call, folded into a value so the caller can
+     * dispatch on {@link Kind} without try/catch on the underlying future.
+     */
+    public record PluginOutcome(Kind kind, String message) {
+
+        public enum Kind { SUCCESS, PERMANENT, TRANSIENT }
+
+        public static PluginOutcome success() {
+            return new PluginOutcome(Kind.SUCCESS, null);
+        }
+
+        public static PluginOutcome permanent(String message) {
+            return new PluginOutcome(Kind.PERMANENT, message);
+        }
+
+        public static PluginOutcome transientFailure(String message) {
+            return new PluginOutcome(Kind.TRANSIENT, message);
+        }
+    }
+}
