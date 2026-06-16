@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.Time;
@@ -203,11 +204,27 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                     Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message()));
             })
             .whenComplete((response, throwable) -> {
-                switch (backoffAction.get()) {
-                    case CLEAR -> backoff.clear(groupId, pushedEpoch);
-                    case ARM -> backoff.armOrExtend(groupId, pushedEpoch);
-                    case NOOP -> { /* pre-plugin failure: don't touch the back-off */ }
+                BackoffAction action = backoffAction.get();
+                if (action == BackoffAction.NOOP) {
+                    // Pre-plugin failure: don't touch the back-off.
+                    return;
                 }
+                if (action == BackoffAction.CLEAR) {
+                    backoff.clear(groupId, pushedEpoch);
+                    return;
+                }
+                // action == ARM: a post-plugin failure (transient plugin error, or a
+                // bookkeeping write that failed after the plugin succeeded). If the failure
+                // is GroupIdNotFoundException — the group was deleted between the plugin
+                // call and the write — the push has already taken effect at the plugin and
+                // there is no live group left to throttle. Drop the orphaned entry instead
+                // of arming a back-off that nobody can ever clear.
+                if (throwable != null
+                    && Errors.maybeUnwrapException(throwable) instanceof GroupIdNotFoundException) {
+                    backoff.clearGroup(groupId);
+                    return;
+                }
+                backoff.armOrExtend(groupId, pushedEpoch);
             });
     }
 

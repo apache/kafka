@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
@@ -319,6 +320,44 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // Pre-plugin failure must leave the back-off untouched. A legitimate heartbeat at
         // the same epoch must still get the flag — otherwise a fenced/unauthorized caller
         // could grief the entire group's re-solicitation until the back-off window expires.
+        assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
+    }
+
+    @Test
+    public void testUpdateGroupDisappearsBetweenPluginSuccessAndWriteDropsBackoffEntry() throws Exception {
+        // KIP-1331 race: the plugin succeeds, then the group is deleted, then the bookkeeping
+        // write for StoredDescriptionTopologyEpoch fails with GroupIdNotFoundException. The
+        // push has already taken effect at the plugin and the group is gone, so the back-off
+        // must be dropped rather than re-armed for a now-orphan group.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-description-validate"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-set-stored-topology-epoch"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.failedFuture(
+            new GroupIdNotFoundException("Group deleted between plugin success and bookkeeping write.")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), response.errorCode());
+        verify(plugin, times(1)).setTopology(eq("foo"), eq(3), any());
+
+        // Back-off must be dropped, not armed: nobody will ever clear it for a deleted group.
+        // A subsequent heartbeat at the same epoch (if the group somehow comes back) must
+        // still get the flag — i.e. the orphan back-off entry is gone.
         assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
     }
 
