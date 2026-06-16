@@ -1074,6 +1074,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             messages.append("Connector configuration is invalid and contains the following ")
                 .append(errors).append(" error(s):");
             for (ConfigInfo configInfo : configInfos.configs()) {
+                if (configInfo == null || configInfo.configValue() == null) {
+                    continue;
+                }
                 for (String msg : configInfo.configValue().errors()) {
                     messages.append('\n').append(msg);
                 }
