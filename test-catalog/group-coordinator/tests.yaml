@@ -231,6 +231,15 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTest:
 - testSyncGroupInvalidGroupId
 - testSyncGroupWhenNotStarted
 - testSyncGroupWithException
+org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTest:
+- testHeartbeatArmSuppressReSolicitCycle
+- testHeartbeatNeverSetsFlagWithoutPlugin
+- testHeartbeatSetsTopologyDescriptionRequiredWhenStoredLags
+- testHeartbeatSkipsFlagOnV0Request
+- testHeartbeatSkipsFlagWhenFailedAtCurrentEpoch
+- testHeartbeatSkipsFlagWhenStaleTopologyStatusPresent
+- testHeartbeatSkipsFlagWhenStoredMatchesCurrent
+- testShutdownClosesPlugin
 org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 - testCleanupGroupMetadataForConsumerGroup
 - testCleanupGroupMetadataForShareGroup
@@ -1279,10 +1288,11 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResultTest:
 - testCollectionsAreImmutable
 - testNullArgumentsRejected
 org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResultTest:
+- testConstructorPreservesEpochs
 - testCreatableTopicsMapIsImmutable
 - testCurrentTopologyEpochIsPartOfEquality
 - testNullDataIsRejected
-- testThreeArgConstructorPreservesTopologyEpoch
+- testStoredAndFailedEpochsArePartOfEquality
 org.apache.kafka.coordinator.group.streams.StreamsGroupMemberTest:
 - testAsStreamsGroupDescribeMember
 - testAsStreamsGroupDescribeWithTargetAssignmentNull
@@ -1341,6 +1351,16 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testValidateOffsetCommitWithOlderEpochValidAssignment
 - testValidateOffsetFetch
 - testValidateTransactionalOffsetCommit
+org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionBackoffTest:
+- testArmIfNotActiveArmsWhenIdle
+- testArmIfNotActiveDoublesAfterExpiredWindowAtSameEpoch
+- testArmIfNotActiveReArmsAfterEpochAdvance
+- testArmIfNotActiveReturnsFalseWhenAlreadyActive
+- testClearRemovesEntry
+- testConsecutiveArmsDoubleTheWindowUpToMax
+- testDifferentEpochResetsTheWindow
+- testFirstArmUsesInitialDelay
+- testIsActiveIsScopedToEpoch
 org.apache.kafka.coordinator.group.streams.StreamsTopologyTest:
 - asStreamsGroupDescribeTopicInfoShouldConvertCorrectly
 - asStreamsGroupDescribeTopologyShouldReturnCorrectStructure
