@@ -107,6 +107,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
         public void reset() {
             lastSentFields.reset();
+            lastTaskOffsetIntervalTs = -1L;
         }
 
         public int endpointInformationEpoch() {
@@ -163,11 +164,15 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                     lastSentFields.assignment = reconciledAssignment;
                 }
 
-                if (assignmentChanged || taskOffsetIntervalPassed() || hasAtLeastOneHotWarmupTask()) {
+                // call both method only once, as they invoke an expensive `supplier`
+                final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
+                final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
+
+                if (assignmentChanged || taskOffsetIntervalPassed() || hasAtLeastOneHotWarmupTask(taskOffsetSum, taskEndOffsetSum)) {
 
                     // TODO: send only if changed this last time
-                    data.setTaskOffsets(convertToList(streamsRebalanceData.taskOffsetSum()));
-                    data.setTaskEndOffsets(convertToList(streamsRebalanceData.taskEndOffsetSum()));
+                    data.setTaskOffsets(convertToList(taskOffsetSum));
+                    data.setTaskEndOffsets(convertToList(taskEndOffsetSum));
 
                     lastTaskOffsetIntervalTs = time.milliseconds();
                 }
@@ -189,10 +194,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return lastTaskOffsetIntervalTs + streamsRebalanceData.taskOffsetIntervalMs() <= time.milliseconds();
         }
 
-        private boolean hasAtLeastOneHotWarmupTask() {
+        private boolean hasAtLeastOneHotWarmupTask(
+            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
+            final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
+        ) {
             final long acceptableRecoveryLag = streamsRebalanceData.acceptableRecoveryLag();
 
-            // -1 means "unknown" (can happen when talking to older brakers)
+            // -1 means "unknown" (can happen when talking to older brokers)
             // we must be conservative and assume that no warmup might be hot already
             //
             // technically, we should never get warmup tasks assigned when talking to older brokers,
@@ -207,10 +215,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             if (warmupTasks.isEmpty()) {
                 return false;
             }
-
-            // call both method only once, as they invoke an expensive `supplier`
-            final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
-            final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
 
             return warmupTasks.stream()
                 .anyMatch(taskId -> {

@@ -881,7 +881,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         //  - assignmentChanged is false
         //  - task.offset.interval.ms did not pass, as we did not advance time
         // the only remaining candidate trigger is hasHotWarmupTask — and with valid acceptableRecoveryLag and low lag
-        // we expect the offest to be sent
+        // we expect the offset to be sent
         final StreamsGroupHeartbeatRequestData second = heartbeatState.buildRequestData();
         assertEquals(900L, second.taskOffsets().get(0).offset());
     }
