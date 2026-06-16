@@ -2169,7 +2169,7 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':storage')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation rootProject.project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     implementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
@@ -2468,7 +2468,7 @@ project(':storage') {
     testImplementation project(':clients')
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation rootProject.project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':storage:storage-api'))
     testImplementation project(':metadata')
     testImplementation project(':test-common:test-common-internal-api')
@@ -2670,7 +2670,7 @@ project(':tools') {
     testImplementation project(':server')
     testImplementation project(':core')
     testImplementation testFixtures(project(':server'))
-    testImplementation project(':core').sourceSets.test.output
+    testImplementation rootProject.project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server-common')
@@ -2678,11 +2678,11 @@ project(':tools') {
     testImplementation project(':connect:api')
     testImplementation project(':connect:runtime')
     testImplementation testFixtures(project(':connect:runtime'))
-    testImplementation project(':storage:storage-api').sourceSets.main.output
+    testImplementation rootProject.project(':storage:storage-api').sourceSets.main.output
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
-    testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':streams:integration-tests').sourceSets.test.output
+    testImplementation rootProject.project(':streams').sourceSets.test.output
+    testImplementation rootProject.project(':streams:integration-tests').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2996,7 +2996,7 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    testImplementation project(':streams').sourceSets.test.output
+    testImplementation rootProject.project(':streams').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':streams:test-utils')
 
@@ -3055,7 +3055,7 @@ project(':streams:integration-tests') {
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':storage')
-    testImplementation project(':streams').sourceSets.test.output
+    testImplementation rootProject.project(':streams').sourceSets.test.output
     testImplementation project(':streams:streams-scala')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
