@@ -259,16 +259,17 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
             @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3")
         }
     )
+    @Timeout(120)
     public void testTransactionalShareAckCommitAcceptWithRemoteShareCoordinator() throws Exception {
         String groupId = "txn-share-remote-commit-accept";
         alterShareAutoOffsetReset(groupId, "earliest");
 
         try (Admin admin = createAdminClient()) {
-            TopicIdPartition topicIdPartition = createTopicIdPartitionWithRemoteShareCoordinator(admin, groupId, "txn-share-remote-commit-topic");
+            TopicIdPartition topicIdPartition = createTopicIdPartitionWithRemoteShareCoordinator(admin, groupId, "txn-share-remote-commit-topic", 0);
             TopicPartition topicPartition = topicIdPartition.topicPartition();
 
             try (Producer<byte[], byte[]> producer = createProducer();
-                 Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-remote-commit-accept-producer");
+                 Producer<byte[], byte[]> transactionalProducer = createRemoteTransactionalProducer("txn-share-remote-commit-accept-producer");
                  ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                      groupId,
                      Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
@@ -309,6 +310,15 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
         ));
     }
 
+    private Producer<byte[], byte[]> createRemoteTransactionalProducer(String transactionalId) {
+        return createProducer(Map.of(
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId,
+            ProducerConfig.MAX_BLOCK_MS_CONFIG, "60000",
+            ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "30000",
+            ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "120000"
+        ));
+    }
+
     private ProducerRecord<byte[], byte[]> record(String value) {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         return new ProducerRecord<>(tp.topic(), tp.partition(), null, bytes, bytes);
@@ -322,9 +332,10 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
     private TopicIdPartition createTopicIdPartitionWithRemoteShareCoordinator(
         Admin admin,
         String groupId,
-        String topicPrefix
+        String topicPrefix,
+        int sourceLeaderId
     ) throws Exception {
-        for (int attempt = 0; attempt < 12; attempt++) {
+        for (int attempt = 0; attempt < 24; attempt++) {
             String topicName = topicPrefix + "-" + attempt;
             Uuid topicId = createTopic(topicName, 1, 3);
             TopicPartition topicPartition = new TopicPartition(topicName, 0);
@@ -338,11 +349,11 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
 
             int sourceLeader = topicPartitionLeader(admin, topicPartition.topic(), topicPartition.partition()).get(0);
             int shareStateLeader = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareStatePartition).get(0);
-            if (sourceLeader != shareStateLeader) {
+            if (sourceLeader == sourceLeaderId && sourceLeader != shareStateLeader) {
                 return new TopicIdPartition(topicId, topicPartition);
             }
         }
-        fail("Could not find source and share-state partitions with different leaders.");
+        fail("Could not find source partition on broker " + sourceLeaderId + " with a remote share-state coordinator.");
         return null;
     }
 
