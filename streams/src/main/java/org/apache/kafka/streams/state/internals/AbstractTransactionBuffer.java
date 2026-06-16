@@ -90,11 +90,14 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
         return snapshotScan(null, null, forward, true);
     }
 
+    /**
+     * @throws IllegalArgumentException if {@code from > to} and {@code forward == true}; or {@code from < to} and {@code forward == false}.
+     */
     @Override
     public ManagedKeyValueIterator<K, byte[]> range(final K from, final K to, final boolean forward, final boolean toInclusive) {
         if (Thread.currentThread() == ownerThread) {
-            final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseIterator(from, to, forward, toInclusive);
             final NavigableMap<K, Optional<byte[]>> stagingView = boundStaging(from, to, toInclusive);
+            final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseIterator(from, to, forward, toInclusive);
             return new StagedMergeIterator<>(stagingView, baseIter, forward);
         }
         return snapshotScan(from, to, forward, toInclusive);
