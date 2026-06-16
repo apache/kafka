@@ -65,26 +65,30 @@ public class StreamsGroupTopologyDescriptionBackoff {
 
     /**
      * Atomic check-and-arm. Returns true if no window was in effect and a new one was
-     * armed, false if a window was already active and nothing changed. Used on the
-     * heartbeat path to fold the "check + arm" pair into a single compute so two
-     * concurrent heartbeats for the same group cannot both arm the back-off, and to
-     * preserve the exponential chain when the previous window has expired without a
-     * push reaching the coordinator (e.g. the client never sent one, or the push was
-     * lost in flight before {@link #armOrExtend} could run).
+     * installed, false if a window was already active and nothing changed. Used on the
+     * heartbeat path so two concurrent heartbeats for the same group cannot both arm
+     * the back-off, and to preserve the exponential chain when the previous window has
+     * expired without a push reaching the coordinator (e.g. the client never sent one,
+     * or the push was lost in flight before {@link #armOrExtend} could run).
      */
     public boolean armIfNotActive(String groupId, int topologyEpoch) {
-        final long now = time.milliseconds();
-        final boolean[] armed = new boolean[]{false};
-        state.compute(groupId, (key, existing) -> {
+        while (true) {
+            final long now = time.milliseconds();
+            Entry existing = state.get(groupId);
             if (existing != null
                 && existing.topologyEpoch() == topologyEpoch
                 && now < existing.nextAttemptMs()) {
-                return existing;
+                return false;
             }
-            armed[0] = true;
-            return computeNextEntry(existing, topologyEpoch, now);
-        });
-        return armed[0];
+            Entry next = computeNextEntry(existing, topologyEpoch, now);
+            boolean installed = existing == null
+                ? state.putIfAbsent(groupId, next) == null
+                : state.replace(groupId, existing, next);
+            if (installed) {
+                return true;
+            }
+            // Lost a race with a concurrent mutation; retry with the fresh state.
+        }
     }
 
     /**
