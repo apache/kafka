@@ -38,6 +38,10 @@ public class TestRecord<K, V> {
     private final V value;
     private final Instant recordTime;
 
+    public boolean equalsIgnorePartition(final TestRecord<? extends K, ? super V> o) {
+        return false;
+    }
+
     /**
      * Creates a record.
      *

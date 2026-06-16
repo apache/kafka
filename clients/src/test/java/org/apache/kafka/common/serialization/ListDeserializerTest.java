@@ -361,7 +361,7 @@ public class ListDeserializerTest {
             (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF // encodes number of null entries == -1
         };
 
-        final ListDeserializer<String> testDeserializer = new ListDeserializer<>(ArrayList.class, new StringDeserializer());
+        final ListDeserializer<Integer> testDeserializer = new ListDeserializer<>(ArrayList.class, new IntegerDeserializer());
 
         final SerializationException exception = assertThrows(
             SerializationException.class,
@@ -380,14 +380,14 @@ public class ListDeserializerTest {
             (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF // encodes number of null entries == 255
         };
 
-        final ListDeserializer<String> testDeserializer = new ListDeserializer<>(ArrayList.class, new StringDeserializer());
+        final ListDeserializer<Integer> testDeserializer = new ListDeserializer<>(ArrayList.class, new IntegerDeserializer());
 
         final SerializationException exception = assertThrows(
             SerializationException.class,
             () -> testDeserializer.deserialize(null, corruptedData)
         );
         assertEquals(
-            "Corrupted byte[]. The number of null list entries cannot be larger than overall number of bytes.",
+            "Corrupted byte[]. The number of null list entries cannot be larger than overall number of elements.",
             exception.getMessage()
         );
     }

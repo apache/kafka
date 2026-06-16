@@ -73,7 +73,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                      final ColumnFamilyOptions columnFamilyOptions) {
         // Check if we're upgrading from RocksDBTimestampedStore or from plain RocksDBStore
         final List<byte[]> existingCFs;
-        try (final Options options = new Options(dbOptions, new ColumnFamilyOptions())) {
+        try (final Options options = new Options(dbOptions, columnFamilyOptions)) {
             existingCFs = RocksDB.listColumnFamilies(options, dbDir.getAbsolutePath());
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error listing column families for store " + name, e);

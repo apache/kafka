@@ -63,7 +63,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.network.Request
 import org.apache.kafka.security.DelegationTokenManager
-import org.apache.kafka.server.{ApiVersionManager, AutoTopicCreationManager, ClientMetricsManager, FetchManager, ProcessRole}
+import org.apache.kafka.server.{ApiVersionManager, AutoTopicCreationManager, ClientMetricsManager, FetchManager, ForwardingManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
@@ -84,6 +84,7 @@ import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 import scala.jdk.javaapi.OptionConverters
 
 /**
@@ -131,14 +132,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def forwardToController(request: Request): Unit = {
-    def responseCallback(responseOpt: Option[AbstractResponse]): Unit = {
-      responseOpt match {
+    def responseCallback(responseOpt: Optional[AbstractResponse]): Unit = {
+      responseOpt.toScala match {
         case Some(response) => requestHelper.sendForwardedResponse(request, response)
         case None => handleInvalidVersionsDuringForwarding(request)
       }
     }
 
-    forwardingManager.forwardRequest(request, responseCallback)
+    forwardingManager.forwardRequest(request, r => responseCallback(r))
   }
 
   private def handleInvalidVersionsDuringForwarding(request: Request): Unit = {
@@ -2204,8 +2205,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val original = request.body(classOf[AlterConfigsRequest])
     val preprocessingResponses = configManager.preprocess(original.data())
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
-    def sendResponse(secondPart: Option[ApiMessage]): Unit = {
-      secondPart match {
+    def sendResponse(secondPart: Optional[ApiMessage]): Unit = {
+      secondPart.toScala match {
         case Some(result: AlterConfigsResponseData) =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new AlterConfigsResponse(ConfigAdminManager.reassembleLegacyResponse(
@@ -2216,7 +2217,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     if (remaining.resources().isEmpty) {
-      sendResponse(Some(new AlterConfigsResponseData()))
+      sendResponse(Optional.of(new AlterConfigsResponseData()))
     } else {
       forwardingManager.forwardRequest(request,
         new AlterConfigsRequest(remaining, request.header.apiVersion()),
@@ -2230,8 +2231,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       (rType, rName) => authHelper.authorize(request.context, ALTER_CONFIGS, rType, rName))
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
 
-    def sendResponse(secondPart: Option[ApiMessage]): Unit = {
-      secondPart match {
+    def sendResponse(secondPart: Optional[ApiMessage]): Unit = {
+      secondPart.toScala match {
         case Some(result: IncrementalAlterConfigsResponseData) =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new IncrementalAlterConfigsResponse(ConfigAdminManager.reassembleIncrementalResponse(
@@ -2243,7 +2244,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (remaining.resources().isEmpty) {
-      sendResponse(Some(new IncrementalAlterConfigsResponseData()))
+      sendResponse(Optional.of(new IncrementalAlterConfigsResponseData()))
     } else {
       forwardingManager.forwardRequest(request,
         new IncrementalAlterConfigsRequest(remaining, request.header.apiVersion()),
