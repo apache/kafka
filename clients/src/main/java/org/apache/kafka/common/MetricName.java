@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Map;
 import java.util.Objects;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.metricName(...).
  * <p>

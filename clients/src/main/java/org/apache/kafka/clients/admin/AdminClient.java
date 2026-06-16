@@ -17,10 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Map;
 import java.util.Properties;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The base class for in-built admin clients.
  *

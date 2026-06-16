@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.TopicPartition;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Class for listening to various states of the restoration process of a StateStore.

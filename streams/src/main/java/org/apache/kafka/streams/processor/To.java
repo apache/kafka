@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.processor;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * This class is used to provide the optional parameters when sending output records to downstream processor
  * using {@link ProcessorContext#forward(Object, Object, To)}.

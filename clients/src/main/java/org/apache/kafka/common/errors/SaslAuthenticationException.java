@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
-import javax.security.sasl.SaslServer;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import javax.security.sasl.SaslServer;
 /**
  * This exception indicates that SASL authentication has failed. The error message
  * in the exception indicates the actual cause of failure.

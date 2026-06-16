@@ -17,10 +17,9 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#updateFeatures(Map, UpdateFeaturesOptions)} call.
  *

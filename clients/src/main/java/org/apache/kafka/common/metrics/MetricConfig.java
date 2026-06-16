@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.metrics;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Configuration values for metrics
  */

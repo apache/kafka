@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 @InterfaceAudience.Public
 public class TransactionListing {
     private final String transactionalId;

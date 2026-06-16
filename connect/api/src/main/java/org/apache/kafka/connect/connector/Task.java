@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.connector;
 
-import java.util.Map;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Map;
 /**
  * <p>
  * Tasks contain the code that actually copies data to/from another system. They receive

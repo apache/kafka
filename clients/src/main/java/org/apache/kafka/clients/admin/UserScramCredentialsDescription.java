@@ -17,10 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.List;
 import java.util.Objects;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Representation of all SASL/SCRAM credentials associated with a user that can be retrieved, or an exception indicating
  * why credentials could not be retrieved.

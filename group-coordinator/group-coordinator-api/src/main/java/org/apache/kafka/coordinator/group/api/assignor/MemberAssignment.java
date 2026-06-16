@@ -17,11 +17,10 @@
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The partition assignment for a consumer group member.
  */

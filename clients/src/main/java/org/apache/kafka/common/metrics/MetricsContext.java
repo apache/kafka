@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.metrics;
 
-import java.util.Map;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Map;
 /**
  * MetricsContext encapsulates additional contextLabels about metrics exposed via a
  * {@link org.apache.kafka.common.metrics.MetricsReporter}

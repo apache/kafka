@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams;
 
-import java.util.Set;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Set;
 /**
  * Metadata of a stream thread.
  */

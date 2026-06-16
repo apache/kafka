@@ -17,12 +17,11 @@
 package org.apache.kafka.common;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.io.PrintStream;
 import java.util.Map;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This interface allows to define Formatters that can be used to parse and format records read by a
  *  Consumer instance for display.

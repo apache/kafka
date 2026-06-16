@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
 
 import javax.security.auth.Subject;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A simple immutable value object class holding customizable SASL extensions.
  *

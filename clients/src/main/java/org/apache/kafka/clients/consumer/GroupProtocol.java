@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.util.Locale;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Locale;
 /**
  * Enum representing the supported consumer group protocols.
  * <ul>

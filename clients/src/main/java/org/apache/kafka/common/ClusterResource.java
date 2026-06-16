@@ -17,9 +17,9 @@
 package org.apache.kafka.common;
 
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * The <code>ClusterResource</code> class encapsulates metadata for a Kafka cluster.
  */

@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.net.InetAddress;
 
 import javax.net.ssl.SSLSession;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 @InterfaceAudience.Public
 public class SslAuthenticationContext implements AuthenticationContext {
     private final SSLSession session;

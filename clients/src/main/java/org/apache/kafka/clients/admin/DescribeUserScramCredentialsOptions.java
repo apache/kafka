@@ -17,9 +17,9 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.List;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.List;
 /**
  * Options for {@link AdminClient#describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
  */

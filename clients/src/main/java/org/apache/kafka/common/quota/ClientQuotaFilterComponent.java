@@ -17,10 +17,10 @@
 
 package org.apache.kafka.common.quota;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 import java.util.Optional;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Describes a component for applying a client quota filter.
  */

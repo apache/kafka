@@ -17,10 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 import java.util.Optional;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This class is used to contain the offset and lag information for a share-partition.
  */

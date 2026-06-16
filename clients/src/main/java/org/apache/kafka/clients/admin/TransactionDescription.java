@@ -17,12 +17,11 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.Set;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 @InterfaceAudience.Public
 public class TransactionDescription {
     private final int coordinatorId;

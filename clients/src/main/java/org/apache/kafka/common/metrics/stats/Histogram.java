@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.Arrays;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Arrays;
 @InterfaceAudience.Public
 public class Histogram {
 

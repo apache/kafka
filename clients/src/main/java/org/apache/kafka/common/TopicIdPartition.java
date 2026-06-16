@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * This represents universally unique identifier with topic id for a topic partition. This makes sure that topics
  * recreated with the same name will always have unique topic identifiers.

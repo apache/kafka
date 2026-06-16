@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 @InterfaceAudience.Public
 public class CloseOptions {
     /**

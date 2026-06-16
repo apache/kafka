@@ -18,10 +18,9 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Thrown when the offset for a set of partitions is invalid (either undefined or out of range),
  * and no reset policy has been configured.

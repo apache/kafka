@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.record;
 
-import java.util.NoSuchElementException;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.NoSuchElementException;
 /**
  * The timestamp type of the records.
  */

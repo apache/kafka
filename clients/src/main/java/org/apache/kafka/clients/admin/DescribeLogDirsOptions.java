@@ -17,9 +17,9 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Collection;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Collection;
 /**
  * Options for {@link Admin#describeLogDirs(Collection)}
  */

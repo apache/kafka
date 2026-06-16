@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.errors;
 
-import java.util.List;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.List;
 @InterfaceAudience.Public
 public class MissingInternalTopicsException extends StreamsException {
 

@@ -19,10 +19,9 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#listGroups()}.
  */

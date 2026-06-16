@@ -17,13 +17,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This class is used to describe the state of the quorum received in DescribeQuorumResponse.
  */

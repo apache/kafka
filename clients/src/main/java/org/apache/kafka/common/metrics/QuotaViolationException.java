@@ -17,7 +17,6 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.KafkaException;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Thrown when a sensor records a value that causes a metric to go outside the bounds configured as its quota

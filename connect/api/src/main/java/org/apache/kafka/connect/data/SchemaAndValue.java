@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.data;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * A composite containing a {@link Schema} and associated value
  */

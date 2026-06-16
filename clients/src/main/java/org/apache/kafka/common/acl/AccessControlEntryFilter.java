@@ -17,9 +17,9 @@
 
 package org.apache.kafka.common.acl;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * Represents a filter which matches access control entries.
  */

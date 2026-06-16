@@ -18,11 +18,10 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.List;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Interface that specifies how an exception when attempting to produce a result to
  * Kafka should be handled.

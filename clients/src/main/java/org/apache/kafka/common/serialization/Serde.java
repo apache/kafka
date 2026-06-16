@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.io.Closeable;
 import java.util.Map;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The interface for wrapping a serializer and deserializer for the given data type.
  *

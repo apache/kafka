@@ -21,15 +21,13 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
-
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Convenience tool for multi-cluster environments. Wraps {@link MirrorClient}
  * <p>

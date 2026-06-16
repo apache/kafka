@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Arrays;
 import java.util.Objects;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This is used to describe per-partition state in the MetadataResponse.
  */

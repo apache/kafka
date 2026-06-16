@@ -17,11 +17,11 @@
 
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 
 import javax.security.auth.callback.Callback;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Optional callback used for SASL mechanisms if any extensions need to be set
  * in the SASL exchange.

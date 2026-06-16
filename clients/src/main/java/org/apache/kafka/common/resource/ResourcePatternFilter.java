@@ -17,9 +17,10 @@
 
 package org.apache.kafka.common.resource;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 
-import org.apache.kafka.common.annotation.InterfaceAudience;
 import static org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE;
 
 /**

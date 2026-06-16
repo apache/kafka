@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.health;
 
-import java.util.Locale;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Locale;
 /**
  * Enum definition that identifies the type of the connector.
  */

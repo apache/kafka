@@ -18,13 +18,12 @@ package org.apache.kafka.tools.api;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.io.InputStream;
 import java.util.Iterator;
 import java.util.Map;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Typical implementations of this interface convert data from an `InputStream` received via `readRecords` into a
  * iterator of `ProducerRecord` instance. Note that implementations must have a public nullary constructor.

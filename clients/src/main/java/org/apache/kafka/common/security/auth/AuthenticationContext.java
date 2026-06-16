@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.common.security.auth;
 
-import java.net.InetAddress;
-
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.net.InetAddress;
 /**
  * An object representing contextual information from the authentication session. See
  * {@link PlaintextAuthenticationContext}, {@link SaslAuthenticationContext}

@@ -18,13 +18,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The result of the {@link Admin#alterUserScramCredentials(List)} call.
  */

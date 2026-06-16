@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.security.scram;
 
-import javax.security.auth.callback.Callback;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import javax.security.auth.callback.Callback;
 /**
  * Callback used for SCRAM mechanisms.
  */

@@ -17,10 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.List;
 import java.util.Map;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Describes new partitions for a particular topic in a call to {@link Admin#createPartitions(Map)}.
  */

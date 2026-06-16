@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A template for a MetricName. It contains a name, group, and description, as
  * well as all the tags that will be used to create the mBean name. Tag values

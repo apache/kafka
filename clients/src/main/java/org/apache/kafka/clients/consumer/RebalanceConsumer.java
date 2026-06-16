@@ -20,6 +20,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -27,8 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A restricted view of a {@link Consumer} passed to {@link ConsumerRebalanceListener} callback
  * methods during a partition rebalance. This interface provides compile-time enforcement of safe

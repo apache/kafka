@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.io.Serializable;
 import java.util.Objects;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A topic name and partition number
  */

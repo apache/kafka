@@ -17,10 +17,10 @@
 
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.List;
 import java.util.Locale;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Describes whether the server should require or request client authentication.
  */

@@ -17,9 +17,9 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * A request to alter a user's SASL/SCRAM credentials.
  *

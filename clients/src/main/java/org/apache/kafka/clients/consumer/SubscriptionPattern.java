@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * Represents a regular expression compatible with Google RE2/J, used to subscribe to topics.
  * This just keeps the String representation of the pattern, and all validations to ensure

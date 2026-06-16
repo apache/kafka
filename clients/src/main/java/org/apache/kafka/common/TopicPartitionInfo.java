@@ -17,12 +17,12 @@
 
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A class containing leadership, replicas and ISR information for a topic partition.
  */

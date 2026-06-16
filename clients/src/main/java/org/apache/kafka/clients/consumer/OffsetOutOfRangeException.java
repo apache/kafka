@@ -17,11 +17,10 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * No reset policy has been defined, and the offsets for these partitions are either larger or smaller
  * than the range of offsets the server has for the given partition.

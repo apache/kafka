@@ -19,10 +19,9 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A plugin interface that allows you to intercept (and possibly mutate) records received by the consumer. A primary use-case
  * is for third-party components to hook into the consumer applications for custom monitoring, logging, etc.

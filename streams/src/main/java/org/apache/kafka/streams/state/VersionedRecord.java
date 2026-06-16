@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 import java.util.Optional;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Combines a value (from a key-value record) with a timestamp, for use as the return type
  * from {@link VersionedKeyValueStore#get(Object, long)} and related methods.

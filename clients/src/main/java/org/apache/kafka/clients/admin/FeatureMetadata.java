@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.apache.kafka.common.annotation.InterfaceAudience;
 import static java.util.stream.Collectors.joining;
 
 /**

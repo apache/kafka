@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.HashSet;
 import java.util.Set;
-
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The client has attempted to perform an operation on an invalid topic.
  * For example the topic name is too long, contains invalid characters etc.

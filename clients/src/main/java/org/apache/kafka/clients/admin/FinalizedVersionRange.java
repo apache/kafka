@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * Represents a range of version levels supported by every broker in a cluster for some feature.
  */

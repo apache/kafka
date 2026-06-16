@@ -17,10 +17,9 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 @InterfaceAudience.Public
 public class AbortTransactionSpec {
     private final TopicPartition topicPartition;

@@ -17,9 +17,9 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.util.Map;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Map;
 /**
  * Options for {@link Admin#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)}.
  */

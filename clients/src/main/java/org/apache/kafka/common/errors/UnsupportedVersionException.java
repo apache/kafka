@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
-import java.util.Map;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Map;
 /**
  * Indicates that a request API or version needed by the client is not supported by the broker. This is
  * typically a fatal error as Kafka clients will downgrade request versions as needed except in cases where

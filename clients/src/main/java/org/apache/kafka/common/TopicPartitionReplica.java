@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.io.Serializable;
 import java.util.Objects;
-
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The topic name, partition number and the brokerId of the replica
  */

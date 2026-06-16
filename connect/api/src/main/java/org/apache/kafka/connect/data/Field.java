@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.data;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * <p>
  *     A field in a {@link Struct}, consisting of a field name, index, and {@link Schema} for the field value.

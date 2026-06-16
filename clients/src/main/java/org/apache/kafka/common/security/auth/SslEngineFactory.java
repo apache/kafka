@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.security.KeyStore;
@@ -24,8 +25,6 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.net.ssl.SSLEngine;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Plugin interface for allowing creation of <code>SSLEngine</code> object in a custom way.
  * For example, you can use this to customize loading your key material and trust material needed for <code>SSLContext</code>.

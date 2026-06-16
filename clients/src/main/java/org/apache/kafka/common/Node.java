@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * Information about a Kafka node
  */

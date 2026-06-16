@@ -17,11 +17,10 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Optional;
 import java.util.Set;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This is a simple container class used during the assignment process to distinguish
  * TopicPartitions type. Since the assignment logic can depend on the type of topic we're

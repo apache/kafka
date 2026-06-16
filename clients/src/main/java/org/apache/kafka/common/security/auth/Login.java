@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Map;
 
 import javax.security.auth.Subject;
 import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Login interface for authentication.
  */

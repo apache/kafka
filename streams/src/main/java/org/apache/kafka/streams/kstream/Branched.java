@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * The {@code Branched} class is used to define the optional parameters when building branches with
  * {@link BranchedKStream}.

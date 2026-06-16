@@ -17,13 +17,13 @@
 
 package org.apache.kafka.common.resource;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Resource pattern type.
  */

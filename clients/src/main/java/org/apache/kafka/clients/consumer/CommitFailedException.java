@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * This exception is raised when an offset commit with {@link KafkaConsumer#commitSync()} fails

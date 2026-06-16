@@ -17,12 +17,11 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for controlling the consumer close behavior.
  * <p>

@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 import java.util.Objects;
 import java.util.OptionalInt;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Options for {@link Admin#describeProducers(Collection)}.
  */

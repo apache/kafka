@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparato
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,8 +39,6 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * <p>The range assignor works on a per-topic basis. For each topic, we lay out the available partitions in numeric order
  * and the consumers in lexicographic order. We then divide the number of partitions by the total number of

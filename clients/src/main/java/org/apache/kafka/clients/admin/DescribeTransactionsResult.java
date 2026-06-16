@@ -18,13 +18,12 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 @InterfaceAudience.Public
 public class DescribeTransactionsResult {
     private final Map<CoordinatorKey, KafkaFuture<TransactionDescription>> futures;

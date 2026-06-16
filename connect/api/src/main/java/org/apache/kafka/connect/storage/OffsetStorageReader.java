@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Collection;
 import java.util.Map;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * <p>
  * OffsetStorageReader provides access to the offset storage used by sources. This can be used by

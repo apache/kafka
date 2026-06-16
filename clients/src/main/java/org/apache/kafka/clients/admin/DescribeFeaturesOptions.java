@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.OptionalInt;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.OptionalInt;
 /**
  * Options for {@link AdminClient#describeFeatures(DescribeFeaturesOptions)}.
  */

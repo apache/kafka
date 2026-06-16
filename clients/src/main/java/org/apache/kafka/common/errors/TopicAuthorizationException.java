@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
-import java.util.Set;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Set;
 @InterfaceAudience.Public
 public class TopicAuthorizationException extends AuthorizationException {
     private final Set<String> unauthorizedTopics;

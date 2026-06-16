@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.Objects;
 import java.util.Optional;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A container class for offset and timestamp.
  */

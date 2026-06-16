@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.security.auth;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.net.InetAddress;
 import java.util.Optional;
 
 import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 @InterfaceAudience.Public
 public class SaslAuthenticationContext implements AuthenticationContext {
     private final SaslServer server;

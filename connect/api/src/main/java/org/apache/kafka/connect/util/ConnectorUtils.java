@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.ArrayList;
 import java.util.List;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Utilities that connector implementations might find useful. Contains common building blocks
  * for writing connectors.

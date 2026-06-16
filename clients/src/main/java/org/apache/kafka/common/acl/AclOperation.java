@@ -17,10 +17,10 @@
 
 package org.apache.kafka.common.acl;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.util.HashMap;
 import java.util.Locale;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Represents an operation which an ACL grants or denies permission to perform.
  *

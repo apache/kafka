@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,8 +26,6 @@ import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * It describes the metadata about a topic partition's remote log segment in the remote storage. This is uniquely
  * represented with {@link RemoteLogSegmentId}.

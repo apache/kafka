@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.io.Closeable;
 import java.util.Iterator;
-
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * Iterator interface of {@link VersionedRecord VersionedRecord<V>}.
  * <p>

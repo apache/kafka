@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.tools.api;
 
-import java.nio.ByteBuffer;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.nio.ByteBuffer;
 /**
  * The integer decoder translates bytes into integers.
  */

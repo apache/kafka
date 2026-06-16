@@ -17,9 +17,9 @@
 
 package org.apache.kafka.connect.health;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * Describes the state, IDs, and any errors of a connector task.
  */

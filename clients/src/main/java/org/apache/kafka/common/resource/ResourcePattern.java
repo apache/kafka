@@ -17,9 +17,9 @@
 
 package org.apache.kafka.common.resource;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
+import java.util.Objects;
 /**
  * Represents a pattern that is used by ACLs to match zero or more
  * {@link org.apache.kafka.common.resource.Resource Resources}.

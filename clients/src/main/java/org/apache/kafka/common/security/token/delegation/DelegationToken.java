@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.security.token.delegation;
 
+import org.apache.kafka.common.annotation.InterfaceAudience;
+
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
-
-import org.apache.kafka.common.annotation.InterfaceAudience;
 /**
  * A class representing a delegation token.
  *
