@@ -279,7 +279,11 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             if (throwable == null) {
                 return PluginOutcome.success();
             }
+
             Throwable cause = Errors.maybeUnwrapException(throwable);
+            if (cause == null) {
+                return PluginOutcome.transientFailure("Plugin failure (no cause).");
+            }
             if (cause instanceof StreamsTopologyDescriptionPermanentFailureException) {
                 return PluginOutcome.permanent(cause.getMessage());
             }

@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
@@ -256,6 +257,41 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
         // Back-off must be armed on transient failure: a subsequent heartbeat at the same
         // epoch is suppressed rather than re-soliciting immediately.
+        assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
+    }
+
+    @Test
+    public void testUpdatePluginFutureWithNullCauseIsTreatedAsTransient() throws Exception {
+        // CompletionException / ExecutionException can legally carry a null cause. If a
+        // plugin completes its future with one of those (rare but legal), the handle()
+        // callback must not NPE on cause.getMessage() — that would lose the
+        // transient/permanent classification and surface UNKNOWN_SERVER_ERROR. The null
+        // cause is treated as a transient failure with a generic message.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.failedFuture(new CompletionException(null)));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-description-validate"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        // Treated as transient: STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED rather than
+        // UNKNOWN_SERVER_ERROR; no metadata record written; back-off armed.
+        assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code(), response.errorCode());
+        assertNotNull(response.errorMessage());
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("streams-group-set-stored-topology-epoch"), any(), any());
+        verify(runtime, never()).scheduleWriteOperation(
+            eq("streams-group-set-failed-topology-epoch"), any(), any());
         assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
     }
 
