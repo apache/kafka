@@ -19,9 +19,11 @@ package org.apache.kafka.server.policy;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * <p>An interface for enforcing a policy on alter configs requests.
@@ -42,6 +44,7 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
         private final ConfigResource resource;
         private final Map<String, String> configs;
+        private final KafkaPrincipal principal;
 
         /**
          * Create an instance of this class with the provided parameters.
@@ -49,8 +52,23 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
          * This constructor is public to make testing of <code>AlterConfigPolicy</code> implementations easier.
          */
         public RequestMetadata(ConfigResource resource, Map<String, String> configs) {
+            this(resource, configs, null);
+        }
+
+        /**
+         * Create an instance of this class with the provided parameters, including the principal that initiated the
+         * request.
+         *
+         * This constructor is public to make testing of <code>AlterConfigPolicy</code> implementations easier.
+         *
+         * @param resource the resource whose configs are being altered.
+         * @param configs the configs in the request.
+         * @param principal the authenticated principal that initiated the request, or null if not available.
+         */
+        public RequestMetadata(ConfigResource resource, Map<String, String> configs, KafkaPrincipal principal) {
             this.resource = resource;
             this.configs = configs;
+            this.principal = principal;
         }
 
         /**
@@ -64,6 +82,16 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
             return resource;
         }
 
+        /**
+         * Return the authenticated principal that initiated the request, if available. This may be empty when the
+         * metadata is constructed without a principal (for example, in tests or via the legacy constructor).
+         */
+        public Optional<KafkaPrincipal> principal() {
+            return Optional.ofNullable(principal);
+        }
+
+        // The principal is intentionally excluded from equals/hashCode: it is request-scoped metadata about who
+        // initiated the request, not part of the identity of the requested config change.
         @Override
         public int hashCode() {
             return Objects.hash(resource, configs);
@@ -80,7 +108,8 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
         @Override
         public String toString() {
             return "AlterConfigPolicy.RequestMetadata(resource=" + resource +
-                    ", configs=" + configs + ")";
+                    ", configs=" + configs +
+                    ", principal=" + principal + ")";
         }
     }
 

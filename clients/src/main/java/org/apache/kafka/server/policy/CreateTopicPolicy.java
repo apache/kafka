@@ -18,11 +18,13 @@ package org.apache.kafka.server.policy;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * <p>An interface for enforcing a policy on create topics requests.
@@ -45,6 +47,7 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
         private final Short replicationFactor;
         private final Map<Integer, List<Integer>> replicasAssignments;
         private final Map<String, String> configs;
+        private final KafkaPrincipal principal;
 
         /**
          * Create an instance of this class with the provided parameters.
@@ -61,11 +64,33 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
          */
         public RequestMetadata(String topic, Integer numPartitions, Short replicationFactor,
                         Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs) {
+            this(topic, numPartitions, replicationFactor, replicasAssignments, configs, null);
+        }
+
+        /**
+         * Create an instance of this class with the provided parameters, including the principal that initiated the
+         * request.
+         *
+         * This constructor is public to make testing of <code>CreateTopicPolicy</code> implementations easier.
+         *
+         * @param topic the name of the topic to create.
+         * @param numPartitions the number of partitions to create or null if replicasAssignments is set.
+         * @param replicationFactor the replication factor for the topic or null if replicaAssignments is set.
+         * @param replicasAssignments replica assignments or null if numPartitions and replicationFactor is set. The
+         *                            assignment is a map from partition id to replica (broker) ids.
+         * @param configs topic configs for the topic to be created, not including broker defaults. Broker configs are
+         *                passed via the {@code configure()} method of the policy implementation.
+         * @param principal the authenticated principal that initiated the request, or null if not available.
+         */
+        public RequestMetadata(String topic, Integer numPartitions, Short replicationFactor,
+                        Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs,
+                        KafkaPrincipal principal) {
             this.topic = topic;
             this.numPartitions = numPartitions;
             this.replicationFactor = replicationFactor;
             this.replicasAssignments = replicasAssignments == null ? null : Collections.unmodifiableMap(replicasAssignments);
             this.configs = Collections.unmodifiableMap(configs);
+            this.principal = principal;
         }
 
         /**
@@ -105,6 +130,16 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
             return configs;
         }
 
+        /**
+         * Return the authenticated principal that initiated the request, if available. This may be empty when the
+         * metadata is constructed without a principal (for example, in tests or via the legacy constructor).
+         */
+        public Optional<KafkaPrincipal> principal() {
+            return Optional.ofNullable(principal);
+        }
+
+        // The principal is intentionally excluded from equals/hashCode: it is request-scoped metadata about who
+        // initiated the request, not part of the identity of the requested topic.
         @Override
         public int hashCode() {
             return Objects.hash(topic, numPartitions, replicationFactor,
@@ -129,7 +164,8 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
                     ", numPartitions=" + numPartitions +
                     ", replicationFactor=" + replicationFactor +
                     ", replicasAssignments=" + replicasAssignments +
-                    ", configs=" + configs + ")";
+                    ", configs=" + configs +
+                    ", principal=" + principal + ")";
         }
     }
 
