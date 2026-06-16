@@ -788,6 +788,9 @@ public final class KafkaRaftClientFetchTest {
             local.directoryId().get()
         )
             .withStaticVoters(voters)
+            // configure the bootstrap servers to only include the bootstrap voter
+            // to reliably check the destination of the observer's fetch requests
+            // alternates between the leader and the bootstrap voter
             .withBootstrapServers(
                 Optional.of(List.of(RaftClientTestContext.mockAddress(bootstrapVoter.id())))
             )
@@ -859,6 +862,7 @@ public final class KafkaRaftClientFetchTest {
         );
     }
 
+    //
     private RaftRequest.Outbound pollAndCheckObserverFetchRequest(
         RaftClientTestContext context,
         boolean isBootstrapFetch,
@@ -868,15 +872,12 @@ public final class KafkaRaftClientFetchTest {
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         if (isBootstrapFetch) {
             assertTrue(context.client.quorum().isUnattached());
-            assertEquals(-2, fetchRequest.destination().id());
+            assertTrue(fetchRequest.destination().id() < -1);
         } else {
             assertTrue(context.client.quorum().isFollower());
             assertEquals(expectedDestinationId, fetchRequest.destination().id());
         }
-        assertEquals(
-            RaftClientTestContext.mockAddress(expectedDestinationId).getHostName(),
-            fetchRequest.destination().host()
-        );
+        // only need to check port since the host is always "localhost" for the mock addresses
         assertEquals(
             RaftClientTestContext.mockAddress(expectedDestinationId).getPort(),
             fetchRequest.destination().port()

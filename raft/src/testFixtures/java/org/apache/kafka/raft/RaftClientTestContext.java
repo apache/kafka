@@ -998,13 +998,8 @@ public final class RaftClientTestContext {
         int leaderId,
         boolean expireUpdateVoterSetTimer
     ) throws Exception {
-        final var state = client.quorum().followerStateOrThrow();
         for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD; i++) {
-            long sleepMs = Math.min(
-                state.remainingFetchTimeMs(time.milliseconds()) - 1,
-                state.remainingUpdateVoterSetTimeMs(time.milliseconds()) - 1
-            );
-            time.sleep(Math.max(0, sleepMs));
+            time.sleep(fetchTimeoutMs - 1);
             pollUntilRequest();
             final var fetchRequest = assertSentFetchRequest();
             assertFetchRequestData(
@@ -1030,8 +1025,7 @@ public final class RaftClientTestContext {
             client.poll();
         }
         if (expireUpdateVoterSetTimer) {
-            long remaining = state.remainingUpdateVoterSetTimeMs(time.milliseconds());
-            time.sleep(remaining + 1);
+            time.sleep(fetchTimeoutMs - 1);
         }
     }
 

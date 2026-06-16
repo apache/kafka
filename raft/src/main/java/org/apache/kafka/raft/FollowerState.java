@@ -106,11 +106,6 @@ public class FollowerState implements EpochState {
         return fetchTimer.remainingMs();
     }
 
-    public long remainingUpdateVoterSetTimeMs(long currentTimeMs) {
-        updateVoterSetPeriodTimer.update(currentTimeMs);
-        return updateVoterSetPeriodTimer.remainingMs();
-    }
-
     public int leaderId() {
         return leaderId;
     }
