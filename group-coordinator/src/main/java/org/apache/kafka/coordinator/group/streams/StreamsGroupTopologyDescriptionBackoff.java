@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,22 +25,31 @@ import java.util.concurrent.ConcurrentHashMap;
  * In-memory per-group back-off that throttles broker re-solicitation of a topology
  * description push. An entry is armed when the broker decides to set
  * {@code TopologyDescriptionRequired=true} on a heartbeat or after a transient plugin
- * failure; consecutive arms at the same topology epoch double the window from
- * {@value #INITIAL_DELAY_MS} ms up to {@value #MAX_DELAY_MS} ms. Successful pushes,
- * permanent plugin failures, and topology-epoch advances clear the entry.
+ * failure; consecutive arms at the same topology epoch advance the attempt count and
+ * delegate to {@link ExponentialBackoff} for the next delay . Successful pushes, permanent plugin failures,
+ * and topology-epoch advances clear the entry.
  */
 public class StreamsGroupTopologyDescriptionBackoff {
 
     static final long INITIAL_DELAY_MS = 30_000L;
     static final long MAX_DELAY_MS = 3_600_000L;
+    static final int MULTIPLIER = 2;
+    static final double JITTER = 0.2;
 
     private final Time time;
+    private final ExponentialBackoff exponentialBackoff;
     private final ConcurrentHashMap<String, Entry> state = new ConcurrentHashMap<>();
 
-    record Entry(int topologyEpoch, long currentDelayMs, long nextAttemptMs) { }
+    record Entry(int topologyEpoch, int attempts, long nextAttemptMs) { }
 
     public StreamsGroupTopologyDescriptionBackoff(Time time) {
+        this(time, new ExponentialBackoff(INITIAL_DELAY_MS, MULTIPLIER, MAX_DELAY_MS, JITTER));
+    }
+
+    // Visible for testing
+    StreamsGroupTopologyDescriptionBackoff(Time time, ExponentialBackoff exponentialBackoff) {
         this.time = time;
+        this.exponentialBackoff = exponentialBackoff;
     }
 
     /**
@@ -72,14 +82,7 @@ public class StreamsGroupTopologyDescriptionBackoff {
                 return existing;
             }
             armed[0] = true;
-            // Re-arm: continue the exponential chain at the same epoch (the previous
-            // window expired without a push completing); reset to INITIAL_DELAY_MS on
-            // an epoch advance, which implicitly drops the prior history.
-            if (existing != null && existing.topologyEpoch() == topologyEpoch) {
-                long nextDelay = Math.min(existing.currentDelayMs() * 2, MAX_DELAY_MS);
-                return new Entry(topologyEpoch, nextDelay, now + nextDelay);
-            }
-            return new Entry(topologyEpoch, INITIAL_DELAY_MS, now + INITIAL_DELAY_MS);
+            return computeNextEntry(existing, topologyEpoch, now);
         });
         return armed[0];
     }
@@ -90,9 +93,9 @@ public class StreamsGroupTopologyDescriptionBackoff {
      * <p>Epoch-aware: if the stored entry is for a newer topology epoch than {@code
      * topologyEpoch} (a concurrent heartbeat already armed for the advanced epoch while a
      * late post-plugin callback finishes at the old epoch), the call is a no-op so we do
-     * not overwrite the newer window. At the same epoch the window doubles up to {@link
-     * #MAX_DELAY_MS}; at a stale-or-absent entry we install a fresh {@link #INITIAL_DELAY_MS}
-     * window.
+     * not overwrite the newer window. At the same epoch the attempt count advances and
+     * the next delay is drawn from {@link ExponentialBackoff}; at a stale-or-absent entry
+     * we start a fresh chain at {@code attempts=0}.
      */
     public void armOrExtend(String groupId, int topologyEpoch) {
         final long now = time.milliseconds();
@@ -100,11 +103,7 @@ public class StreamsGroupTopologyDescriptionBackoff {
             if (existing != null && existing.topologyEpoch() > topologyEpoch) {
                 return existing;
             }
-            if (existing == null || existing.topologyEpoch() != topologyEpoch) {
-                return new Entry(topologyEpoch, INITIAL_DELAY_MS, now + INITIAL_DELAY_MS);
-            }
-            long nextDelay = Math.min(existing.currentDelayMs() * 2, MAX_DELAY_MS);
-            return new Entry(topologyEpoch, nextDelay, now + nextDelay);
+            return computeNextEntry(existing, topologyEpoch, now);
         });
     }
 
@@ -135,5 +134,21 @@ public class StreamsGroupTopologyDescriptionBackoff {
     // Visible for testing.
     Entry entry(String groupId) {
         return state.get(groupId);
+    }
+
+    /**
+     * Build the next entry for an arm: same-epoch arms advance the attempt count to
+     * continue the exponential chain; a different (or absent) epoch starts fresh at
+     * {@code attempts=0}. The actual delay is drawn from {@link ExponentialBackoff} so
+     * the multiplier / max / jitter are configured in one place rather than hand-rolled
+     * twice.
+     */
+    private Entry computeNextEntry(Entry existing, int topologyEpoch, long now) {
+        int nextAttempts =
+            (existing != null && existing.topologyEpoch() == topologyEpoch)
+                ? existing.attempts() + 1
+                : 0;
+        long delay = exponentialBackoff.backoff(nextAttempts);
+        return new Entry(topologyEpoch, nextAttempts, now + delay);
     }
 }
