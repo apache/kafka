@@ -63,7 +63,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.network.Request
 import org.apache.kafka.security.DelegationTokenManager
-import org.apache.kafka.server.{ApiVersionManager, AutoTopicCreationManager, ClientMetricsManager, FetchManager, ProcessRole}
+import org.apache.kafka.server.{ApiVersionManager, AutoTopicCreationManager, ClientMetricsManager, FetchManager, ForwardingManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
@@ -84,6 +84,7 @@ import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 import scala.jdk.javaapi.OptionConverters
 
 /**
@@ -132,14 +133,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def forwardToController(request: Request): Unit = {
-    def responseCallback(responseOpt: Option[AbstractResponse]): Unit = {
-      responseOpt match {
+    def responseCallback(responseOpt: Optional[AbstractResponse]): Unit = {
+      responseOpt.toScala match {
         case Some(response) => requestHelper.sendForwardedResponse(request, response)
         case None => handleInvalidVersionsDuringForwarding(request)
       }
     }
 
-    forwardingManager.forwardRequest(request, responseCallback)
+    forwardingManager.forwardRequest(request, r => responseCallback(r))
   }
 
   private def handleInvalidVersionsDuringForwarding(request: Request): Unit = {
@@ -250,6 +251,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS => handleDeleteShareGroupOffsetsRequest(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_DESCRIBE => handleStreamsGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsGroupHeartbeat(request).exceptionally(handleError)
+        case ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE => handleStreamsGroupTopologyDescriptionUpdate(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -525,7 +527,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendNoOpResponseExemptThrottle(request)
         }
       } else {
-        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs, nodeEndpoints.values.toList.asJava), None)
+        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs, nodeEndpoints.values.toList.asJava))
       }
     }
 
@@ -726,7 +728,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         recordBytesOutMetric(fetchResponse)
         // Send the response immediately.
-        requestChannel.sendResponse(request, fetchResponse, None)
+        requestChannel.sendResponse(request, fetchResponse)
       }
     }
 
@@ -1534,10 +1536,22 @@ class KafkaApis(val requestChannel: RequestChannel,
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       } else if (!apiVersionRequest.isValid) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
+      } else if (clusterIdOrNodeIdIsInvalid(apiVersionRequest)) {
+        apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.REBOOTSTRAP_REQUIRED.exception)
       } else {
         apiVersionManager.apiVersionResponse(requestThrottleMs, request.header.apiVersion() < 4)
       }
     }
+
+    // KIP-1242 checks the cluster ID and node ID in the request if provided to ensure the
+    // client is connecting to the correct broker. If both are specified, they must match
+    // the expected values for this broker.
+    def clusterIdOrNodeIdIsInvalid(apiVersionRequest: ApiVersionsRequest): Boolean = {
+      apiVersionRequest.version >= 5 &&
+        apiVersionRequest.data.clusterId != null &&
+        (apiVersionRequest.data.clusterId != clusterId || apiVersionRequest.data.nodeId != brokerId)
+    }
+
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
   }
 
@@ -1865,7 +1879,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (controlRecords.nonEmpty) {
           replicaManager.appendRecords(
             timeout = config.requestTimeoutMs.toLong,
-            requiredAcks = -1,
+            requiredAcks = TransactionCoordinator.EnforcedRequiredAcks,
             internalTopicsAllowed = true,
             origin = AppendOrigin.COORDINATOR,
             entriesPerPartition = controlRecords,
@@ -2221,8 +2235,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val original = request.body(classOf[AlterConfigsRequest])
     val preprocessingResponses = configManager.preprocess(original.data())
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
-    def sendResponse(secondPart: Option[ApiMessage]): Unit = {
-      secondPart match {
+    def sendResponse(secondPart: Optional[ApiMessage]): Unit = {
+      secondPart.toScala match {
         case Some(result: AlterConfigsResponseData) =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new AlterConfigsResponse(ConfigAdminManager.reassembleLegacyResponse(
@@ -2233,7 +2247,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     if (remaining.resources().isEmpty) {
-      sendResponse(Some(new AlterConfigsResponseData()))
+      sendResponse(Optional.of(new AlterConfigsResponseData()))
     } else {
       forwardingManager.forwardRequest(request,
         new AlterConfigsRequest(remaining, request.header.apiVersion()),
@@ -2247,8 +2261,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       (rType, rName) => authHelper.authorize(request.context, ALTER_CONFIGS, rType, rName))
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
 
-    def sendResponse(secondPart: Option[ApiMessage]): Unit = {
-      secondPart match {
+    def sendResponse(secondPart: Optional[ApiMessage]): Unit = {
+      secondPart.toScala match {
         case Some(result: IncrementalAlterConfigsResponseData) =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new IncrementalAlterConfigsResponse(ConfigAdminManager.reassembleIncrementalResponse(
@@ -2260,7 +2274,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (remaining.resources().isEmpty) {
-      sendResponse(Some(new IncrementalAlterConfigsResponseData()))
+      sendResponse(Optional.of(new IncrementalAlterConfigsResponseData()))
     } else {
       forwardingManager.forwardRequest(request,
         new IncrementalAlterConfigsRequest(remaining, request.header.apiVersion()),
@@ -2927,6 +2941,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  // Stub handler for KIP-1331. The full handler lands in a later sub-task; until then this
+  // responds with UNSUPPORTED_VERSION so callers fail loud rather than hit the IllegalStateException
+  // default branch in handle().
+  def handleStreamsGroupTopologyDescriptionUpdate(request: Request): CompletableFuture[Unit] = {
+    val updateRequest = request.body(classOf[StreamsGroupTopologyDescriptionUpdateRequest])
+    requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
   def handleStreamsGroupDescribe(request: Request): CompletableFuture[Unit] = {
     val streamsGroupDescribeRequest = request.body(classOf[StreamsGroupDescribeRequest])
     val includeAuthorizedOperations = streamsGroupDescribeRequest.data.includeAuthorizedOperations
@@ -3463,7 +3486,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
       } else {
-        requestChannel.sendResponse(request, result, None)
+        requestChannel.sendResponse(request, result)
       }
     }
   }

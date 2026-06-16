@@ -47,13 +47,13 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client and Consumer.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + NL +
         "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " +
-        "Additionally, the --export option is used to export the results to a CSV format." + NL +
+        "Additionally, the --export option is used to export the offsets in CSV format." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
         "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +
         "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'.";
     private static final String DRY_RUN_DOC = "Only show results without executing changes on Consumer Groups. Supported operations: reset-offsets.";
     private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
-    private static final String EXPORT_DOC = "Export operation execution to a CSV file. Supported operations: reset-offsets.";
+    private static final String EXPORT_DOC = "Export offset information in CSV format. Supported operations: reset-offsets.";
     private static final String RESET_TO_OFFSET_DOC = "Reset offsets to a specific offset.";
     private static final String RESET_FROM_FILE_DOC = "Reset offsets to values defined in CSV file.";
     private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'";

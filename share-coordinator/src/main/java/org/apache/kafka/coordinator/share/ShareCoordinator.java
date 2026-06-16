@@ -34,8 +34,8 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
+import java.util.Map;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntSupplier;
@@ -50,11 +50,11 @@ public interface ShareCoordinator {
     int partitionFor(SharePartitionKey key);
 
     /**
-     * Return the configuration properties of the share-group state topic.
+     * Return the configuration of the share-group state topic.
      *
-     * @return Properties of the share-group state topic.
+     * @return The configuration of the share-group state topic.
      */
-    Properties shareGroupStateTopicConfigs();
+    Map<String, String> shareGroupStateTopicConfigs();
 
     /**
      * Start the share coordinator

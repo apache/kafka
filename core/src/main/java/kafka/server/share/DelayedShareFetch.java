@@ -17,7 +17,6 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
@@ -27,11 +26,12 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperation;
+import org.apache.kafka.server.share.LogReader;
+import org.apache.kafka.server.share.PartitionMetadataProvider;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey;
@@ -44,7 +44,6 @@ import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
-import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
 import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
@@ -71,12 +70,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
-import java.util.stream.Collectors;
-
-import scala.Tuple2;
-import scala.collection.Seq;
-import scala.jdk.javaapi.CollectionConverters;
-import scala.runtime.BoxedUnit;
 
 import static kafka.server.share.PendingRemoteFetches.RemoteFetch;
 
@@ -91,6 +84,8 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private final ShareFetch shareFetch;
     private final ReplicaManager replicaManager;
+    private final LogReader logReader;
+    private final PartitionMetadataProvider metadataProvider;
     private final BiConsumer<SharePartitionKey, Throwable> exceptionHandler;
     private final PartitionMaxBytesStrategy partitionMaxBytesStrategy;
     private final ShareGroupMetrics shareGroupMetrics;
@@ -130,6 +125,8 @@ public class DelayedShareFetch extends DelayedOperation {
     public DelayedShareFetch(
             ShareFetch shareFetch,
             ReplicaManager replicaManager,
+            LogReader logReader,
+            PartitionMetadataProvider metadataProvider,
             BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
             ShareGroupMetrics shareGroupMetrics,
@@ -138,6 +135,8 @@ public class DelayedShareFetch extends DelayedOperation {
     ) {
         this(shareFetch,
             replicaManager,
+            logReader,
+            metadataProvider,
             exceptionHandler,
             sharePartitions,
             PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM),
@@ -166,6 +165,8 @@ public class DelayedShareFetch extends DelayedOperation {
     DelayedShareFetch(
         ShareFetch shareFetch,
         ReplicaManager replicaManager,
+        LogReader logReader,
+        PartitionMetadataProvider metadataProvider,
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
         PartitionMaxBytesStrategy partitionMaxBytesStrategy,
@@ -178,6 +179,8 @@ public class DelayedShareFetch extends DelayedOperation {
         super(shareFetch.fetchParams().maxWaitMs);
         this.shareFetch = shareFetch;
         this.replicaManager = replicaManager;
+        this.logReader = logReader;
+        this.metadataProvider = metadataProvider;
         this.partitionsAcquired = new LinkedHashMap<>();
         this.localPartitionsAlreadyFetched = new LinkedHashMap<>();
         this.exceptionHandler = exceptionHandler;
@@ -292,7 +295,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 shareFetch,
                 shareFetchPartitionDataList,
                 sharePartitions,
-                replicaManager,
+                metadataProvider,
                 exceptionHandler
             ));
         } catch (Exception e) {
@@ -516,55 +519,15 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private LogOffsetMetadata endOffsetMetadataForTopicPartition(TopicIdPartition topicIdPartition) {
-        Partition partition = ShareFetchUtils.partition(replicaManager, topicIdPartition.topicPartition());
-        LogOffsetSnapshot offsetSnapshot = partition.fetchOffsetSnapshot(Optional.empty(), true);
-        // The FetchIsolation type that we use for share fetch is FetchIsolation.HIGH_WATERMARK. In the future, we can
-        // extend it to support other FetchIsolation types.
         FetchIsolation isolationType = shareFetch.fetchParams().isolation;
-        if (isolationType == FetchIsolation.LOG_END)
-            return offsetSnapshot.logEndOffset();
-        else if (isolationType == FetchIsolation.HIGH_WATERMARK)
-            return offsetSnapshot.highWatermark();
-        else
-            return offsetSnapshot.lastStableOffset();
+        return metadataProvider.endOffsetMetadata(topicIdPartition, isolationType);
     }
 
     private LinkedHashMap<TopicIdPartition, LogReadResult> readFromLog(LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
                                                                        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes) {
         // Filter if there already exists any erroneous topic partition.
         Set<TopicIdPartition> partitionsToFetch = shareFetch.filterErroneousTopicPartitions(topicPartitionFetchOffsets.keySet());
-        if (partitionsToFetch.isEmpty()) {
-            return new LinkedHashMap<>();
-        }
-
-        LinkedHashMap<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new LinkedHashMap<>();
-
-        topicPartitionFetchOffsets.forEach((topicIdPartition, fetchOffset) -> topicPartitionData.put(topicIdPartition,
-            new FetchRequest.PartitionData(
-                topicIdPartition.topicId(),
-                fetchOffset,
-                0,
-                partitionMaxBytes.get(topicIdPartition),
-                Optional.empty())
-        ));
-
-        Seq<Tuple2<TopicIdPartition, LogReadResult>> responseLogResult = replicaManager.readFromLog(
-            shareFetch.fetchParams(),
-            CollectionConverters.asScala(
-                partitionsToFetch.stream().map(topicIdPartition ->
-                    new Tuple2<>(topicIdPartition, topicPartitionData.get(topicIdPartition))).collect(Collectors.toList())
-            ),
-            QuotaFactory.UNBOUNDED_QUOTA,
-            true);
-
-        LinkedHashMap<TopicIdPartition, LogReadResult> responseData = new LinkedHashMap<>();
-        responseLogResult.foreach(tpLogResult -> {
-            responseData.put(tpLogResult._1(), tpLogResult._2());
-            return BoxedUnit.UNIT;
-        });
-
-        log.trace("Data successfully retrieved by replica manager: {}", responseData);
-        return responseData;
+        return logReader.read(shareFetch.fetchParams(), partitionsToFetch, topicPartitionFetchOffsets, partitionMaxBytes);
     }
 
     private boolean anyPartitionHasLogReadError(LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse) {
@@ -946,7 +909,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 shareGroupMetrics.recordTopicPartitionsFetchRatio(shareFetch.groupId(), (int) (acquiredRatio * 100));
 
             Map<TopicIdPartition, ShareFetchResponseData.PartitionData> remoteFetchResponse = ShareFetchUtils.processFetchResponse(
-                shareFetch, shareFetchPartitionDataList, sharePartitions, replicaManager, exceptionHandler);
+                shareFetch, shareFetchPartitionDataList, sharePartitions, metadataProvider, exceptionHandler);
             shareFetch.maybeComplete(remoteFetchResponse);
             log.trace("Remote share fetch request completed successfully, response: {}", remoteFetchResponse);
         } catch (InterruptedException | ExecutionException e) {

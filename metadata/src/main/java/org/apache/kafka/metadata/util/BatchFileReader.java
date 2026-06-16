@@ -17,9 +17,11 @@
 
 package org.apache.kafka.metadata.util;
 
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
@@ -34,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -55,7 +58,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
             return this;
         }
 
-        public BatchFileReader build() throws Exception {
+        public BatchFileReader build() throws IOException {
             if (path == null) {
                 throw new RuntimeException("You must specify a path.");
             }
@@ -119,6 +122,17 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
                         messages.add(new ApiMessageAndVersion(message, (short) 0));
                         break;
                     }
+                    case KRAFT_VERSION: {
+                        KRaftVersionRecord message = new KRaftVersionRecord();
+                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
+                        messages.add(new ApiMessageAndVersion(message, (short) 0));
+                        break;
+                    }
+                    case KRAFT_VOTERS:
+                        VotersRecord message =  new VotersRecord();
+                        message.read(new ByteBufferAccessor(record.value()), (short) 0);
+                        messages.add(new ApiMessageAndVersion(message, (short) 0));
+                        break;
                     default:
                         throw new RuntimeException("Unsupported control record type " + type + " at offset " +
                                 record.offset());

@@ -21,6 +21,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
@@ -49,7 +51,6 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
-import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -119,6 +120,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
@@ -908,14 +910,60 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *
      * @param groupIds      The IDs of the groups to describe.
      *
-     * @return A list containing the StreamsGroupDescribeResponseData.DescribedGroup.
+     * @return A {@link StreamsGroupDescribeResult} containing the described groups and per-group
+     *         stored description topology epoch (KIP-1331).
      *
      */
-    public List<StreamsGroupDescribeResponseData.DescribedGroup> streamsGroupDescribe(
+    public StreamsGroupDescribeResult streamsGroupDescribe(
         List<String> groupIds,
         long committedOffset
     ) {
         return groupMetadataManager.streamsGroupDescribe(groupIds, committedOffset);
+    }
+
+    /**
+     * Validates that a streams group exists, that the given member is a current member of
+     * it, and that {@code pushedEpoch} matches the group's current topology epoch. The
+     * lookup runs at {@code committedOffset} so an uncommitted fence/leave does not cause
+     * a still-live member to appear unknown (or vice versa). Must be scheduled on the
+     * coordinator runtime like any other read.
+     *
+     * @param groupId          The group ID.
+     * @param memberId         The member ID.
+     * @param pushedEpoch      The topology epoch carried by the push request.
+     * @param committedOffset  A committed offset corresponding to the desired snapshot.
+     * @throws GroupIdNotFoundException if the group does not exist.
+     * @throws UnknownMemberIdException if the member is not in the group.
+     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
+     *                                  current topology epoch.
+     */
+    public void validateStreamsGroupTopologyDescriptionUpdate(
+        String groupId,
+        String memberId,
+        int pushedEpoch,
+        long committedOffset
+    ) {
+        groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+            groupId, memberId, pushedEpoch, committedOffset);
+    }
+
+    /**
+     * Persist the outcome of a topology description plugin call. Writes a metadata record
+     * advancing either {@code StoredDescriptionTopologyEpoch} (on plugin success) or
+     * {@code FailedDescriptionTopologyEpoch} (on permanent plugin failure).
+     *
+     * @param groupId           The streams group id.
+     * @param pushedEpoch       The topology epoch on the push that just completed.
+     * @param permanentFailure  True if the plugin signalled a permanent failure; false on success.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> streamsGroupSetTopologyDescriptionEpoch(
+        String groupId,
+        int pushedEpoch,
+        boolean permanentFailure
+    ) {
+        return groupMetadataManager.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, permanentFailure);
     }
 
     /**

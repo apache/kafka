@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 93,
+  "apiKey": 94,
   "type": "response",
   "name": "TxnShareAcknowledgeResponse",
   "validVersions": "0",

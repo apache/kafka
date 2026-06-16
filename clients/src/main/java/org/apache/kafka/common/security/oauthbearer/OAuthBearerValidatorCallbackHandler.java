@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
@@ -104,13 +105,27 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        jwtValidator = getConfiguredInstance(
+        JwtValidator validator = getConfiguredInstance(
             configs,
             saslMechanism,
             jaasConfigEntries,
             SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
             JwtValidator.class
         );
+
+        if (validator instanceof DefaultJwtValidator
+                && ((DefaultJwtValidator) validator).delegate() instanceof ClientJwtValidator) {
+            Utils.closeQuietly(validator, "JWT validator");
+            throw new ConfigException(String.format(
+                "The OAuth validator for the broker requires \"%s\" to be configured so that JWT signatures" +
+                " can be verified, but it was not set. Set \"%s\" to the OAuth/OIDC provider's JWKS endpoint URL" +
+                " for this listener, or configure a signature-verifying \"%s\".",
+                SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL,
+                SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL,
+                SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS));
+        }
+
+        jwtValidator = validator;
     }
 
     /*

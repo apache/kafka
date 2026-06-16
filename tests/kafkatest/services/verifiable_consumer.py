@@ -238,9 +238,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                  static_membership=False, max_messages=-1, session_timeout_sec=0, enable_autocommit=False,
                  assignment_strategy=None, group_protocol=None, group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
-                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True, prop_file=""):
+                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True,
+                 close_timeout_sec=15, prop_file=""):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
+        :param close_timeout_sec: Timeout in seconds for closing the consumer (default: 15)
         """
         super(VerifiableConsumer, self).__init__(context, num_nodes)
         self.log_level = log_level
@@ -257,6 +259,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.assignment_strategy = assignment_strategy
         self.prop_file = prop_file
         self.stop_timeout_sec = stop_timeout_sec
+        self.close_timeout_sec = close_timeout_sec
         self.on_record_consumed = on_record_consumed
         self.verify_offsets = verify_offsets
 
@@ -440,6 +443,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             cmd += " --max-messages %s" % str(self.max_messages)
 
         version = get_version(node)
+
+        if self.close_timeout_sec >= 0 and version.supports_consumer_close_timeout():
+            cmd += " --close-timeout %s" % (self.close_timeout_sec * 1000)
+
         if version.supports_command_config():
             cmd += " --command-config %s" % VerifiableConsumer.CONFIG_FILE
         else:
