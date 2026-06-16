@@ -34,7 +34,6 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescription
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 /**
@@ -144,17 +143,18 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * the plugin, persist the outcome, and centralize back-off state mutations in a
      * single {@code whenComplete}.
      *
-     * <p>The chain carries the terminal disposition through an {@link AtomicReference}
-     * holder so {@code whenComplete} can act on it without having to reason about the
-     * response shape. The holder is committed to {@link BackoffAction#ARM} as the chain
-     * crosses the plugin boundary, so any post-plugin failure — including a metadata
-     * record write that fails after a successful plugin call — re-arms the back-off and
-     * the next heartbeat re-solicits an idempotent re-push. Pre-plugin failures
-     * ({@code validateStreamsGroupMember} fencing the caller, {@code fromRequest}
-     * rejecting a malformed payload, or the read operation surfacing a runtime error
-     * such as NOT_COORDINATOR) leave the holder at {@link BackoffAction#NOOP}, so a
-     * fenced/unauthorized caller cannot grief the back-off and suppress legitimate
-     * solicitation for the rest of the group.
+     * <p>Each terminal branch of the chain produces a {@link SetTopologyOutcome} that
+     * carries the response value and the back-off disposition together, so the
+     * disposition is part of the future's value rather than a side-channel mutable cell.
+     * Pre-plugin failures (validation, conversion, or a runtime error like
+     * NOT_COORDINATOR surfacing from the read) skip the post-plugin stages and are
+     * wrapped with {@link BackoffAction#NOOP} by {@code exceptionally} so a fenced or
+     * unauthorized caller cannot grief the back-off and suppress legitimate solicitation
+     * for the rest of the group. Post-plugin failures (transient plugin error, or a
+     * bookkeeping write that fails after the plugin succeeded) arm the back-off; a
+     * post-plugin write failing with {@code GroupIdNotFoundException} — the group was
+     * deleted between the plugin call and the write — drops the orphaned entry instead
+     * since no live group remains to throttle.
      */
     public CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> handleSetTopology(
         StreamsGroupTopologyDescriptionUpdateRequestData request
@@ -165,7 +165,6 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         final TopicPartition tp = topicPartitionFor.apply(groupId);
         final StreamsGroupTopologyDescriptionPlugin p = plugin.get();
 
-        final AtomicReference<BackoffAction> backoffAction = new AtomicReference<>(BackoffAction.NOOP);
         return runtime.scheduleReadOperation(
                 "streams-group-topology-description-validate",
                 tp,
@@ -175,58 +174,77 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                     return null;
                 })
             .thenApply(__ -> StreamsGroupTopologyDescriptionConverter.fromRequest(request.topologyDescription()))
-            .thenCompose(description -> {
-                // Plugin boundary: from here on, a failure means we attempted the push and
-                // therefore arms the back-off (unless a downstream stage explicitly upgrades
-                // the action to CLEAR after a successful epoch write).
-                backoffAction.set(BackoffAction.ARM);
-                return invokePluginSetTopology(p, groupId, pushedEpoch, description);
+            .thenCompose(description -> invokePluginSetTopology(p, groupId, pushedEpoch, description))
+            .thenCompose(pluginOutcome -> postPluginAction(pluginOutcome, groupId, pushedEpoch, tp))
+            // The post-plugin stages always return a SetTopologyOutcome (failures inside
+            // the write are folded into ARM / CLEAR_GROUP outcomes by postPluginAction),
+            // so anything reaching this exceptionally is pre-plugin.
+            .exceptionally(t -> new SetTopologyOutcome(null, BackoffAction.NOOP, t))
+            .thenApply(outcome -> {
+                applyBackoff(outcome, groupId, pushedEpoch);
+                return outcome;
             })
-            .thenCompose(pluginOutcome -> switch (pluginOutcome.kind()) {
-                case SUCCESS -> runtime.scheduleWriteOperation(
-                    "streams-group-set-stored-topology-epoch",
-                    tp,
-                    coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, false)
-                ).thenApply(unused -> {
-                    backoffAction.set(BackoffAction.CLEAR);
-                    return new StreamsGroupTopologyDescriptionUpdateResponseData();
-                });
-                case PERMANENT -> runtime.scheduleWriteOperation(
-                    "streams-group-set-failed-topology-epoch",
-                    tp,
-                    coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, true)
-                ).thenApply(unused -> {
-                    backoffAction.set(BackoffAction.CLEAR);
-                    return errorResponse(
-                        Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message());
-                });
-                case TRANSIENT -> CompletableFuture.completedFuture(errorResponse(
-                    Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message()));
-            })
-            .whenComplete((response, throwable) -> {
-                BackoffAction action = backoffAction.get();
-                if (action == BackoffAction.NOOP) {
-                    // Pre-plugin failure: don't touch the back-off.
-                    return;
-                }
-                if (action == BackoffAction.CLEAR) {
-                    backoff.clear(groupId, pushedEpoch);
-                    return;
-                }
-                // action == ARM: a post-plugin failure (transient plugin error, or a
-                // bookkeeping write that failed after the plugin succeeded). If the failure
-                // is GroupIdNotFoundException — the group was deleted between the plugin
-                // call and the write — the push has already taken effect at the plugin and
-                // there is no live group left to throttle. Drop the orphaned entry instead
-                // of arming a back-off that nobody can ever clear.
-                if (throwable != null
-                    && Errors.maybeUnwrapException(throwable) instanceof GroupIdNotFoundException) {
-                    backoff.clearGroup(groupId);
-                    return;
-                }
-                backoff.armOrExtend(groupId, pushedEpoch);
-            });
+            .thenCompose(outcome -> outcome.failure() == null
+                ? CompletableFuture.completedFuture(outcome.response())
+                : CompletableFuture.failedFuture(outcome.failure()));
     }
+
+    private CompletableFuture<SetTopologyOutcome> postPluginAction(
+        PluginOutcome pluginOutcome,
+        String groupId,
+        int pushedEpoch,
+        TopicPartition tp
+    ) {
+        return switch (pluginOutcome.kind()) {
+            case SUCCESS -> runtime.scheduleWriteOperation(
+                "streams-group-set-stored-topology-epoch",
+                tp,
+                coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, false)
+            ).handle((unused, throwable) -> outcomeForPostPluginWrite(
+                throwable, new StreamsGroupTopologyDescriptionUpdateResponseData()));
+            case PERMANENT -> runtime.scheduleWriteOperation(
+                "streams-group-set-failed-topology-epoch",
+                tp,
+                coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, true)
+            ).handle((unused, throwable) -> outcomeForPostPluginWrite(
+                throwable,
+                errorResponse(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message())));
+            case TRANSIENT -> CompletableFuture.completedFuture(new SetTopologyOutcome(
+                errorResponse(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message()),
+                BackoffAction.ARM, null));
+        };
+    }
+
+    private static SetTopologyOutcome outcomeForPostPluginWrite(
+        Throwable throwable,
+        StreamsGroupTopologyDescriptionUpdateResponseData responseOnSuccess
+    ) {
+        if (throwable == null) {
+            return new SetTopologyOutcome(responseOnSuccess, BackoffAction.CLEAR, null);
+        }
+        // The group was deleted between the plugin call and the bookkeeping write — the
+        // push already took effect at the plugin and no live group remains to throttle,
+        // so drop the orphaned back-off entry instead of arming one nobody will clear.
+        if (Errors.maybeUnwrapException(throwable) instanceof GroupIdNotFoundException) {
+            return new SetTopologyOutcome(null, BackoffAction.CLEAR_GROUP, throwable);
+        }
+        return new SetTopologyOutcome(null, BackoffAction.ARM, throwable);
+    }
+
+    private void applyBackoff(SetTopologyOutcome outcome, String groupId, int pushedEpoch) {
+        switch (outcome.backoffAction()) {
+            case NOOP -> { }
+            case CLEAR -> backoff.clear(groupId, pushedEpoch);
+            case CLEAR_GROUP -> backoff.clearGroup(groupId);
+            case ARM -> backoff.armOrExtend(groupId, pushedEpoch);
+        }
+    }
+
+    private record SetTopologyOutcome(
+        StreamsGroupTopologyDescriptionUpdateResponseData response,
+        BackoffAction backoffAction,
+        Throwable failure
+    ) { }
 
     // Visible for testing.
     StreamsGroupTopologyDescriptionBackoff backoff() {
@@ -307,5 +325,5 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         }
     }
 
-    private enum BackoffAction { NOOP, ARM, CLEAR }
+    private enum BackoffAction { NOOP, ARM, CLEAR, CLEAR_GROUP }
 }
