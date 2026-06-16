@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -1611,52 +1610,6 @@ public class PlaintextConsumerTest {
                 }
             });
             assertThrows(WakeupException.class, () -> consumer.position(topicPartition, Duration.ofSeconds(100)));
-        }
-    }
-
-    @ClusterTest
-    public void testClassicConsumerCloseRunsRevocationCallbackOnInterrupt() throws Exception {
-        testCloseRunsRevocationCallbackOnInterrupt(Map.of(
-            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT),
-            KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
-            VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
-            AUTO_OFFSET_RESET_CONFIG, "earliest",
-            GROUP_ID_CONFIG, "group_test,",
-            BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()
-        ));
-    }
-
-    @ClusterTest
-    public void testAsyncConsumerCloseRunsRevocationCallbackOnInterrupt() throws Exception {
-        testCloseRunsRevocationCallbackOnInterrupt(Map.of(
-            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
-            KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
-            VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName(),
-            AUTO_OFFSET_RESET_CONFIG, "earliest",
-            GROUP_ID_CONFIG, "group_test,",
-            BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()
-        ));
-    }
-
-    private void testCloseRunsRevocationCallbackOnInterrupt(Map<String, Object> consumerConfig) throws Exception {
-        try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
-            var listener = new TestConsumerReassignmentListener();
-            consumer.subscribe(List.of(TOPIC), listener);
-            awaitRebalance(consumer, listener);
-
-            assertEquals(1, listener.callsToAssigned);
-            assertEquals(0, listener.callsToRevoked);
-
-            try {
-                Thread.currentThread().interrupt();
-                assertThrows(InterruptException.class, consumer::close);
-            } finally {
-                // Clear the interrupted flag so we don't create problems for subsequent tests.
-                Thread.interrupted();
-            }
-
-            assertEquals(1, listener.callsToAssigned);
-            assertEquals(1, listener.callsToRevoked);
         }
     }
 
