@@ -145,10 +145,15 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      *
      * <p>The chain carries the terminal disposition through an {@link AtomicReference}
      * holder so {@code whenComplete} can act on it without having to reason about the
-     * response shape. Default is {@link BackoffAction#ARM}; any post-plugin failure
-     * (including a metadata-record write that fails after a successful plugin call)
-     * therefore re-arms the back-off and the next heartbeat re-solicits an idempotent
-     * re-push.
+     * response shape. The holder is committed to {@link BackoffAction#ARM} as the chain
+     * crosses the plugin boundary, so any post-plugin failure — including a metadata
+     * record write that fails after a successful plugin call — re-arms the back-off and
+     * the next heartbeat re-solicits an idempotent re-push. Pre-plugin failures
+     * ({@code validateStreamsGroupMember} fencing the caller, {@code fromRequest}
+     * rejecting a malformed payload, or the read operation surfacing a runtime error
+     * such as NOT_COORDINATOR) leave the holder at {@link BackoffAction#NOOP}, so a
+     * fenced/unauthorized caller cannot grief the back-off and suppress legitimate
+     * solicitation for the rest of the group.
      */
     public CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> handleSetTopology(
         StreamsGroupTopologyDescriptionUpdateRequestData request
@@ -159,16 +164,23 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         final TopicPartition tp = topicPartitionFor.apply(groupId);
         final StreamsGroupTopologyDescriptionPlugin p = plugin.get();
 
-        final AtomicReference<BackoffAction> backoffAction = new AtomicReference<>(BackoffAction.ARM);
+        final AtomicReference<BackoffAction> backoffAction = new AtomicReference<>(BackoffAction.NOOP);
         return runtime.scheduleReadOperation(
                 "streams-group-topology-description-validate",
                 tp,
                 (coordinator, lastCommittedOffset) -> {
-                    coordinator.validateStreamsGroupMember(groupId, memberId, lastCommittedOffset);
+                    coordinator.validateStreamsGroupTopologyDescriptionUpdate(
+                        groupId, memberId, pushedEpoch, lastCommittedOffset);
                     return null;
                 })
             .thenApply(__ -> StreamsGroupTopologyDescriptionConverter.fromRequest(request.topologyDescription()))
-            .thenCompose(description -> invokePluginSetTopology(p, groupId, pushedEpoch, description))
+            .thenCompose(description -> {
+                // Plugin boundary: from here on, a failure means we attempted the push and
+                // therefore arms the back-off (unless a downstream stage explicitly upgrades
+                // the action to CLEAR after a successful epoch write).
+                backoffAction.set(BackoffAction.ARM);
+                return invokePluginSetTopology(p, groupId, pushedEpoch, description);
+            })
             .thenCompose(pluginOutcome -> switch (pluginOutcome.kind()) {
                 case SUCCESS -> runtime.scheduleWriteOperation(
                     "streams-group-set-stored-topology-epoch",
@@ -191,10 +203,10 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                     Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message()));
             })
             .whenComplete((response, throwable) -> {
-                if (backoffAction.get() == BackoffAction.CLEAR) {
-                    backoff.clear(groupId);
-                } else {
-                    backoff.armOrExtend(groupId, pushedEpoch);
+                switch (backoffAction.get()) {
+                    case CLEAR -> backoff.clear(groupId, pushedEpoch);
+                    case ARM -> backoff.armOrExtend(groupId, pushedEpoch);
+                    case NOOP -> { /* pre-plugin failure: don't touch the back-off */ }
                 }
             });
     }
@@ -274,5 +286,5 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         }
     }
 
-    private enum BackoffAction { CLEAR, ARM }
+    private enum BackoffAction { NOOP, ARM, CLEAR }
 }

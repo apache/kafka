@@ -85,12 +85,21 @@ public class StreamsGroupTopologyDescriptionBackoff {
     }
 
     /**
-     * Arm a new back-off window or extend the existing one. If the existing entry is for a
-     * different topology epoch the window is reset to {@link #INITIAL_DELAY_MS}.
+     * Arm a new back-off window or extend the existing one at the caller's topology epoch.
+     *
+     * <p>Epoch-aware: if the stored entry is for a newer topology epoch than {@code
+     * topologyEpoch} (a concurrent heartbeat already armed for the advanced epoch while a
+     * late post-plugin callback finishes at the old epoch), the call is a no-op so we do
+     * not overwrite the newer window. At the same epoch the window doubles up to {@link
+     * #MAX_DELAY_MS}; at a stale-or-absent entry we install a fresh {@link #INITIAL_DELAY_MS}
+     * window.
      */
     public void armOrExtend(String groupId, int topologyEpoch) {
         final long now = time.milliseconds();
         state.compute(groupId, (key, existing) -> {
+            if (existing != null && existing.topologyEpoch() > topologyEpoch) {
+                return existing;
+            }
             if (existing == null || existing.topologyEpoch() != topologyEpoch) {
                 return new Entry(topologyEpoch, INITIAL_DELAY_MS, now + INITIAL_DELAY_MS);
             }
@@ -100,10 +109,26 @@ public class StreamsGroupTopologyDescriptionBackoff {
     }
 
     /**
-     * Drop the back-off entry for a group. Called on a successful push, a permanent plugin
-     * failure, or when the group is removed.
+     * Drop the back-off entry for a group at the given topology epoch. Epoch-aware: only
+     * clears if the stored entry matches {@code topologyEpoch} (a late post-plugin
+     * callback at the old epoch must not wipe a window a concurrent heartbeat armed at
+     * the advanced epoch). Called on a successful push or a permanent plugin failure.
      */
-    public void clear(String groupId) {
+    public void clear(String groupId, int topologyEpoch) {
+        state.compute(groupId, (key, existing) -> {
+            if (existing == null || existing.topologyEpoch() != topologyEpoch) {
+                return existing;
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Drop the back-off entry for a group unconditionally. Used by paths that remove the
+     * group entirely (explicit {@code DeleteGroups}, periodic cleanup of naturally-expired
+     * groups), where any in-flight back-off state is irrelevant because the group is gone.
+     */
+    public void clearGroup(String groupId) {
         state.remove(groupId);
     }
 

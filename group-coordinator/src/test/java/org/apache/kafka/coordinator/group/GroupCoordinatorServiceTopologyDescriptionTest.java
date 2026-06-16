@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
@@ -288,6 +289,37 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // Plugin succeeded, write failed. BackoffAction defaulted to ARM and the thenApply
         // that would have set CLEAR never ran, so whenComplete armed the back-off.
         assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
+    }
+
+    @Test
+    public void testUpdatePreValidationFailureDoesNotArmBackoff() throws Exception {
+        // A fenced/stale member (or, once routing lands, an unauthorized caller) whose
+        // validateStreamsGroupMember check fails must not arm the per-group back-off:
+        // legitimate members of the same group must still get TopologyDescriptionRequired
+        // on their next heartbeat at the same epoch.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-description-validate"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.failedFuture(
+            new UnknownMemberIdException("Member fenced from the group.")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.UNKNOWN_MEMBER_ID.code(), response.errorCode());
+        verify(plugin, never()).setTopology(anyString(), anyInt(), any());
+
+        // Pre-plugin failure must leave the back-off untouched. A legitimate heartbeat at
+        // the same epoch must still get the flag — otherwise a fenced/unauthorized caller
+        // could grief the entire group's re-solicitation until the back-off window expires.
+        assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
     }
 
     @Test

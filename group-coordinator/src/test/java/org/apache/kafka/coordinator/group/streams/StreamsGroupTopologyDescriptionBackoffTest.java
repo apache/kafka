@@ -85,14 +85,56 @@ public class StreamsGroupTopologyDescriptionBackoffTest {
     }
 
     @Test
-    public void testClearRemovesEntry() {
+    public void testClearRemovesEntryWhenEpochMatches() {
         MockTime time = new MockTime();
         StreamsGroupTopologyDescriptionBackoff backoff = new StreamsGroupTopologyDescriptionBackoff(time);
         backoff.armOrExtend("g", 1);
         assertNotNull(backoff.entry("g"));
-        backoff.clear("g");
+        backoff.clear("g", 1);
         assertNull(backoff.entry("g"));
         assertFalse(backoff.isActive("g", 1));
+    }
+
+    @Test
+    public void testClearIsNoOpWhenEpochDoesNotMatch() {
+        // A late post-plugin callback at the old epoch must not wipe a window a concurrent
+        // heartbeat armed at the advanced epoch.
+        MockTime time = new MockTime();
+        StreamsGroupTopologyDescriptionBackoff backoff = new StreamsGroupTopologyDescriptionBackoff(time);
+        backoff.armOrExtend("g", 6);
+        long armedAt = backoff.entry("g").nextAttemptMs();
+
+        backoff.clear("g", 5);
+        assertNotNull(backoff.entry("g"));
+        assertEquals(6, backoff.entry("g").topologyEpoch());
+        assertEquals(armedAt, backoff.entry("g").nextAttemptMs());
+    }
+
+    @Test
+    public void testClearGroupRemovesEntryUnconditionally() {
+        // Used by paths that remove the group entirely (DeleteGroups, periodic cleanup):
+        // back-off state is irrelevant because the group is gone.
+        MockTime time = new MockTime();
+        StreamsGroupTopologyDescriptionBackoff backoff = new StreamsGroupTopologyDescriptionBackoff(time);
+        backoff.armOrExtend("g", 6);
+        backoff.clearGroup("g");
+        assertNull(backoff.entry("g"));
+    }
+
+    @Test
+    public void testArmOrExtendIsNoOpWhenStoredEpochIsNewer() {
+        // A late post-plugin callback at the old epoch must not overwrite an entry a
+        // concurrent heartbeat armed at the advanced epoch.
+        MockTime time = new MockTime();
+        StreamsGroupTopologyDescriptionBackoff backoff = new StreamsGroupTopologyDescriptionBackoff(time);
+        backoff.armOrExtend("g", 6);
+        long armedAt = backoff.entry("g").nextAttemptMs();
+
+        backoff.armOrExtend("g", 5);
+        assertEquals(6, backoff.entry("g").topologyEpoch());
+        assertEquals(StreamsGroupTopologyDescriptionBackoff.INITIAL_DELAY_MS,
+            backoff.entry("g").currentDelayMs());
+        assertEquals(armedAt, backoff.entry("g").nextAttemptMs());
     }
 
     @Test
