@@ -906,6 +906,29 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testCloseRestoresThreadInterruptedStatus() {
+        // KAFKA-19651: Verify that Thread.interrupted() returns true after close() throws InterruptException
+        Set<TopicPartition> partitions = singleton(new TopicPartition("topic1", 0));
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        when(subscriptions.assignedPartitions()).thenReturn(partitions);
+        when(applicationEventHandler.addAndGet(any(CompletableApplicationEvent.class))).thenThrow(InterruptException.class);
+        consumer = spy(newConsumer(
+            mock(FetchBuffer.class),
+            mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions));
+
+        try {
+            assertThrows(InterruptException.class, () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
+            assertTrue(Thread.interrupted(),
+                "Thread interrupted status should be restored when close() throws InterruptException");
+        } finally {
+            // Clear interrupted status in case assertion failed
+            Thread.interrupted();
+        }
+    }
+
+    @Test
     public void testCommitSyncAllConsumed() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(

@@ -1605,6 +1605,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         Throwable exception = firstException.get();
         if (exception != null && !swallowException) {
             if (exception instanceof InterruptException) {
+                Thread.currentThread().interrupt();
                 throw (InterruptException) exception;
             }
             throw new KafkaException("Failed to close kafka producer", exception);
