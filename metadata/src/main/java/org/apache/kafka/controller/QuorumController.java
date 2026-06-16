@@ -128,6 +128,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -1075,7 +1076,31 @@ public final class QuorumController implements Controller {
 
         @Override
         public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
-            reader.close();
+            appendRaftEvent(String.format("handleLoadBootstrap[snapshotId=%s]", reader.snapshotId()), () -> {
+                try {
+                    String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
+                    if (isActiveController()) {
+                        throw fatalFaultHandler.handleFault("Asked to load bootstrap snapshot " + snapshotName +
+                                ", but we are the active controller at epoch " + curClaimEpoch);
+                    }
+                    List<ApiMessageAndVersion> records = new ArrayList<>();
+                    while (reader.hasNext()) {
+                        Batch<ApiMessageAndVersion> batch = reader.next();
+                        records.addAll(batch.records());
+                    }
+                    if (!records.isEmpty()) {
+                        log.debug("Loaded {} bootstrap records from {}", records.size(), snapshotName);
+                        bootstrapMetadata = BootstrapMetadata.fromRecords(records, "bootstrap");
+                    }
+                } catch (FaultHandlerException e) {
+                    throw e;
+                } catch (Throwable e) {
+                    throw fatalFaultHandler.handleFault("Error while loading bootstrap snapshot " +
+                            reader.snapshotId(), e);
+                } finally {
+                    reader.close();
+                }
+            });
         }
 
         @Override
@@ -1460,7 +1485,7 @@ public final class QuorumController implements Controller {
     /**
      * The bootstrap metadata to use for initialization if needed.
      */
-    private final BootstrapMetadata bootstrapMetadata;
+    private BootstrapMetadata bootstrapMetadata;
 
     /**
      * The maximum number of records per batch to allow.

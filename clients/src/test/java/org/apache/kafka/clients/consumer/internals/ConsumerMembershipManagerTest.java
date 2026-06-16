@@ -962,6 +962,50 @@ public class ConsumerMembershipManagerTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
 
+    /**
+     * When the resolvable subset of the target equals the current assignment but some topic ids
+     * remain unresolved, the partial acknowledgement must fire exactly once per target epoch -
+     * regardless of which thread invokes maybeReconcile. The first attempt (background or
+     * foreground) acks the resolvable fragment; subsequent attempts must stay in RECONCILING
+     * to avoid emitting redundant heartbeats.
+     */
+    @Test
+    public void testPartialAckNotRepeatedOnBackgroundReconcileWhenMetadataMissing() {
+        Uuid topicId1 = Uuid.randomUuid();
+        String topic1 = "topic1";
+        final TopicIdPartition topicId1Partition0 = new TopicIdPartition(topicId1, new TopicPartition(topic1, 0));
+
+        Uuid topicId2 = Uuid.randomUuid();
+
+        ConsumerMembershipManager membershipManager =
+            mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Collections.singletonList(0));
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        when(subscriptionState.assignedPartitions()).thenReturn(getTopicPartitions(Collections.singleton(topicId1Partition0)));
+        clearInvocations(membershipManager, subscriptionState);
+
+        Map<Uuid, SortedSet<Integer>> newAssignment = Map.of(topicId1, mkSortedSet(0), topicId2, mkSortedSet(0));
+        receiveAssignment(newAssignment, membershipManager);
+
+        // First reconcile from the background thread acks the resolvable fragment, no need to wait for consumer.poll.
+        membershipManager.maybeReconcile(false);
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
+
+        // Until a new target arrives or new metadata resolves topicId2, further reconciles from either
+        // thread must stay in RECONCILING - no redundant acks.
+        for (int i = 0; i < 5; i++) {
+            membershipManager.maybeReconcile(false);
+            assertEquals(MemberState.RECONCILING, membershipManager.state());
+            membershipManager.maybeReconcile(true);
+            assertEquals(MemberState.RECONCILING, membershipManager.state());
+        }
+    }
+
     // Tests the case where topic metadata is not available at the time of the assignment,
     // but is made available later.
     @Test
@@ -992,7 +1036,6 @@ public class ConsumerMembershipManagerTest {
 
         receiveAssignment(newAssignment, membershipManager);
         membershipManager.maybeReconcile(false);
-
         // No full reconciliation triggered, but assignment needs to be acknowledged.
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.shouldHeartbeatNow());

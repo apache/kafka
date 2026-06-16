@@ -246,9 +246,25 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     @Override
     public void close(final DBAccessor accessor) throws RocksDBException {
-        super.close(accessor);
-        oldColumnFamily.close();
-        newColumnFamily.close();
+        try {
+            super.close(accessor);
+        } finally {
+            try {
+                oldColumnFamily.close();
+            } finally {
+                newColumnFamily.close();
+            }
+        }
+    }
+
+    // Visible for testing
+    ColumnFamilyHandle oldColumnFamily() {
+        return oldColumnFamily;
+    }
+
+    // Visible for testing
+    ColumnFamilyHandle newColumnFamily() {
+        return newColumnFamily;
     }
 
     private static class RocksDBDualCFIterator

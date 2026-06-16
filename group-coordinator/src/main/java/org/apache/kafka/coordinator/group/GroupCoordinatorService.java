@@ -98,8 +98,11 @@ import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionManager;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsDelta;
@@ -249,6 +252,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
+            Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin =
+                Optional.ofNullable(config.streamsGroupTopologyDescriptionPlugin(Map.of()));
+
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
                 new GroupCoordinatorShard.Builder(config, groupConfigManager)
                     .withAuthorizerPlugin(authorizerPlugin);
@@ -296,7 +302,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 groupConfigManager,
                 persister,
                 timer,
-                partitionMetadataClient
+                partitionMetadataClient,
+                streamsGroupTopologyDescriptionPlugin,
+                time
             );
         }
     }
@@ -352,6 +360,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final PartitionMetadataClient partitionMetadataClient;
 
     /**
+     * The broker-level component that owns the streams-group topology description plugin
+     * (KIP-1331): plugin reference, per-group push back-off, and the three entry points
+     * the service delegates into — heartbeat post-processing, the push RPC, and the
+     * pre-tombstone hook on DeleteGroups.
+     */
+    private final StreamsGroupTopologyDescriptionManager streamsGroupTopologyDescriptionManager;
+
+    /**
      * The number of partitions of the __consumer_offsets topics. This is provided
      * when the component is started.
      */
@@ -381,7 +397,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         GroupConfigManager groupConfigManager,
         Persister persister,
         Timer timer,
-        PartitionMetadataClient partitionMetadataClient
+        PartitionMetadataClient partitionMetadataClient,
+        Optional<StreamsGroupTopologyDescriptionPlugin> streamsGroupTopologyDescriptionPlugin,
+        Time time
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
@@ -396,6 +414,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .map(ConsumerGroupPartitionAssignor::name)
             .collect(Collectors.toSet());
         this.partitionMetadataClient = partitionMetadataClient;
+        this.streamsGroupTopologyDescriptionManager = new StreamsGroupTopologyDescriptionManager(
+            streamsGroupTopologyDescriptionPlugin,
+            time
+        );
     }
 
     /**
@@ -583,7 +605,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private static void throwIfStreamsGroupHeartbeatRequestIsUsingUnsupportedFeatures(
         StreamsGroupHeartbeatRequestData request
     ) throws InvalidRequestException {
-        throwIfNotNull(request.instanceId(), "Static membership is not yet supported.");
         throwIfNotNull(request.taskOffsets(), "TaskOffsets are not supported yet.");
         throwIfNotNull(request.taskEndOffsets(), "TaskEndOffsets are not supported yet.");
         throwIfNotNullOrEmpty(request.warmupTasks(), "WarmupTasks are not supported yet.");
@@ -606,8 +627,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
                 new StreamsGroupHeartbeatResult(
-                    new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
-                    Map.of()
+                    new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                 )
             );
         }
@@ -621,8 +641,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 new StreamsGroupHeartbeatResult(
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(apiError.error().code())
-                        .setErrorMessage(apiError.message()),
-                    Map.of()
+                        .setErrorMessage(apiError.message())
                 )
             );
         }
@@ -631,6 +650,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "streams-group-heartbeat",
             topicPartitionFor(request.groupId()),
             coordinator -> coordinator.streamsGroupHeartbeat(context, request)
+        ).thenApply(result -> streamsGroupTopologyDescriptionManager.maybeSetTopologyDescriptionRequired(result, request.groupId(), context.requestVersion())
         ).exceptionally(exception -> handleOperationException(
             "streams-group-heartbeat",
             request,
@@ -639,8 +659,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 new StreamsGroupHeartbeatResult(
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(error.code())
-                        .setErrorMessage(message),
-                    Map.of()
+                        .setErrorMessage(message)
                 ),
             log
         ));
@@ -1227,7 +1246,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "streams-group-describe",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset)
-                ).exceptionally(exception -> handleOperationException(
+                ).thenApply(StreamsGroupDescribeResult::describedGroups)
+                .exceptionally(exception -> handleOperationException(
                     "streams-group-describe",
                     groupList,
                     exception,
@@ -2321,12 +2341,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * See {@link GroupCoordinator#groupMetadataTopicConfigs()}.
      */
     @Override
-    public Properties groupMetadataTopicConfigs() {
-        Properties properties = new Properties();
-        properties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
-        properties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
-        properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.offsetsTopicSegmentBytes()));
-        return properties;
+    public Map<String, String> groupMetadataTopicConfigs() {
+        return Map.of(
+            TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT,
+            TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name,
+            TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.offsetsTopicSegmentBytes())
+        );
     }
 
     /**
@@ -2376,6 +2396,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         log.info("Shutting down.");
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
+        Utils.closeQuietly(streamsGroupTopologyDescriptionManager, "streams group topology description manager");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
         Utils.closeQuietly(groupConfigManager, "group config manager");
         log.info("Shutdown complete.");

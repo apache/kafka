@@ -47,7 +47,7 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Offset = offset of the first message in each epoch.
  * <p>
  * Note that {@link #truncateFromStartAsyncFlush},{@link #truncateFromEndAsyncFlush} flush the epoch-entry changes to checkpoint asynchronously.
- * Hence, it is instantiater's responsibility to ensure restoring the cache to the correct state after instantiating
+ * Hence, it is instantiator's responsibility to ensure restoring the cache to the correct state after instantiating
  * this class from checkpoint (which might contain stale epoch entries right after instantiation).
  */
 public final class LeaderEpochFileCache {

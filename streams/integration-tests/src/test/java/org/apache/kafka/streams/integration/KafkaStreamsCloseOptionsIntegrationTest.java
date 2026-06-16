@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.CloseOptions;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -57,8 +58,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.isEmptyConsumerGroup;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.isEmptyStreamGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyStreamGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @Tag("integration")
 @Timeout(600)
@@ -161,6 +166,84 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
         streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP).withTimeout(Duration.ofSeconds(30)));
         waitForEmptyConsumerGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
+    }
+
+    @Test
+    public void testCloseOptionsRemainInGroupClassicProtocol() throws Exception {
+        // Classic + REMAIN_IN_GROUP: member must stay in group (no leave heartbeat).
+        // The group should still have a member immediately after close because
+        // the session timeout is set to Integer.MAX_VALUE.
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        assertFalse(isEmptyConsumerGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)),
+            "Group should still have a member after REMAIN_IN_GROUP close (session timeout is MAX)");
+    }
+
+    @Test
+    public void testCloseOptionsDefaultClassicProtocol() throws Exception {
+        // Classic + DEFAULT: must behave like REMAIN_IN_GROUP (member stays in group).
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.DEFAULT)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        assertFalse(isEmptyConsumerGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)),
+            "Group should still have a member after DEFAULT close under Classic protocol");
+    }
+
+    @Test
+    public void testCloseOptionsLeaveGroupStreamsProtocol() throws Exception {
+        // Streams + LEAVE_GROUP: member must leave the group immediately.
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
+    }
+
+    @Test
+    public void testCloseOptionsDefaultStreamsProtocol() throws Exception {
+        // Streams + DEFAULT: dynamic member must leave the group (consistent with Streams protocol design).
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.DEFAULT)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
+    }
+
+    @Test
+    public void testCloseOptionsRemainInGroupStreamsProtocol() throws Exception {
+        // Streams + REMAIN_IN_GROUP: member must stay in group (no leave heartbeat sent).
+        streamsConfig.remove(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        streamsConfig.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
+            .withTimeout(Duration.ofSeconds(30)));
+
+        assertFalse(isEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG)),
+            "Group should still have a member after REMAIN_IN_GROUP close under Streams protocol");
     }
 
     protected Topology setupTopologyWithoutIntermediateUserTopic() {
