@@ -301,6 +301,66 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
         }
     }
 
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3")
+        }
+    )
+    @Timeout(120)
+    public void testTransactionalShareAckAbortAcceptWithRemoteShareCoordinator() throws Exception {
+        String groupId = "txn-share-remote-abort-accept";
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Admin admin = createAdminClient()) {
+            TopicIdPartition topicIdPartition = createTopicIdPartitionWithRemoteShareCoordinator(admin, groupId, "txn-share-remote-abort-topic", 0);
+            TopicPartition topicPartition = topicIdPartition.topicPartition();
+
+            try (Producer<byte[], byte[]> producer = createProducer();
+                 Producer<byte[], byte[]> transactionalProducer = createRemoteTransactionalProducer("txn-share-remote-abort-accept-producer");
+                 ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                     groupId,
+                     Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+                producer.send(record(topicPartition, "remote-abort")).get();
+                producer.flush();
+
+                shareConsumer.subscribe(Set.of(topicPartition.topic()));
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+                ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+                assertEquals(0L, record.offset());
+                assertEquals("remote-abort", new String(record.value(), StandardCharsets.UTF_8));
+
+                ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+                shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                ShareAcknowledgements acknowledgements = shareConsumer.acknowledgementsForTransaction();
+                assertFalse(acknowledgements.isEmpty());
+
+                transactionalProducer.initTransactions();
+                transactionalProducer.partitionsFor(topicPartition.topic());
+                transactionalProducer.beginTransaction();
+                transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+                transactionalProducer.abortTransaction();
+
+                verifySharePartitionLag(admin, groupId, topicPartition, 1L);
+                ConsumerRecords<byte[], byte[]> redeliveredRecords = waitedPoll(shareConsumer, 2500L, 1);
+                ConsumerRecord<byte[], byte[]> redeliveredRecord = redeliveredRecords.iterator().next();
+                assertEquals(0L, redeliveredRecord.offset());
+                assertEquals("remote-abort", new String(redeliveredRecord.value(), StandardCharsets.UTF_8));
+                verifyShareGroupStateTopicRecordsProduced();
+            }
+        }
+    }
+
     private Producer<byte[], byte[]> createTransactionalProducer(String transactionalId) {
         return createProducer(Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId,
