@@ -81,6 +81,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -96,6 +97,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -937,6 +939,7 @@ public class AbstractHerderTest {
     private void assertErrorForKey(ConfigInfos configInfos, String testKey) {
         final List<String> errorsForKey = configInfos.configs().stream()
                 .map(ConfigInfo::configValue)
+                .filter(Objects::nonNull)
                 .filter(configValue -> configValue.name().equals(testKey))
                 .map(ConfigValueInfo::errors)
                 .flatMap(Collection::stream)
@@ -1328,6 +1331,27 @@ public class AbstractHerderTest {
                 Set.of()
         );
         assertTrue(AbstractHerder.taskConfigsChanged(snapshotWithDifferentAppliedConfig, CONN1, TASK_CONFIGS));
+    }
+
+    @Test
+    public void testDifferenceInConfigDefAndValidation() {
+        AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy);
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        config.put("name", "somename");
+        config.put("required", "value");
+        config.put("testKey", null);
+
+        final ConfigInfos configInfos = herder.validateConnectorConfig(config, s -> null, false);
+
+        herder.maybeAddConfigErrors(configInfos, (error, result) -> {
+            assertNotNull(error);
+            assertInstanceOf(BadRequestException.class, error);
+            assertTrue(error.getMessage().contains("Connector configuration is invalid"));
+        });
+
+        verifyValidationIsolation();
     }
 
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {
