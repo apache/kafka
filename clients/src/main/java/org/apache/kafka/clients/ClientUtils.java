@@ -109,10 +109,8 @@ public final class ClientUtils {
             final String host = getHost(url);
             final Integer port = getPort(url);
 
-            if (host == null || port == null) {
-                log.warn("Skipping invalid bootstrap URL: {}", url);
-                continue;
-            }
+            if (host == null || port == null)
+                throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
             try {
                 addresses.addAll(resolveAddress(url, host, port, clientDnsLookup));

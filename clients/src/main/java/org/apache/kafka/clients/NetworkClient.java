@@ -21,6 +21,7 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BootstrapResolutionException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -155,6 +156,8 @@ public class NetworkClient implements KafkaClient {
     private CompletableFuture<List<InetSocketAddress>> pendingBootstrapResolution;
 
     private volatile long bootstrapResolutionRetryMs = -1L;
+
+    private BootstrapResolutionException bootstrapException = null;
 
     private final ExecutorService bootstrapExecutor;
 
@@ -1300,6 +1303,10 @@ public class NetworkClient implements KafkaClient {
                                                       final ClientDnsLookup clientDnsLookup,
                                                       final long bootstrapResolveTimeoutMs,
                                                       final long retryBackoffMs) {
+            for (String url : bootstrapServers) {
+                if (Utils.getHost(url) == null || Utils.getPort(url) == null)
+                    throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+            }
             return new BootstrapConfiguration(bootstrapServers, clientDnsLookup, bootstrapResolveTimeoutMs, retryBackoffMs);
         }
     }
@@ -1320,16 +1327,27 @@ public class NetworkClient implements KafkaClient {
         if (bootstrapConfiguration == BootstrapConfiguration.DISABLED || metadataUpdater.isBootstrapped())
             return;
 
+        if (bootstrapException != null)
+            return;
+
         if (Thread.interrupted()) {
             cancelBootstrapResolution();
             throw new InterruptException(new InterruptedException());
+        }
+
+        // Check if a pending resolution completed before checking the timeout, so that a
+        // result arriving at the same time as the deadline is not incorrectly rejected.
+        if (pendingBootstrapResolution != null && pendingBootstrapResolution.isDone()) {
+            processBootstrapResolutionResult(currentTimeMs);
+            if (metadataUpdater.isBootstrapped())
+                return;
         }
 
         if (bootstrapTimer != null) {
             bootstrapTimer.update(currentTimeMs);
             checkBootstrapTimeout();
         }
-        handleAsyncBootstrapResolution(currentTimeMs);
+        maybeStartBootstrapResolution(currentTimeMs);
     }
 
     /**
@@ -1338,41 +1356,34 @@ public class NetworkClient implements KafkaClient {
     private void checkBootstrapTimeout() {
         if (bootstrapTimer.isExpired()) {
             cancelBootstrapResolution();
-            throw new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
+            bootstrapException = new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
                 bootstrapConfiguration.bootstrapResolveTimeoutMs + "ms. " +
                 "Please check your bootstrap.servers configuration and DNS settings.");
+            throw bootstrapException;
         }
     }
 
     /**
-     * Handle the async DNS resolution state machine.
-     * States: Not Started -> In Progress -> Completed (Success/Failure)
+     * Trigger a new async DNS resolution if none is in progress and the retry backoff has elapsed.
      */
-    private void handleAsyncBootstrapResolution(final long currentTimeMs) {
-        if (pendingBootstrapResolution == null) {
-            if (bootstrapResolutionRetryMs >= 0 && currentTimeMs < bootstrapResolutionRetryMs) {
-                return;
-            }
-            bootstrapResolutionRetryMs = -1L;
-            if (bootstrapTimer == null) {
-                bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
-            }
-            pendingBootstrapResolution = CompletableFuture.supplyAsync(
-                () -> ClientUtils.parseAddresses(
-                    bootstrapConfiguration.bootstrapServers,
-                    bootstrapConfiguration.clientDnsLookup
-                ),
-                bootstrapExecutor
-            );
+    private void maybeStartBootstrapResolution(final long currentTimeMs) {
+        if (pendingBootstrapResolution != null)
             return;
-        }
 
-        // check again on next poll
-        if (!pendingBootstrapResolution.isDone()) {
+        if (bootstrapResolutionRetryMs >= 0 && currentTimeMs < bootstrapResolutionRetryMs)
             return;
-        }
 
-        processBootstrapResolutionResult(currentTimeMs);
+        bootstrapResolutionRetryMs = -1L;
+        if (bootstrapTimer == null)
+            bootstrapTimer = time.timer(bootstrapConfiguration.bootstrapResolveTimeoutMs);
+
+        pendingBootstrapResolution = CompletableFuture.supplyAsync(
+            () -> ClientUtils.parseAddresses(
+                bootstrapConfiguration.bootstrapServers,
+                bootstrapConfiguration.clientDnsLookup
+            ),
+            bootstrapExecutor
+        );
     }
 
     /**
