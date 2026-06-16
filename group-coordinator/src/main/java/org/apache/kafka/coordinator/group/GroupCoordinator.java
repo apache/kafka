@@ -59,6 +59,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -446,12 +447,11 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Return the configuration properties of the internal group
-     * metadata topic.
+     * Returns the configuration of the internal group metadata topic.
      *
-     * @return Properties of the internal topic.
+     * @return The configuration of the internal group metadata topic.
      */
-    Properties groupMetadataTopicConfigs();
+    Map<String, String> groupMetadataTopicConfigs();
 
     /**
      * Return the configuration of the provided group.

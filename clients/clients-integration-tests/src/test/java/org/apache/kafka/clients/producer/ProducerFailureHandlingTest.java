@@ -218,11 +218,9 @@ public class ProducerFailureHandlingTest {
     @ClusterTest
     public void testCannotSendToInternalTopic(ClusterInstance clusterInstance) throws InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
-            Map<String, String> topicConfig = new HashMap<>();
-            clusterInstance.brokers().get(0)
-                    .groupCoordinator()
-                    .groupMetadataTopicConfigs()
-                    .forEach((k, v) -> topicConfig.put(k.toString(), v.toString()));
+            Map<String, String> topicConfig = clusterInstance.brokers().get(0)
+                .groupCoordinator()
+                .groupMetadataTopicConfigs();
             admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1).configs(topicConfig)));
             clusterInstance.waitTopicDeletion(Topic.GROUP_METADATA_TOPIC_NAME);
         }

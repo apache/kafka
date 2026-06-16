@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.test.TestUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,14 +28,17 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
+import java.net.JarURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,6 +47,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.stream.Collectors;
@@ -407,6 +412,13 @@ public class TestPlugins {
         if (resource == null) {
             throw new IOException("Could not find test plugin resource: " + resourceDir);
         }
+        // When this class is consumed as a test fixture from another module, the test-plugins
+        // resources are packaged inside the test-fixtures jar and the resource URL uses the "jar:"
+        // protocol, which cannot be walked as a filesystem directory. In that case, extract the
+        // directory subtree into a temporary directory so the existing compile/jar logic can run.
+        if ("jar".equals(resource.getProtocol())) {
+            return extractResourceDirectoryFromJar(resourceDir, resource);
+        }
         Path file = Paths.get(resource.getFile());
         if (!Files.isDirectory(file)) {
             throw new IOException("Resource is not a directory: " + resourceDir);
@@ -415,6 +427,30 @@ public class TestPlugins {
             throw new IOException("Resource directory is not readable: " + resourceDir);
         }
         return file;
+    }
+
+    private static Path extractResourceDirectoryFromJar(String resourceDir, URL resource) throws IOException {
+        String prefix = resourceDir.endsWith("/") ? resourceDir : resourceDir + "/";
+        Path tmpDir = TestUtils.tempDirectory("test-plugins-resources.").toPath();
+        JarURLConnection connection = (JarURLConnection) resource.openConnection();
+        // Do not share the cached JarFile with the classloader, so we own it and can close it.
+        connection.setUseCaches(false);
+        try (JarFile jarFile = connection.getJarFile()) {
+            Enumeration<JarEntry> entries = jarFile.entries();
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                String name = entry.getName();
+                if (entry.isDirectory() || !name.startsWith(prefix)) {
+                    continue;
+                }
+                Path dest = tmpDir.resolve(name.substring(prefix.length()));
+                Files.createDirectories(dest.getParent());
+                try (InputStream in = jarFile.getInputStream(entry)) {
+                    Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+        return tmpDir;
     }
 
     private static JarOutputStream openJarFile(Path jarFile) throws IOException {

@@ -36,7 +36,6 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 
 import java.util
-import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.jdk.OptionConverters._
 
@@ -1012,14 +1011,14 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
    *
    * @return Properties of the transaction state topic.
    */
-  def transactionStateTopicConfigs: Properties = {
-    val props = new Properties
-    props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
-    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-    props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, txnConfig.transactionLogMinInsyncReplicas.toString)
-    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, txnConfig.transactionLogSegmentBytes.toString)
-    props
+  def transactionStateTopicConfigs: util.Map[String, String] = {
+    util.Map.of(
+      TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false",
+      TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name,
+      TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT,
+      TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, txnConfig.transactionLogMinInsyncReplicas.toString,
+      TopicConfig.SEGMENT_BYTES_CONFIG, txnConfig.transactionLogSegmentBytes.toString
+    )
   }
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
