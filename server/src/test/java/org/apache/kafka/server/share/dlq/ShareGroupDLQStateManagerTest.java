@@ -34,6 +34,7 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
@@ -41,6 +42,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper.TopicPartitionData;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
+import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
@@ -48,6 +50,7 @@ import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogReadResult;
+import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -1704,6 +1707,214 @@ class ShareGroupDLQStateManagerTest {
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledWithRemoteFetch() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            captureProduce(capturedProduces),
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();   // 3 offsets requested
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+
+        LogReader logReader = mock(LogReader.class);
+        // The local read indicates that the data has been tiered off to remote storage.
+        LogReadResult readResult = mock(LogReadResult.class);
+        when(readResult.error()).thenReturn(Errors.NONE);
+        when(readResult.info()).thenReturn(remoteFetchDataInfo(param.topicIdPartition()));
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+        readResultMap.put(param.topicIdPartition(), readResult);
+        when(logReader.read(any(), anySet(), any(), any())).thenReturn(readResultMap);
+
+        // The remote read returns all the requested records.
+        when(logReader.readRemote(any())).thenReturn(CompletableFuture.completedFuture(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
+            )
+        )));
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
+        ));
+        verify(logReader).readRemote(any());
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledWithMixedLocalAndRemoteFetch() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            captureProduce(capturedProduces),
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();   // 3 offsets requested (0, 1, 2)
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+
+        LogReader logReader = mock(LogReader.class);
+        // First local read returns offset 0 locally; the next read (for offset 1) indicates the
+        // remaining data has been tiered off to remote storage.
+        LogReadResult localResult = mock(LogReadResult.class);
+        when(localResult.error()).thenReturn(Errors.NONE);
+        when(localResult.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1)
+            )
+        ));
+        LogReadResult remoteResult = mock(LogReadResult.class);
+        when(remoteResult.error()).thenReturn(Errors.NONE);
+        when(remoteResult.info()).thenReturn(remoteFetchDataInfo(param.topicIdPartition()));
+
+        LinkedHashMap<TopicIdPartition, LogReadResult> localMap = new LinkedHashMap<>();
+        localMap.put(param.topicIdPartition(), localResult);
+        LinkedHashMap<TopicIdPartition, LogReadResult> remoteMap = new LinkedHashMap<>();
+        remoteMap.put(param.topicIdPartition(), remoteResult);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(localMap)
+            .thenReturn(remoteMap);
+
+        // The remote read returns the batch covering the requested offset; it starts at base offset 0
+        // so records at or before the already-read position (offset 0) are skipped by the caller, and
+        // only the tiered offsets (1 and 2) are collected.
+        when(logReader.readRemote(any())).thenReturn(CompletableFuture.completedFuture(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
+            )
+        )));
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
+        ));
+        verify(logReader).readRemote(any());
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledWithRemoteFetchFailureSkipsRecords() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            captureProduce(capturedProduces),
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();
+        LogReader logReader = mock(LogReader.class);
+        // The local read indicates the data is in remote storage.
+        LogReadResult readResult = mock(LogReadResult.class);
+        when(readResult.error()).thenReturn(Errors.NONE);
+        when(readResult.info()).thenReturn(remoteFetchDataInfo(param.topicIdPartition()));
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+        readResultMap.put(param.topicIdPartition(), readResult);
+        when(logReader.read(any(), anySet(), any(), any())).thenReturn(readResultMap);
+
+        // The remote read fails (e.g. remote storage not configured or segment unavailable). The
+        // offsets are gracefully skipped and the DLQ record is produced with headers only.
+        when(logReader.readRemote(any())).thenReturn(CompletableFuture.failedFuture(
+            new IllegalStateException("remote log manager not configured")));
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), List.of(), List.of())
+        ));
+        verify(logReader).readRemote(any());
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    // Builds a FetchDataInfo that mimics a local read whose requested offset has been tiered off the
+    // local log: empty local records plus a remote fetch descriptor that triggers a remote read.
+    private static FetchDataInfo remoteFetchDataInfo(TopicIdPartition topicIdPartition) {
+        int maxBytes = 1024 * 1024;
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(
+            maxBytes,
+            true,
+            topicIdPartition,
+            new FetchRequest.PartitionData(topicIdPartition.topicId(), 0L, 0L, maxBytes, Optional.empty()),
+            FetchIsolation.HIGH_WATERMARK
+        );
+        return new FetchDataInfo(null, MemoryRecords.EMPTY, false, Optional.empty(), Optional.of(remoteStorageFetchInfo));
+    }
+
+    private static MockClient.RequestMatcher captureProduce(List<ProduceRequest> capturedProduces) {
+        return body -> {
+            if (body instanceof ProduceRequest pr) {
+                capturedProduces.add(pr);
+                return true;
+            }
+            return false;
+        };
     }
 
     private static ShareGroupDLQStateManager.ProduceRequestHandler newHandlerForCoalesceTest(

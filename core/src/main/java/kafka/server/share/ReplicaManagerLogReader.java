@@ -21,9 +21,12 @@ import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.storage.log.FetchParams;
+import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogReadResult;
+import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,11 +34,13 @@ import org.slf4j.LoggerFactory;
 import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
 import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
+import scala.jdk.javaapi.OptionConverters;
 import scala.runtime.BoxedUnit;
 
 /**
@@ -91,5 +96,38 @@ public class ReplicaManagerLogReader implements LogReader {
 
         log.trace("Data successfully retrieved by replica manager: {}", responseData);
         return responseData;
+    }
+
+    @Override
+    public CompletableFuture<FetchDataInfo> readRemote(RemoteStorageFetchInfo remoteStorageFetchInfo) {
+        CompletableFuture<FetchDataInfo> future = new CompletableFuture<>();
+
+        Optional<RemoteLogManager> remoteLogManager = OptionConverters.toJava(replicaManager.remoteLogManager());
+        if (remoteLogManager.isEmpty()) {
+            future.completeExceptionally(new IllegalStateException(
+                "Cannot read " + remoteStorageFetchInfo + " from remote storage as remote log manager is not configured."));
+            return future;
+        }
+
+        try {
+            // The read runs on the remote storage reader thread pool; the callback completes the
+            // future on that pool's thread, so the caller's thread is never blocked on remote IO.
+            remoteLogManager.get().asyncRead(remoteStorageFetchInfo, result -> {
+                if (result.error().isPresent()) {
+                    future.completeExceptionally(result.error().get());
+                } else if (result.fetchDataInfo().isPresent()) {
+                    future.complete(result.fetchDataInfo().get());
+                } else {
+                    future.completeExceptionally(new IllegalStateException(
+                        "Remote read for " + remoteStorageFetchInfo + " returned neither data nor error."));
+                }
+            });
+        } catch (Exception e) {
+            // e.g. RejectedExecutionException if the reader pool is shutting down.
+            log.warn("Unable to schedule remote read for {}.", remoteStorageFetchInfo, e);
+            future.completeExceptionally(e);
+        }
+
+        return future;
     }
 }
