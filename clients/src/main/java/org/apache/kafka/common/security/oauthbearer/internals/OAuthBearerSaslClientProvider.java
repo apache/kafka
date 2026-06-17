@@ -27,8 +27,13 @@ public final class OAuthBearerSaslClientProvider extends Provider {
 
     private OAuthBearerSaslClientProvider() {
         super("SASL/OAUTHBEARER Client Provider", "1.0", "SASL/OAUTHBEARER Client Provider for Kafka");
-        put("SaslClientFactory." + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-                OAuthBearerSaslClientFactory.class.getName());
+        putService(new Provider.Service(this, "SaslClientFactory", OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+                OAuthBearerSaslClientFactory.class.getName(), null, null) {
+            @Override
+            public Object newInstance(Object constructorParameter) {
+                return new OAuthBearerSaslClientFactory();
+            }
+        });
     }
 
     public static void initialize() {
