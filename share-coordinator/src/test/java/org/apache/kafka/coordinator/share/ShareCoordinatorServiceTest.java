@@ -2067,6 +2067,82 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
+    public void testPeriodicJobsDoNotDuplicateAfterDisableEnableWithInFlightJobs() throws InterruptedException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        PartitionWriter writer = mock(PartitionWriter.class);
+        MockTime time = new MockTime();
+        MockTimer timer = spy(new MockTimer(time));
+
+        Metrics metrics = new Metrics();
+
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        CompletableFuture<Optional<Long>> firstPruneFuture = new CompletableFuture<>();
+        CompletableFuture<Optional<Long>> secondPruneFuture = new CompletableFuture<>();
+        CompletableFuture<Void> firstSnapshotFuture = new CompletableFuture<>();
+        CompletableFuture<Void> secondSnapshotFuture = new CompletableFuture<>();
+
+        when(runtime.<Optional<Long>>scheduleWriteOperation(
+            eq("write-state-record-prune"),
+            any(),
+            any()
+        ))
+            .thenReturn(firstPruneFuture)
+            .thenReturn(secondPruneFuture);
+
+        when(runtime.<Void>scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any()
+        ))
+            .thenReturn(List.of(firstSnapshotFuture))
+            .thenReturn(List.of(secondSnapshotFuture));
+
+        service.startup(() -> 1);
+
+        MetadataImage disabledImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
+        when(disabledImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 0);
+
+        MetadataImage enabledImage = mockMetadataImageWithShareGroupsEnabled();
+        service.onMetadataUpdate(mock(MetadataDelta.class), enabledImage);
+
+        verify(timer, times(2)).add(any());
+        timer.advanceClock(30001L);
+        verify(runtime, times(1)).scheduleWriteOperation(
+            eq("write-state-record-prune"),
+            any(),
+            any()
+        );
+        verify(runtime, times(1)).scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any()
+        );
+
+        service.onMetadataUpdate(mock(MetadataDelta.class), disabledImage);
+        assertFalse(service.shouldRunPeriodicJob());
+
+        service.onMetadataUpdate(mock(MetadataDelta.class), enabledImage);
+        assertTrue(service.shouldRunPeriodicJob());
+        verify(timer, times(4)).add(any());
+
+        firstPruneFuture.complete(Optional.empty());
+        firstSnapshotFuture.complete(null);
+
+        verify(timer, times(4)).add(any());
+
+        checkMetrics(metrics);
+
+        service.shutdown();
+    }
+
+    @Test
     public void testShareStateTopicConfigs() {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         MockTime time = new MockTime();
