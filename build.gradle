@@ -1308,6 +1308,8 @@ project(':core') {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     into 'site-docs'
     duplicatesStrategy 'exclude'
   }
