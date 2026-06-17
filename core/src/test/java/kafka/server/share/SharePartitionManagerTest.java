@@ -2581,24 +2581,19 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testTransactionalAcknowledgeReinitializesPendingTransactionalSharePartitionBeforeStaging() throws Exception {
+    public void testTransactionalAcknowledgeUsesCachedSharePartitionWithPendingTransactionalRecords() throws Exception {
         String groupId = "grp";
         String memberId = "member-id";
         long producerId = 10L;
         short producerEpoch = 2;
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         SharePartitionKey sharePartitionKey = new SharePartitionKey(groupId, tp0);
-        SharePartition staleSharePartition = mock(SharePartition.class);
-        SharePartition refreshedSharePartition = mock(SharePartition.class);
-        SharePartitionListener listener = mock(SharePartitionListener.class);
+        SharePartition sharePartition = mock(SharePartition.class);
         SharePartitionCache partitionCache = mock(SharePartitionCache.class);
-        ReplicaManager replicaManager = mock(ReplicaManager.class);
 
-        when(staleSharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
-        when(staleSharePartition.hasPendingTransactionalRecords()).thenReturn(true);
-        when(staleSharePartition.listener()).thenReturn(listener);
-        when(refreshedSharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
-        when(refreshedSharePartition.stageTxnAcknowledge(
+        when(sharePartition.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
+        when(sharePartition.hasPendingTransactionalRecords()).thenReturn(true);
+        when(sharePartition.stageTxnAcknowledge(
             ArgumentMatchers.eq(memberId),
             ArgumentMatchers.eq(producerId),
             ArgumentMatchers.eq(producerEpoch),
@@ -2606,11 +2601,9 @@ public class SharePartitionManagerTest {
         )).thenReturn(CompletableFuture.completedFuture(null));
 
         when(partitionCache.computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any()))
-            .thenReturn(staleSharePartition, refreshedSharePartition);
-        when(partitionCache.remove(sharePartitionKey)).thenReturn(staleSharePartition);
+            .thenReturn(sharePartition);
 
         sharePartitionManager = SharePartitionManagerBuilder.builder()
-            .withReplicaManager(replicaManager)
             .withPartitionCache(partitionCache)
             .withBrokerTopicStats(brokerTopicStats)
             .build();
@@ -2624,12 +2617,11 @@ public class SharePartitionManagerTest {
         ).get();
 
         assertEquals(Errors.NONE.code(), response.get(tp0).errorCode());
-        verify(partitionCache, times(2)).computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any());
-        verify(partitionCache).remove(sharePartitionKey);
-        verify(staleSharePartition).markFenced();
-        verify(replicaManager).removeListener(tp0.topicPartition(), listener);
-        verify(staleSharePartition, Mockito.never()).stageTxnAcknowledge(anyString(), anyLong(), ArgumentMatchers.anyShort(), any());
-        verify(refreshedSharePartition).stageTxnAcknowledge(
+        verify(partitionCache).computeIfAbsent(ArgumentMatchers.eq(sharePartitionKey), any());
+        verify(partitionCache, Mockito.never()).remove(sharePartitionKey);
+        verify(sharePartition, Mockito.never()).hasPendingTransactionalRecords();
+        verify(sharePartition, Mockito.never()).markFenced();
+        verify(sharePartition).stageTxnAcknowledge(
             ArgumentMatchers.eq(memberId),
             ArgumentMatchers.eq(producerId),
             ArgumentMatchers.eq(producerEpoch),

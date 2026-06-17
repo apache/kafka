@@ -112,6 +112,78 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
     }
 
     @ClusterTest
+    public void testTransactionalShareAckCommitAcrossMultiplePolls() throws Exception {
+        String groupId = "txn-share-commit-multiple-polls";
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-commit-multiple-polls-producer");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 groupId,
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin admin = createAdminClient()) {
+
+            producer.send(record("first")).get();
+            producer.flush();
+
+            transactionalProducer.initTransactions();
+            transactionalProducer.partitionsFor(tp.topic());
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> firstRecords = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> firstRecord = firstRecords.iterator().next();
+            assertEquals(0L, firstRecord.offset());
+            assertEquals("first", new String(firstRecord.value(), StandardCharsets.UTF_8));
+
+            ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+            shareConsumer.acknowledge(firstRecord, AcknowledgeType.ACCEPT);
+            ShareAcknowledgements firstAcknowledgements = shareConsumer.acknowledgementsForTransaction();
+            assertFalse(firstAcknowledgements.isEmpty());
+            TopicIdPartition firstAcknowledgedPartition = firstAcknowledgements.acknowledgements().keySet().iterator().next();
+            assertEquals(tp, firstAcknowledgedPartition.topicPartition());
+            ShareAcknowledgementBatch firstBatch = firstAcknowledgements.acknowledgements().get(firstAcknowledgedPartition).get(0);
+            assertEquals(0L, firstBatch.firstOffset());
+            assertEquals(0L, firstBatch.lastOffset());
+            assertEquals(List.of(AcknowledgeType.ACCEPT.id), firstBatch.acknowledgeTypes());
+            transactionalProducer.beginTransaction();
+            try {
+                transactionalProducer.sendShareAcknowledgementsToTransaction(firstAcknowledgements, groupMetadata);
+            } catch (Exception e) {
+                fail("First transactional share acknowledgement failed", e);
+            }
+
+            producer.send(record("second")).get();
+            producer.flush();
+
+            ConsumerRecords<byte[], byte[]> secondRecords = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> secondRecord = secondRecords.iterator().next();
+            assertEquals(1L, secondRecord.offset());
+            assertEquals("second", new String(secondRecord.value(), StandardCharsets.UTF_8));
+
+            shareConsumer.acknowledge(secondRecord, AcknowledgeType.ACCEPT);
+            ShareAcknowledgements secondAcknowledgements = shareConsumer.acknowledgementsForTransaction();
+            assertFalse(secondAcknowledgements.isEmpty());
+            TopicIdPartition secondAcknowledgedPartition = secondAcknowledgements.acknowledgements().keySet().iterator().next();
+            assertEquals(tp, secondAcknowledgedPartition.topicPartition());
+            ShareAcknowledgementBatch secondBatch = secondAcknowledgements.acknowledgements().get(secondAcknowledgedPartition).get(0);
+            assertEquals(1L, secondBatch.firstOffset());
+            assertEquals(1L, secondBatch.lastOffset());
+            assertEquals(List.of(AcknowledgeType.ACCEPT.id), secondBatch.acknowledgeTypes());
+            try {
+                transactionalProducer.sendShareAcknowledgementsToTransaction(secondAcknowledgements, groupMetadata);
+            } catch (Exception e) {
+                fail("Second transactional share acknowledgement failed", e);
+            }
+
+            transactionalProducer.commitTransaction();
+
+            verifySharePartitionLag(admin, groupId, tp, 0L);
+            assertEquals(0, shareConsumer.poll(Duration.ofMillis(500)).count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
     public void testTransactionalShareAckAbortAccept() throws Exception {
         String groupId = "txn-share-abort-accept";
         alterShareAutoOffsetReset(groupId, "earliest");

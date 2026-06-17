@@ -828,13 +828,7 @@ public class SharePartitionManager implements AutoCloseable {
         SharePartitionKey sharePartitionKey
     ) {
         SharePartition sharePartition = getOrCreateSharePartition(sharePartitionKey);
-        return sharePartition.maybeInitialize().thenCompose(ignored -> {
-            if (sharePartition.hasPendingTransactionalRecords()) {
-                SharePartition refreshedSharePartition = reinitializePendingTransactionalSharePartition(sharePartitionKey);
-                return refreshedSharePartition.maybeInitialize().thenApply(refreshedResult -> refreshedSharePartition);
-            }
-            return CompletableFuture.completedFuture(sharePartition);
-        });
+        return sharePartition.maybeInitialize().thenApply(ignored -> sharePartition);
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {
