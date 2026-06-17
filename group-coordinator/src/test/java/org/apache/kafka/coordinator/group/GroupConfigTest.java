@@ -134,6 +134,9 @@ public class GroupConfigTest {
             } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_boolean");
             } else if (GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG.equals(name)) {
+                // This is a free-form list of tag keys, so values like "not_a_number" are valid. Only an
+                // empty tag key (an empty element between commas) is rejected.
+                assertPropertyInvalid(name, "tag1,,tag2");
             } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }

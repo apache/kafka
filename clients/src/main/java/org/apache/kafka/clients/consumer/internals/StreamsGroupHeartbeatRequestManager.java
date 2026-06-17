@@ -580,21 +580,28 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         List<StreamsGroupHeartbeatResponseData.Status> statuses = data.status();
         if (statuses != null) {
             streamsRebalanceData.setStatuses(statuses);
-            if (!statuses.isEmpty()) {
-                List<String> statusesToLog = new ArrayList<>();
-                for (StreamsGroupHeartbeatResponseData.Status status : statuses) {
-                    if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code()) {
-                        if (!status.statusDetail().equals(lastMissingClientTagsDetail)) {
-                            lastMissingClientTagsDetail = status.statusDetail();
-                            statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
-                        }
-                    } else {
+            // The broker recomputes and returns the full set of statuses on every heartbeat, so a response without a
+            // MISSING_CLIENT_TAGS status means the condition no longer holds.
+            boolean hasMissingClientTagsStatus = false;
+            List<String> statusesToLog = new ArrayList<>();
+            for (StreamsGroupHeartbeatResponseData.Status status : statuses) {
+                if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code()) {
+                    hasMissingClientTagsStatus = true;
+                    if (!status.statusDetail().equals(lastMissingClientTagsDetail)) {
+                        lastMissingClientTagsDetail = status.statusDetail();
                         statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
                     }
+                } else {
+                    statusesToLog.add("(" + status.statusCode() + ") " + status.statusDetail());
                 }
-                if (!statusesToLog.isEmpty()) {
-                    logger.warn("Membership is in the following statuses: {}", String.join(", ", statusesToLog));
-                }
+            }
+            // Reset the de-duplication marker once the MISSING_CLIENT_TAGS status clears, so that a later recurrence
+            // (even with the same detail) is logged again rather than silently suppressed.
+            if (!hasMissingClientTagsStatus) {
+                lastMissingClientTagsDetail = null;
+            }
+            if (!statusesToLog.isEmpty()) {
+                logger.warn("Membership is in the following statuses: {}", String.join(", ", statusesToLog));
             }
         }
 

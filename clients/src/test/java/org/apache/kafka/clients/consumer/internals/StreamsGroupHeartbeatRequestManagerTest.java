@@ -1740,6 +1740,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(1, firstWarnCount);
+            assertTrue(logAppender.getMessages("WARN").stream().anyMatch(m -> m.contains("[zone, cluster]")),
+                "The logged warning should contain the missing client tags detail [zone, cluster]");
 
             // Second heartbeat with the same status — should NOT log again
             final NetworkClientDelegate.PollResult result2 = heartbeatRequestManager.poll(time.milliseconds());
@@ -1786,6 +1788,52 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 .filter(m -> m.contains("Missing required client tags"))
                 .count();
             assertEquals(2, thirdWarnCount, "MISSING_CLIENT_TAGS warning should be logged again when the detail changes");
+            assertTrue(logAppender.getMessages("WARN").stream().anyMatch(m -> m.contains("[zone]")),
+                "The logged warning should contain the changed missing client tags detail [zone]");
+
+            // Fourth heartbeat with the status cleared (e.g. broker reverted its required tags) — nothing to log,
+            // but the de-duplication marker should be reset.
+            final NetworkClientDelegate.PollResult result4 = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result4.unsentRequests.size());
+
+            final ClientResponse response4 = new ClientResponse(
+                new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+                null, "-1", time.milliseconds(), time.milliseconds(), false, null, null,
+                new StreamsGroupHeartbeatResponse(
+                    new StreamsGroupHeartbeatResponseData()
+                        .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+                        .setStatus(List.of())
+                )
+            );
+            result4.unsentRequests.get(0).handler().onComplete(response4);
+
+            long fourthWarnCount = logAppender.getMessages("WARN").stream()
+                .filter(m -> m.contains("Missing required client tags"))
+                .count();
+            assertEquals(2, fourthWarnCount, "Clearing the status should not log a new warning");
+
+            // Fifth heartbeat with the status recurring with the previously-seen detail — should log again because
+            // the marker was reset when the status cleared.
+            final NetworkClientDelegate.PollResult result5 = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result5.unsentRequests.size());
+
+            final ClientResponse response5 = new ClientResponse(
+                new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+                null, "-1", time.milliseconds(), time.milliseconds(), false, null, null,
+                new StreamsGroupHeartbeatResponse(
+                    new StreamsGroupHeartbeatResponseData()
+                        .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+                        .setStatus(List.of(new StreamsGroupHeartbeatResponseData.Status()
+                            .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_CLIENT_TAGS.code())
+                            .setStatusDetail(changedStatusDetail)))
+                )
+            );
+            result5.unsentRequests.get(0).handler().onComplete(response5);
+
+            long fifthWarnCount = logAppender.getMessages("WARN").stream()
+                .filter(m -> m.contains("Missing required client tags"))
+                .count();
+            assertEquals(3, fifthWarnCount, "MISSING_CLIENT_TAGS warning should be logged again after the status cleared and recurred");
         }
     }
 
