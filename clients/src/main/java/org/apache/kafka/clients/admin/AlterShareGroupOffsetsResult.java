@@ -76,8 +76,8 @@ public class AlterShareGroupOffsetsResult {
                 .collect(Collectors.toList());
             for (ApiException exception : topicPartitionErrorsMap.values()) {
                 if (exception != null) {
-                    throw Errors.forException(exception).exception(
-                        "Failed altering group offsets for the following partitions: " + partitionsFailed);
+                    throw Errors.forException(exception).exception(exception.getMessage() +
+                        " Failed altering group offsets for the following partitions: " + partitionsFailed);
                 }
             }
             return null;
