@@ -635,6 +635,7 @@ class DefaultStateUpdaterTest {
         final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         when(task.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 42L));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
         stateUpdater.add(task);
         stateUpdater.start();
 
@@ -648,6 +649,7 @@ class DefaultStateUpdaterTest {
         when(t1.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 100L));
         when(t2.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_B_0, 200L));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
         stateUpdater.add(t1);
         stateUpdater.add(t2);
         stateUpdater.start();
@@ -675,6 +677,7 @@ class DefaultStateUpdaterTest {
             TOPIC_PARTITION_A_1, OFFSET_UNKNOWN
         ));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
         stateUpdater.add(task);
         stateUpdater.start();
 
@@ -689,6 +692,7 @@ class DefaultStateUpdaterTest {
             TOPIC_PARTITION_A_1, 100L
         ));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
         stateUpdater.add(task);
         stateUpdater.start();
 
@@ -708,6 +712,7 @@ class DefaultStateUpdaterTest {
             TOPIC_PARTITION_B_0, OFFSET_UNKNOWN
         ));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
         stateUpdater.add(task);
         stateUpdater.start();
 
@@ -720,6 +725,7 @@ class DefaultStateUpdaterTest {
         final StreamTask stateful = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         when(stateful.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 5L));
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
         stateUpdater.add(stateless);
         stateUpdater.add(stateful);
         stateUpdater.start();
