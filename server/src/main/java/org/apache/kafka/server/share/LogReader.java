@@ -53,10 +53,9 @@ public interface LogReader {
      * preceding {@link #read} determined that the requested data resides in remote storage.
      *
      * <p>The read is performed off-thread (on the remote storage reader pool) so that the caller's
-     * thread is not blocked on remote storage IO. It is intended for low volume, best-effort reads
-     * (e.g. copying records to a DLQ topic). The returned future completes exceptionally when remote
-     * storage is not configured on the broker or the read could not be completed, allowing callers
-     * to gracefully skip the data instead of failing.
+     * thread is not blocked on remote storage IO. It is intended for low volume, best-effort reads.
+     * The returned future completes exceptionally when remote storage is not configured on the broker
+     * or the read could not be completed, allowing callers to gracefully skip the data instead of failing.
      *
      * @param remoteStorageFetchInfo The remote fetch descriptor obtained from a prior local read.
      * @return A future that completes with the fetched data, or completes exceptionally if it could
