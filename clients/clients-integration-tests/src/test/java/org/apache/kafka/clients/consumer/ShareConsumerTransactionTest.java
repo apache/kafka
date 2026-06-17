@@ -503,6 +503,77 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
         }
     }
 
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3")
+        }
+    )
+    @Timeout(180)
+    public void testTransactionalShareAckAbortAfterSourceLeaderFailoverWithPendingState() throws Exception {
+        String groupId = "txn-share-recovery-abort";
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Admin admin = createAdminClient()) {
+            TopicIdPartition topicIdPartition = createTopicIdPartitionWithRemoteShareCoordinator(admin, groupId, "txn-share-recovery-abort-topic", 0);
+            TopicPartition topicPartition = topicIdPartition.topicPartition();
+
+            try (Producer<byte[], byte[]> producer = createProducer();
+                 Producer<byte[], byte[]> transactionalProducer = createRemoteTransactionalProducer("txn-share-recovery-abort-producer")) {
+                producer.send(record(topicPartition, "pending-abort")).get();
+                producer.flush();
+
+                transactionalProducer.initTransactions();
+                transactionalProducer.partitionsFor(topicPartition.topic());
+
+                try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                    groupId,
+                    Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+                    shareConsumer.subscribe(Set.of(topicPartition.topic()));
+                    ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+                    ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+                    assertEquals(0L, record.offset());
+                    assertEquals("pending-abort", new String(record.value(), StandardCharsets.UTF_8));
+
+                    ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+                    shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                    ShareAcknowledgements acknowledgements = shareConsumer.acknowledgementsForTransaction();
+                    assertFalse(acknowledgements.isEmpty());
+
+                    transactionalProducer.beginTransaction();
+                    transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+                }
+
+                shutdownLeaderAndWaitForNewLeader(admin, topicPartition);
+
+                try (ShareConsumer<byte[], byte[]> reloadedConsumer = createShareConsumer(
+                    groupId,
+                    Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+                    reloadedConsumer.subscribe(Set.of(topicPartition.topic()));
+                    assertEquals(0, reloadedConsumer.poll(Duration.ofMillis(1000)).count());
+
+                    transactionalProducer.abortTransaction();
+
+                    verifySharePartitionLag(admin, groupId, topicPartition, 1L);
+                    ConsumerRecords<byte[], byte[]> redeliveredRecords = waitedPoll(reloadedConsumer, 2500L, 1);
+                    ConsumerRecord<byte[], byte[]> redeliveredRecord = redeliveredRecords.iterator().next();
+                    assertEquals(0L, redeliveredRecord.offset());
+                    assertEquals("pending-abort", new String(redeliveredRecord.value(), StandardCharsets.UTF_8));
+                    verifyShareGroupStateTopicRecordsProduced();
+                }
+            }
+        }
+    }
+
     private Producer<byte[], byte[]> createTransactionalProducer(String transactionalId) {
         return createProducer(Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId,
