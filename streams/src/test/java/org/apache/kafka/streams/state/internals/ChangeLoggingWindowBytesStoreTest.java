@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -38,6 +40,8 @@ import org.mockito.quality.Strictness;
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.sameInstance;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +57,8 @@ public class ChangeLoggingWindowBytesStoreTest {
     private WindowStore<Bytes, byte[]> inner;
     @Mock
     private ProcessorContextImpl context;
+    @Mock
+    private ReadOnlyWindowStore<Bytes, byte[]> view;
     private ChangeLoggingWindowBytesStore store;
 
     private static final Position POSITION = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
@@ -122,6 +128,18 @@ public class ChangeLoggingWindowBytesStoreTest {
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused =  store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
             verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
         }
+    }
+
+    @Test
+    public void shouldDelegateReadOnlyUncommittedToInner() {
+        when(inner.readOnly(IsolationLevel.READ_UNCOMMITTED)).thenReturn(view);
+        assertThat(store.readOnly(IsolationLevel.READ_UNCOMMITTED), sameInstance(view));
+    }
+
+    @Test
+    public void shouldDelegateReadOnlyCommittedToInner() {
+        when(inner.readOnly(IsolationLevel.READ_COMMITTED)).thenReturn(view);
+        assertThat(store.readOnly(IsolationLevel.READ_COMMITTED), sameInstance(view));
     }
 
     @Test

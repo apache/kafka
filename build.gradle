@@ -1017,6 +1017,7 @@ project(':server') {
     implementation project(':server-common')
     implementation project(':storage')
     implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
@@ -1041,6 +1042,7 @@ project(':server') {
     testFixturesImplementation testFixtures(project(':clients'))
     testFixturesImplementation project(':metadata')
     testFixturesImplementation project(':server-common')
+    testFixturesImplementation testFixtures(project(':server-common'))
     testFixturesImplementation libs.junitJupiter
 
     testRuntimeOnly runtimeTestLibs
@@ -1432,6 +1434,7 @@ project(':metadata') {
 
     testImplementation testLog4j2Libs
     testFixturesImplementation testFixtures(project(':server-common'))
+    testFixturesImplementation project(':raft')
     testFixturesImplementation libs.junitJupiter
 
     testImplementation libs.junitJupiter
@@ -2476,7 +2479,6 @@ project(':storage') {
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
     testImplementation project(':transaction-coordinator')
-    testImplementation libs.hamcrest
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -2675,7 +2677,7 @@ project(':tools') {
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':connect:api')
     testImplementation project(':connect:runtime')
-    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation testFixtures(project(':connect:runtime'))
     testImplementation project(':storage:storage-api').sourceSets.main.output
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
@@ -2975,6 +2977,9 @@ project(':streams') {
             ':streams:upgrade-system-tests-38:test',
             ':streams:upgrade-system-tests-39:test',
             ':streams:upgrade-system-tests-40:test',
+            ':streams:upgrade-system-tests-41:test',
+            ':streams:upgrade-system-tests-42:test',
+            ':streams:upgrade-system-tests-43:test',
             ':streams:examples:test'
     ]
   )
@@ -3543,6 +3548,38 @@ project(':streams:upgrade-system-tests-41') {
   }
 }
 
+project(':streams:upgrade-system-tests-42') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-42"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_42
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-43') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-43"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_43
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.gradleup.shadow'
@@ -3729,6 +3766,8 @@ project(':connect:json') {
 }
 
 project(':connect:runtime') {
+  apply plugin: 'java-test-fixtures'
+
   configurations {
     swagger
   }
@@ -3778,6 +3817,19 @@ project(':connect:runtime') {
     // or run time. So, we add it to a separate configuration, which we use later on during docs generation
     swagger libs.jakartaServletApi
     swagger libs.jaxrs2Jakarta
+
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation project(':core')
+    testFixturesImplementation project(':metadata')
+    testFixturesImplementation project(':server')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation project(':group-coordinator')
+    testFixturesImplementation project(':test-common:test-common-runtime')
+    testFixturesImplementation libs.jettyClient
+    testFixturesImplementation libs.jacksonDatabind
+    testFixturesImplementation libs.jakartaRsApi
+    testFixturesImplementation libs.slf4jApi
+    testFixturesImplementation libs.junitJupiter
 
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':core')
@@ -3909,7 +3961,7 @@ project(':connect:file') {
 
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':connect:runtime')
-    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation testFixtures(project(':connect:runtime'))
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation testFixtures(project(':server-common'))
@@ -4013,7 +4065,7 @@ project(':connect:mirror') {
     testImplementation libs.bndlib
     testImplementation libs.mockitoCore
     testImplementation testFixtures(project(':clients'))
-    testImplementation project(':connect:runtime').sourceSets.test.output
+    testImplementation testFixtures(project(':connect:runtime'))
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':raft')
@@ -4148,6 +4200,7 @@ gradle.projectsEvaluated {
     'share-coordinator': ':share-coordinator',
     'metadata': ':metadata',
     'raft': ':raft',
+    'connect/runtime': ':connect:runtime',
   ]
   allprojects { proj ->
     proj.configurations.all { config ->

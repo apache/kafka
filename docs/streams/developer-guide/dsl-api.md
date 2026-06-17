@@ -925,6 +925,16 @@ Stateful transformations depend on state for processing inputs and producing out
 
 
 
+**Headers-aware state stores ([KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G)):** Set [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format) to make supported DSL operators use headers-aware state stores. These stores can keep record headers together with the value and timestamp.
+
+This config only changes the state store format. It does not define how DSL operators create headers for output records. Current behavior is:
+
+  * aggregations, KTable-KTable joins, materialized `KTable.mapValues`, `KStream.toTable()`, and `StreamsBuilder.table()` write empty headers to their materialized stores
+  * KStream-KStream join window stores keep source-record headers, but join result records do not get computed or merged headers; they may carry the headers from the record that triggered the result
+  * `suppress()` and left/outer [KStream-KStream joins](#kstream-kstream-join) use non-headers-aware buffer stores, so records passing through those buffers lose their headers
+
+A follow-up KIP will define how DSL result headers are computed.
+
 Note, that state stores are fault-tolerant. In case of failure, Kafka Streams guarantees to fully restore all state stores prior to resuming the processing. See [Fault Tolerance](../architecture.html#streams_architecture_recovery) for further information.
 
 Available stateful transformations in the DSL include:
@@ -2113,9 +2123,13 @@ There are two exceptions where co-partitioning is not required. For KStream-Glob
 
 
 
-#### KStream-KStream Join
+#### KStream-KStream Join {#kstream-kstream-join}
 
-KStream-KStream joins are always windowed joins, because otherwise the size of the internal state store used to perform the join - e.g., a sliding window or "buffer" - would grow indefinitely. For stream-stream joins it's important to highlight that a new input record on one side will produce a join output _for each_ matching record on the other side, and there can be _multiple_ such matching records in a given join window (cf. the row with timestamp 15 in the join semantics table below, for example).
+KStream-KStream joins are always windowed joins, because otherwise the size of the internal state store used to perform the join - e.g., a sliding window or "buffer" - would grow indefinitely.
+
+**Note on headers-aware state stores:** With [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format), inner stream-stream joins use headers-aware join window stores. Left and outer stream-stream joins also use a separate buffer store for not-yet-matched records, and that buffer is not headers-aware. Records that pass through this buffer lose their headers.
+
+Join output records do not get computed or merged headers. The current forwarding path may carry the headers from the record that triggered the output. For stream-stream joins it's important to highlight that a new input record on one side will produce a join output _for each_ matching record on the other side, and there can be _multiple_ such matching records in a given join window (cf. the row with timestamp 15 in the join semantics table below, for example).
 
 Join output records are effectively created as follows, leveraging the user-supplied `ValueJoiner`:
     
@@ -4628,7 +4642,7 @@ If we then receive three additional records (including two out-of-order records)
 
 Detected sessions after having received six input records. Note the two out-of-order data records at t=4 (green) and t=5 (blue), which lead to a merge of sessions and an extension of a session, respectively.
 
-#### Window Final Results
+#### Window Final Results {#window-final-results}
 
 In Kafka Streams, windowed computations update their results continuously. As new data arrives for a window, freshly computed results are emitted downstream. For many applications, this is ideal, since fresh results are always available. and Kafka Streams is designed to make programming continuous computations seamless. However, some applications need to take action **only** on the final result of a windowed computation. Common examples of this are sending alerts or delivering results to a system that doesn't support updates. 
 
@@ -4658,6 +4672,8 @@ The key parts of this program are:
      This configures the buffer used for storing events until their windows close. Production code is able to put a cap on the amount of memory to use for the buffer, but this simple example creates a buffer with no upper bound. 
 
 One thing to note is that suppression is just like any other Kafka Streams operator, so you can build a topology with two branches emerging from the `count`, one suppressed, and one not, or even multiple differently configured suppressions. This allows you to apply suppressions where they are needed and otherwise rely on the default continuous update behavior. 
+
+**Note on headers-aware state stores:** `suppress()` uses an in-memory buffer that is not headers-aware. Record headers attached to upstream records are not preserved across the suppression boundary, even when [`dsl.store.format=HEADERS`](config-streams.html#dsl-store-format) is set globally per [KIP-1285](https://cwiki.apache.org/confluence/x/4ow8G).
 
 For more detailed information, see the JavaDoc on the `Suppressed` config object and [KIP-328](https://cwiki.apache.org/confluence/x/sQU0BQ "KIP-328"). 
 
@@ -5934,5 +5950,3 @@ A complete example of user-defined Serdes can be found in a test class within th
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
   * [Developer Guide](/documentation/streams/developer-guide/)
-
-

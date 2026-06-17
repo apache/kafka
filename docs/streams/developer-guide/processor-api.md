@@ -173,11 +173,16 @@ Yes (enabled by default)
   * Stores its data on local disk.
   * Storage capacity: managed local state can be larger than the memory (heap space) of an application instance, but must fit into the available local disk space.
   * RocksDB settings can be fine-tuned, see [RocksDB configuration](config-streams.html#streams-developer-guide-rocksdb-config).
-  * Available [store variants](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore\(java.lang.String\)): timestamped key-value store, versioned key-value store, time window key-value store, session window key-value store.
-  * Use [persistentTimestampedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore\(java.lang.String\)) when you need a persistent key-(value/timestamp) store that supports put/get/delete and range queries.
-  * Use [persistentVersionedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore\(java.lang.String,java.time.Duration\)) when you need a persistent, versioned key-(value/timestamp) store that supports put/get/delete and timestamped get operations.
-  * Use [persistentWindowStore](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentWindowStore\(java.lang.String,java.time.Duration,java.time.Duration,boolean\)) or [persistentTimestampedWindowStore](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore\(java.lang.String,java.time.Duration,java.time.Duration,boolean\)) when you need a persistent timeWindowedKey-value or timeWindowedKey-(value/timestamp) store, respectively.
-  * Use [persistentSessionStore](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStore\(java.lang.String,java.time.Duration\)) when you need a persistent sessionWindowedKey-value store.
+  * Available [persistent store variants](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)>): plain key-value store (values only — no embedded record timestamp in state), timestamped key-value store, versioned key-value store, windowed store, session store. Header-aware variants are also described below.
+  * Use [persistentKeyValueStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore(java.lang.String)>) when you need a persistent plain key-value store (no embedded record timestamp).
+  * Use [persistentTimestampedKeyValueStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStore(java.lang.String)>) when you need a persistent key-(value/timestamp) store that supports put/get/delete and range queries.
+  * Use [persistentVersionedKeyValueStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentVersionedKeyValueStore(java.lang.String,java.time.Duration)>) when you need a persistent, versioned key-(value/timestamp) store that supports put/get/delete and timestamped get operations.
+  * Use [persistentWindowStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) or [persistentTimestampedWindowStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStore(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) when you need a persistent plain windowed store or a persistent timestamped windowed store, respectively.
+  * Use [persistentSessionStore](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStore(java.lang.String,java.time.Duration)>) when you need a persistent session store.
+  * **Headers:** To persist [record headers](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()>) in state, use a `WithHeaders` store supplier together with its corresponding `StoreBuilder` factory (see [Headers in State Stores](#headers-in-state-stores) below). There are no `WithHeaders` suppliers for plain persistent key-value or plain persistent windowed stores. `WithHeaders` suppliers exist only for persistent timestamped key-value, persistent timestamped windowed, and session stores.
+  * Use [persistentTimestampedKeyValueStoreWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedKeyValueStoreWithHeaders(java.lang.String)>) with [timestampedKeyValueStoreWithHeadersBuilder](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#timestampedKeyValueStoreWithHeadersBuilder(org.apache.kafka.streams.state.KeyValueBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent key-(value/timestamp) store that retains headers and supports put/get/delete and range queries.
+  * Use [persistentTimestampedWindowStoreWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentTimestampedWindowStoreWithHeaders(java.lang.String,java.time.Duration,java.time.Duration,boolean)>) with [timestampedWindowStoreWithHeadersBuilder](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#timestampedWindowStoreWithHeadersBuilder(org.apache.kafka.streams.state.WindowBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent timestamped windowed store that retains headers.
+  * Use [persistentSessionStoreWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentSessionStoreWithHeaders(java.lang.String,java.time.Duration)>) with [sessionStoreWithHeadersBuilder](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#sessionStoreWithHeadersBuilder(org.apache.kafka.streams.state.SessionBytesStoreSupplier,org.apache.kafka.common.serialization.Serde,org.apache.kafka.common.serialization.Serde)>) when you need a persistent session store that retains headers.
 
 
     
@@ -217,7 +222,7 @@ Yes (enabled by default)
   * Stores its data in memory.
   * Storage capacity: managed local state must fit into memory (heap space) of an application instance.
   * Useful when application instances run in an environment where local disk space is either not available or local disk space is wiped in-between app instance restarts.
-  * Available [store variants](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#inMemoryKeyValueStore-java.lang.String-): time window key-value store, session window key-value store.
+  * Available [in-memory store variants](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/Stores.html#inMemoryKeyValueStore(java.lang.String)>): plain key-value store, windowed store, session store.
   * Use [TimestampedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html) when you need a key-(value/timestamp) store that supports put/get/delete and range queries.
   * Use [TimestampedWindowStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html) when you need to store windowedKey-(value/timestamp) pairs.
   * There is no built-in in-memory, versioned key-value store at this time.
@@ -299,9 +304,19 @@ You can query timestamped state stores both with and without a timestamp.
   * For DSL operators, store data is upgraded lazily in the background.
   * No upgrade happens if you provide a custom XxxBytesStoreSupplier, but you can opt-in by implementing the [TimestampedBytesStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedBytesStore.html) interface. In this case, the old format is retained, and Streams uses a proxy store that removes/adds timestamps on read/write.
 
+## Headers in State Stores {#headers-in-state-stores}
 
+You can materialize Kafka [record headers](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/processor/api/Record.html#headers()>) into RocksDB-backed state together with keys and values. Plain persistent key-value stores keep values without an embedded record timestamp; suppliers for timestamped key-value, windowed, or session semantics expose timestamps according to each store type. Use this when downstream processing needs access to record headers from prior input — for example, when an aggregation or join implemented with the Processor API must propagate headers to its output.
 
-## Versioned Key-Value State Stores
+Only persistent, RocksDB-backed suppliers exist for header-aware stores (the `Stores` factory names start with `persistent` and end with `WithHeaders`). 
+
+Use [`Stores`](/{version}/javadoc/org/apache/kafka/streams/state/Stores.html) methods whose names end with `WithHeaders`, each paired with the corresponding `StoreBuilder` factory. For example, pair `persistentTimestampedKeyValueStoreWithHeaders` with `timestampedKeyValueStoreWithHeadersBuilder`, `persistentTimestampedWindowStoreWithHeaders` with `timestampedWindowStoreWithHeadersBuilder`, and `persistentSessionStoreWithHeaders` with `sessionStoreWithHeadersBuilder`.
+
+Key-value and window reads return [ValueTimestampHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html>), which combines the value, its timestamp, and the associated headers. [SessionStoreWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/SessionStoreWithHeaders.html>) stores session aggregations as [AggregationWithHeaders](<https://kafka.apache.org/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html>): the aggregated value together with the headers tied to that session.
+
+**Upgrade note:** Rolling bounce, changelog compatibility, lazy on-disk migration, performance trade-offs, and downgrade constraints are covered in the [Kafka Streams upgrade guide](../../upgrade-guide/#kip-1271-headers-aware-stores).
+
+## Versioned Key-Value State Stores {#versioned-key-value-state-stores}
 
 Versioned key-value state stores are available since Kafka Streams 3.5. Rather than storing a single record version (value and timestamp) per key, versioned state stores may store multiple record versions per key. This allows versioned state stores to support timestamped retrieval operations to return the latest record (per key) as of a specified timestamp.
 
@@ -334,7 +349,7 @@ A read-only state store materialized the data from its input topic. It also uses
 
 **note:** beware of the partitioning requirements when using read-only state stores for lookups during processing. You might want to make sure the original changelog topic is co-partitioned with the processors reading the read-only statestore.
 
-## Implementing Custom State Stores
+## Implementing Custom State Stores {#implementing-custom-state-stores}
 
 You can use the built-in state store types or implement your own. The primary interface to implement for the store is `org.apache.kafka.streams.processor.StateStore`. Kafka Streams also has a few extended interfaces such as `KeyValueStore` and `VersionedKeyValueStore`.
 
