@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -1247,6 +1248,14 @@ public class TaskManager {
         if (schedulingTaskManager != null) {
             schedulingTaskManager.signalTaskExecutors();
         }
+    }
+
+    /**
+     * Returns the per-task changelog offset-sum snapshot published by the state updater.
+     * Safe to invoke from any thread; the returned map is immutable.
+     */
+    public Map<StreamsRebalanceData.TaskId, Long> taskOffsetSumSnapshot() {
+        return stateUpdater.taskOffsetSumSnapshot();
     }
 
     /**

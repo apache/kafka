@@ -1703,7 +1703,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of);
         thread = new StreamThread(
             mockTime, config, null,
             mainConsumer, consumer,
@@ -1736,7 +1736,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of);
         thread = new StreamThread(
             mockTime, config, null,
             mainConsumer, consumer,
@@ -2981,7 +2981,8 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             Map.of(),
-            Map.of()
+            Map.of(),
+            Map::of
         );
 
         final StreamsMetricsImpl streamsMetrics =
@@ -3932,7 +3933,8 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             Map.of(),
-            Map.of()
+            Map.of(),
+            Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -3993,7 +3995,8 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             Map.of(),
-            Map.of()
+            Map.of(),
+            Map::of
         );
 
         final Properties props = configProps(false, false);
@@ -4091,11 +4094,12 @@ public class StreamThreadTest {
         when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-                UUID.randomUUID(),
-                Optional.empty(),
-                Optional.empty(),
-                Map.of(),
-                Map.of()
+            UUID.randomUUID(),
+            Optional.empty(),
+            Optional.empty(),
+            Map.of(),
+            Map.of(),
+            Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -4163,11 +4167,12 @@ public class StreamThreadTest {
         when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-                UUID.randomUUID(),
-                Optional.empty(),
-                Optional.empty(),
-                Map.of(),
-                Map.of()
+            UUID.randomUUID(),
+            Optional.empty(),
+            Optional.empty(),
+            Map.of(),
+            Map.of(),
+            Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
@@ -4231,7 +4236,8 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             Map.of(),
-            Map.of()
+            Map.of(),
+            Map::of
         );
 
         final Properties props = configProps(false, false);
@@ -4289,11 +4295,12 @@ public class StreamThreadTest {
         when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-                UUID.randomUUID(),
-                Optional.empty(),
-                Optional.empty(),
-                Map.of(),
-                Map.of()
+            UUID.randomUUID(),
+            Optional.empty(),
+            Optional.empty(),
+            Map.of(),
+            Map.of(),
+            Map::of
         );
 
         final Properties props = configProps(false, false);
@@ -4361,11 +4368,12 @@ public class StreamThreadTest {
         when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-                UUID.randomUUID(),
-                Optional.empty(),
-                Optional.empty(),
-                Map.of(),
-                Map.of()
+            UUID.randomUUID(),
+            Optional.empty(),
+            Optional.empty(),
+            Map.of(),
+            Map.of(),
+            Map::of
         );
 
         final Properties props = configProps(false, false);

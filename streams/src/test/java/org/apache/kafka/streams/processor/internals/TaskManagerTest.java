@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -1946,6 +1947,18 @@ public class TaskManagerTest {
                 mkEntry(taskId02, changelogOffsetOfRestoringStandbyTask)
             ))
         );
+    }
+
+    @Test
+    public void shouldDelegateTaskOffsetSumSnapshotToStateUpdater() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        final Map<StreamsRebalanceData.TaskId, Long> published = Map.of(
+            new StreamsRebalanceData.TaskId("0", 0), 42L
+        );
+        when(stateUpdater.taskOffsetSumSnapshot()).thenReturn(published);
+
+        assertThat(taskManager.taskOffsetSumSnapshot(), is(published));
     }
 
     @Test
