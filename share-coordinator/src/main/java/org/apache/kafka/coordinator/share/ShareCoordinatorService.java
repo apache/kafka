@@ -76,6 +76,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntSupplier;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
@@ -140,6 +141,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
      * Config based sentinel used to start or eventually stop defined periodic job tasks.
      */
     private volatile boolean shouldRunPeriodicJob;
+
+    private final AtomicLong periodicJobGeneration = new AtomicLong();
 
     public static class Builder {
         private final int nodeId;
@@ -319,9 +322,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
         log.info("Startup complete.");
     }
 
-    private void setupPeriodicJobs() {
-        setupRecordPruning();
-        setupSnapshotColdPartitions();
+    private void setupPeriodicJobs(long generation) {
+        setupRecordPruning(generation);
+        setupSnapshotColdPartitions(generation);
     }
 
     /**
@@ -331,11 +334,15 @@ public class ShareCoordinatorService implements ShareCoordinator {
      */
     // Visibility for tests
     void setupRecordPruning() {
+        setupRecordPruning(periodicJobGeneration.get());
+    }
+
+    private void setupRecordPruning(long generation) {
         log.debug("Scheduling share-group state topic prune job.");
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
-                if (!shouldRunPeriodicJob) {
+                if (!shouldRunPeriodicJob(generation)) {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -346,8 +353,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         if (exp != null) {
                             log.error("Received error in share-group state topic prune.", exp);
                         }
+                        if (!shouldRunPeriodicJob(generation)) {
+                            return;
+                        }
                         // Perpetual recursion, failure or not.
-                        setupRecordPruning();
+                        setupRecordPruning(generation);
                     });
             }
         });
@@ -415,11 +425,15 @@ public class ShareCoordinatorService implements ShareCoordinator {
      */
     // Visibility for tests
     void setupSnapshotColdPartitions() {
+        setupSnapshotColdPartitions(periodicJobGeneration.get());
+    }
+
+    private void setupSnapshotColdPartitions(long generation) {
         log.debug("Scheduling cold share-partition snapshotting.");
         timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
             @Override
             public void run() {
-                if (!shouldRunPeriodicJob) {
+                if (!shouldRunPeriodicJob(generation)) {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
@@ -432,7 +446,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         if (exp != null) {
                             log.error("Received error while snapshotting cold partitions.", exp);
                         }
-                        setupSnapshotColdPartitions();
+                        if (!shouldRunPeriodicJob(generation)) {
+                            return;
+                        }
+                        setupSnapshotColdPartitions(generation);
                     });
             }
         });
@@ -1137,8 +1154,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
         // 1            1               no op on flag, do not call jobs
         if (enabled ^ shouldRunPeriodicJob) {
             shouldRunPeriodicJob = enabled;
+            long generation = periodicJobGeneration.incrementAndGet();
             if (enabled) {
-                setupPeriodicJobs();
+                setupPeriodicJobs(generation);
             }
         }
     }
@@ -1181,5 +1199,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
     // Visibility for tests
     boolean shouldRunPeriodicJob() {
         return shouldRunPeriodicJob;
+    }
+
+    private boolean shouldRunPeriodicJob(long generation) {
+        return shouldRunPeriodicJob && periodicJobGeneration.get() == generation;
     }
 }
