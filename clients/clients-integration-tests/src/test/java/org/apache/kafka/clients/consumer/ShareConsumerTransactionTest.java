@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import kafka.server.KafkaBroker;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -433,6 +435,74 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
         }
     }
 
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "3")
+        }
+    )
+    @Timeout(180)
+    public void testTransactionalShareAckCommitAfterSourceLeaderFailoverWithPendingState() throws Exception {
+        String groupId = "txn-share-recovery-commit";
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Admin admin = createAdminClient()) {
+            TopicIdPartition topicIdPartition = createTopicIdPartitionWithRemoteShareCoordinator(admin, groupId, "txn-share-recovery-commit-topic", 0);
+            TopicPartition topicPartition = topicIdPartition.topicPartition();
+
+            try (Producer<byte[], byte[]> producer = createProducer();
+                 Producer<byte[], byte[]> transactionalProducer = createRemoteTransactionalProducer("txn-share-recovery-commit-producer")) {
+                producer.send(record(topicPartition, "pending-commit")).get();
+                producer.flush();
+
+                transactionalProducer.initTransactions();
+                transactionalProducer.partitionsFor(topicPartition.topic());
+
+                try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                    groupId,
+                    Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+                    shareConsumer.subscribe(Set.of(topicPartition.topic()));
+                    ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+                    ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+                    assertEquals(0L, record.offset());
+                    assertEquals("pending-commit", new String(record.value(), StandardCharsets.UTF_8));
+
+                    ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+                    shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                    ShareAcknowledgements acknowledgements = shareConsumer.acknowledgementsForTransaction();
+                    assertFalse(acknowledgements.isEmpty());
+
+                    transactionalProducer.beginTransaction();
+                    transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+                }
+
+                shutdownLeaderAndWaitForNewLeader(admin, topicPartition);
+
+                try (ShareConsumer<byte[], byte[]> reloadedConsumer = createShareConsumer(
+                    groupId,
+                    Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+                    reloadedConsumer.subscribe(Set.of(topicPartition.topic()));
+                    assertEquals(0, reloadedConsumer.poll(Duration.ofMillis(1000)).count());
+
+                    transactionalProducer.commitTransaction();
+
+                    verifySharePartitionLag(admin, groupId, topicPartition, 0L);
+                    assertEquals(0, reloadedConsumer.poll(Duration.ofMillis(500)).count());
+                    verifyShareGroupStateTopicRecordsProduced();
+                }
+            }
+        }
+    }
+
     private Producer<byte[], byte[]> createTransactionalProducer(String transactionalId) {
         return createProducer(Map.of(
             ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId,
@@ -500,5 +570,28 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
     private int shareStatePartition(String groupId, Uuid topicId, int partition) {
         SharePartitionKey key = SharePartitionKey.getInstance(groupId, topicId, partition);
         return Utils.abs(key.asCoordinatorKey().hashCode()) % sgsTopicPartitions.size();
+    }
+
+    private void shutdownLeaderAndWaitForNewLeader(Admin admin, TopicPartition topicPartition) throws Exception {
+        List<Integer> oldLeaders = topicPartitionLeader(admin, topicPartition.topic(), topicPartition.partition());
+        assertEquals(1, oldLeaders.size());
+        int oldLeader = oldLeaders.get(0);
+        KafkaBroker broker = cluster.brokers().get(oldLeader);
+        cluster.shutdownBroker(oldLeader);
+        broker.awaitShutdown();
+        TestUtils.waitForCondition(
+            () -> hasDifferentLeader(admin, topicPartition, oldLeader),
+            DEFAULT_MAX_WAIT_MS,
+            DEFAULT_POLL_INTERVAL_MS,
+            () -> "Failed to elect new leader for " + topicPartition);
+    }
+
+    private boolean hasDifferentLeader(Admin admin, TopicPartition topicPartition, int oldLeader) {
+        try {
+            List<Integer> leaders = topicPartitionLeader(admin, topicPartition.topic(), topicPartition.partition());
+            return leaders.size() == 1 && leaders.get(0) != oldLeader;
+        } catch (InterruptedException | ExecutionException e) {
+            return false;
+        }
     }
 }
