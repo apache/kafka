@@ -233,6 +233,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTest:
 - testSyncGroupWithException
 org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTest:
 - testHeartbeatArmSuppressReSolicitCycle
+- testHeartbeatDecorationFailurePreservesCommittedResponse
 - testHeartbeatNeverSetsFlagWithoutPlugin
 - testHeartbeatSetsTopologyDescriptionRequiredWhenStoredLags
 - testHeartbeatSkipsFlagOnV0Request
@@ -240,6 +241,18 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTes
 - testHeartbeatSkipsFlagWhenStaleTopologyStatusPresent
 - testHeartbeatSkipsFlagWhenStoredMatchesCurrent
 - testShutdownClosesPlugin
+- testUpdateBackoffArmedWhenStoredEpochWriteFailsAfterPluginSuccess
+- testUpdateGroupDisappearsBetweenPluginSuccessAndWriteDropsBackoffEntry
+- testUpdatePermanentFailurePersistsFailedEpoch
+- testUpdatePluginFutureWithNullCauseIsTreatedAsTransient
+- testUpdatePluginReturnsNullFutureIsTreatedAsPermanentFailure
+- testUpdatePreValidationFailureDoesNotArmBackoff
+- testUpdateRejectedWhenCoordinatorNotActive
+- testUpdateRejectsEmptyGroupId
+- testUpdateRejectsEmptyMemberId
+- testUpdateReturnsUnsupportedVersionWhenNoPlugin
+- testUpdateSuccessPersistsStoredEpoch
+- testUpdateTransientFailureWritesNoRecord
 org.apache.kafka.coordinator.group.GroupCoordinatorShardTest:
 - testCleanupGroupMetadataForConsumerGroup
 - testCleanupGroupMetadataForShareGroup
@@ -721,9 +734,10 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testUpdatingSubscriptionTriggersNewTargetAssignment
 - testValidHeartbeat
 - testValidLeaveGroup
-- testValidateStreamsGroupMemberDoesNotSeeUncommittedFence
-- testValidateStreamsGroupMemberThrowsWhenGroupAbsent
-- testValidateStreamsGroupMemberThrowsWhenMemberAbsent
+- testValidateStreamsGroupTopologyDescriptionUpdateDoesNotSeeUncommittedFence
+- testValidateStreamsGroupTopologyDescriptionUpdateRejectsStaleEpoch
+- testValidateStreamsGroupTopologyDescriptionUpdateThrowsWhenGroupAbsent
+- testValidateStreamsGroupTopologyDescriptionUpdateThrowsWhenMemberAbsent
 org.apache.kafka.coordinator.group.OffsetAndMetadataTest:
 - testAttributes
 - testFromRecord
@@ -876,7 +890,7 @@ org.apache.kafka.coordinator.group.UtilsTest:
 - testComputeTopicHashWithLeastSignificantBitsFirst
 - testNonExistingTopicName
 org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionTest:
-- testCollectionsAreDefensivelyCopied
+- testCollectionAccessorsAreUnmodifiable
 - testNodeIsSealedToSourceProcessorSink
 - testNullArgumentsRejected
 - testProcessorEqualsAndHashCode
@@ -1352,15 +1366,26 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testValidateOffsetFetch
 - testValidateTransactionalOffsetCommit
 org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionBackoffTest:
+- testArmIfNotActiveAdvancesAttemptsAfterExpiredWindowAtSameEpoch
 - testArmIfNotActiveArmsWhenIdle
-- testArmIfNotActiveDoublesAfterExpiredWindowAtSameEpoch
 - testArmIfNotActiveReArmsAfterEpochAdvance
 - testArmIfNotActiveReturnsFalseWhenAlreadyActive
-- testClearRemovesEntry
-- testConsecutiveArmsDoubleTheWindowUpToMax
-- testDifferentEpochResetsTheWindow
+- testArmOrExtendIsNoOpWhenStoredEpochIsNewer
+- testClearGroupRemovesEntryUnconditionally
+- testClearIsNoOpWhenEpochDoesNotMatch
+- testClearRemovesEntryWhenEpochMatches
+- testConsecutiveArmsAdvanceAttemptsUpToCap
+- testDifferentEpochResetsAttempts
 - testFirstArmUsesInitialDelay
 - testIsActiveIsScopedToEpoch
+- testProductionWiringUsesJitter
+org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionConverterTest:
+- testConvertsAllThreeNodeKindsAndPreservesOrder
+- testEmptyTopologyIsAccepted
+- testGlobalStoreIsConverted
+- testGlobalStoreWithMismatchedNodesIsRejected
+- testSinkWithoutTopicYieldsEmptyOptional
+- testUnknownNodeTypeIsRejected
 org.apache.kafka.coordinator.group.streams.StreamsTopologyTest:
 - asStreamsGroupDescribeTopicInfoShouldConvertCorrectly
 - asStreamsGroupDescribeTopologyShouldReturnCorrectStructure

@@ -837,6 +837,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testBeginningOffsetsAuthenticationFailure
 - testBeginningOffsetsTimeout
 - testChangingRegexSubscription
+- testClassicConsumerCloseRunsRevocationCallbackAndAttemptsLeaveGroupWhenInterrupted
 - testClassicProtocolLogsRecommendationToTryConsumerProtocol
 - testClientInstanceId
 - testClientInstanceIdInvalidTimeout
@@ -1194,6 +1195,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testCloseLeavesGroup
 - testCloseLeavesGroupDespiteInterrupt
 - testCloseLeavesGroupDespiteOnPartitionsLostError
+- testCloseRunsRevocationCallbackAndSendsLeaveGroupEventOnInterrupt
 - testCloseWrapsStreamsRebalanceListenerException
 - testCommitAsyncShouldCopyOffsets
 - testCommitAsyncUserSuppliedCallbackNoException

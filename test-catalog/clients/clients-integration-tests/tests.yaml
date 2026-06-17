@@ -263,7 +263,6 @@ org.apache.kafka.clients.consumer.PlaintextConsumerSubscriptionTest:
 org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testAsyncConsumeCoordinatorFailover
 - testAsyncConsumerAutoOffsetReset
-- testAsyncConsumerCloseLeavesGroupOnInterrupt
 - testAsyncConsumerCloseOnBrokerShutdown
 - testAsyncConsumerClusterResourceListener
 - testAsyncConsumerConsumeMessagesWithCreateTime
@@ -302,7 +301,6 @@ org.apache.kafka.clients.consumer.PlaintextConsumerTest:
 - testAsyncConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled
 - testAsyncStaticMemberCloseWithLeaveGroupTriggersRebalance
 - testClassicConsumerAutoOffsetReset
-- testClassicConsumerCloseLeavesGroupOnInterrupt
 - testClassicConsumerCloseOnBrokerShutdown
 - testClassicConsumerClusterResourceListener
 - testClassicConsumerConsumeMessagesWithCreateTime

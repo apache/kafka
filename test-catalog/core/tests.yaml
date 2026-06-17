@@ -397,8 +397,6 @@ kafka.api.PlaintextConsumerAssignorsTest:
 - testRemoteAssignorInvalid
 - testRemoteAssignorRange
 - testRoundRobinAssignment
-kafka.api.PlaintextConsumerTest:
-- testCloseLeavesGroupOnInterrupt
 kafka.api.PlaintextEndToEndAuthorizationTest:
 - testListenerName
 - testNoConsumeWithDescribeAclViaAssign

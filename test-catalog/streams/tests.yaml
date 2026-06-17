@@ -3935,6 +3935,39 @@ org.apache.kafka.streams.state.ValueTimestampHeadersTest:
 - shouldNotBeEqualWhenDifferentTimestamps
 - shouldNotBeEqualWhenDifferentValues
 - shouldReturnNullWhenValueIsNullWithMake
+org.apache.kafka.streams.state.internals.AbstractTransactionBufferTest:
+- allForwardMergesStagedAndBase
+- allReverseReturnsKeysDescending
+- allStagedTombstoneHidesBaseEntry
+- boundStagingBothBoundsExclusiveUpperReturnsSubMap
+- boundStagingBothBoundsInclusiveReturnsSubMap
+- boundStagingBothNullReturnsFullMap
+- boundStagingOnlyFromReturnsTailMap
+- boundStagingOnlyToExclusiveReturnsHeadMapExclusive
+- boundStagingOnlyToInclusiveReturnsHeadMapInclusive
+- byteCountAccumulatesAcrossMultipleStages
+- byteCountReflectsStagedTombstone
+- byteCountReflectsStagedValue
+- commitClearsPendingWritesAndBytes
+- commitFlushesTombstoneToBase
+- commitFlushesWritesToBase
+- getStagedTombstoneReturnsEmptyOptional
+- getStagedValueReturnsOptionalOfValue
+- getUnstaggedKeyReturnsNull
+- isEmptyAndZeroBytesOnFreshBuffer
+- isNotEmptyAfterStage
+- nonOwnerAllSnapshotsAtCreationTime
+- nonOwnerRangeSnapshotsAtCreationTime
+- nonOwnerThreadCanReadStagedEntry
+- rangeExclusiveUpperBound
+- rangeInclusiveUpperBound
+- rangeNullBothBoundsWithReverseReturnsSameAsAllReverse
+- rangeNullFromOpensLowerBound
+- rangeNullToOpensUpperBound
+- rollbackClearsPendingWritesAndBytes
+- rollbackDiscardsNewEntries
+- rollbackLeavesBaseUnchanged
+- subsequentBatchAfterCommitIsIndependent
 org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializerTest:
 - shouldDeserializeAggregationWithEmptyHeaders
 - shouldDeserializeAggregationWithHeaders
@@ -6376,6 +6409,23 @@ org.apache.kafka.streams.state.internals.SessionToHeadersStoreAdapterTest:
 - shouldWrapFetchWithKeyRangeIterator
 - shouldWrapFindSessionsIterator
 - shouldWrapFindSessionsWithKeyRangeIterator
+org.apache.kafka.streams.state.internals.StagedMergeIteratorTest:
+- shouldHandleAllTombstones
+- shouldHandleBothEmpty
+- shouldHandleConsecutiveTombstonesInStaging
+- shouldHandleEmptyBase
+- shouldHandleEmptyStaging
+- shouldMaintainSortOrderWithInterleavedEntries
+- shouldMergeDisjointStagingAndBase
+- shouldPreferStagingOverBaseForSameKey
+- shouldReverseMergeDisjointStagingAndBase
+- shouldReversePreferStagingOverBaseForSameKey
+- shouldReverseSkipBaseKeyWhenStagingHasTombstoneForSameKey
+- shouldReverseSkipTombstones
+- shouldSkipBaseKeyWhenStagingHasTombstoneForSameKey
+- shouldSkipTombstones
+- shouldSupportPeekNextKey
+- shouldThrowOnNextWhenExhausted
 org.apache.kafka.streams.state.internals.StoreQueryUtilsTest:
 - shouldPassIsolationLevelToReadOnlyForKeyQuery
 - shouldPassIsolationLevelToReadOnlyForRangeQuery
