@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -361,6 +362,47 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // Pre-plugin failure must leave the back-off untouched. A legitimate heartbeat at
         // the same epoch must still get the flag — otherwise a fenced/unauthorized caller
         // could grief the entire group's re-solicitation until the back-off window expires.
+        assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
+    }
+
+    @Test
+    public void testUpdatePostPluginWriteRoutingFailureDoesNotArmBackoff() throws Exception {
+        // The plugin succeeds, but between the plugin call and the bookkeeping write this
+        // broker stops being the coordinator (NotCoordinatorException surfaces from the
+        // write). The client will retry against the new coordinator, which holds no
+        // back-off entry of its own; arming a broker-wide entry on this broker would leak
+        // until expiry and could later suppress a legitimate solicitation if the group
+        // migrates back. CoordinatorLoadInProgressException and CoordinatorNotAvailableException
+        // travel the same NOOP branch — covered by one representative case to avoid
+        // parameterized-test scaffolding.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.setTopology(anyString(), anyInt(), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadOperation(
+            eq("streams-group-topology-description-validate"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-set-stored-topology-epoch"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.failedFuture(
+            new NotCoordinatorException("Lost coordinator status between plugin success and bookkeeping write.")));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+
+        StreamsGroupTopologyDescriptionUpdateResponseData response = service.streamsGroupTopologyDescriptionUpdate(
+            requestContext(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE),
+            validUpdateRequest()
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(Errors.NOT_COORDINATOR.code(), response.errorCode());
+        verify(plugin, times(1)).setTopology(eq("foo"), eq(3), any());
+
+        // Back-off must be untouched so the new coordinator (or this broker after a
+        // migration back) can still solicit a fresh push at the same epoch.
         assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 3, -1, -1));
     }
 

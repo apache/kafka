@@ -18,15 +18,20 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 /**
  * Broker-level component that owns the streams-group topology description plugin
@@ -196,6 +201,52 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      */
     public void clearBackoffGroup(String groupId) {
         backoff.clearGroup(groupId);
+    }
+
+    /**
+     * Call {@code plugin.deleteTopology} for every supplied group id. Returns a per-group
+     * map of failures keyed by group id; groups absent from the map either had no plugin
+     * configured or the plugin call succeeded. The returned future never completes
+     * exceptionally — failures are folded into the map so the service-level
+     * {@code DeleteGroups} flow can dispatch on the per-group outcome without try/catch
+     * on the underlying future. A synchronous throw from the plugin (which violates the
+     * SPI contract) is mapped to the same {@code GROUP_DELETION_FAILED} as an
+     * exceptional future.
+     *
+     * <p>Pure plugin invocation: does not read group state and does not touch the
+     * back-off map. The service layer pre-filters the input via
+     * {@code streamsGroupsWithStoredTopologyDescription} and is responsible for invoking
+     * {@link #clearBackoffGroup} for the groups that were attempted.
+     */
+    public CompletableFuture<Map<String, ApiError>> invokeDeleteTopologies(Set<String> groupIds) {
+        if (plugin.isEmpty() || groupIds.isEmpty()) {
+            return CompletableFuture.completedFuture(Map.of());
+        }
+        final StreamsGroupTopologyDescriptionPlugin p = plugin.get();
+        Map<String, CompletableFuture<Throwable>> calls = new HashMap<>(groupIds.size());
+        for (String groupId : groupIds) {
+            CompletableFuture<Throwable> outcome;
+            try {
+                outcome = p.deleteTopology(groupId).handle((unused, throwable) -> throwable);
+            } catch (Exception e) {
+                outcome = CompletableFuture.completedFuture(e);
+            }
+            calls.put(groupId, outcome);
+        }
+        CompletableFuture<?>[] all = calls.values().toArray(new CompletableFuture<?>[0]);
+        return CompletableFuture.allOf(all).thenApply(unused -> {
+            Map<String, ApiError> failures = new HashMap<>();
+            calls.forEach((groupId, throwableFuture) -> {
+                Throwable t = throwableFuture.join();
+                if (t == null) {
+                    return;
+                }
+                Throwable cause = t instanceof CompletionException && t.getCause() != null
+                    ? t.getCause() : t;
+                failures.put(groupId, new ApiError(Errors.GROUP_DELETION_FAILED, cause.getMessage()));
+            });
+            return failures;
+        });
     }
 
     // Visible for testing.
