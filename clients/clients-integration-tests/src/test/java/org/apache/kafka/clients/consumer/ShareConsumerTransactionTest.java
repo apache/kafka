@@ -32,11 +32,19 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
+import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
+import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
+import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.server.share.fetch.RecordState;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Timeout;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -483,6 +491,7 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
 
                     transactionalProducer.beginTransaction();
                     transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+                    verifyLatestShareStateDeliveryState(groupId, topicIdPartition, 0L, RecordState.TX_PENDING);
                 }
 
                 shutdownLeaderAndWaitForNewLeader(admin, topicPartition);
@@ -495,6 +504,7 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
 
                     transactionalProducer.commitTransaction();
 
+                    verifyLatestShareStateDeliveryState(groupId, topicIdPartition, 0L, RecordState.ACKNOWLEDGED);
                     verifySharePartitionLag(admin, groupId, topicPartition, 0L);
                     assertEquals(0, reloadedConsumer.poll(Duration.ofMillis(500)).count());
                     verifyShareGroupStateTopicRecordsProduced();
@@ -551,6 +561,7 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
 
                     transactionalProducer.beginTransaction();
                     transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+                    verifyLatestShareStateDeliveryState(groupId, topicIdPartition, 0L, RecordState.TX_PENDING);
                 }
 
                 shutdownLeaderAndWaitForNewLeader(admin, topicPartition);
@@ -563,6 +574,7 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
 
                     transactionalProducer.abortTransaction();
 
+                    verifyLatestShareStateDeliveryState(groupId, topicIdPartition, 0L, RecordState.AVAILABLE);
                     verifySharePartitionLag(admin, groupId, topicPartition, 1L);
                     ConsumerRecords<byte[], byte[]> redeliveredRecords = waitedPoll(reloadedConsumer, 2500L, 1);
                     ConsumerRecord<byte[], byte[]> redeliveredRecord = redeliveredRecords.iterator().next();
@@ -664,5 +676,111 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
         } catch (InterruptedException | ExecutionException e) {
             return false;
         }
+    }
+
+    private void verifyLatestShareStateDeliveryState(
+        String groupId,
+        TopicIdPartition topicIdPartition,
+        long offset,
+        RecordState expectedState
+    ) throws InterruptedException {
+        int shareStatePartition = shareStatePartition(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
+        TopicPartition shareStateTopicPartition = new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareStatePartition);
+        ShareCoordinatorRecordSerde serde = new ShareCoordinatorRecordSerde();
+
+        try (Consumer<byte[], byte[]> consumer = cluster.consumer()) {
+            consumer.assign(List.of(shareStateTopicPartition));
+            TestUtils.waitForCondition(
+                () -> {
+                    Byte actualState = latestShareStateDeliveryState(consumer, serde, groupId, topicIdPartition, shareStateTopicPartition, offset);
+                    return actualState != null && actualState == expectedState.id();
+                },
+                DEFAULT_MAX_WAIT_MS,
+                DEFAULT_POLL_INTERVAL_MS,
+                () -> "Timed out waiting for share state " + expectedState + " for " + topicIdPartition);
+        }
+    }
+
+    private Byte latestShareStateDeliveryState(
+        Consumer<byte[], byte[]> consumer,
+        ShareCoordinatorRecordSerde serde,
+        String groupId,
+        TopicIdPartition topicIdPartition,
+        TopicPartition shareStateTopicPartition,
+        long offset
+    ) {
+        consumer.seekToBeginning(List.of(shareStateTopicPartition));
+        long endOffset = consumer.endOffsets(List.of(shareStateTopicPartition)).get(shareStateTopicPartition);
+        Byte latestDeliveryState = null;
+
+        while (consumer.position(shareStateTopicPartition) < endOffset) {
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
+            if (records.isEmpty()) {
+                break;
+            }
+
+            for (ConsumerRecord<byte[], byte[]> record : records.records(shareStateTopicPartition)) {
+                CoordinatorRecord coordinatorRecord = serde.deserialize(
+                    ByteBuffer.wrap(record.key()),
+                    record.value() == null ? null : ByteBuffer.wrap(record.value())
+                );
+                if (coordinatorRecord.value() == null ||
+                    !matchesShareStateKey(coordinatorRecord, groupId, topicIdPartition)) {
+                    continue;
+                }
+
+                Object value = coordinatorRecord.value().message();
+                Byte deliveryState = null;
+                if (value instanceof ShareSnapshotValue snapshot) {
+                    deliveryState = snapshotDeliveryState(snapshot.stateBatches(), offset);
+                } else if (value instanceof ShareUpdateValue update) {
+                    deliveryState = updateDeliveryState(update.stateBatches(), offset);
+                }
+                if (deliveryState != null) {
+                    latestDeliveryState = deliveryState;
+                }
+            }
+        }
+
+        return latestDeliveryState;
+    }
+
+    private boolean matchesShareStateKey(
+        CoordinatorRecord coordinatorRecord,
+        String groupId,
+        TopicIdPartition topicIdPartition
+    ) {
+        Object key = coordinatorRecord.key();
+        if (key instanceof ShareSnapshotKey snapshotKey) {
+            return snapshotKey.groupId().equals(groupId) &&
+                snapshotKey.topicId().equals(topicIdPartition.topicId()) &&
+                snapshotKey.partition() == topicIdPartition.partition();
+        }
+        if (key instanceof ShareUpdateKey updateKey) {
+            return updateKey.groupId().equals(groupId) &&
+                updateKey.topicId().equals(topicIdPartition.topicId()) &&
+                updateKey.partition() == topicIdPartition.partition();
+        }
+        return false;
+    }
+
+    private Byte snapshotDeliveryState(List<ShareSnapshotValue.StateBatch> stateBatches, long offset) {
+        Byte deliveryState = null;
+        for (ShareSnapshotValue.StateBatch stateBatch : stateBatches) {
+            if (stateBatch.firstOffset() <= offset && offset <= stateBatch.lastOffset()) {
+                deliveryState = stateBatch.deliveryState();
+            }
+        }
+        return deliveryState;
+    }
+
+    private Byte updateDeliveryState(List<ShareUpdateValue.StateBatch> stateBatches, long offset) {
+        Byte deliveryState = null;
+        for (ShareUpdateValue.StateBatch stateBatch : stateBatches) {
+            if (stateBatch.firstOffset() <= offset && offset <= stateBatch.lastOffset()) {
+                deliveryState = stateBatch.deliveryState();
+            }
+        }
+        return deliveryState;
     }
 }

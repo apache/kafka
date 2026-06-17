@@ -2168,6 +2168,8 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':metadata')
     testImplementation project(':raft')
     testImplementation project(':server')
+    testImplementation project(':coordinator-common')
+    testImplementation project(':share-coordinator')
     testImplementation project(':storage')
     testImplementation project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
