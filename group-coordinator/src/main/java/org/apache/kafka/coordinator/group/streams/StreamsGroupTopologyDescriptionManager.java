@@ -25,13 +25,14 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescri
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 /**
  * Broker-level component that owns the streams-group topology description plugin
@@ -223,30 +224,39 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             return CompletableFuture.completedFuture(Map.of());
         }
         final StreamsGroupTopologyDescriptionPlugin p = plugin.get();
-        Map<String, CompletableFuture<Throwable>> calls = new HashMap<>(groupIds.size());
+        List<CompletableFuture<Map.Entry<String, ApiError>>> outcomes = new ArrayList<>(groupIds.size());
         for (String groupId : groupIds) {
-            CompletableFuture<Throwable> outcome;
+            CompletableFuture<Map.Entry<String, ApiError>> outcome;
             try {
-                outcome = p.deleteTopology(groupId).handle((unused, throwable) -> throwable);
+                outcome = p.deleteTopology(groupId).handle((unused, throwable) -> toFailureEntry(groupId, throwable));
             } catch (Exception e) {
-                outcome = CompletableFuture.completedFuture(e);
+                // Synchronous throw from the plugin violates the SPI contract; treat it as
+                // any other per-group failure so the failures map carries it back to the
+                // caller without dropping the rest of the batch.
+                outcome = CompletableFuture.completedFuture(toFailureEntry(groupId, e));
             }
-            calls.put(groupId, outcome);
+            outcomes.add(outcome);
         }
-        CompletableFuture<?>[] all = calls.values().toArray(new CompletableFuture<?>[0]);
+        CompletableFuture<?>[] all = outcomes.toArray(new CompletableFuture<?>[0]);
         return CompletableFuture.allOf(all).thenApply(unused -> {
             Map<String, ApiError> failures = new HashMap<>();
-            calls.forEach((groupId, throwableFuture) -> {
-                Throwable t = throwableFuture.join();
-                if (t == null) {
-                    return;
+            for (CompletableFuture<Map.Entry<String, ApiError>> future : outcomes) {
+                Map.Entry<String, ApiError> entry = future.join();
+                if (entry != null) {
+                    failures.put(entry.getKey(), entry.getValue());
                 }
-                Throwable cause = t instanceof CompletionException && t.getCause() != null
-                    ? t.getCause() : t;
-                failures.put(groupId, new ApiError(Errors.GROUP_DELETION_FAILED, cause.getMessage()));
-            });
+            }
             return failures;
         });
+    }
+
+    private static Map.Entry<String, ApiError> toFailureEntry(String groupId, Throwable throwable) {
+        if (throwable == null) {
+            return null;
+        }
+        Throwable cause = Errors.maybeUnwrapException(throwable);
+        String message = cause != null ? cause.getMessage() : "Plugin failure (no cause).";
+        return Map.entry(groupId, new ApiError(Errors.GROUP_DELETION_FAILED, message));
     }
 
     // Visible for testing.
