@@ -716,39 +716,6 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
-    public void testDeleteGroupsPluginFailureDowngradesErrorOnV2() throws Exception {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
-        when(plugin.deleteTopology("foo"))
-            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
-
-        when(runtime.scheduleWriteOperation(
-            eq("delete-share-groups"),
-            any(),
-            any()
-        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
-        when(runtime.scheduleReadOperation(
-            eq("streams-group-topology-pre-delete"),
-            eq(GROUP_TP),
-            any()
-        )).thenReturn(CompletableFuture.completedFuture(Set.of("foo")));
-
-        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-
-        DeleteGroupsResponseData.DeletableGroupResultCollection results =
-            service.deleteGroups(
-                requestContext(ApiKeys.DELETE_GROUPS, (short) 2),
-                List.of("foo"),
-                BufferSupplier.NO_CACHING
-            ).get(5, TimeUnit.SECONDS);
-
-        DeleteGroupsResponseData.DeletableGroupResult result = results.find("foo");
-        assertNotNull(result);
-        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), result.errorCode());
-        assertNull(result.errorMessage());
-    }
-
-    @Test
     public void testDeleteGroupsPluginSuccessProceedsToTombstone() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);

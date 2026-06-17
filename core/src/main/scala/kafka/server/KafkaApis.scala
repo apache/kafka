@@ -1456,6 +1456,17 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setErrorCode(error.code))
         }
       } else {
+        // GROUP_DELETION_FAILED was introduced for DeleteGroups v3 (KIP-1331). Older
+        // clients cannot interpret the new code, so downgrade it to UNKNOWN_SERVER_ERROR.
+        // ErrorMessage is "versions": "3+", "ignorable": true and is stripped at the
+        // serialization layer for v<3, so only the error code needs gating here.
+        if (request.context.apiVersion < 3) {
+          results.forEach { result =>
+            if (result.errorCode == Errors.GROUP_DELETION_FAILED.code) {
+              result.setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+            }
+          }
+        }
         response.setResults(results)
       }
 

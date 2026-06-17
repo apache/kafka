@@ -1644,13 +1644,38 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 return runPrePluginDelete(topicPartition, retainedGroupIds)
                     .thenCompose(streamsErrMap -> {
                         List<String> afterStreams = filterStreamsTopologyErrors(
-                            streamsErrMap, retainedGroupIds, deletableGroupResults, context.requestVersion());
+                            streamsErrMap, retainedGroupIds, deletableGroupResults);
                         if (afterStreams.isEmpty()) {
                             return CompletableFuture.completedFuture(deletableGroupResults);
                         }
                         return handleDeleteGroups(context, topicPartition, afterStreams)
                             .whenComplete((resp, __) -> resp.forEach(result -> deletableGroupResults.add(result.duplicate())))
                             .thenApply(__ -> deletableGroupResults);
+                    })
+                    .exceptionally(exception -> {
+                        // Defensive net for any uncaught synchronous throw in the
+                        // post-runPrePluginDelete stage. Without this, the exception would
+                        // propagate through FutureUtils.combineFutures.join() and fail the
+                        // whole cross-partition DeleteGroups response — including groups on
+                        // other partitions that already succeeded. Runtime read failures
+                        // inside runPrePluginDelete are absorbed there, so they never reach
+                        // this branch; what we are catching here is the synchronous stages
+                        // (filterStreamsTopologyErrors etc.). Fold the exception into
+                        // per-group failures for any retainedGroupIds not yet recorded.
+                        ApiError apiError = ApiError.fromThrowable(exception);
+                        Set<String> recorded = new HashSet<>();
+                        deletableGroupResults.forEach(result -> recorded.add(result.groupId()));
+                        for (String groupId : retainedGroupIds) {
+                            if (!recorded.contains(groupId)) {
+                                deletableGroupResults.add(
+                                    new DeleteGroupsResponseData.DeletableGroupResult()
+                                        .setGroupId(groupId)
+                                        .setErrorCode(apiError.error().code())
+                                        .setErrorMessage(apiError.message())
+                                );
+                            }
+                        }
+                        return deletableGroupResults;
                     });
             });
             // deleteShareGroups has its own exceptionally block, so we don't need one here.
@@ -1765,41 +1790,31 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * Move plugin failures into {@code deletableGroupResults} and return the group ids
-     * that should still proceed to tombstoning.
-     *
-     * <p>Per KIP-1331, {@code GROUP_DELETION_FAILED} and the per-group {@code ErrorMessage}
-     * field were introduced in DeleteGroups v3. For older clients we downgrade the error to
-     * {@code UNKNOWN_SERVER_ERROR} with no message — matching the convention used by KIP-1043
-     * for new error codes that pre-existing request versions cannot interpret. Errors that
-     * predate this KIP (e.g. NOT_COORDINATOR surfaced from the runtime via the exceptionally
-     * branch above) are passed through unchanged.
+     * that should still proceed to tombstoning. Version-agnostic: the raw {@link ApiError}
+     * is added as-is; any per-version translation of new error codes (e.g. downgrading
+     * {@code GROUP_DELETION_FAILED} for {@code DeleteGroups} v&lt;3) happens at the
+     * {@code KafkaApis} layer where {@code request.context.apiVersion()} is in scope and
+     * matches how other new error codes are version-gated.
      */
     private static List<String> filterStreamsTopologyErrors(
         Map<String, ApiError> streamsErrMap,
         List<String> groupIds,
-        DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults,
-        int requestVersion
+        DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults
     ) {
         if (streamsErrMap.isEmpty()) {
             return groupIds;
         }
-        List<String> retained = new ArrayList<>(groupIds.size() - streamsErrMap.size());
+        List<String> retained = new ArrayList<>();
         for (String groupId : groupIds) {
             ApiError err = streamsErrMap.get(groupId);
             if (err == null) {
                 retained.add(groupId);
             } else {
-                Errors effectiveError = err.error();
-                String effectiveMessage = err.message();
-                if (effectiveError == Errors.GROUP_DELETION_FAILED && requestVersion < 3) {
-                    effectiveError = Errors.UNKNOWN_SERVER_ERROR;
-                    effectiveMessage = null;
-                }
                 deletableGroupResults.add(
                     new DeleteGroupsResponseData.DeletableGroupResult()
                         .setGroupId(groupId)
-                        .setErrorCode(effectiveError.code())
-                        .setErrorMessage(effectiveMessage)
+                        .setErrorCode(err.error().code())
+                        .setErrorMessage(err.message())
                 );
             }
         }
