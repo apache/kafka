@@ -459,7 +459,97 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testTxnShareAcknowledgeRegistersAllShareStatePartitionsBeforeStaging(): Unit = {
+  def testTxnShareAcknowledgeRegistersAllMappedShareStatePartitionsBeforeStaging(): Unit = {
+    val transactionalId = "transactional-id"
+    val groupId = "group"
+    val memberId = "member-id"
+    val producerId = 10L
+    val producerEpoch = 2.toShort
+    val topic = "foo"
+    val topicId = Uuid.randomUuid
+    val sourcePartitions = 0 until 10
+    val shareStatePartitionIds = Seq(7, 8, 9)
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
+      shareVersion = ShareVersion.SV_3,
+      transactionVersion = Some(TransactionVersion.TV_2)
+    )
+    addTopicToMetadataCache(topic, sourcePartitions.size, topicId = topicId)
+
+    val tips = sourcePartitions.map(partition => new TopicIdPartition(topicId, new TopicPartition(topic, partition)))
+    tips.foreach { tip =>
+      val shareStatePartitionId = shareStatePartitionIds(tip.partition % shareStatePartitionIds.size)
+      when(shareCoordinator.partitionFor(ArgumentMatchers.eq(SharePartitionKey.getInstance(groupId, tip))))
+        .thenReturn(shareStatePartitionId)
+    }
+    val expectedShareStatePartitions = shareStatePartitionIds
+      .map(partition => new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, partition))
+      .toSet
+      .asJava
+
+    val addPartitionsCallback: ArgumentCaptor[AddPartitionsToTxnManager.AppendCallback] =
+      ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
+    doNothing().when(addPartitionsToTxnManager).addOrVerifyTransaction(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(producerId),
+      ArgumentMatchers.eq(producerEpoch),
+      ArgumentMatchers.eq(expectedShareStatePartitions),
+      addPartitionsCallback.capture(),
+      ArgumentMatchers.eq(AddPartitionsToTxnManager.TransactionSupportedOperation.ADD_PARTITION)
+    )
+
+    val acknowledgeBatchesCaptor: ArgumentCaptor[util.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]] =
+      ArgumentCaptor.forClass(classOf[util.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]])
+    when(sharePartitionManager.acknowledgeTransactional(
+      ArgumentMatchers.eq(memberId),
+      ArgumentMatchers.eq(groupId),
+      ArgumentMatchers.eq(producerId),
+      ArgumentMatchers.eq(producerEpoch),
+      acknowledgeBatchesCaptor.capture()
+    )).thenReturn(CompletableFuture.completedFuture(
+      tips.map(tip => tip -> ShareAcknowledgeResponse.partitionResponse(tip, Errors.NONE)).toMap.asJava
+    ))
+
+    val requestPartitions = sourcePartitions.map { partition =>
+      new TxnShareAcknowledgeRequestData.TxnShareAcknowledgePartition()
+        .setPartitionIndex(partition)
+        .setAcknowledgementBatches(util.List.of(
+          new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeBatch()
+            .setFirstOffset(partition.toLong)
+            .setLastOffset(partition.toLong)
+            .setAcknowledgeTypes(util.List.of(AcknowledgeType.ACCEPT.id))))
+    }
+    val requestData = new TxnShareAcknowledgeRequestData()
+      .setTransactionalId(transactionalId)
+      .setGroupId(groupId)
+      .setProducerId(producerId)
+      .setProducerEpoch(producerEpoch)
+      .setMemberId(memberId)
+      .setMemberEpoch(1)
+      .setTopics(util.List.of(
+        new TxnShareAcknowledgeRequestData.TxnShareAcknowledgeTopic()
+          .setTopicId(topicId)
+          .setPartitions(requestPartitions.asJava)
+      ))
+    val request = buildRequest(new TxnShareAcknowledgeRequest.Builder(requestData).build(0.toShort))
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, requestLocal)
+    verify(sharePartitionManager, never()).acknowledgeTransactional(any(), any(), anyLong(), anyShort(), any())
+
+    addPartitionsCallback.getValue.complete(expectedShareStatePartitions.asScala.map(_ -> Errors.NONE).toMap.asJava)
+
+    val response = verifyNoThrottling[TxnShareAcknowledgeResponse](request)
+    assertEquals(Errors.NONE.code, response.data.errorCode)
+    sourcePartitions.foreach { partition =>
+      assertEquals(Errors.NONE.code, txnShareAcknowledgePartitionError(response, topicId, partition))
+    }
+    assertEquals(tips.toSet.asJava, acknowledgeBatchesCaptor.getValue.keySet)
+  }
+
+  @Test
+  def testTxnShareAcknowledgeDeduplicatesShareStatePartitionsBeforeStaging(): Unit = {
     val transactionalId = "transactional-id"
     val groupId = "group"
     val memberId = "member-id"
@@ -469,8 +559,7 @@ class KafkaApisTest extends Logging {
     val topicId = Uuid.randomUuid
     val sourcePartition0 = 1
     val sourcePartition1 = 2
-    val shareStatePartitionId0 = 7
-    val shareStatePartitionId1 = 8
+    val shareStatePartitionId = 7
     val requestLocal = RequestLocal.withThreadConfinedCaching
 
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled(
@@ -481,12 +570,11 @@ class KafkaApisTest extends Logging {
 
     val tip0 = new TopicIdPartition(topicId, new TopicPartition(topic, sourcePartition0))
     val tip1 = new TopicIdPartition(topicId, new TopicPartition(topic, sourcePartition1))
-    val shareStatePartition0 = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, shareStatePartitionId0)
-    val shareStatePartition1 = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, shareStatePartitionId1)
+    val shareStatePartition = new TopicPartition(SHARE_GROUP_STATE_TOPIC_NAME, shareStatePartitionId)
     when(shareCoordinator.partitionFor(ArgumentMatchers.eq(SharePartitionKey.getInstance(groupId, tip0))))
-      .thenReturn(shareStatePartitionId0)
+      .thenReturn(shareStatePartitionId)
     when(shareCoordinator.partitionFor(ArgumentMatchers.eq(SharePartitionKey.getInstance(groupId, tip1))))
-      .thenReturn(shareStatePartitionId1)
+      .thenReturn(shareStatePartitionId)
 
     val addPartitionsCallback: ArgumentCaptor[AddPartitionsToTxnManager.AppendCallback] =
       ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
@@ -494,7 +582,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(producerEpoch),
-      ArgumentMatchers.eq(util.Set.of(shareStatePartition0, shareStatePartition1)),
+      ArgumentMatchers.eq(util.Set.of(shareStatePartition)),
       addPartitionsCallback.capture(),
       ArgumentMatchers.eq(AddPartitionsToTxnManager.TransactionSupportedOperation.ADD_PARTITION)
     )
@@ -547,8 +635,7 @@ class KafkaApisTest extends Logging {
     verify(sharePartitionManager, never()).acknowledgeTransactional(any(), any(), anyLong(), anyShort(), any())
 
     addPartitionsCallback.getValue.complete(util.Map.of(
-      shareStatePartition0, Errors.NONE,
-      shareStatePartition1, Errors.NONE
+      shareStatePartition, Errors.NONE
     ))
 
     val response = verifyNoThrottling[TxnShareAcknowledgeResponse](request)
