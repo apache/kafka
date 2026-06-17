@@ -167,6 +167,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         Optional.of(RACK_ID),
         SUBTOPOLOGIES,
         CLIENT_TAGS,
+        Map::of,
         Map::of
     );
 

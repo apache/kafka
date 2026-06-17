@@ -1038,12 +1038,43 @@ public class StoreChangelogReaderTest {
         // we should be able to restore to the log end offsets since there's no limit
         changelogReader.restore(mockTasks);
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+        // For non-source-topic standbys, the reader refreshes restoreEndOffset from the consumer's
+        // cached Fetch high-water-mark every restore batch (no RPC) so taskEndOffsetSumSnapshot
+        // can publish lag for warm-up promotion. The records went up to offset 11, so the
+        // exclusive limit lands at the partition's next-to-be-assigned offset 12.
+        assertEquals(12L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
         assertNull(callback.storeNameCalledStates.get(RESTORE_END));
         assertNull(callback.storeNameCalledStates.get(RESTORE_BATCH));
+    }
+
+    @Test
+    public void changelogEndOffsetsShouldFallBackToStoreMetadataWhenLogicalChangelogMetadataIsNull() {
+        // Verifies the 3-step fallback chain in changelogEndOffsets():
+        //   1) ChangelogMetadata.restoreEndOffset (preferred)
+        //   2) StateStoreMetadata.endOffset (physical Fetch high-water-mark)
+        //   3) null  (caller treats as MAX_VALUE — conservative for warm-up promotion)
+        // This test wires a standby with restoreEndOffset == null but
+        // storeMetadata.endOffset == 42L → fallback returns 42L.
+        setupStandbyStateManager();
+        when(storeMetadata.endOffset()).thenReturn(42L);
+
+        changelogReader.register(tp, standbyStateManager);
+
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
+        assertEquals(Long.valueOf(42L), changelogReader.logicalChangelogEndOffsets().get(tp));
+    }
+
+    @Test
+    public void logicalChangelogEndOffsetsShouldReturnNullWhenBothSourcesUnknown() {
+        setupStandbyStateManager();
+        when(storeMetadata.endOffset()).thenReturn(null);
+
+        changelogReader.register(tp, standbyStateManager);
+
+        assertNull(changelogReader.logicalChangelogEndOffsets().get(tp));
     }
 
     @Test

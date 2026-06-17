@@ -303,6 +303,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
+            Map::of,
             Map::of
         );
 
@@ -336,6 +337,7 @@ public class StreamsRebalanceDataTest {
                 Optional.empty(),
                 subtopologies,
                 clientTags,
+                Map::of,
                 Map::of
             )
         );
@@ -356,6 +358,7 @@ public class StreamsRebalanceDataTest {
                 Optional.empty(),
                 subtopologies,
                 clientTags,
+                Map::of,
                 Map::of
             )
         );
@@ -376,6 +379,7 @@ public class StreamsRebalanceDataTest {
                 Optional.empty(),
                 null,
                 clientTags,
+                Map::of,
                 Map::of
             )
         );
@@ -397,6 +401,7 @@ public class StreamsRebalanceDataTest {
                 null,
                 subtopologies,
                 clientTags,
+                Map::of,
                 Map::of
             )
         );
@@ -417,6 +422,7 @@ public class StreamsRebalanceDataTest {
                 Optional.empty(),
                 subtopologies,
                 null,
+                Map::of,
                 Map::of
             )
         );
@@ -435,6 +441,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
+            Map::of,
             Map::of
         );
 
@@ -453,6 +460,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
+            Map::of,
             Map::of
         );
 
@@ -471,6 +479,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
+            Map::of,
             Map::of
         );
 
@@ -489,6 +498,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
+            Map::of,
             Map::of
         );
 
@@ -509,6 +519,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
+            Map::of,
             Map::of
         );
 
@@ -529,6 +540,7 @@ public class StreamsRebalanceDataTest {
             Optional.empty(),
             subtopologies,
             clientTags,
+            Map::of,
             Map::of
         );
 
