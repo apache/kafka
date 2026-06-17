@@ -251,7 +251,7 @@ public interface StateUpdater {
 
     /**
      * Returns the latest per-task changelog offset-sum snapshot for tasks currently
-     * being restored. Safe to invoke from any thread; the returned map is immutable.
+     * being restored. Safe to invoke from any thread
      */
     Map<StreamsRebalanceData.TaskId, Long> taskOffsetSumSnapshot();
 }

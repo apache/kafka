@@ -200,14 +200,16 @@ public class DefaultStateUpdater implements StateUpdater {
 
             resumeTasks();
             pauseTasks();
-            restoreTasks(totalStartTimeMs);
+            final boolean madeProgress = restoreTasks(totalStartTimeMs);
 
             maybeGetClientInstanceIds();
 
             final long checkpointStartTimeMs = time.milliseconds();
             maybeCheckpointTasks(checkpointStartTimeMs);
 
-            updateTaskOffsetSumSnapshot();
+            if (madeProgress) {
+                updateTaskOffsetSumSnapshot();
+            }
 
             final long waitStartTimeMs = time.milliseconds();
             waitIfAllChangelogsCompletelyRead();
@@ -258,9 +260,10 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void restoreTasks(final long now) {
+        private boolean restoreTasks(final long now) {
+            long restored = 0L;
             try {
-                final long restored = changelogReader.restore(updatingTasks);
+                restored = changelogReader.restore(updatingTasks);
                 updaterMetrics.restoreSensor.record(restored, now);
             } catch (final TaskCorruptedException taskCorruptedException) {
                 handleTaskCorruptedException(taskCorruptedException);
@@ -272,6 +275,8 @@ public class DefaultStateUpdater implements StateUpdater {
             for (final Task task : activeTasks) {
                 maybeCompleteRestoration((StreamTask) task, completedChangelogs);
             }
+
+            return restored > 0;
         }
 
         private void maybeGetClientInstanceIds() {
@@ -475,7 +480,7 @@ public class DefaultStateUpdater implements StateUpdater {
                     sum
                 );
             }
-            taskOffsetSumSnapshot.set(Map.copyOf(snapshot));
+            taskOffsetSumSnapshot.set(snapshot);
         }
 
         private void waitIfAllChangelogsCompletelyRead() {

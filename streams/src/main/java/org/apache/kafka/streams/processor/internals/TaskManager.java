@@ -1252,7 +1252,7 @@ public class TaskManager {
 
     /**
      * Returns the per-task changelog offset-sum snapshot published by the state updater.
-     * Safe to invoke from any thread; the returned map is immutable.
+     * Safe to invoke from any thread
      */
     public Map<StreamsRebalanceData.TaskId, Long> taskOffsetSumSnapshot() {
         return stateUpdater.taskOffsetSumSnapshot();
