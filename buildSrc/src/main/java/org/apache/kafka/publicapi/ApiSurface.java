@@ -33,24 +33,25 @@ import java.util.Set;
  */
 final class ApiSurface {
 
-    /** Externally-visible effectively-Public classes — drives the cascade iteration. */
+    /** Every class that is effectively {@code @Public} (direct or inherited), regardless of visibility. */
     private final Set<ClassFacts> effectivePublic;
     /** Classes carrying a direct {@code @InterfaceAudience.Public} — drives the MISSING_JAVADOC iteration. */
     private final Set<ClassFacts> directPublic;
-    /** Membership set used by {@link #isEffectivelyPublic} — includes inherited Public on private/package nested classes. */
-    private final Set<String> effectivePublicDottedNames;
     private final Map<String, ClassFacts> byDottedName;
     private final Map<String, File> jarByDottedName;
 
     private ApiSurface(Builder b) {
         this.effectivePublic = Set.copyOf(b.effectivePublic);
         this.directPublic = Set.copyOf(b.directPublic);
-        this.effectivePublicDottedNames = Set.copyOf(b.effectivePublicDottedNames);
         this.byDottedName = Map.copyOf(b.byDottedName);
         this.jarByDottedName = Map.copyOf(b.jarByDottedName);
     }
 
-    /** Externally-visible classes that are effectively {@code @Public}. Cascade iterates this. */
+    /**
+     * Every class that is effectively {@code @Public} (direct or inherited). Cascade iteration
+     * filters this further on {@link ClassFacts#isExternallyVisible()} — private/package-private
+     * nested classes inherit the audience but their methods aren't reachable to consumers.
+     */
     Set<ClassFacts> effectivePublic() {
         return effectivePublic;
     }
@@ -72,11 +73,20 @@ final class ApiSurface {
 
     /**
      * True iff the class is effectively {@code @Public} — directly or via enclosing-class
-     * inheritance, regardless of source-level access. Cascade reference checks use this to
-     * recognise nested types whose outer carries the annotation.
+     * inheritance, regardless of source-level access. Walks the enclosing chain just like
+     * {@link #isDeprecated}; explicit {@code @InterfaceAudience.Private} on a nested class
+     * overrides an inherited {@code @Public}.
      */
     boolean isEffectivelyPublic(String name) {
-        return effectivePublicDottedNames.contains(normalize(name));
+        ClassFacts current = factsOf(name);
+        while (current != null) {
+            if (current.isPrivate()) return false;
+            if (current.isPublic()) return true;
+            String enclosing = current.enclosingName();
+            if (enclosing == null) return false;
+            current = factsOf(enclosing);
+        }
+        return false;
     }
 
     /**
@@ -107,7 +117,6 @@ final class ApiSurface {
     static final class Builder {
         private final Set<ClassFacts> effectivePublic = new HashSet<>();
         private final Set<ClassFacts> directPublic = new HashSet<>();
-        private final Set<String> effectivePublicDottedNames = new HashSet<>();
         private final Map<String, ClassFacts> byDottedName = new HashMap<>();
         private final Map<String, File> jarByDottedName = new HashMap<>();
 
@@ -118,17 +127,7 @@ final class ApiSurface {
             return this;
         }
 
-        /**
-         * Membership marker: the class is effectively {@code @Public} (direct or inherited).
-         * Feeds the set behind {@link #isEffectivelyPublic(String)}. Independent of cascade
-         * iteration, which is governed by {@link #addEffectivePublic(ClassFacts)}.
-         */
-        Builder markEffectivelyPublic(ClassFacts facts) {
-            effectivePublicDottedNames.add(facts.dottedName());
-            return this;
-        }
-
-        /** Add a class to the cascade iteration set (externally-visible effectively-Public classes). */
+        /** Add a class that is effectively {@code @Public} (direct or inherited), any visibility. */
         Builder addEffectivePublic(ClassFacts facts) {
             effectivePublic.add(facts);
             return this;

@@ -1,10 +1,10 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -30,7 +30,12 @@ import java.nio.file.Path;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for the enhanced KafkaPublicApiCheckerTask with dual validation.
@@ -99,16 +104,17 @@ public class KafkaPublicApiCheckerTaskTest {
     }
 
     @Test
-    void testTaskExecution_FallbackToOldBehavior() throws IOException {
+    void testTaskExecution_FailsWhenProjectJarsMissing() throws IOException {
+        // Project JAR files are mandatory after the SOLID refactor — without them the scanner has
+        // nothing to read. The task must surface this as a configuration error rather than silently
+        // running on an empty surface (which would let everything appear "missing javadoc").
         File javadocJar = createMockJavadocJar();
 
         task.getCheckerEnabled().set(true);
         task.getJavadocJarPath().set(javadocJar);
-        // Don't set project JAR files - should fall back to old behavior
-        task.getFailOnViolation().set(false); // Don't fail on violations for this test
+        task.getFailOnViolation().set(false);
 
-        // Should not throw exception and use fallback behavior
-        assertDoesNotThrow(() -> task.checkPublicApi());
+        assertThrows(org.gradle.api.GradleException.class, () -> task.checkPublicApi());
     }
 
     @Test

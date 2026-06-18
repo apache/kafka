@@ -56,6 +56,10 @@ final class CascadeValidator {
         List<PublicApiViolation> violations = new ArrayList<>();
         List<PublicApiViolation> suppressions = new ArrayList<>();
         for (ClassFacts cls : surface.effectivePublic()) {
+            // Private/package-private nested classes inherit the audience but their methods
+            // and ctors aren't reachable to consumers, so cascade-walking them would just
+            // produce noise on internal helpers.
+            if (!cls.isExternallyVisible()) continue;
             checkClass(cls, surface, violations, suppressions);
         }
         return new CheckResult(violations, suppressions);

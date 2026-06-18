@@ -97,15 +97,6 @@ public class PublicApiChecker {
         if (surface.isDeprecated(binaryClassName)) {
             return true; // deprecated is out of scope, mirroring the original semantic
         }
-        // Walk the enclosing chain. Explicit @Private wins over inherited @Public.
-        ClassFacts current = surface.factsOf(binaryClassName);
-        while (current != null) {
-            if (current.isPrivate()) return false;
-            if (current.isPublic()) return true;
-            String enclosing = current.enclosingName();
-            if (enclosing == null) return false;
-            current = surface.factsOf(enclosing);
-        }
-        return false;
+        return surface.isEffectivelyPublic(binaryClassName);
     }
 }

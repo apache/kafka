@@ -50,7 +50,7 @@ import java.util.jar.JarFile;
  * to .java imports.
  */
 public class PluginDeveloperApiUsageScanner {
-    private static final Logger logger = LoggerFactory.getLogger(PluginDeveloperApiUsageScanner.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PluginDeveloperApiUsageScanner.class);
     private static final int ASM_API = Opcodes.ASM9;
 
     /** Internal-form prefix (slashes) for any class we care about checking the audience of. */
@@ -147,17 +147,12 @@ public class PluginDeveloperApiUsageScanner {
                                   String suppressionReason,
                                   Map<String, PublicApiViolation> violations,
                                   Map<String, PublicApiViolation> suppressions) {
-        if (internalName == null) {
+        String binaryName = resolveInternalKafkaReference(internalName);
+        if (binaryName == null) {
             return;
         }
-        // Strip array prefixes ('[' for arrays, 'L' / ';' for object descriptors).
-        String trimmed = stripDescriptor(internalName);
-        if (trimmed == null || !trimmed.startsWith(KAFKA_INTERNAL_PREFIX)) {
-            return;
-        }
-        String binaryName = trimmed.replace('/', '.');
-        // Skip references to inner/nested types -- the outer type covers them and has the audience marker.
-        String outerName = binaryName.contains("$") ? binaryName.substring(0, binaryName.indexOf('$')) : binaryName;
+        // Inner/nested types inherit the outer's audience marker, so check the outer.
+        String outerName = outerNameOf(binaryName);
         if (isPublicApi.test(outerName)) {
             return;
         }
@@ -165,23 +160,72 @@ public class PluginDeveloperApiUsageScanner {
         if (outerName.equals(consumerClass) || binaryName.equals(consumerClass)) {
             return;
         }
-        String locationSuffix = (memberName != null ? "#" + memberName : "")
-                + (line > 0 ? " (line " + line + ")" : "");
+        String location = formatLocation(consumerClass, memberName, line);
+        String key = referenceKey(consumerClass, binaryName, memberName, line);
         if (suppressionReason != null) {
-            String reasonForLog = suppressionReason.isEmpty() ? NO_REASON_GIVEN : suppressionReason;
-            logger.info("Suppressed internal-API reference to {} from {}{}: {}",
-                    binaryName, consumerClass, locationSuffix, reasonForLog);
-            String description = String.format("Suppressed reference to internal Kafka class %s from %s%s — reason: %s",
-                    binaryName, consumerClass, locationSuffix, reasonForLog);
-            String key = consumerClass + "|" + binaryName + "|" + (memberName == null ? "" : memberName) + "|" + line;
-            suppressions.putIfAbsent(key,
-                    new PublicApiViolation(binaryName, "SUPPRESSED_INTERNAL_API_USAGE", description, memberName));
-            return;
+            recordSuppression(suppressions, key, binaryName, memberName, location, suppressionReason);
+        } else {
+            recordViolation(violations, key, binaryName, memberName, location);
         }
-        String description = String.format("Bytecode reference to internal Kafka class %s from %s%s",
-                binaryName, consumerClass, locationSuffix);
-        String key = consumerClass + "|" + binaryName + "|" + (memberName == null ? "" : memberName) + "|" + line;
-        violations.putIfAbsent(key, new PublicApiViolation(binaryName, "INTERNAL_API_USAGE", description, memberName));
+    }
+
+    /**
+     * @return the dotted binary name of an {@code org.apache.kafka.*} type referenced by
+     *         {@code internalName} (an ASM internal name or descriptor), or {@code null} if the
+     *         reference is to a non-Kafka type, a primitive, or unparseable.
+     */
+    private static String resolveInternalKafkaReference(String internalName) {
+        if (internalName == null) {
+            return null;
+        }
+        String trimmed = stripDescriptor(internalName);
+        if (trimmed == null || !trimmed.startsWith(KAFKA_INTERNAL_PREFIX)) {
+            return null;
+        }
+        return trimmed.replace('/', '.');
+    }
+
+    private static String outerNameOf(String binaryName) {
+        int dollar = binaryName.indexOf('$');
+        return dollar < 0 ? binaryName : binaryName.substring(0, dollar);
+    }
+
+    /** Render the consumer-side location as {@code Class#member (line N)}, omitting absent parts. */
+    private static String formatLocation(String consumerClass, String memberName, int line) {
+        StringBuilder sb = new StringBuilder(consumerClass);
+        if (memberName != null) {
+            sb.append('#').append(memberName);
+        }
+        if (line > 0) {
+            sb.append(" (line ").append(line).append(')');
+        }
+        return sb.toString();
+    }
+
+    /** Stable de-dup key so the same call-site reported via multiple visitor callbacks collapses to one entry. */
+    private static String referenceKey(String consumerClass, String binaryName, String memberName, int line) {
+        return consumerClass + "|" + binaryName + "|" + (memberName == null ? "" : memberName) + "|" + line;
+    }
+
+    private static void recordSuppression(Map<String, PublicApiViolation> suppressions,
+                                          String key, String binaryName, String memberName,
+                                          String location, String reason) {
+        String prettyReason = reason.isEmpty() ? NO_REASON_GIVEN : reason;
+        LOG.info("Suppressed internal-API reference to {} from {}: {}", binaryName, location, prettyReason);
+        String description = String.format(
+                "Suppressed reference to internal Kafka class %s from %s — reason: %s",
+                binaryName, location, prettyReason);
+        suppressions.putIfAbsent(key,
+                new PublicApiViolation(binaryName, "SUPPRESSED_INTERNAL_API_USAGE", description, memberName));
+    }
+
+    private static void recordViolation(Map<String, PublicApiViolation> violations,
+                                        String key, String binaryName, String memberName, String location) {
+        String description = String.format(
+                "Bytecode reference to internal Kafka class %s from %s",
+                binaryName, location);
+        violations.putIfAbsent(key,
+                new PublicApiViolation(binaryName, "INTERNAL_API_USAGE", description, memberName));
     }
 
     /** Convert any of: {@code Lorg/apache/kafka/Foo;}, {@code [Lorg/apache/kafka/Foo;}, {@code org/apache/kafka/Foo} to the bare internal form. */
@@ -263,6 +307,12 @@ public class PluginDeveloperApiUsageScanner {
             this.suppressions = suppressions;
         }
 
+        /**
+         * Class header — superclass + interface list + generic signature. Caught here so a consumer
+         * that {@code extends} or {@code implements} an internal Kafka type is flagged even if its
+         * body never names the type. Generics ({@code class C<T> extends Foo<Internal>}) hide
+         * inside the signature string and are pulled out via {@link SignatureReader}.
+         */
         @Override
         public void visit(int version, int access, String name, String signature,
                           String superName, String[] interfaces) {
@@ -278,17 +328,27 @@ public class PluginDeveloperApiUsageScanner {
             collectSignatureRefs(signature, null, -1, headerRefs);
         }
 
+        /**
+         * Class-level annotations. Two jobs: (a) capture the reason on
+         * {@code @SuppressKafkaInternalApiUsage} so header refs can be silenced, and (b) treat the
+         * annotation's own type as a reference — an {@code @InternalAnnotation} on a consumer class
+         * is still a reference into Kafka internals.
+         */
         @Override
         public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
             if (SUPPRESS_DESCRIPTOR.equals(descriptor)) {
                 return new ReasonCaptureVisitor(r -> classSuppression = r);
             }
-            // The annotation's own type is a reference; record it (header refs aren't suppressed by other
-            // annotations on this class, so the class-level suppression is the only thing in scope).
             headerRefs.add(new PendingReference(stripDescriptor(descriptor), null, -1));
             return null;
         }
 
+        /**
+         * Field declarations. The field's declared type (descriptor) and its full generic form
+         * (signature) can both name internal types — e.g. {@code private InternalCache cache} or
+         * {@code Map<String, InternalFoo> data}. Refs are buffered so a field-level
+         * {@code @SuppressKafkaInternalApiUsage} (visited after the declaration) can suppress them.
+         */
         @Override
         public FieldVisitor visitField(int access, String name, String descriptor,
                                        String signature, Object value) {
@@ -315,16 +375,25 @@ public class PluginDeveloperApiUsageScanner {
             };
         }
 
+        /**
+         * Per-method delegate. Each method's body is walked by a
+         * {@link ReferenceCollectingMethodVisitor} that records every kind of bytecode-level
+         * reference (see its own javadoc).
+         */
         @Override
         public MethodVisitor visitMethod(int access, String name, String descriptor,
                                          String signature, String[] exceptions) {
             return new ReferenceCollectingMethodVisitor(name, descriptor, signature, exceptions);
         }
 
+        /**
+         * End of class. Flushes the buffered header refs (superclass / interfaces / generic
+         * signature / non-suppress annotations) now that the class-level
+         * {@code @SuppressKafkaInternalApiUsage} reason — which is visited <em>after</em> the
+         * header in ASM's callback order — is finally known.
+         */
         @Override
         public void visitEnd() {
-            // Header refs were buffered to allow class-level @SuppressKafkaInternalApiUsage (visited after
-            // the class header) to suppress them.
             flush(headerRefs, classSuppression);
         }
 
@@ -375,6 +444,12 @@ public class PluginDeveloperApiUsageScanner {
                 collectSignatureRefs(signature, name, -1, headerBuffer);
             }
 
+            /**
+             * Method-level annotations. {@code @SuppressKafkaInternalApiUsage} captures the reason
+             * to silence both header refs (return/param/exception types) and body refs in this
+             * method. All other annotation types are themselves recorded as references — an
+             * annotation IS a class reference, even if it's never used elsewhere.
+             */
             @Override
             public AnnotationVisitor visitAnnotation(String d, boolean v) {
                 if (SUPPRESS_DESCRIPTOR.equals(d)) {
@@ -384,10 +459,14 @@ public class PluginDeveloperApiUsageScanner {
                 return null;
             }
 
+            /**
+             * Marker fired when ASM transitions from method header to method body. All method-level
+             * annotations have already been visited by this point, so {@link #methodSuppression} is
+             * stable — header refs (return type / params / declared exceptions / generic signature
+             * / non-suppress annotations) are flushed now with the correct effective reason.
+             */
             @Override
             public void visitCode() {
-                // Method-level annotations are visited before visitCode -- methodSuppression is now stable.
-                // Flush header refs here so body instructions don't have to revisit them later.
                 if (!codeStarted) {
                     flush(headerBuffer, effective(methodSuppression));
                     headerBuffer.clear();
@@ -395,22 +474,48 @@ public class PluginDeveloperApiUsageScanner {
                 }
             }
 
+            /**
+             * Source line marker from the {@code LineNumberTable} debug attribute. Only fires for
+             * classes compiled with {@code javac -g} (the default). Carries no class reference of
+             * its own — we just track the current line so violations can be reported as
+             * {@code ConsumerClass#method (line N)}. Stays at -1 when debug info is stripped.
+             */
             @Override
             public void visitLineNumber(int line, org.objectweb.asm.Label start) {
                 this.currentLine = line;
             }
 
+            /**
+             * Type-as-operand instructions: {@code NEW}, {@code ANEWARRAY}, {@code CHECKCAST},
+             * {@code INSTANCEOF}. The operand is the class being instantiated, cast to, or tested —
+             * exactly the cases where a consumer reaches an internal type without naming it via a
+             * method call or field access.
+             */
             @Override
             public void visitTypeInsn(int opcode, String type) {
                 recordBody(type);
             }
 
+            /**
+             * Field-access instructions: {@code GETFIELD}, {@code PUTFIELD}, {@code GETSTATIC},
+             * {@code PUTSTATIC}. Both the field's <em>owner</em> (the declaring class) and its
+             * <em>type</em> (descriptor) can name internal Kafka classes — e.g. reading
+             * {@code InternalClass.CONSTANT} (owner is internal) or writing to a field whose type
+             * is internal.
+             */
             @Override
             public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
                 recordBody(owner);
                 recordBody(stripDescriptor(descriptor));
             }
 
+            /**
+             * Method-invocation instructions: {@code INVOKEVIRTUAL}, {@code INVOKESPECIAL},
+             * {@code INVOKESTATIC}, {@code INVOKEINTERFACE}. Three reference slots per call site:
+             * the owner (declaring class), the return type, and each argument type. Catches both
+             * "calls into an internal class" and "passes an internal type as an argument or
+             * receives one as a return".
+             */
             @Override
             public void visitMethodInsn(int opcode, String owner, String name,
                                         String descriptor, boolean isInterface) {
@@ -422,6 +527,13 @@ public class PluginDeveloperApiUsageScanner {
                 }
             }
 
+            /**
+             * {@code INVOKEDYNAMIC}. Emitted by {@code javac} for lambdas, method references, and
+             * {@code String} concatenation since Java 9. Only the call-site descriptor — return
+             * type and argument types — is walked. The bootstrap method handle itself is not
+             * followed, because the LambdaMetafactory machinery is JDK-owned and the user-visible
+             * references show up via the descriptor anyway.
+             */
             @Override
             public void visitInvokeDynamicInsn(String name, String descriptor,
                                                Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
@@ -432,6 +544,12 @@ public class PluginDeveloperApiUsageScanner {
                 }
             }
 
+            /**
+             * {@code LDC} loads a constant onto the operand stack — int / long / float / double /
+             * String / and, relevantly here, {@code Class} literals such as
+             * {@code InternalClass.class}. Only the {@link Type} case is interesting; primitive
+             * and string constants carry no class reference.
+             */
             @Override
             public void visitLdcInsn(Object value) {
                 if (value instanceof Type) {
@@ -442,15 +560,23 @@ public class PluginDeveloperApiUsageScanner {
                 }
             }
 
+            /**
+             * {@code MULTIANEWARRAY} for multi-dimensional arrays
+             * ({@code new InternalClass[3][3]}). Single-dimensional array allocation goes through
+             * {@code ANEWARRAY} which is handled by {@link #visitTypeInsn}.
+             */
             @Override
             public void visitMultiANewArrayInsn(String descriptor, int numDimensions) {
                 recordBody(stripDescriptor(descriptor));
             }
 
+            /**
+             * End of method. {@link #visitCode} is never called for abstract / native methods —
+             * they have no body — so their header refs would otherwise leak unflushed. This safety
+             * net guarantees every method's return/param/exception types are still audited.
+             */
             @Override
             public void visitEnd() {
-                // Abstract / native methods have no body; visitCode is never called for them. Flush here as
-                // a safety net so their header references still emit.
                 if (!codeStarted) {
                     flush(headerBuffer, effective(methodSuppression));
                     headerBuffer.clear();

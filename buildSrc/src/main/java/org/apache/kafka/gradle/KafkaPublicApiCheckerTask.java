@@ -1,10 +1,10 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -20,18 +20,21 @@ import org.apache.kafka.publicapi.CheckResult;
 import org.apache.kafka.publicapi.PublicApiChecker;
 import org.apache.kafka.publicapi.PublicApiViolation;
 import org.apache.kafka.publicapi.ViolationReporter;
+
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.RegularFileProperty;
-import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.PathSensitive;
+import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
+import org.gradle.work.DisableCachingByDefault;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,6 +44,7 @@ import java.util.List;
 /**
  * Gradle task for checking public API consistency in Kafka codebase.
  */
+@DisableCachingByDefault(because = "Reports are tiny; caching the bytecode scan adds little and complicates Hadoop-style audience-inheritance debugging")
 public class KafkaPublicApiCheckerTask extends DefaultTask {
 
     private final Property<Boolean> enabled = getProject().getObjects().property(Boolean.class);
@@ -156,18 +160,21 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
 
     @InputFile
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     public RegularFileProperty getJavadocJarPath() {
         return javadocJarPath;
     }
 
     @InputFiles
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     public ConfigurableFileCollection getProjectJarFiles() {
         return projectJarFiles;
     }
 
     @InputFiles
     @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
     public ConfigurableFileCollection getReferenceJarFiles() {
         return referenceJarFiles;
     }

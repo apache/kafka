@@ -1,10 +1,10 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,236 +16,198 @@
  */
 package org.apache.kafka.publicapi;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.objectweb.asm.Opcodes;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.jar.JarEntry;
-import java.util.jar.JarOutputStream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Comprehensive tests for the enhanced PublicApiChecker with dual validation.
+ * Tests for the {@link PublicApiChecker} facade: surface construction, {@code isPublicApi}
+ * predicate semantics, and merged results from {@link JavadocConsistencyValidator} +
+ * {@link CascadeValidator} + {@link PluginDeveloperApiUsageScanner}.
  */
-public class PublicApiCheckerTest {
+class PublicApiCheckerTest {
 
     @TempDir
     Path tempDir;
 
-    private PublicApiChecker checker;
+    // ----- isPublicApi -----
 
-    @BeforeEach
-    void setUp() throws IOException {
-        checker = new PublicApiChecker(List.of());
+    @Test
+    void isPublicApi_nonKafkaClass_returnsTrueOutOfScope() throws IOException {
+        PublicApiChecker checker = checkerFor();
+        assertTrue(checker.isPublicApi("java.util.Map"));
+        assertTrue(checker.isPublicApi("com.example.Foo"));
     }
 
     @Test
-    void testIsClassHtmlFile_ValidClassFile() throws Exception {
-        Method isClassHtmlFile = PublicApiChecker.class.getDeclaredMethod("isClassHtmlFile", String.class);
-        isClassHtmlFile.setAccessible(true);
-
-        assertTrue((Boolean) isClassHtmlFile.invoke(checker, "org/apache/kafka/common/Resource.html"));
-        assertTrue((Boolean) isClassHtmlFile.invoke(checker, "org/apache/kafka/clients/producer/Producer.html"));
+    void isPublicApi_directPublic_returnsTrue() throws IOException {
+        PublicApiChecker checker = checkerFor(
+                AsmClassFactory.klass("org.apache.kafka.api.Pub").access(Opcodes.ACC_PUBLIC).publicApi());
+        assertTrue(checker.isPublicApi("org.apache.kafka.api.Pub"));
     }
 
     @Test
-    void testIsClassHtmlFile_InvalidFiles() throws Exception {
-        Method isClassHtmlFile = PublicApiChecker.class.getDeclaredMethod("isClassHtmlFile", String.class);
-        isClassHtmlFile.setAccessible(true);
-
-        // Not HTML file
-        assertFalse((Boolean) isClassHtmlFile.invoke(checker, "org/apache/kafka/common/Resource.java"));
-
-        // No package structure
-        assertFalse((Boolean) isClassHtmlFile.invoke(checker, "index.html"));
-
-        // Structural HTML files
-        assertFalse((Boolean) isClassHtmlFile.invoke(checker, "org/apache/kafka/package-summary.html"));
-        assertFalse((Boolean) isClassHtmlFile.invoke(checker, "overview-tree.html"));
-        assertFalse((Boolean) isClassHtmlFile.invoke(checker, "constant-values.html"));
-
-        // Not a class (lowercase start)
-        assertFalse((Boolean) isClassHtmlFile.invoke(checker, "org/apache/kafka/common/util.html"));
+    void isPublicApi_directPrivate_returnsFalse() throws IOException {
+        PublicApiChecker checker = checkerFor(
+                AsmClassFactory.klass("org.apache.kafka.api.Hidden").access(Opcodes.ACC_PUBLIC).privateApi());
+        assertFalse(checker.isPublicApi("org.apache.kafka.api.Hidden"));
     }
 
     @Test
-    void testConvertHtmlPathToClassName() throws Exception {
-        Method convertHtmlPathToClassName = PublicApiChecker.class.getDeclaredMethod(
-            "convertHtmlPathToClassName", String.class);
-        convertHtmlPathToClassName.setAccessible(true);
-
-        assertEquals("org.apache.kafka.common.Resource",
-                   convertHtmlPathToClassName.invoke(checker, "org/apache/kafka/common/Resource.html"));
-
-        assertEquals("org.apache.kafka.clients.producer.Producer",
-                   convertHtmlPathToClassName.invoke(checker, "org/apache/kafka/clients/producer/Producer.html"));
+    void isPublicApi_deprecated_returnsTrueOutOfScope() throws IOException {
+        // @Deprecated is out of scope on every side of the checker; isPublicApi returns true so
+        // consumers don't get flagged for using a deprecated-but-soon-removed type.
+        PublicApiChecker checker = checkerFor(
+                AsmClassFactory.klass("org.apache.kafka.api.Old")
+                        .access(Opcodes.ACC_PUBLIC).privateApi().deprecated());
+        assertTrue(checker.isPublicApi("org.apache.kafka.api.Old"),
+                "@Deprecated overrides audience: even @Private classes are out-of-scope when deprecated");
     }
 
     @Test
-    void testFindClassesFromJavadocHtml() throws Exception {
-        // Create a mock javadoc JAR with HTML files
-        File javadocJar = createMockJavadocJar();
-
-        Method findClassesFromJavadocHtml = PublicApiChecker.class.getDeclaredMethod(
-            "findClassesFromJavadocHtml", File.class);
-        findClassesFromJavadocHtml.setAccessible(true);
-
-        @SuppressWarnings("unchecked")
-        Set<String> classes = (Set<String>) findClassesFromJavadocHtml.invoke(checker, javadocJar);
-
-        assertTrue(classes.contains("org.apache.kafka.common.Resource"));
-        assertTrue(classes.contains("org.apache.kafka.clients.producer.Producer"));
-        assertFalse(classes.contains("org.apache.kafka.common.internals.InternalClass")); // excluded package
-
-        // Should not contain structural files
-        assertFalse(classes.contains("package-summary"));
-        assertFalse(classes.contains("index"));
+    void isPublicApi_nestedInheritsFromOuter() throws IOException {
+        PublicApiChecker checker = checkerFor(
+                AsmClassFactory.klass("org.apache.kafka.api.Outer").access(Opcodes.ACC_PUBLIC).publicApi(),
+                AsmClassFactory.klass("org.apache.kafka.api.Outer$Inner").access(Opcodes.ACC_PUBLIC));
+        assertTrue(checker.isPublicApi("org.apache.kafka.api.Outer$Inner"));
     }
 
     @Test
-    void testCrossValidateClassSets_MissingJavadoc() throws Exception {
-        Set<String> htmlClasses = new HashSet<>();
-        htmlClasses.add("org.apache.kafka.common.Resource");
-
-        Set<String> annotatedClasses = new HashSet<>();
-        annotatedClasses.add("org.apache.kafka.common.Resource");
-        annotatedClasses.add("org.apache.kafka.clients.producer.Producer"); // Missing from javadoc
-
-        Method crossValidateClassSets = PublicApiChecker.class.getDeclaredMethod(
-            "crossValidateClassSets", Set.class, Set.class);
-        crossValidateClassSets.setAccessible(true);
-
-        @SuppressWarnings("unchecked")
-        List<PublicApiViolation> violations = (List<PublicApiViolation>)
-            crossValidateClassSets.invoke(checker, htmlClasses, annotatedClasses);
-
-        assertEquals(1, violations.size());
-        PublicApiViolation violation = violations.get(0);
-        assertEquals("MISSING_JAVADOC", violation.getViolationType());
-        assertEquals("org.apache.kafka.clients.producer.Producer", violation.getClassName());
-        assertTrue(violation.getDescription().contains("@InterfaceAudience.Public annotation but is missing from javadoc"));
+    void isPublicApi_nestedPrivateOverridesOuterPublic() throws IOException {
+        PublicApiChecker checker = checkerFor(
+                AsmClassFactory.klass("org.apache.kafka.api.Outer").access(Opcodes.ACC_PUBLIC).publicApi(),
+                AsmClassFactory.klass("org.apache.kafka.api.Outer$Inner").access(Opcodes.ACC_PUBLIC).privateApi());
+        assertFalse(checker.isPublicApi("org.apache.kafka.api.Outer$Inner"));
     }
 
     @Test
-    void testCrossValidateClassSets_MissingAnnotation() throws Exception {
-        Set<String> htmlClasses = new HashSet<>();
-        htmlClasses.add("org.apache.kafka.common.Resource");
-        htmlClasses.add("org.apache.kafka.clients.producer.Producer"); // Missing @InterfaceAudience.Public
-
-        Set<String> annotatedClasses = new HashSet<>();
-        annotatedClasses.add("org.apache.kafka.common.Resource");
-
-        Method crossValidateClassSets = PublicApiChecker.class.getDeclaredMethod(
-            "crossValidateClassSets", Set.class, Set.class);
-        crossValidateClassSets.setAccessible(true);
-
-        @SuppressWarnings("unchecked")
-        List<PublicApiViolation> violations = (List<PublicApiViolation>)
-            crossValidateClassSets.invoke(checker, htmlClasses, annotatedClasses);
-
-        assertEquals(1, violations.size());
-        PublicApiViolation violation = violations.get(0);
-        assertEquals("MISSING_PUBLICAPI_ANNOTATION", violation.getViolationType());
-        assertEquals("org.apache.kafka.clients.producer.Producer", violation.getClassName());
-        assertTrue(violation.getDescription().contains("appears in javadoc but lacks @InterfaceAudience.Public annotation"));
+    void isPublicApi_unknownKafkaClass_returnsFalse() throws IOException {
+        PublicApiChecker checker = checkerFor();
+        assertFalse(checker.isPublicApi("org.apache.kafka.UnknownClass"));
     }
 
     @Test
-    void testCrossValidateClassSets_PerfectMatch() throws Exception {
-        Set<String> htmlClasses = new HashSet<>();
-        htmlClasses.add("org.apache.kafka.common.Resource");
-        htmlClasses.add("org.apache.kafka.clients.producer.Producer");
+    void isPublicApi_nestedWithoutOuterFacts_returnsFalse() throws IOException {
+        // Inner is recorded but Outer isn't. The chain walk finds Inner (no annotation), looks up
+        // Outer, gets null, exits with false — inheritance requires the outer to be in scope.
+        PublicApiChecker checker = checkerFor(
+                AsmClassFactory.klass("org.apache.kafka.api.Outer$Inner").access(Opcodes.ACC_PUBLIC));
+        assertFalse(checker.isPublicApi("org.apache.kafka.api.Outer$Inner"));
+    }
 
-        Set<String> annotatedClasses = new HashSet<>();
-        annotatedClasses.add("org.apache.kafka.common.Resource");
-        annotatedClasses.add("org.apache.kafka.clients.producer.Producer");
+    // ----- checkPublicApiConsistency -----
 
-        Method crossValidateClassSets = PublicApiChecker.class.getDeclaredMethod(
-            "crossValidateClassSets", Set.class, Set.class);
-        crossValidateClassSets.setAccessible(true);
+    @Test
+    void checkPublicApiConsistency_mergesJavadocAndCascadeViolations() throws IOException {
+        // Bar is @Public with a method that leaks an internal type; javadoc jar is empty.
+        // Expected: MISSING_JAVADOC from the javadoc validator + INVALID_RETURN_TYPE from cascade.
+        AsmClassFactory.ClassBuilder bar = AsmClassFactory.klass("org.apache.kafka.api.Bar")
+                .access(Opcodes.ACC_PUBLIC).publicApi()
+                .method(AsmClassFactory.method("leak").returns("Lorg/apache/kafka/internals/Internal;"));
+        File projectJar = TempJarBuilder.jar().addClass(bar).writeTo(tempDir, "proj.jar");
+        File javadocJar = TempJarBuilder.jar().writeTo(tempDir, "javadoc.jar");
 
-        @SuppressWarnings("unchecked")
-        List<PublicApiViolation> violations = (List<PublicApiViolation>)
-            crossValidateClassSets.invoke(checker, htmlClasses, annotatedClasses);
+        CheckResult result = new PublicApiChecker(List.of(projectJar)).checkPublicApiConsistency(javadocJar);
 
-        assertTrue(violations.isEmpty(), "Should have no violations for perfectly matched sets");
+        assertTrue(result.violations().stream().anyMatch(v -> "MISSING_JAVADOC".equals(v.getViolationType())),
+                "expected MISSING_JAVADOC from javadoc validator: " + result.violations());
+        assertTrue(result.violations().stream().anyMatch(v -> "INVALID_RETURN_TYPE".equals(v.getViolationType())),
+                "expected INVALID_RETURN_TYPE from cascade validator: " + result.violations());
     }
 
     @Test
-    void testCheckPublicApiConsistency_IntegrationTest() throws IOException {
-        File javadocJar = createMockJavadocJar();
-        File projectJar = createMockProjectJar();
+    void checkPublicApiConsistency_mergesSuppressionsFromCascade() throws IOException {
+        // Class-level @SuppressKafkaInternalApiUsage routes the cascade leak into suppressions
+        // instead of violations. Javadoc HTML present → no MISSING_JAVADOC.
+        AsmClassFactory.ClassBuilder bar = AsmClassFactory.klass("org.apache.kafka.api.Bar")
+                .access(Opcodes.ACC_PUBLIC).publicApi().suppress("legacy")
+                .method(AsmClassFactory.method("leak").returns("Lorg/apache/kafka/internals/Internal;"));
+        File projectJar = TempJarBuilder.jar().addClass(bar).writeTo(tempDir, "proj.jar");
+        File javadocJar = TempJarBuilder.jar()
+                .addHtml("org/apache/kafka/api/Bar.html", "")
+                .writeTo(tempDir, "javadoc.jar");
 
-        List<File> projectJars = new ArrayList<>();
-        projectJars.add(projectJar);
+        CheckResult result = new PublicApiChecker(List.of(projectJar)).checkPublicApiConsistency(javadocJar);
 
-        PublicApiChecker integrationChecker = new PublicApiChecker(projectJars);
-        CheckResult result = integrationChecker.checkPublicApiConsistency(javadocJar);
-
-        // Should not crash; exact violation count depends on the mocked environment.
-        assertNotNull(result);
-        assertNotNull(result.violations());
-        assertNotNull(result.suppressions());
+        assertTrue(result.violations().isEmpty(), "everything suppressed: " + result.violations());
+        assertEquals(1, result.suppressions().size());
+        assertTrue(result.suppressions().get(0).getDescription().contains("reason: legacy"),
+                "suppression must carry the annotation reason: " + result.suppressions().get(0).getDescription());
     }
 
-    // Helper methods for creating mock JAR files
+    // ----- checkBytecode -----
 
-    private File createMockJavadocJar() throws IOException {
-        File jarFile = tempDir.resolve("test-javadoc.jar").toFile();
+    @Test
+    void checkBytecode_flagsConsumerReferenceToInternalClass() throws IOException {
+        // Project surface defines Hidden as an in-scope Kafka class with no @Public annotation.
+        // The consumer references it → checkBytecode should report INTERNAL_API_USAGE.
+        File projectJar = TempJarBuilder.jar()
+                .addClass(AsmClassFactory.klass("org.apache.kafka.internals.Hidden").access(Opcodes.ACC_PUBLIC))
+                .writeTo(tempDir, "proj.jar");
+        File consumerJar = TempJarBuilder.jar()
+                .addClass(AsmClassFactory.klass("com.example.Consumer")
+                        .access(Opcodes.ACC_PUBLIC)
+                        .method(AsmClassFactory.method("hold").returns("Lorg/apache/kafka/internals/Hidden;")))
+                .writeTo(tempDir, "consumer.jar");
 
-        try (JarOutputStream jos = new JarOutputStream(new FileOutputStream(jarFile))) {
-            // Add valid class HTML files
-            addHtmlEntry(jos, "org/apache/kafka/common/Resource.html", "");
-            addHtmlEntry(jos, "org/apache/kafka/clients/producer/Producer.html", "");
+        ScanResult result = new PublicApiChecker(List.of(projectJar)).checkBytecode(List.of(consumerJar));
 
-            // Add excluded package class (should be filtered out)
-            addHtmlEntry(jos, "org/apache/kafka/common/internals/InternalClass.html", "");
-
-            // Add structural HTML files (should be filtered out)
-            addHtmlEntry(jos, "org/apache/kafka/package-summary.html", "");
-            addHtmlEntry(jos, "index.html", "");
-            addHtmlEntry(jos, "overview-tree.html", "");
-            addHtmlEntry(jos, "constant-values.html", "");
-
-            // Add non-HTML files (should be filtered out)
-            addEntry(jos, "org/apache/kafka/common/Resource.class", new byte[0]);
-        }
-
-        return jarFile;
+        assertFalse(result.getViolations().isEmpty(),
+                "unannotated Kafka class reference must be flagged: " + result.getViolations());
+        assertEquals("INTERNAL_API_USAGE", result.getViolations().get(0).getViolationType());
+        assertEquals("org.apache.kafka.internals.Hidden", result.getViolations().get(0).getClassName());
     }
 
-    private File createMockProjectJar() throws IOException {
-        File jarFile = tempDir.resolve("test-project.jar").toFile();
+    @Test
+    void checkBytecode_passesConsumerReferenceToPublicClass() throws IOException {
+        File projectJar = TempJarBuilder.jar()
+                .addClass(AsmClassFactory.klass("org.apache.kafka.api.Pub").access(Opcodes.ACC_PUBLIC).publicApi())
+                .writeTo(tempDir, "proj.jar");
+        File consumerJar = TempJarBuilder.jar()
+                .addClass(AsmClassFactory.klass("com.example.Consumer")
+                        .access(Opcodes.ACC_PUBLIC)
+                        .method(AsmClassFactory.method("use").returns("Lorg/apache/kafka/api/Pub;")))
+                .writeTo(tempDir, "consumer.jar");
 
-        try (JarOutputStream jos = new JarOutputStream(new FileOutputStream(jarFile))) {
-            // Add some empty entries instead of class files to avoid ClassFormatError
-            addEntry(jos, "META-INF/MANIFEST.MF", "Manifest-Version: 1.0\n".getBytes());
-        }
+        ScanResult result = new PublicApiChecker(List.of(projectJar)).checkBytecode(List.of(consumerJar));
 
-        return jarFile;
+        assertTrue(result.getViolations().isEmpty(),
+                "reference to a @Public class must pass: " + result.getViolations());
     }
 
-    private void addHtmlEntry(JarOutputStream jos, String path, String content) throws IOException {
-        JarEntry entry = new JarEntry(path);
-        jos.putNextEntry(entry);
-        jos.write(content.getBytes());
-        jos.closeEntry();
+    // ----- constructor overload -----
+
+    @Test
+    void singleArgConstructor_equivalentToEmptyReferenceJars() throws IOException {
+        File projectJar = TempJarBuilder.jar()
+                .addClass(AsmClassFactory.klass("org.apache.kafka.api.Bar").access(Opcodes.ACC_PUBLIC).publicApi())
+                .writeTo(tempDir, "proj.jar");
+
+        PublicApiChecker single = new PublicApiChecker(List.of(projectJar));
+        PublicApiChecker dual   = new PublicApiChecker(List.of(projectJar), Collections.emptyList());
+
+        assertTrue(single.isPublicApi("org.apache.kafka.api.Bar"));
+        assertTrue(dual.isPublicApi("org.apache.kafka.api.Bar"));
+        assertFalse(single.isPublicApi("org.apache.kafka.UnknownClass"));
+        assertFalse(dual.isPublicApi("org.apache.kafka.UnknownClass"));
     }
 
-    private void addEntry(JarOutputStream jos, String path, byte[] content) throws IOException {
-        JarEntry entry = new JarEntry(path);
-        jos.putNextEntry(entry);
-        jos.write(content);
-        jos.closeEntry();
+    // ----- helper -----
+
+    private PublicApiChecker checkerFor(AsmClassFactory.ClassBuilder... classes) throws IOException {
+        if (classes.length == 0) return new PublicApiChecker(List.of());
+        TempJarBuilder jar = TempJarBuilder.jar();
+        for (AsmClassFactory.ClassBuilder c : classes) jar.addClass(c);
+        return new PublicApiChecker(List.of(jar.writeTo(tempDir, "proj.jar")));
     }
 }

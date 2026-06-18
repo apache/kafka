@@ -1,10 +1,10 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -20,6 +20,7 @@ import org.apache.kafka.publicapi.PublicApiChecker;
 import org.apache.kafka.publicapi.PublicApiViolation;
 import org.apache.kafka.publicapi.ScanResult;
 import org.apache.kafka.publicapi.ViolationReporter;
+
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.artifacts.Configuration;
@@ -30,7 +31,10 @@ import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.PathSensitive;
+import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
+import org.gradle.work.DisableCachingByDefault;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,6 +48,7 @@ import java.util.List;
  * works uniformly for Java, Scala, Kotlin and any other JVM-language consumer. The task
  * therefore runs after the project's {@code classes} task.
  */
+@DisableCachingByDefault(because = "Scans bytecode and resolves runtime configurations; cache key would miss transitive Kafka jars")
 public class KafkaInternalApiCheckerTask extends DefaultTask {
 
     private final Property<Boolean> enabled = getProject().getObjects().property(Boolean.class);
@@ -175,6 +180,7 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
     }
 
     @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
     public Property<FileCollection> getClassDirs() {
         return classDirs;
     }

@@ -2,6 +2,8 @@ plugins {
     id 'java-gradle-plugin'
     id 'maven-publish'
     id 'java-library'
+    id 'checkstyle'
+    id 'com.diffplug.spotless' version '8.4.0'
 }
 
 group = 'org.apache.kafka'
@@ -159,6 +161,28 @@ publishing {
 
 test {
     useJUnitPlatform()
+}
+
+checkstyle {
+    toolVersion = '12.3.1'
+    configDirectory = file("$rootDir/../checkstyle")
+    configProperties = [importControlFile: 'import-control-buildsrc.xml']
+}
+
+tasks.named('checkstyleMain').configure {
+    group = 'Verification'
+    description = 'Run checkstyle on all main Java sources'
+}
+
+tasks.named('checkstyleTest').configure {
+    group = 'Verification'
+    description = 'Run checkstyle on all test Java sources'
+}
+
+spotless {
+    java {
+        importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+    }
 }
 
 // Task to run plugin validation

@@ -69,11 +69,11 @@ final class ApiSurfaceScanner {
     static ApiSurface scan(List<File> projectJars, List<File> referenceJars) throws IOException {
         ApiSurface.Builder surface = ApiSurface.builder();
         Map<String, ClassFacts> byBinaryName = new HashMap<>();
-        Set<String> ownedDottedNames = new HashSet<>();
+        Set<String> projectJarDottedNames = new HashSet<>();
 
         // Pass 1 — read facts for every in-scope class. Project-owned classes get tracked so
         // pass 2 can keep them out of reference-only iteration sets.
-        scanJars(projectJars, byBinaryName, surface, ownedDottedNames::add);
+        scanJars(projectJars, byBinaryName, surface, projectJarDottedNames::add);
         scanJars(referenceJars, byBinaryName, surface, name -> { });
 
         // Pass 2 — resolve inheritance and populate the surface's derived sets. Deprecated
@@ -81,21 +81,21 @@ final class ApiSurfaceScanner {
         // {@link ApiSurface#isDeprecated} directly from the per-class facts so no separate
         // deprecated set is needed here.
         for (ClassFacts facts : byBinaryName.values()) {
-            if (facts.isDeprecated()) continue;
-            boolean owned = ownedDottedNames.contains(facts.dottedName());
-            if (facts.isPublic() && owned) {
+            if (facts.isDeprecated() || !projectJarDottedNames.contains(facts.dottedName())) continue;
+            if (facts.isPublic()) {
                 surface.addDirectPublic(facts);
             }
             if (resolveEffectiveAudience(facts.binaryName(), byBinaryName) == DirectAudience.PUBLIC) {
-                // Membership set — both owned and reference classes count, so cross-module
-                // @Public references resolve.
-                surface.markEffectivelyPublic(facts);
-                // Cascade only runs on owned externally-visible classes — private nested
-                // classes inherit @Public under the Hadoop model but their methods/ctors aren't
-                // reachable to consumers, and reference jars are validated by their own module.
-                if (facts.isExternallyVisible() && owned) {
-                    surface.addEffectivePublic(facts);
-                }
+                // Owned effective-Public classes all go into the surface — cross-module
+                // @Public references resolve via {@link ApiSurface#isEffectivelyPublic} which
+                // walks the enclosing chain. Reference-jar classes don't need to be added
+                // here: they're validated by their own module's task.
+                //
+                // Iteration consumers (CascadeValidator) filter on
+                // {@link ClassFacts#isExternallyVisible()} at the call site — private nested
+                // classes inherit the audience but their methods/ctors aren't reachable to
+                // consumers and shouldn't be cascade-walked.
+                surface.addEffectivePublic(facts);
             }
         }
 
