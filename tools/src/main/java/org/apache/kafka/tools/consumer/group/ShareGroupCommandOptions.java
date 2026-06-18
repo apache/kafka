@@ -34,7 +34,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     private static final String GROUP_DOC = "The share group id.";
     private static final String TOPIC_DOC = "The topic whose offset information should be deleted or reset. " +
         "When resetting offsets, partitions can be specified using this format: `topic:0,1,2`, where 0,1,2 are the partitions to be included.";
-    private static final String ALL_TOPICS_DOC = "Apply to all topics. Supported operations: reset-offsets.";
+    private static final String ALL_TOPICS_DOC = "Apply to all topics. Supported operation: reset-offsets.";
     private static final String LIST_DOC = "List all share groups.";
     private static final String DESCRIBE_DOC = "Describe share group, members and offset information.";
     private static final String ALL_GROUPS_DOC = "Apply to all share groups.";
@@ -48,9 +48,9 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         "You must choose one of the following reset specifications: --to-datetime, --to-earliest, --to-latest, --from-file, --to-current, --to-offset." + NL +
         "To define the scope, use --all-topics or --topic. The scope must be specified unless you use --from-file." + NL +
         "Fails if neither --dry-run nor --execute is specified.";
-    private static final String DRY_RUN_DOC = "Output offset reset information without executing the operation. Supported operations: reset-offsets.";
-    private static final String EXECUTE_DOC = "Execute the offset reset operation. Supported operations: reset-offsets.";
-    private static final String EXPORT_DOC = "Generate offset reset information in CSV format for export to a file. Supported operations: reset-offsets.";
+    private static final String DRY_RUN_DOC = "Output offset reset information without executing the operation. Supported operation: reset-offsets.";
+    private static final String EXECUTE_DOC = "Execute the offset reset operation. Supported operation: reset-offsets.";
+    private static final String EXPORT_DOC = "Generate offset reset information in CSV format for export to a file. Supported operation: reset-offsets.";
     private static final String RESET_TO_OFFSET_DOC = "Reset offsets to a specific offset.";
     private static final String RESET_FROM_FILE_DOC = "Reset offsets to values defined in CSV file.";
     private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'";
@@ -60,7 +60,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     private static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the --describe option only.";
     private static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information. " +
         "This is the default sub-action and may be used with the --describe option only.";
-    private static final String STATE_DOC = "When specified with --describe, includes the state of the group." + NL +
+    private static final String STATE_DOC = "When specified with --describe, it displays the state of the group." + NL +
         "When specified with --list, it displays the state of all groups. It can also be used to list groups with specific states. " +
         "Valid values are Empty, Stable and Dead.";
     private static final String VERBOSE_DOC = "Provide additional information, if any, when describing the group. This option may be used " +
@@ -173,7 +173,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
 
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     public void checkArgs() {
-        CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list, describe, reset and delete share groups.");
+        CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list, describe, delete and manage the offsets of share groups.");
 
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
