@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -32,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -530,6 +534,31 @@ public class StreamsRebalanceDataTest {
 
         streamsRebalanceData.setHeartbeatIntervalMs(1000);
         assertEquals(1000, streamsRebalanceData.heartbeatIntervalMs());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldDefaultAndUpdateTopologyPushFields() {
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                UUID.randomUUID(),
+                Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090)),
+                Optional.empty(),
+                Map.of(),
+                Map.of("clientTag1", "clientTagValue1")
+        );
+
+        assertNull(streamsRebalanceData.wireTopologyDescription());
+        assertNull(streamsRebalanceData.memberId());
+        assertFalse(streamsRebalanceData.topologyPushRequired());
+
+        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
+                new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription();
+        streamsRebalanceData.setWireTopologyDescription(wire);
+        streamsRebalanceData.setMemberId("member-1");
+        streamsRebalanceData.setTopologyPushRequired(true);
+
+        assertSame(wire, streamsRebalanceData.wireTopologyDescription());
+        assertEquals("member-1", streamsRebalanceData.memberId());
+        assertTrue(streamsRebalanceData.topologyPushRequired());
     }
 
 }

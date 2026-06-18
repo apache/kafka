@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -354,6 +355,12 @@ public class StreamsRebalanceData {
 
     private final AtomicLong acceptableRecoveryLag = new AtomicLong(-1);
 
+    private final AtomicReference<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription> wireTopologyDescription = new AtomicReference<>(null);
+
+    private volatile String memberId;
+
+    private final AtomicBoolean topologyPushRequired = new AtomicBoolean(false);
+
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Optional<String> rackId,
@@ -474,4 +481,27 @@ public class StreamsRebalanceData {
         return acceptableRecoveryLag.get();
     }
 
+    public void setWireTopologyDescription(final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wireDescription) {
+        wireTopologyDescription.set(wireDescription);
+    }
+
+    public StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wireTopologyDescription() {
+        return wireTopologyDescription.get();
+    }
+
+    public void setMemberId(final String memberId) {
+        this.memberId = memberId;
+    }
+
+    public String memberId() {
+        return memberId;
+    }
+
+    public void setTopologyPushRequired(final boolean topologyPushRequired) {
+        this.topologyPushRequired.set(topologyPushRequired);
+    }
+
+    public boolean topologyPushRequired() {
+        return topologyPushRequired.get();
+    }
 }

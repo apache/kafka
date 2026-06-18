@@ -912,6 +912,11 @@ public class StreamsConfig extends AbstractConfig {
             "Whether to use the configured <code>" + PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + "</code> during global store/KTable processing. " +
                     "Disabled by default. This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
 
+    public static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG = "topology.description.push.enabled";
+    private static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC = "Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. " +
+        "When set to false, the client ignores TopologyDescriptionRequired=true in heartbeat responses. " +
+        "Enabled by default.";
+
     static {
         CONFIG = new ConfigDef()
 
@@ -1359,7 +1364,13 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.MEDIUM,
+                    TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC
+                );
     }
 
     // this is the list of configs for underlying clients
