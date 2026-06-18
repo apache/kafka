@@ -725,14 +725,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
         final int pushedEpoch = request.topologyEpoch();
         final TopicPartition tp = topicPartitionFor(groupId);
 
-        // Each terminal branch produces a SetTopologyOutcome carrying the response and the
-        // back-off disposition. Pre-plugin failures (validate / convert / runtime error)
-        // skip the post-plugin stages and are wrapped with BackoffAction.NOOP by
-        // exceptionally so a fenced or unauthorized caller cannot grief the back-off and
-        // suppress legitimate solicitation. Post-plugin failures arm the back-off; a
-        // post-plugin write failing with GroupIdNotFoundException — the group was deleted
-        // between the plugin call and the write — drops the orphaned entry since no live
-        // group remains to throttle.
+        // The back-off is mutated where the disposition is actually known, so it never has to
+        // be threaded through the chain as data: pre-plugin failures (validate / convert /
+        // runtime) never reach the arming code, so a fenced or unauthorized caller cannot grief
+        // the back-off; a transient plugin failure arms it; and the post-plugin bookkeeping
+        // write clears it on success, drops the whole entry if the group was deleted underneath
+        // us, leaves it alone on a coordinator-moved error, or arms it (see finishPostPluginWrite).
         return runtime.scheduleReadOperation(
                 "streams-group-topology-description-validate",
                 tp,
@@ -744,87 +742,69 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .thenApply(__ -> StreamsGroupTopologyDescriptionConverter.fromRequest(request.topologyDescription()))
             .thenCompose(description -> streamsGroupTopologyDescriptionManager.invokeSetTopology(
                 groupId, pushedEpoch, description))
-            .thenCompose(pluginOutcome -> postPluginSetTopologyAction(pluginOutcome, groupId, pushedEpoch, tp))
-            .exceptionally(t -> new SetTopologyOutcome(null, BackoffAction.NOOP, t))
-            .thenApply(outcome -> {
-                applySetTopologyBackoff(outcome, groupId, pushedEpoch);
-                return outcome;
+            .thenCompose(pluginOutcome -> switch (pluginOutcome.kind()) {
+                case SUCCESS -> runtime.scheduleWriteOperation(
+                    "streams-group-set-stored-topology-epoch",
+                    tp,
+                    coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, false)
+                ).handle((unused, throwable) -> finishPostPluginWrite(
+                    groupId, pushedEpoch, throwable,
+                    new StreamsGroupTopologyDescriptionUpdateResponseData()));
+                case PERMANENT -> runtime.scheduleWriteOperation(
+                    "streams-group-set-failed-topology-epoch",
+                    tp,
+                    coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, true)
+                ).handle((unused, throwable) -> finishPostPluginWrite(
+                    groupId, pushedEpoch, throwable,
+                    topologyDescriptionUpdateError(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message())));
+                case TRANSIENT -> {
+                    streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
+                    yield CompletableFuture.completedFuture(topologyDescriptionUpdateError(
+                        Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message()));
+                }
             })
-            .thenCompose(outcome -> outcome.failure() == null
-                ? CompletableFuture.completedFuture(outcome.response())
-                : CompletableFuture.failedFuture(outcome.failure()))
             .exceptionally(exception -> handleOperationException(
                 "streams-group-topology-description-update",
                 request,
                 exception,
-                (error, message) -> new StreamsGroupTopologyDescriptionUpdateResponseData()
-                    .setErrorCode(error.code())
-                    .setErrorMessage(message),
+                GroupCoordinatorService::topologyDescriptionUpdateError,
                 log
             ));
     }
 
-    private CompletableFuture<SetTopologyOutcome> postPluginSetTopologyAction(
-        StreamsGroupTopologyDescriptionManager.PluginOutcome pluginOutcome,
+    /**
+     * Apply the back-off mutation for the terminal disposition of a post-plugin bookkeeping
+     * write, then either return the response (write committed) or rethrow so the chain's
+     * terminal {@code exceptionally} maps the error. Acting on the back-off here — where the
+     * outcome is actually known — avoids threading the disposition through the chain as data.
+     */
+    private StreamsGroupTopologyDescriptionUpdateResponseData finishPostPluginWrite(
         String groupId,
         int pushedEpoch,
-        TopicPartition tp
-    ) {
-        return switch (pluginOutcome.kind()) {
-            case SUCCESS -> runtime.scheduleWriteOperation(
-                "streams-group-set-stored-topology-epoch",
-                tp,
-                coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, false)
-            ).handle((unused, throwable) -> outcomeForPostPluginWrite(
-                throwable, new StreamsGroupTopologyDescriptionUpdateResponseData()));
-            case PERMANENT -> runtime.scheduleWriteOperation(
-                "streams-group-set-failed-topology-epoch",
-                tp,
-                coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, true)
-            ).handle((unused, throwable) -> outcomeForPostPluginWrite(
-                throwable,
-                topologyDescriptionUpdateError(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message())));
-            case TRANSIENT -> CompletableFuture.completedFuture(new SetTopologyOutcome(
-                topologyDescriptionUpdateError(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message()),
-                BackoffAction.ARM, null));
-        };
-    }
-
-    private static SetTopologyOutcome outcomeForPostPluginWrite(
         Throwable throwable,
-        StreamsGroupTopologyDescriptionUpdateResponseData responseOnSuccess
+        StreamsGroupTopologyDescriptionUpdateResponseData responseOnWriteCommit
     ) {
         if (throwable == null) {
-            return new SetTopologyOutcome(responseOnSuccess, BackoffAction.CLEAR, null);
+            streamsGroupTopologyDescriptionManager.clearBackoff(groupId, pushedEpoch);
+            return responseOnWriteCommit;
         }
         Throwable cause = Errors.maybeUnwrapException(throwable);
-        // The group was deleted between the plugin call and the bookkeeping write — the
-        // push already took effect at the plugin and no live group remains to throttle,
-        // so drop the orphaned back-off entry instead of arming one nobody will clear.
         if (cause instanceof GroupIdNotFoundException) {
-            return new SetTopologyOutcome(null, BackoffAction.CLEAR_GROUP, throwable);
-        }
-        // This broker stopped being the coordinator between the plugin call and the
-        // bookkeeping write. The client will retry against the new coordinator, which
-        // holds no back-off entry of its own; arming a broker-wide entry here would
-        // leak until expiry and could suppress a legitimate solicitation if the group
-        // ever migrates back. The retry that lands on the new coordinator is what
-        // re-establishes convergence, not a back-off window on the broker that bowed out.
-        if (cause instanceof NotCoordinatorException
+            // The group was deleted between the plugin call and the bookkeeping write — the push
+            // already took effect at the plugin and no live group remains to throttle, so drop
+            // the orphaned back-off entry instead of arming one nobody will clear.
+            streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
+        } else if (cause instanceof NotCoordinatorException
             || cause instanceof CoordinatorLoadInProgressException
             || cause instanceof CoordinatorNotAvailableException) {
-            return new SetTopologyOutcome(null, BackoffAction.NOOP, throwable);
+            // This broker stopped being the coordinator between the plugin call and the write.
+            // The client retries against the new coordinator, which holds no back-off entry of
+            // its own; arming a broker-wide entry here would leak until expiry and could
+            // suppress a legitimate solicitation if the group migrates back. Leave it alone.
+        } else {
+            streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
         }
-        return new SetTopologyOutcome(null, BackoffAction.ARM, throwable);
-    }
-
-    private void applySetTopologyBackoff(SetTopologyOutcome outcome, String groupId, int pushedEpoch) {
-        switch (outcome.backoffAction()) {
-            case NOOP -> { }
-            case CLEAR -> streamsGroupTopologyDescriptionManager.clearBackoff(groupId, pushedEpoch);
-            case CLEAR_GROUP -> streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
-            case ARM -> streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
-        }
+        throw new CompletionException(throwable);
     }
 
     private static StreamsGroupTopologyDescriptionUpdateResponseData topologyDescriptionUpdateError(
@@ -835,14 +815,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .setErrorCode(error.code())
             .setErrorMessage(message);
     }
-
-    private record SetTopologyOutcome(
-        StreamsGroupTopologyDescriptionUpdateResponseData response,
-        BackoffAction backoffAction,
-        Throwable failure
-    ) { }
-
-    private enum BackoffAction { NOOP, ARM, CLEAR, CLEAR_GROUP }
 
     private void throwIfStreamsGroupTopologyDescriptionUpdateInvalid(
         StreamsGroupTopologyDescriptionUpdateRequestData request
