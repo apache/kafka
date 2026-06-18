@@ -458,8 +458,11 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
                 transactionalProducer.partitionsFor(topicPartition.topic());
                 transactionalProducer.beginTransaction();
                 transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+                verifyLatestShareStateDeliveryState(groupId, topicIdPartition, 0L, RecordState.TX_PENDING);
+                assertEquals(0, shareConsumer.poll(Duration.ofMillis(1000)).count());
                 transactionalProducer.commitTransaction();
 
+                verifyLatestShareStateDeliveryState(groupId, topicIdPartition, 0L, RecordState.ACKNOWLEDGED);
                 verifySharePartitionLag(admin, groupId, topicPartition, 0L);
                 assertEquals(0, shareConsumer.poll(Duration.ofMillis(500)).count());
                 verifyShareGroupStateTopicRecordsProduced();
@@ -515,8 +518,11 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
                 transactionalProducer.partitionsFor(topicPartition.topic());
                 transactionalProducer.beginTransaction();
                 transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+                verifyLatestShareStateDeliveryState(groupId, topicIdPartition, 0L, RecordState.TX_PENDING);
+                assertEquals(0, shareConsumer.poll(Duration.ofMillis(1000)).count());
                 transactionalProducer.abortTransaction();
 
+                verifyLatestShareStateDeliveryState(groupId, topicIdPartition, 0L, RecordState.AVAILABLE);
                 verifySharePartitionLag(admin, groupId, topicPartition, 1L);
                 ConsumerRecords<byte[], byte[]> redeliveredRecords = waitedPoll(shareConsumer, 2500L, 1);
                 ConsumerRecord<byte[], byte[]> redeliveredRecord = redeliveredRecords.iterator().next();
