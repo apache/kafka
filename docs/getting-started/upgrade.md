@@ -58,6 +58,12 @@ If you are upgrading from version 2.4.0 or above, and you have not overridden th
 
 
 
+### Notable changes in 3.9.3
+
+  * The broker-side OAUTHBEARER JWT validator now fails fast at startup when a JWKS endpoint (`sasl.oauthbearer.jwks.endpoint.url`) is configured but `sasl.oauthbearer.expected.audience` or `sasl.oauthbearer.expected.issuer` is not set. Brokers that previously started without these settings will now fail to start until they are configured. To intentionally accept tokens regardless of their audience or issuer, set the new `sasl.oauthbearer.allow.unverified.audience` or `sasl.oauthbearer.allow.unverified.issuer` configs (both default `false`) to `true`.
+
+
+
 ### Notable changes in 3.9.2
 
   * There is a new server configuration, `alter.config.policy.kraft.compatibility.enable`, which ensures that an AlterConfigPolicy is invoked consistently between KRaft and ZooKeeper modes. To enable this behavior, set the property to `true` in `server.properties`. For backward compatibility, the default value is `false`. See [KIP-1252](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=399279475) for more details.

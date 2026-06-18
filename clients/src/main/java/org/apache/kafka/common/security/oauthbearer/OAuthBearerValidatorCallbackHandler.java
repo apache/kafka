@@ -85,12 +85,25 @@ import javax.security.auth.login.AppConfigurationEntry;
  * </p>
  *
  * <p>
+ * The configuration options
+ * {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_EXPECTED_AUDIENCE} and
+ * {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_EXPECTED_ISSUER}
+ * are also required, so that the audience and issuer of each JWT can be verified. A broker that is
+ * missing either of them fails to start, unless the corresponding opt-out
+ * ({@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE} or
+ * {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER})
+ * is set to <code>true</code>.
+ * </p>
+ *
+ * <p>
  * The following is a list of all the configuration options that are available for the broker
  * validation callback handler:
  *
  * <ul>
  *   <li>{@link org.apache.kafka.common.config.internals.BrokerSecurityConfigs#SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_JAAS_CONFIG}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_ALLOW_UNVERIFIED_AUDIENCE}</li>
+ *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_ALLOW_UNVERIFIED_ISSUER}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_EXPECTED_AUDIENCE}</li>
  *   <li>{@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_EXPECTED_ISSUER}</li>

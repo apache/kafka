@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
@@ -29,12 +30,16 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -42,17 +47,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
+    private static final String EXPECTED_ISSUER = "https://idp.legit.example/";
+
+    private static final String EXPECTED_AUDIENCE = "kafka-cluster";
+
     @Test
     public void testBasic() throws Exception {
         String expectedAudience = "a";
         List<String> allAudiences = Arrays.asList(expectedAudience, "b", "c");
         AccessTokenBuilder builder = new AccessTokenBuilder()
             .audience(expectedAudience)
+            .addCustomClaim("iss", EXPECTED_ISSUER)
             .jwk(createRsaJwk())
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         String accessToken = builder.build();
 
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, allAudiences);
+        Map<String, Object> options = new HashMap<>();
+        options.put(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, allAudiences);
+        options.put(SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER);
+        Map<String, ?> configs = getSaslConfigs(options);
         OAuthBearerValidatorCallbackHandler handler = createHandler(configs, builder);
 
         try {
@@ -71,6 +84,34 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     }
 
     @Test
+    public void testFailsToStartWhenExpectedAudienceMissingWithJwksUrl() {
+        // A broker validator handler configured with a JWKS endpoint URL and expected.issuer but no expected.audience
+        // must fail to start, rather than come up and accept tokens whose audience cannot be verified.
+        Map<String, Object> options = new HashMap<>();
+        options.put(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "https://example.com/jwks");
+        options.put(SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER);
+        Map<String, ?> configs = getSaslConfigs(options);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        assertThrowsWithMessage(ConfigException.class,
+            () -> configureHandler(handler, configs, Collections.emptyMap()),
+            SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
+    }
+
+    @Test
+    public void testFailsToStartWhenExpectedIssuerMissingWithJwksUrl() {
+        // A broker validator handler configured with a JWKS endpoint URL and expected.audience but no expected.issuer
+        // must fail to start, rather than come up and accept tokens whose issuer cannot be verified.
+        Map<String, Object> options = new HashMap<>();
+        options.put(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, "https://example.com/jwks");
+        options.put(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, Collections.singletonList(EXPECTED_AUDIENCE));
+        Map<String, ?> configs = getSaslConfigs(options);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        assertThrowsWithMessage(ConfigException.class,
+            () -> configureHandler(handler, configs, Collections.emptyMap()),
+            SASL_OAUTHBEARER_EXPECTED_ISSUER);
+    }
+
+    @Test
     public void testInvalidAccessToken() throws Exception {
         // There aren't different error messages for the validation step, so these are all the
         // same :(
@@ -82,7 +123,11 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     }
 
     private void assertInvalidAccessTokenFails(String accessToken, String expectedMessageSubstring) throws Exception {
-        Map<String, ?> configs = getSaslConfigs();
+        // The injected validator is created by AccessTokenValidatorFactory, which requires expected.issuer and expected.audience.
+        Map<String, Object> options = new HashMap<>();
+        options.put(SASL_OAUTHBEARER_EXPECTED_ISSUER, EXPECTED_ISSUER);
+        options.put(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, Collections.singletonList(EXPECTED_AUDIENCE));
+        Map<String, ?> configs = getSaslConfigs(options);
         OAuthBearerValidatorCallbackHandler handler = createHandler(configs, new AccessTokenBuilder());
 
         try {

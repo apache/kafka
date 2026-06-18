@@ -59,6 +59,11 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *         Signature matching validation against the <code>kid</code> and those provided by
  *         the OAuth/OIDC provider's JWKS
  *     </li>
+ *     <li>
+ *         Match of the <code>aud</code> and <code>iss</code> claims against the configured expected
+ *         audience(s) and issuer, which {@link AccessTokenValidatorFactory} requires unless the
+ *         operator has explicitly opted out
+ *     </li>
  * </ol>
  */
 
@@ -100,6 +105,9 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
      *                                and authentication will fail. May be <code>null</code> to not
      *                                perform any check to verify the JWT's <code>iss</code> claim
      *                                matches a specific issuer.
+     * @param allowUnverifiedAudience Whether to accept a JWT regardless of its <code>aud</code>
+     *                                claim when no expected audience is given. Has no effect if
+     *                                <code>expectedAudiences</code> is non-empty.
      * @param verificationKeyResolver jose4j-based {@link VerificationKeyResolver} that is used
      *                                to validate the signature matches the contents of the header
      *                                and payload
@@ -115,6 +123,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
     public ValidatorAccessTokenValidator(Integer clockSkew,
         Set<String> expectedAudiences,
         String expectedIssuer,
+        boolean allowUnverifiedAudience,
         VerificationKeyResolver verificationKeyResolver,
         String scopeClaimName,
         String subClaimName) {
@@ -125,6 +134,9 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
 
         if (expectedAudiences != null && !expectedAudiences.isEmpty())
             jwtConsumerBuilder.setExpectedAudience(expectedAudiences.toArray(new String[0]));
+        else if (allowUnverifiedAudience)
+            // jose4j otherwise rejects any token that carries an "aud" claim when no expected audience is set
+            jwtConsumerBuilder.setSkipDefaultAudienceValidation();
 
         if (expectedIssuer != null)
             jwtConsumerBuilder.setExpectedIssuer(expectedIssuer);
@@ -137,6 +149,20 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
             .build();
         this.scopeClaimName = scopeClaimName;
         this.subClaimName = subClaimName;
+    }
+
+    /**
+     * Equivalent to the full constructor with <code>allowUnverifiedAudience</code> set to
+     * <code>false</code>.
+     */
+
+    public ValidatorAccessTokenValidator(Integer clockSkew,
+        Set<String> expectedAudiences,
+        String expectedIssuer,
+        VerificationKeyResolver verificationKeyResolver,
+        String scopeClaimName,
+        String subClaimName) {
+        this(clockSkew, expectedAudiences, expectedIssuer, false, verificationKeyResolver, scopeClaimName, subClaimName);
     }
 
     /**
