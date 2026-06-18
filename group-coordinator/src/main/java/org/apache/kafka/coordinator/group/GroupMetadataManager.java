@@ -8441,8 +8441,17 @@ public class GroupMetadataManager {
     ) throws GroupIdNotFoundException {
         StreamsGroup group = streamsGroup(groupId);
 
-        int newStored = permanentFailure ? group.storedDescriptionTopologyEpoch() : pushedEpoch;
-        int newFailed = permanentFailure ? pushedEpoch : group.failedDescriptionTopologyEpoch();
+        // The pushed epoch was validated against the current topology epoch in a separate read
+        // op; the plugin call and this write happen later, so the group may have advanced (or a
+        // concurrent higher-epoch push may have already recorded its epoch) in between. Only
+        // advance the field, never regress it, so a slow stale push cannot move stored/failed
+        // backwards below an already-recorded higher epoch.
+        int newStored = permanentFailure
+            ? group.storedDescriptionTopologyEpoch()
+            : Math.max(group.storedDescriptionTopologyEpoch(), pushedEpoch);
+        int newFailed = permanentFailure
+            ? Math.max(group.failedDescriptionTopologyEpoch(), pushedEpoch)
+            : group.failedDescriptionTopologyEpoch();
 
         CoordinatorRecord record = newStreamsGroupMetadataRecord(
             groupId,

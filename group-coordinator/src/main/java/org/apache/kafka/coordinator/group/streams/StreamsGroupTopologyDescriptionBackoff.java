@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * In-memory per-group back-off that throttles broker re-solicitation of a topology
@@ -72,23 +73,18 @@ public class StreamsGroupTopologyDescriptionBackoff {
      * or the push was lost in flight before {@link #armOrExtend} could run).
      */
     public boolean armIfNotActive(String groupId, int topologyEpoch) {
-        while (true) {
-            final long now = time.milliseconds();
-            Entry existing = state.get(groupId);
+        final long now = time.milliseconds();
+        final AtomicBoolean armed = new AtomicBoolean(false);
+        state.compute(groupId, (key, existing) -> {
             if (existing != null
                 && existing.topologyEpoch() == topologyEpoch
                 && now < existing.nextAttemptMs()) {
-                return false;
+                return existing;
             }
-            Entry next = computeNextEntry(existing, topologyEpoch, now);
-            boolean installed = existing == null
-                ? state.putIfAbsent(groupId, next) == null
-                : state.replace(groupId, existing, next);
-            if (installed) {
-                return true;
-            }
-            // Lost a race with a concurrent mutation; retry with the fresh state.
-        }
+            armed.set(true);
+            return computeNextEntry(existing, topologyEpoch, now);
+        });
+        return armed.get();
     }
 
     /**
