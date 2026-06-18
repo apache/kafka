@@ -53,6 +53,7 @@ public class ShareFetchTest {
                 11L,
                 List.of(AcknowledgeType.ACCEPT.id, AcknowledgeType.REJECT.id)))),
             transactionAcknowledgements.acknowledgements());
+        assertTrue(fetch.takeAcknowledgementsForTransaction().isEmpty());
         assertTrue(fetch.takeAcknowledgedRecords().isEmpty());
         assertTrue(fetch.isEmpty());
     }
