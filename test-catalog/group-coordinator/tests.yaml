@@ -241,6 +241,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTes
 - testHeartbeatDecorationFailurePreservesCommittedResponse
 - testHeartbeatNeverSetsFlagWithoutPlugin
 - testHeartbeatSetsTopologyDescriptionRequiredWhenStoredLags
+- testHeartbeatSkipsFlagForDepartingMember
 - testHeartbeatSkipsFlagOnV0Request
 - testHeartbeatSkipsFlagWhenFailedAtCurrentEpoch
 - testHeartbeatSkipsFlagWhenStaleTopologyStatusPresent
