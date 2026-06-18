@@ -61,8 +61,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -145,7 +145,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     private String statusTopic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
     private int generation;
-    private ExecutorService sendRetryExecutor;
+    private ScheduledExecutorService sendRetryExecutor;
 
     public KafkaStatusBackingStore(Time time, Converter converter, Supplier<TopicAdmin> topicAdminSupplier, String clientIdBase) {
         this.time = time;
@@ -163,7 +163,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         this(time, converter, null, "connect-distributed-");
         this.kafkaLog = kafkaLog;
         this.statusTopic = statusTopic;
-        sendRetryExecutor = Executors.newSingleThreadExecutor(
+        sendRetryExecutor = Executors.newSingleThreadScheduledExecutor(
                 ThreadUtils.createThreadFactory("status-store-retry-" + statusTopic, true));
     }
 
@@ -173,7 +173,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         if (this.statusTopic == null || this.statusTopic.trim().isEmpty())
             throw new ConfigException("Must specify topic for connector status.");
 
-        sendRetryExecutor = Executors.newSingleThreadExecutor(
+        sendRetryExecutor = Executors.newSingleThreadScheduledExecutor(
                 ThreadUtils.createThreadFactory("status-store-retry-" + statusTopic, true));
 
         String clusterId = config.kafkaClusterId();
@@ -304,21 +304,20 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
                 }
                 
                 if (exception instanceof RetriableException) {
-                    if (attemptNumber >= MAX_RETRY_ATTEMPTS) {
-                        log.error("Failed to write status update for key {} after {} attempts. Giving up.",
-                                key, attemptNumber + 1, exception);
-                        return;
+                    long backoffMs = calculateBackoff(attemptNumber);
+                    if (attemptNumber < MAX_RETRY_ATTEMPTS) {
+                        log.warn("Failed to write status update for key {} (attempt {}). " +
+                                "Retrying after {}ms. Reason: {}",
+                                key, attemptNumber + 1, backoffMs, exception.getMessage());
+                    } else {
+                        log.warn("Failed to write status update for key {} after {} attempts. " +
+                                "Will continue retrying with {}ms backoff. Reason: {}",
+                                key, attemptNumber + 1, backoffMs, exception.getMessage());
                     }
                     
-                    long backoffMs = calculateBackoff(attemptNumber);
-                    log.warn("Failed to write status update for key {} (attempt {}/{}). " +
-                            "Retrying after {}ms. Reason: {}",
-                            key, attemptNumber + 1, MAX_RETRY_ATTEMPTS + 1, backoffMs, exception.getMessage());
-                    
-                    sendRetryExecutor.submit(() -> {
-                        time.sleep(backoffMs);
+                    sendRetryExecutor.schedule(() -> {
                         sendWithRetry(key, value, attemptNumber + 1);
-                    });
+                    }, backoffMs, TimeUnit.MILLISECONDS);
                 } else {
                     log.error("Failed to write status update for key {} with non-retriable exception",
                             key, exception);
@@ -330,12 +329,15 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     /**
      * Calculate exponential backoff delay for retry attempts.
      * Uses formula: min(INITIAL_BACKOFF * 2^attempt, MAX_BACKOFF)
+     * After MAX_RETRY_ATTEMPTS, the backoff is capped at MAX_BACKOFF.
      *
      * @param attemptNumber the retry attempt number (0-based)
      * @return the backoff delay in milliseconds
      */
     private long calculateBackoff(int attemptNumber) {
-        long backoff = INITIAL_RETRY_BACKOFF_MS * (1L << attemptNumber);
+        // Cap the exponent to prevent overflow and limit backoff growth
+        int cappedAttempt = Math.min(attemptNumber, MAX_RETRY_ATTEMPTS);
+        long backoff = INITIAL_RETRY_BACKOFF_MS * (1L << cappedAttempt);
         return Math.min(backoff, MAX_RETRY_BACKOFF_MS);
     }
 
@@ -395,21 +397,20 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
                         }
                     }
 
-                    if (attemptNumber >= MAX_RETRY_ATTEMPTS) {
-                        log.error("Failed to write status update for key {} after {} attempts. Giving up.",
-                                key, attemptNumber + 1, exception);
-                        return;
+                    long backoffMs = calculateBackoff(attemptNumber);
+                    if (attemptNumber < MAX_RETRY_ATTEMPTS) {
+                        log.warn("Failed to write status update for key {} (attempt {}). " +
+                                "Retrying after {}ms. Reason: {}",
+                                key, attemptNumber + 1, backoffMs, exception.getMessage());
+                    } else {
+                        log.warn("Failed to write status update for key {} after {} attempts. " +
+                                "Will continue retrying with {}ms backoff. Reason: {}",
+                                key, attemptNumber + 1, backoffMs, exception.getMessage());
                     }
                     
-                    long backoffMs = calculateBackoff(attemptNumber);
-                    log.warn("Failed to write status update for key {} (attempt {}/{}). " +
-                            "Retrying after {}ms. Reason: {}",
-                            key, attemptNumber + 1, MAX_RETRY_ATTEMPTS + 1, backoffMs, exception.getMessage());
-                    
-                    sendRetryExecutor.submit(() -> {
-                        time.sleep(backoffMs);
+                    sendRetryExecutor.schedule(() -> {
                         sendWithRetry(key, value, status, entry, safeWrite, sequence, attemptNumber + 1);
-                    });
+                    }, backoffMs, TimeUnit.MILLISECONDS);
                 } else {
                     log.error("Failed to write status update for key {} with non-retriable exception",
                             key, exception);
