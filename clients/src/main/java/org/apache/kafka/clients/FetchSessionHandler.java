@@ -526,11 +526,15 @@ public class FetchSessionHandler {
      */
     public boolean handleResponse(FetchResponse response, short version) {
         if (response.error() != Errors.NONE) {
-            log.info("Node {} was unable to process the fetch request with {}: {}.",
-                node, nextMetadata, response.error());
             if (response.error() == Errors.FETCH_SESSION_ID_NOT_FOUND) {
+                // This is a recoverable condition logged at DEBUG to avoid noise from routine cache churn.
+                log.debug("Node {} returned a {} error; the fetch session {} was likely evicted from the broker's " +
+                    "fetch session cache. Re-sending a full fetch request to establish a new session.",
+                    node, response.error(), nextMetadata.sessionId());
                 nextMetadata = FetchMetadata.INITIAL;
             } else {
+                log.info("Node {} was unable to process the fetch request with {}: {}.",
+                    node, nextMetadata, response.error());
                 nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             }
             return false;
