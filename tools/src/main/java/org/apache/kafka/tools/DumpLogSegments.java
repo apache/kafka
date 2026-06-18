@@ -53,6 +53,8 @@ import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.transaction.TransactionState;
+import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -725,8 +727,13 @@ public class DumpLogSegments {
 
         @Override
         protected JsonNode valueAsJson(ApiMessage message, short version) {
-            return org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
+            JsonNode json = org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
                 .writeRecordValueAsJson(message, version);
+            if (message instanceof TransactionLogValue) {
+                ((ObjectNode) json).put("transactionStatus",
+                    TransactionState.fromId(((TransactionLogValue) message).transactionStatus()).stateName());
+            }
+            return json;
         }
     }
 
