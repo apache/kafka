@@ -19,11 +19,13 @@ package org.apache.kafka.connect.transforms;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
@@ -78,6 +80,31 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         header = config.getString(HEADER_FIELD);
-        literalValue = Values.parseString(config.getString(VALUE_LITERAL_FIELD));
+        String rawValue = config.getString(VALUE_LITERAL_FIELD);
+        SchemaAndValue parsed = Values.parseString(rawValue);
+        if (parsed != null && parsed.schema() != null) {
+            Schema.Type type = parsed.schema().type();
+            boolean isIntegral = type == Schema.Type.INT8 || type == Schema.Type.INT16 || type == Schema.Type.INT32 || type == Schema.Type.INT64;
+            if (isIntegral && rawValue.contains(".")) {
+                try {
+                    BigDecimal decimal = new BigDecimal(rawValue);
+                    float fValue = decimal.floatValue();
+                    double dValue = decimal.doubleValue();
+                    if (fValue != Float.NEGATIVE_INFINITY && fValue != Float.POSITIVE_INFINITY) {
+                        literalValue = new SchemaAndValue(Schema.FLOAT32_SCHEMA, fValue);
+                    } else if (dValue != Double.NEGATIVE_INFINITY && dValue != Double.POSITIVE_INFINITY) {
+                        literalValue = new SchemaAndValue(Schema.FLOAT64_SCHEMA, dValue);
+                    } else {
+                        literalValue = new SchemaAndValue(org.apache.kafka.connect.data.Decimal.schema(decimal.scale()), decimal);
+                    }
+                } catch (NumberFormatException e) {
+                    literalValue = parsed;
+                }
+            } else {
+                literalValue = parsed;
+            }
+        } else {
+            literalValue = parsed;
+        }
     }
 }
