@@ -58,6 +58,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
+import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -706,7 +707,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final Map<String, StreamsRebalanceData.Subtopology> subtopologies = initBrokerTopology(config, internalTopologyBuilder);
 
-        return new StreamsRebalanceData(
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
             processId,
             endpoint,
             rackId,
@@ -714,6 +715,17 @@ public class StreamThread extends Thread implements ProcessingThread {
             config.getClientTags(),
             taskOffsetSum
         );
+
+        if (config.getBoolean(StreamsConfig.TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG)) {
+            final TopologyDescription description = internalTopologyBuilder.describe();
+            if (description != null) {
+                streamsRebalanceData.setWireTopologyDescription(
+                    TopologyDescriptionConverter.toWire(description)
+                );
+            }
+        }
+
+        return streamsRebalanceData;
     }
 
     private static Map<String, StreamsRebalanceData.Subtopology> initBrokerTopology(final StreamsConfig config,
