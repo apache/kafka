@@ -941,22 +941,33 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Persist the outcome of a topology description plugin call. Writes a metadata record
-     * advancing either {@code StoredDescriptionTopologyEpoch} (on plugin success) or
-     * {@code FailedDescriptionTopologyEpoch} (on permanent plugin failure).
+     * Advance {@code StoredDescriptionTopologyEpoch} after a successful plugin {@code setTopology}.
      *
-     * @param groupId           The streams group id.
-     * @param pushedEpoch       The topology epoch on the push that just completed.
-     * @param permanentFailure  True if the plugin signalled a permanent failure; false on success.
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
      * @return A coordinator result carrying the metadata record.
      * @throws GroupIdNotFoundException if the streams group no longer exists.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> streamsGroupSetTopologyDescriptionEpoch(
+    public CoordinatorResult<Void, CoordinatorRecord> setStoredDescriptionTopologyEpoch(
         String groupId,
-        int pushedEpoch,
-        boolean permanentFailure
+        int pushedEpoch
     ) {
-        return groupMetadataManager.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, permanentFailure);
+        return groupMetadataManager.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch);
+    }
+
+    /**
+     * Advance {@code FailedDescriptionTopologyEpoch} after a permanent plugin failure.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setFailedDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) {
+        return groupMetadataManager.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch);
     }
 
     /**

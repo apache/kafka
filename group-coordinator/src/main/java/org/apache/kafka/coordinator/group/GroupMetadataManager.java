@@ -8423,33 +8423,53 @@ public class GroupMetadataManager {
     ) {
         Set<String> withStored = new HashSet<>();
         for (String groupId : groupIds) {
-            try {
-                StreamsGroup group = streamsGroup(groupId, committedOffset);
-                if (group.storedDescriptionTopologyEpoch(committedOffset) != -1) {
-                    withStored.add(groupId);
-                }
-            } catch (GroupIdNotFoundException ignored) {
-                // Not a streams group on this shard; nothing to clean up.
+            // Use a non-throwing lookup and type check rather than streamsGroup(...), which
+            // throws GroupIdNotFoundException for every absent or non-streams group: deleting
+            // a large batch of non-streams groups would otherwise build and unwind one
+            // exception per group on the coordinator thread purely as control flow.
+            Group group = groups.get(groupId, committedOffset);
+            if (group != null
+                && group.type() == STREAMS
+                && ((StreamsGroup) group).storedDescriptionTopologyEpoch(committedOffset) != -1) {
+                withStored.add(groupId);
             }
         }
         return withStored;
     }
 
     /**
-     * Persist the outcome of a topology description plugin call for a streams group.
+     * Advance {@code StoredDescriptionTopologyEpoch} to {@code pushedEpoch} after a successful
+     * plugin {@code setTopology}, so subsequent heartbeats at the same epoch do not re-solicit.
      *
-     * <p>On a successful plugin {@code setTopology} the {@code StoredDescriptionTopologyEpoch}
-     * field is advanced to the pushed epoch; on a permanent failure the
-     * {@code FailedDescriptionTopologyEpoch} field is advanced instead so subsequent
-     * heartbeats at the same epoch do not re-solicit a push.
-     *
-     * @param groupId           The streams group id.
-     * @param pushedEpoch       The topology epoch on the push that just completed.
-     * @param permanentFailure  True if the plugin signalled a permanent failure; false on success.
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
      * @return A coordinator result carrying the metadata record that updates the field.
      * @throws GroupIdNotFoundException if the streams group no longer exists.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> streamsGroupSetTopologyDescriptionEpoch(
+    public CoordinatorResult<Void, CoordinatorRecord> setStoredDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) throws GroupIdNotFoundException {
+        return updateTopologyDescriptionEpochs(groupId, pushedEpoch, false);
+    }
+
+    /**
+     * Advance {@code FailedDescriptionTopologyEpoch} to {@code pushedEpoch} after a permanent
+     * plugin failure, so subsequent heartbeats at the same epoch do not re-solicit a push.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record that updates the field.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setFailedDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) throws GroupIdNotFoundException {
+        return updateTopologyDescriptionEpochs(groupId, pushedEpoch, true);
+    }
+
+    private CoordinatorResult<Void, CoordinatorRecord> updateTopologyDescriptionEpochs(
         String groupId,
         int pushedEpoch,
         boolean permanentFailure

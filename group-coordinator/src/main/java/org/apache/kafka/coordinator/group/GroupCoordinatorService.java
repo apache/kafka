@@ -746,14 +746,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 case SUCCESS -> runtime.scheduleWriteOperation(
                     "streams-group-set-stored-topology-epoch",
                     tp,
-                    coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, false)
+                    coordinator -> coordinator.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch)
                 ).handle((unused, throwable) -> finishPostPluginWrite(
                     groupId, pushedEpoch, throwable,
                     new StreamsGroupTopologyDescriptionUpdateResponseData()));
                 case PERMANENT -> runtime.scheduleWriteOperation(
                     "streams-group-set-failed-topology-epoch",
                     tp,
-                    coordinator -> coordinator.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, true)
+                    coordinator -> coordinator.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch)
                 ).handle((unused, throwable) -> finishPostPluginWrite(
                     groupId, pushedEpoch, throwable,
                     topologyDescriptionUpdateError(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message())));
