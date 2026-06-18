@@ -727,7 +727,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         // cannot grief the back-off; a transient plugin failure arms it; and the post-plugin
         // bookkeeping write clears it on success, drops the whole entry if the group was deleted
         // underneath us, leaves it alone on a coordinator-moved error, or arms it (see
-        // finishPostPluginWrite).
+        // StreamsGroupTopologyDescriptionManager#completeEpochWrite).
         return runtime.scheduleReadOperation(
                 "streams-group-topology-description-validate",
                 tp,
