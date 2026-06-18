@@ -19,12 +19,14 @@ package org.apache.kafka.clients.consumer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -33,6 +35,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
@@ -275,6 +278,53 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
 
             verifySharePartitionLag(admin, groupId, tp, 0L);
             assertEquals(0, shareConsumer.poll(Duration.ofMillis(500)).count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    @Timeout(120)
+    public void testTransactionalShareAckCommitRejectWithDlqEnabled() throws Exception {
+        String groupId = "txn-share-commit-reject-dlq";
+        String dlqTopic = "dlq." + groupId;
+        createDlqTopic(dlqTopic);
+        alterShareAutoOffsetReset(groupId, "earliest");
+        alterShareGroupConfig(groupId, GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, dlqTopic);
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-commit-reject-dlq-producer");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 groupId,
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin admin = createAdminClient()) {
+
+            producer.send(record("dlq-rejected")).get();
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+            assertEquals(0L, record.offset());
+            assertEquals("dlq-rejected", new String(record.value(), StandardCharsets.UTF_8));
+
+            ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+            shareConsumer.acknowledge(record, AcknowledgeType.REJECT);
+            ShareAcknowledgements acknowledgements = shareConsumer.acknowledgementsForTransaction();
+            assertFalse(acknowledgements.isEmpty());
+            TopicIdPartition acknowledgedPartition = acknowledgements.acknowledgements().keySet().iterator().next();
+            assertEquals(tp, acknowledgedPartition.topicPartition());
+
+            transactionalProducer.initTransactions();
+            transactionalProducer.partitionsFor(tp.topic());
+            transactionalProducer.beginTransaction();
+            transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+            verifyLatestShareStateDeliveryState(groupId, acknowledgedPartition, 0L, RecordState.TX_PENDING);
+            transactionalProducer.commitTransaction();
+
+            assertEquals(0, shareConsumer.poll(Duration.ofMillis(1000)).count());
+            verifySharePartitionLag(admin, groupId, tp, 0L);
+            waitForDlqRecords(dlqTopic, 1);
+            verifyLatestShareStateDeliveryState(groupId, acknowledgedPartition, 0L, RecordState.ARCHIVED);
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -742,6 +792,32 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
             ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "30000",
             ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "120000"
         ));
+    }
+
+    private void createDlqTopic(String dlqTopic) throws Exception {
+        try (Admin admin = createAdminClient()) {
+            admin.createTopics(Set.of(new NewTopic(dlqTopic, 1, (short) 1).configs(Map.of(
+                TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, Boolean.TRUE.toString()
+            )))).all().get();
+        }
+    }
+
+    private void waitForDlqRecords(String dlqTopic, int expectedCount) throws InterruptedException {
+        TopicPartition dlqTopicPartition = new TopicPartition(dlqTopic, 0);
+        List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        try (Consumer<byte[], byte[]> consumer = cluster.consumer()) {
+            consumer.assign(List.of(dlqTopicPartition));
+            consumer.seekToBeginning(List.of(dlqTopicPartition));
+            TestUtils.waitForCondition(
+                () -> {
+                    consumer.poll(Duration.ofMillis(500)).records(dlqTopicPartition).forEach(records::add);
+                    return records.size() >= expectedCount;
+                },
+                DEFAULT_MAX_WAIT_MS,
+                DEFAULT_POLL_INTERVAL_MS,
+                () -> "Timed out waiting for " + expectedCount + " DLQ records from " + dlqTopic);
+        }
+        assertEquals(expectedCount, records.size());
     }
 
     private void completeTransactionAfterShareCoordinatorFailoverWithPendingState(

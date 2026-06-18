@@ -398,9 +398,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return DELIVERY_STATE_AVAILABLE;
         }
         if (batch.stagedDeliveryState() != PersisterStateBatch.NO_STAGED_DELIVERY_STATE) {
-            if (batch.stagedDeliveryState() == DELIVERY_STATE_ARCHIVING) {
-                return DELIVERY_STATE_ARCHIVED;
-            }
             return batch.stagedDeliveryState();
         }
         return batch.stagedAckType() == ACKNOWLEDGE_TYPE_ACCEPT ? DELIVERY_STATE_ACKNOWLEDGED : DELIVERY_STATE_ARCHIVED;
