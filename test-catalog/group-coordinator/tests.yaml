@@ -232,6 +232,11 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTest:
 - testSyncGroupWhenNotStarted
 - testSyncGroupWithException
 org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTest:
+- testDeleteGroupsMixedPluginOutcome
+- testDeleteGroupsPluginFailureReturnsGroupDeletionFailed
+- testDeleteGroupsPluginSuccessProceedsToTombstone
+- testDeleteGroupsSkipsPluginCallWhenNoStoredTopology
+- testDeleteGroupsWithoutPluginSkipsPluginCall
 - testHeartbeatArmSuppressReSolicitCycle
 - testHeartbeatDecorationFailurePreservesCommittedResponse
 - testHeartbeatNeverSetsFlagWithoutPlugin
@@ -246,6 +251,7 @@ org.apache.kafka.coordinator.group.GroupCoordinatorServiceTopologyDescriptionTes
 - testUpdatePermanentFailurePersistsFailedEpoch
 - testUpdatePluginFutureWithNullCauseIsTreatedAsTransient
 - testUpdatePluginReturnsNullFutureIsTreatedAsPermanentFailure
+- testUpdatePostPluginWriteRoutingFailureDoesNotArmBackoff
 - testUpdatePreValidationFailureDoesNotArmBackoff
 - testUpdateRejectedWhenCoordinatorNotActive
 - testUpdateRejectsEmptyGroupId

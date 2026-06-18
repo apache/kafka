@@ -1695,7 +1695,9 @@ kafka.server.KafkaApisTest:
 - testHandleAddPartitionsToTxnAuthorizationFailedAndMetrics
 - testHandleDeleteGroups
 - testHandleDeleteGroupsAuthenticationFailed
+- testHandleDeleteGroupsDowngradesGroupDeletionFailedForOldClients
 - testHandleDeleteGroupsFutureFailed
+- testHandleDeleteGroupsKeepsGroupDeletionFailedForV3Clients
 - testHandleDescribeGroups
 - testHandleDescribeGroupsAuthenticationFailed
 - testHandleDescribeGroupsFutureFailed
