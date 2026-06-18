@@ -175,9 +175,8 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val bytesIn = s"${BrokerTopicMetrics.BYTES_IN_PER_SEC},topic=$topic"
     val bytesOut = s"${BrokerTopicMetrics.BYTES_OUT_PER_SEC},topic=$topic"
 
-    val topicConfig = new Properties
-    topicConfig.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
-    createTopic(topic, 1, numNodes, topicConfig)
+    val topicConfigs = util.Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    createTopic(topic, 1, numNodes, topicConfigs)
     // Produce a few messages to create the metrics
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
 

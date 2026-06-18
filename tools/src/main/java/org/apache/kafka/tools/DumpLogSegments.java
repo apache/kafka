@@ -54,7 +54,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
 import org.apache.kafka.metadata.MetadataRecordSerde;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.util.CommandDefaultOptions;
@@ -365,7 +365,7 @@ public class DumpLogSegments {
             long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
             System.out.println("Log starting offset: " + startOffset);
         } else if (file.getName().endsWith(Snapshots.SUFFIX)) {
-            if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+            if (file.getName().equals(BootstrapMetadata.BINARY_BOOTSTRAP_FILENAME)) {
                 System.out.println("KRaft bootstrap snapshot");
             } else {
                 Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());

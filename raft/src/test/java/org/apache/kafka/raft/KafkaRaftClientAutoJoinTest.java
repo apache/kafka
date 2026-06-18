@@ -318,7 +318,7 @@ public class KafkaRaftClientAutoJoinTest {
             )
         );
         // poll kraft to update the replica's voter set
-        context.client.poll();
+        context.poll();
     }
 
     private int randomReplicaId() {

@@ -31,6 +31,8 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -48,6 +50,7 @@ import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -496,6 +499,25 @@ public class KafkaClusterTestKit implements AutoCloseable {
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
             formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
+
+            List<ApiMessageAndVersion> additionalRecords = new ArrayList<>();
+            for (ApiMessageAndVersion record : nodes.bootstrapMetadata().records()) {
+                if (record.message() instanceof FeatureLevelRecord featureRecord) {
+                    if (!featureRecord.name().equals(MetadataVersion.FEATURE_NAME)) {
+                        formatter.setFeatureLevel(featureRecord.name(), featureRecord.featureLevel());
+                    }
+                } else if (!(record.message() instanceof UserScramCredentialRecord)) {
+                    additionalRecords.add(record);
+                } else {
+                    throw new IllegalStateException("UserScramCredentialRecord is not supported in " +
+                        "bootstrap metadata. Use Formatter.setScramArguments() instead.");
+                }
+            }
+            for (String disabledFeature : nodes.disabledFeatures()) {
+                formatter.setFeatureLevel(disabledFeature, (short) 0);
+            }
+            formatter.setAdditionalBootstrapRecords(additionalRecords);
+
             StringBuilder dynamicVotersBuilder = new StringBuilder();
             String prefix = "";
             if (standalone) {
@@ -560,6 +582,67 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         }
+    }
+
+    /**
+     * Stops and restarts the brokers with swapped client listener ports. This simulates a network routing
+     * anomaly, such as a misconfigured proxy. Clients should rebootstrap, reconnect and continue working.
+     *
+     * @param nodeId1       The ID of the first broker.
+     * @param nodeId2       The ID of the second broker.
+     */
+    public void restartBrokersWithSwappedClientListenerPorts(int nodeId1, int nodeId2) throws IOException {
+        if (nodeId1 == nodeId2) {
+            throw new IllegalArgumentException("Broker IDs must not be equal");
+        }
+        BrokerServer broker1 = brokers.get(nodeId1);
+        if (broker1 == null) {
+            throw new IllegalArgumentException("Unknown broker ID " + nodeId1);
+        }
+        BrokerServer broker2 = brokers.get(nodeId2);
+        if (broker2 == null) {
+            throw new IllegalArgumentException("Unknown broker ID " + nodeId2);
+        }
+
+        String brokerListener = nodes.brokerListenerName().value();
+        int brokerPort1 = broker1.boundPort(ListenerName.normalised(brokerListener));
+        int brokerPort2 = broker2.boundPort(ListenerName.normalised(brokerListener));
+
+        broker1.shutdown();
+        broker2.shutdown();
+
+        socketFactoryManager.swapPortsForListener(nodeId1, nodeId2, brokerListener, brokerPort1, brokerPort2);
+
+        SharedServer sharedServer1 = new SharedServer(
+            broker1.config(),
+            broker1.sharedServer().metaPropsEnsemble(),
+            Time.SYSTEM,
+            new Metrics(),
+            CompletableFuture.completedFuture(
+                QuorumConfig.parseVoterConnections(broker1.config().quorumConfig().voters())),
+            QuorumConfig.parseBootstrapServers(broker1.config().quorumConfig().bootstrapServers()),
+            faultHandlerFactory,
+            socketFactoryManager.getOrCreateSocketFactory(nodeId1)
+        );
+        broker1 = new BrokerServer(sharedServer1);
+        brokers.put(nodeId1, broker1);
+
+        SharedServer sharedServer2 = new SharedServer(
+            broker2.config(),
+            broker2.sharedServer().metaPropsEnsemble(),
+            Time.SYSTEM,
+            new Metrics(),
+            CompletableFuture.completedFuture(
+                QuorumConfig.parseVoterConnections(broker2.config().quorumConfig().voters())),
+            QuorumConfig.parseBootstrapServers(broker2.config().quorumConfig().bootstrapServers()),
+            faultHandlerFactory,
+            socketFactoryManager.getOrCreateSocketFactory(nodeId2)
+        );
+        broker2 = new BrokerServer(sharedServer2);
+        brokers.put(nodeId2, broker2);
+
+        broker1.startup();
+        broker2.startup();
     }
 
     /**

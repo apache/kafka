@@ -148,6 +148,7 @@ public final class RaftClientTestContext {
     final boolean canBecomeVoter;
 
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
+    private final List<Throwable> uncaughtExceptions = new ArrayList<>();
 
     private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_VOTER_SET_PERIOD = 1;
 
@@ -687,13 +688,37 @@ public final class RaftClientTestContext {
         for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
             BeginQuorumEpochResponseData beginEpochResponse = beginEpochResponse(epoch, localIdOrThrow());
             deliverResponse(request.correlationId(), request.destination(), beginEpochResponse);
-            client.poll();
+            poll();
         }
+    }
+
+    /**
+     * Asserts that no uncaught exceptions occurred in async callbacks (e.g., CompletionStage.whenComplete).
+     * This method is automatically called by the poll() wrapper method, but can also be called directly
+     * by tests to check for async exceptions at any point.
+     *
+     * @throws AssertionError if any uncaught exceptions were captured
+     */
+    public void assertNoAsyncExceptions() {
+        if (!uncaughtExceptions.isEmpty()) {
+            Throwable first = uncaughtExceptions.get(0);
+            uncaughtExceptions.clear();
+            throw new AssertionError("Uncaught exception in async callback", first);
+        }
+    }
+
+    /**
+     * Poll for new events and check for any uncaught exceptions in async callbacks.
+     * This is a wrapper around client.poll() that also calls assertNoAsyncExceptions().
+     */
+    public void poll() {
+        client.poll();
+        assertNoAsyncExceptions();
     }
 
     public void pollUntil(TestCondition condition) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
-            client.poll();
+            poll();
             return condition.conditionMet();
         }, 5000, "Condition failed to be satisfied before timeout");
     }
@@ -968,14 +993,13 @@ public final class RaftClientTestContext {
             versionedRequest,
             time.milliseconds()
         );
-        inboundRequest.completion.whenComplete((response, exception) -> {
+        client.handle(inboundRequest).whenComplete((response, exception) -> {
             if (exception != null) {
-                throw new RuntimeException(exception);
+                uncaughtExceptions.add(exception);
             } else {
                 sentResponses.add(response);
             }
         });
-        client.handle(inboundRequest);
     }
 
     void deliverResponse(int correlationId, Node source, ApiMessage response) {
@@ -994,7 +1018,7 @@ public final class RaftClientTestContext {
      * the initial sleep time must be less than what was previously used.
      * This avoids expiring the fetch timer, but will expire the update voter set timer.
      *
-     * @param epoch - the current epoch 
+     * @param epoch - the current epoch
      * @param leaderId - the leader id
      * @param initialSleepMs - the initial sleep time before the first fetch, which should
      *                       be less than the fetch timeout to avoid expiring the fetch timer

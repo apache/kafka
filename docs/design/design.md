@@ -1,6 +1,6 @@
 ---
 title: Design
-description: 
+description: Kafka architecture design and the principles behind its core features.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 

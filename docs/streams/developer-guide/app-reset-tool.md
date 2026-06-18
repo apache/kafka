@@ -1,6 +1,6 @@
 ---
 title: Application Reset Tool
-description: 
+description: Kafka Streams application reset tool usage and limitations.
 weight: 13
 tags: ['kafka', 'docs']
 aliases: 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
@@ -41,12 +42,14 @@ import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
@@ -253,109 +256,72 @@ public class MeteredWindowStore<K, V>
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         Objects.requireNonNull(key, "key cannot be null");
-        return new MeteredWindowStoreIterator<>(
-            wrapped().fetch(serializeKey(key), timeFrom, timeTo),
-            fetchSensor,
-            iteratorDurationSensor,
-            this::deserializeValue,
-            time,
-            numOpenIterators,
-            openIterators
-        );
+        return meteredTimeRangeIterator(wrapped().fetch(serializeKey(key), timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<V> backwardFetch(final K key, final long timeFrom, final long timeTo) {
         Objects.requireNonNull(key, "key cannot be null");
-        return new MeteredWindowStoreIterator<>(
-            wrapped().backwardFetch(serializeKey(key), timeFrom, timeTo),
-            fetchSensor,
-            iteratorDurationSensor,
-            this::deserializeValue,
-            time,
-            numOpenIterators,
-            openIterators
-        );
+        return meteredTimeRangeIterator(wrapped().backwardFetch(serializeKey(key), timeFrom, timeTo));
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(
-        final K keyFrom,
-        final K keyTo,
-        final long timeFrom,
-        final long timeTo
-    ) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetch(
-                serializeKey(keyFrom),
-                serializeKey(keyTo),
-                timeFrom,
-                timeTo),
-            fetchSensor,
-            iteratorDurationSensor,
-            this::deserializeKey,
-            this::deserializeValue,
-            time,
-            numOpenIterators,
-            openIterators
-        );
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                  final K keyTo,
+                                                  final long timeFrom,
+                                                  final long timeTo) {
+        return meteredWindowedIterator(wrapped().fetch(serializeKey(keyFrom), serializeKey(keyTo), timeFrom, timeTo));
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetch(
-        final K keyFrom,
-        final K keyTo,
-        final long timeFrom,
-        final long timeTo
-    ) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFetch(
-                serializeKey(keyFrom),
-                serializeKey(keyTo),
-                timeFrom,
-                timeTo),
-            fetchSensor,
-            iteratorDurationSensor,
-            this::deserializeKey,
-            this::deserializeValue,
-            time,
-            numOpenIterators,
-            openIterators
-        );
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                          final K keyTo,
+                                                          final long timeFrom,
+                                                          final long timeTo) {
+        return meteredWindowedIterator(wrapped().backwardFetch(serializeKey(keyFrom), serializeKey(keyTo), timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetchAll(timeFrom, timeTo),
-            fetchSensor,
-            iteratorDurationSensor,
-            this::deserializeKey,
-            this::deserializeValue,
-            time,
-            numOpenIterators,
-            openIterators
-        );
+        return meteredWindowedIterator(wrapped().fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom, final long timeTo) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFetchAll(timeFrom, timeTo),
-            fetchSensor,
-            iteratorDurationSensor,
-            this::deserializeKey,
-            this::deserializeValue,
-            time,
-            numOpenIterators,
-            openIterators
-        );
+        return meteredWindowedIterator(wrapped().backwardFetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
+        return meteredWindowedIterator(wrapped().all());
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardAll() {
+        return meteredWindowedIterator(wrapped().backwardAll());
+    }
+
+    @Override
+    public ReadOnlyWindowStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyView(wrapped().readOnly(isolationLevel));
+    }
+
+    private WindowStoreIterator<V> meteredTimeRangeIterator(final WindowStoreIterator<byte[]> iter) {
+        return new MeteredWindowStoreIterator<>(
+            iter,
+            fetchSensor,
+            iteratorDurationSensor,
+            this::deserializeValue,
+            time,
+            numOpenIterators,
+            openIterators
+        );
+    }
+
+    private KeyValueIterator<Windowed<K>, V> meteredWindowedIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter) {
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().all(),
+            iter,
             fetchSensor,
             iteratorDurationSensor,
             this::deserializeKey,
@@ -366,18 +332,92 @@ public class MeteredWindowStore<K, V>
         );
     }
 
-    @Override
-    public KeyValueIterator<Windowed<K>, V> backwardAll() {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardAll(),
-            fetchSensor,
-            iteratorDurationSensor,
-            this::deserializeKey,
-            this::deserializeValue,
-            time,
-            numOpenIterators,
-            openIterators
-        );
+    private final class ReadOnlyView implements ReadOnlyWindowStore<K, V> {
+
+        private final ReadOnlyWindowStore<Bytes, byte[]> underlying;
+
+        ReadOnlyView(final ReadOnlyWindowStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public V fetch(final K key, final long windowStartTimestamp) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return maybeMeasureLatency(
+                () -> {
+                    final byte[] result = underlying.fetch(serializeKey(key), windowStartTimestamp);
+                    return result == null ? null : deserializeValue(result);
+                },
+                time,
+                fetchSensor
+            );
+        }
+
+        @Override
+        public WindowStoreIterator<V> fetch(
+            final K key,
+            final Instant timeFrom,
+            final Instant timeTo
+        ) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return meteredTimeRangeIterator(underlying.fetch(serializeKey(key), timeFrom, timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<V> backwardFetch(
+            final K key,
+            final Instant timeFrom,
+            final Instant timeTo
+        ) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return meteredTimeRangeIterator(underlying.backwardFetch(serializeKey(key), timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(
+            final K keyFrom,
+            final K keyTo,
+            final Instant timeFrom,
+            final Instant timeTo
+        ) {
+            return meteredWindowedIterator(underlying.fetch(serializeKey(keyFrom), serializeKey(keyTo), timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(
+            final K keyFrom,
+            final K keyTo,
+            final Instant timeFrom,
+            final Instant timeTo
+        ) {
+            return meteredWindowedIterator(underlying.backwardFetch(serializeKey(keyFrom), serializeKey(keyTo), timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> all() {
+            return meteredWindowedIterator(underlying.all());
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardAll() {
+            return meteredWindowedIterator(underlying.backwardAll());
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetchAll(
+            final Instant timeFrom,
+            final Instant timeTo
+        ) {
+            return meteredWindowedIterator(underlying.fetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(
+            final Instant timeFrom,
+            final Instant timeTo
+        ) {
+            return meteredWindowedIterator(underlying.backwardFetchAll(timeFrom, timeTo));
+        }
     }
 
     @Override

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
@@ -39,6 +40,7 @@ import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -113,8 +115,16 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     @Override
     public ValueTimestampHeaders<V> get(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
+        return getInternal(wrapped(), key);
+    }
+
+    private ValueTimestampHeaders<V> getInternal(final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K key) {
         try {
-            return maybeMeasureLatency(() -> deserializeValue(wrapped().get(serializeKey(key, internalContext.headers()))), time, getSensor);
+            return maybeMeasureLatency(
+                () -> deserializeValue(store.get(serializeKey(key, internalContext.headers()))),
+                time,
+                getSensor
+            );
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -463,21 +473,32 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     @Override
-    public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScan(final P prefix,
-                                                                                                  final PS prefixKeySerializer) {
+    public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScan(
+        final P prefix, final PS prefixKeySerializer
+    ) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+        return prefixScanInternal(wrapped(), prefix, prefixKeySerializer);
+    }
+
+    private <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScanInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final P prefix, final PS prefixKeySerializer
+    ) {
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
-            wrapped().prefixScan(prefix, prefixKeySerializer),
-            prefixScanSensor
+            store.prefixScan(prefix, prefixKeySerializer), prefixScanSensor
         );
     }
 
     @Override
-    public KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from,
-                                                               final K to) {
+    public KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from, final K to) {
+        return rangeInternal(wrapped(), from, to);
+    }
+
+    private KeyValueIterator<K, ValueTimestampHeaders<V>> rangeInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K from, final K to
+    ) {
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
-            wrapped().range(
+            store.range(
                 serializeKey(from, internalContext.headers()),
                 serializeKey(to, internalContext.headers())
             ),
@@ -486,10 +507,15 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     @Override
-    public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRange(final K from,
-                                                                      final K to) {
+    public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRange(final K from, final K to) {
+        return reverseRangeInternal(wrapped(), from, to);
+    }
+
+    private KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRangeInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store, final K from, final K to
+    ) {
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
-            wrapped().reverseRange(
+            store.reverseRange(
                 serializeKey(from, internalContext.headers()),
                 serializeKey(to, internalContext.headers())
             ),
@@ -499,18 +525,24 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> all() {
-        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
-            wrapped().all(),
-            allSensor
-        );
+        return allInternal(wrapped());
+    }
+
+    private KeyValueIterator<K, ValueTimestampHeaders<V>> allInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store
+    ) {
+        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(store.all(), allSensor);
     }
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseAll() {
-        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
-            wrapped().reverseAll(),
-            allSensor
-        );
+        return reverseAllInternal(wrapped());
+    }
+
+    private KeyValueIterator<K, ValueTimestampHeaders<V>> reverseAllInternal(
+        final ReadOnlyKeyValueStore<Bytes, byte[]> store
+    ) {
+        return new MeteredTimestampedKeyValueStoreWithHeadersIterator(store.reverseAll(), allSensor);
     }
 
     @SuppressWarnings("unchecked")
@@ -656,6 +688,61 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                 cachedNext = next();
             }
             return cachedNext.key;
+        }
+    }
+
+    @Override
+    public ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        return new ReadOnlyHeadersView(wrapped().readOnly(isolationLevel));
+    }
+
+    private final class ReadOnlyHeadersView implements ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> {
+
+        private final ReadOnlyKeyValueStore<Bytes, byte[]> underlying;
+
+        ReadOnlyHeadersView(final ReadOnlyKeyValueStore<Bytes, byte[]> underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public ValueTimestampHeaders<V> get(final K key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            return getInternal(underlying, key);
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from, final K to) {
+            return rangeInternal(underlying, from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRange(final K from, final K to) {
+            return reverseRangeInternal(underlying, from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueTimestampHeaders<V>> all() {
+            return allInternal(underlying);
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseAll() {
+            return reverseAllInternal(underlying);
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScan(
+            final P prefix, final PS prefixKeySerializer
+        ) {
+            Objects.requireNonNull(prefix, "prefix cannot be null");
+            Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+            return prefixScanInternal(underlying, prefix, prefixKeySerializer);
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return underlying.approximateNumEntries();
         }
     }
 
