@@ -165,8 +165,7 @@ public final class RemoveVoterHandler {
             .ifPresent(current -> {
                 if (highWatermark > current.lastOffset()) {
                     // VotersRecord with the removed voter was committed; complete the RPC
-                    changeVoterState
-                        .resetRemoveVoterHandlerState(Errors.NONE, null, Optional.empty());
+                    changeVoterState.resetRemoveVoterHandlerState(Errors.NONE, null, Optional.empty());
 
                     // Resign if the leader is not part of the new committed voter set
                     VoterSet voters = partitionState.lastVoterSet();

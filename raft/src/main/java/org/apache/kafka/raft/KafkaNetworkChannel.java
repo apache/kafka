@@ -127,7 +127,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
                     request.createdTimeMs(),
                     node,
                     buildRequest(request.data()),
-                    response -> sendOnComplete(request, response, future)
+                    response -> sendOnCompleted(request, response, future)
                 )
             );
             return future;
@@ -142,7 +142,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
         }
     }
 
-    private void sendOnComplete(
+    private void sendOnCompleted(
         RaftRequest.Outbound request,
         ClientResponse clientResponse,
         CompletableFuture<RaftResponse.Inbound> future

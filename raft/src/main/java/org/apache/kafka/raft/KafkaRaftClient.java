@@ -3651,10 +3651,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     /**
-     * Handle an inbound request. The response will be returned through
-     * {@link RaftRequest.Inbound#completion}.
+     * Handle an inbound request.
      *
      * @param request The inbound request
+     * @return A completion stage that completes with the outbound response
      */
     public CompletionStage<RaftResponse.Outbound> handle(RaftRequest.Inbound request) {
         return messageQueue.add(Objects.requireNonNull(request)).thenApply(message -> {

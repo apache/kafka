@@ -95,7 +95,7 @@ public class MockNetworkChannel implements NetworkChannel {
         future.complete(response);
     }
 
-    private static record RequestEntry(
+    private record RequestEntry(
         RaftRequest.Outbound request,
         CompletableFuture<RaftResponse.Inbound> future
     ) { }
