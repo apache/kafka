@@ -1012,6 +1012,7 @@ public class KafkaStreams implements AutoCloseable {
         totalCacheSize = totalCacheSize(applicationConfigs);
         final int numStreamThreads = topologyMetadata.numStreamThreads(applicationConfigs);
         final long cacheSizePerThread = cacheSizePerThread(numStreamThreads);
+        final long maxUncommittedBytesPerThread = maxUncommittedBytesPerThread(numStreamThreads);
 
         GlobalStreamThread.State globalThreadState = null;
         if (hasGlobalTopology) {
@@ -1022,6 +1023,7 @@ public class KafkaStreams implements AutoCloseable {
                 clientSupplier.getGlobalConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
                 cacheSizePerThread,
+                maxUncommittedBytesPerThread,
                 streamsMetrics,
                 time,
                 globalThreadId,
@@ -1043,7 +1045,7 @@ public class KafkaStreams implements AutoCloseable {
             globalStateStoreProvider,
             applicationConfigs::defaultInteractiveQueryIsolationLevel);
         for (int i = 1; i <= numStreamThreads; i++) {
-            createAndAddStreamThread(cacheSizePerThread, i);
+            createAndAddStreamThread(cacheSizePerThread, maxUncommittedBytesPerThread, i);
         }
 
         stateDirCleaner = setupStateDirCleaner();
@@ -1066,7 +1068,9 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
+    private StreamThread createAndAddStreamThread(final long cacheSizePerThread,
+                                                  final long maxUncommittedBytesPerThread,
+                                                  final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
             topologyMetadata,
             applicationConfigs,
@@ -1078,6 +1082,7 @@ public class KafkaStreams implements AutoCloseable {
             time,
             streamsMetadataState,
             cacheSizePerThread,
+            maxUncommittedBytesPerThread,
             stateDirectory,
             delegatingStateRestoreListener,
             delegatingStandbyUpdateListener,
@@ -1124,12 +1129,14 @@ public class KafkaStreams implements AutoCloseable {
                 final int threadIdx = nextThreadIndex();
                 final int numLiveThreads = numLiveStreamThreads();
                 final long cacheSizePerThread = cacheSizePerThread(numLiveThreads + 1);
+                final long maxUncommittedBytesPerThread = maxUncommittedBytesPerThread(numLiveThreads + 1);
                 log.info("Adding StreamThread-{}, there will now be {} live threads and the new cache size per thread is {}",
                          threadIdx, numLiveThreads + 1, cacheSizePerThread);
                 resizeThreadCache(cacheSizePerThread);
+                resizeMaxUncommittedBytes(maxUncommittedBytesPerThread);
                 // Creating thread should hold the lock in order to avoid duplicate thread index.
                 // If the duplicate index happen, the metadata of thread may be duplicate too.
-                streamThread = createAndAddStreamThread(cacheSizePerThread, threadIdx);
+                streamThread = createAndAddStreamThread(cacheSizePerThread, maxUncommittedBytesPerThread, threadIdx);
             }
 
             synchronized (stateLock) {
@@ -1143,6 +1150,7 @@ public class KafkaStreams implements AutoCloseable {
                     final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                     log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
                     resizeThreadCache(cacheSizePerThread);
+                    resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
                     return Optional.empty();
                 }
             }
@@ -1223,6 +1231,7 @@ public class KafkaStreams implements AutoCloseable {
                         final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                         log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
                         resizeThreadCache(cacheSizePerThread);
+                        resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
                         final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                         if (remainingTimeMs <= 0) {
                             throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");
@@ -1324,10 +1333,26 @@ public class KafkaStreams implements AutoCloseable {
         return totalCacheSize / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
     }
 
+    private long maxUncommittedBytesPerThread(final int numStreamThreads) {
+        final long totalMax = applicationConfigs.getLong(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG);
+        if (totalMax <= 0) {
+            return -1;
+        }
+        final int divisor = Math.max(numStreamThreads, 0) + (topologyMetadata.hasGlobalTopology() ? 1 : 0);
+        return divisor == 0 ? totalMax : totalMax / divisor;
+    }
+
     private void resizeThreadCache(final long cacheSizePerThread) {
         processStreamThread(thread -> thread.resizeCache(cacheSizePerThread));
         if (globalStreamThread != null) {
             globalStreamThread.resize(cacheSizePerThread);
+        }
+    }
+
+    private void resizeMaxUncommittedBytes(final long maxUncommittedBytesPerThread) {
+        processStreamThread(thread -> thread.resizeMaxUncommittedBytes(maxUncommittedBytesPerThread));
+        if (globalStreamThread != null) {
+            globalStreamThread.resizeMaxUncommittedBytes(maxUncommittedBytesPerThread);
         }
     }
 

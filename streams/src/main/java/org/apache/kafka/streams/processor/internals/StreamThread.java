@@ -330,6 +330,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
 
+    private volatile long maxUncommittedBytesPerThread;
     private final long logSummaryIntervalMs; // the count summary log output time interval
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
@@ -406,6 +407,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
+                                      final long maxUncommittedBytesPerThread,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final StandbyUpdateListener userStandbyUpdateListener,
@@ -542,7 +544,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             cache::resize,
             mainConsumerSetup.streamsRebalanceData,
             streamsMetadataState,
-            metricsReporter
+            metricsReporter,
+            maxUncommittedBytesPerThread
         );
 
         return streamThread.updateThreadMetadata(adminClientId(clientId));
@@ -790,7 +793,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final java.util.function.Consumer<Long> cacheResizer,
                         final Optional<StreamsRebalanceData> streamsRebalanceData,
                         final StreamsMetadataState streamsMetadataState,
-                        final StreamsThreadMetricsDelegatingReporter metricsReporter
+                        final StreamsThreadMetricsDelegatingReporter metricsReporter,
+                        final long maxUncommittedBytesPerThread
                         ) {
         super(threadId);
         this.stateLock = new Object();
@@ -885,6 +889,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.eosEnabled = eosEnabled(config);
         this.processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
+        this.maxUncommittedBytesPerThread = maxUncommittedBytesPerThread;
 
         this.streamsRebalanceData = streamsRebalanceData;
         this.streamsMetadataState = streamsMetadataState;
@@ -1816,7 +1821,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     // visible for testing
     int maybeCommit() {
         final int committed;
-        if (now - lastCommitMs > commitTimeMs) {
+        if (now - lastCommitMs > commitTimeMs || shouldCommitDueToUncommittedBytes()) {
             if (log.isDebugEnabled()) {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                           taskManager.activeRunningTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
@@ -1847,6 +1852,16 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
 
         return committed;
+    }
+
+    private boolean shouldCommitDueToUncommittedBytes() {
+        final long limit = maxUncommittedBytesPerThread;
+        if (limit <= 0) return false;
+        return taskManager.totalUncommittedBytes() > limit;
+    }
+
+    public void resizeMaxUncommittedBytes(final long maxUncommittedBytesPerThread) {
+        this.maxUncommittedBytesPerThread = maxUncommittedBytesPerThread;
     }
 
     /**
