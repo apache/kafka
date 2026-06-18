@@ -694,8 +694,22 @@ org.apache.kafka.raft.internals.BatchMemoryPoolTest:
 - testOversizeAllocation
 - testReleaseBufferNotMatchingBatchSize
 org.apache.kafka.raft.internals.BlockingMessageQueueTest:
+- testAddRejectsNullMessage
 - testOfferAndPoll
 - testWakeupFromPoll
+- testWakeupsAreTransparentToIsEmptyAndDrainedOnPoll
+org.apache.kafka.raft.internals.ChangeVoterHandlerStateTest:
+- testAddVoterLifecycle
+- testCanReplaceAddVoterWithAnotherAddVoter
+- testCanReplaceRemoveVoterWithAnotherRemoveVoter
+- testCannotSetAddVoterWhenRemoveVoterPresent
+- testCannotSetRemoveVoterWhenAddVoterPresent
+- testIsOperationPendingWithAddVoter
+- testIsOperationPendingWithRemoveVoter
+- testMaybeExpirePendingAddVoter
+- testMaybeExpirePendingRemoveVoter
+- testMaybeResetPendingVoterHandlerState
+- testRemoveVoterLifecycle
 org.apache.kafka.raft.internals.KRaftControlRecordStateMachineTest:
 - testEmptyPartition
 - testEmptyPartitionWithNoStaticVoters
@@ -783,7 +797,10 @@ org.apache.kafka.raft.internals.ThresholdPurgatoryTest:
 - testCompleteAll
 - testCompleteAllExceptionally
 - testExpiration
-- testExternalCompletion
+- testExpirationReducesWaitingCount
+- testMaybeCompleteWithHigherValue
+- testMultipleAwaitersWithSameThreshold
+- testNumWaitingWithMixedCompletions
 - testThresholdCompletion
 org.apache.kafka.raft.internals.TreeMapLogHistoryTest:
 - testAddAt
