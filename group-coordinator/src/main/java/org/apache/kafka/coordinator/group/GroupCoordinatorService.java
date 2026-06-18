@@ -725,12 +725,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
         final int pushedEpoch = request.topologyEpoch();
         final TopicPartition tp = topicPartitionFor(groupId);
 
-        // The back-off is mutated where the disposition is actually known, so it never has to
-        // be threaded through the chain as data: pre-plugin failures (validate / convert /
-        // runtime) never reach the arming code, so a fenced or unauthorized caller cannot grief
-        // the back-off; a transient plugin failure arms it; and the post-plugin bookkeeping
-        // write clears it on success, drops the whole entry if the group was deleted underneath
-        // us, leaves it alone on a coordinator-moved error, or arms it (see finishPostPluginWrite).
+        // The back-off is mutated where the disposition is known: pre-plugin failures (validate /
+        // convert / runtime) never reach the arming code, so a fenced or unauthorized caller
+        // cannot grief the back-off; a transient plugin failure arms it; and the post-plugin
+        // bookkeeping write clears it on success, drops the whole entry if the group was deleted
+        // underneath us, leaves it alone on a coordinator-moved error, or arms it (see
+        // finishPostPluginWrite).
         return runtime.scheduleReadOperation(
                 "streams-group-topology-description-validate",
                 tp,
@@ -775,8 +775,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * Apply the back-off mutation for the terminal disposition of a post-plugin bookkeeping
      * write, then either return the response (write committed) or rethrow so the chain's
-     * terminal {@code exceptionally} maps the error. Acting on the back-off here — where the
-     * outcome is actually known — avoids threading the disposition through the chain as data.
+     * terminal {@code exceptionally} maps the error.
      */
     private StreamsGroupTopologyDescriptionUpdateResponseData finishPostPluginWrite(
         String groupId,
@@ -1748,12 +1747,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         return failures;
                     }))
             .exceptionally(exception -> handleOperationException(
-                // Route through handleOperationException (not bare ApiError.fromThrowable) so a
-                // read failure reports the same translated, retriable code the rest of the
-                // DeleteGroups pipeline returns: NOT_LEADER_OR_FOLLOWER/KAFKA_STORAGE_ERROR ->
-                // NOT_COORDINATOR, NOT_ENOUGH_REPLICAS/REQUEST_TIMED_OUT -> COORDINATOR_NOT_AVAILABLE,
-                // etc. It also unwraps CompletionException and suppresses the UNKNOWN_SERVER_ERROR
-                // message so we don't leak plugin internals.
+                // Translate coordinator errors so a read failure reports the same retriable code
+                // as the rest of the DeleteGroups pipeline (e.g. NOT_LEADER_OR_FOLLOWER ->
+                // NOT_COORDINATOR), and unwrap/sanitize the message.
                 "streams-group-topology-pre-delete",
                 groupIds,
                 exception,

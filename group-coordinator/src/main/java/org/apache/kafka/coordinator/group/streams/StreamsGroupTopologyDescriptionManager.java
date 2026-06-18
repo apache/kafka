@@ -106,10 +106,8 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         int memberEpoch
     ) {
         // Do not solicit a push from a departing member (a leave heartbeat carries a negative
-        // member epoch): the member is on its way out, so arming the back-off on its behalf
-        // would only delay solicitation for the rest of the group. Keeping this here, rather
-        // than encoding it as a sentinel in the result built by GroupMetadataManager, keeps the
-        // whole solicitation policy in one place.
+        // member epoch): arming the back-off on its behalf would only delay solicitation for the
+        // rest of the group.
         if (apiVersion < 1 || plugin.isEmpty() || memberEpoch < 0) {
             return result;
         }

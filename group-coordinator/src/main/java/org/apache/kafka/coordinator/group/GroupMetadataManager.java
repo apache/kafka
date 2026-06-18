@@ -4470,9 +4470,6 @@ public class GroupMetadataManager {
             .setMemberEpoch(memberEpoch)
             .setStatus(List.of());
 
-        // Leave/fence paths carry the group's real epochs like any other heartbeat; the
-        // service-layer gate suppresses solicitation for a departing member (negative member
-        // epoch), so the manager no longer needs a sentinel result to avoid arming the back-off.
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
             log.info("[GroupId {}][MemberId {}] Member {} left the streams group.", groupId, memberId, memberId);
@@ -4567,8 +4564,6 @@ public class GroupMetadataManager {
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .setStatus(List.of());
 
-        // Static-leave carries the group's real epochs; the service-layer gate suppresses
-        // solicitation for the departing member (negative member epoch).
         return new CoordinatorResult<>(
             List.of(record),
             new StreamsGroupHeartbeatResult(
@@ -8423,10 +8418,7 @@ public class GroupMetadataManager {
     ) {
         Set<String> withStored = new HashSet<>();
         for (String groupId : groupIds) {
-            // Use a non-throwing lookup and type check rather than streamsGroup(...), which
-            // throws GroupIdNotFoundException for every absent or non-streams group: deleting
-            // a large batch of non-streams groups would otherwise build and unwind one
-            // exception per group on the coordinator thread purely as control flow.
+            // Non-throwing lookup + type check: silently skip absent or non-streams groups.
             Group group = groups.get(groupId, committedOffset);
             if (group != null
                 && group.type() == STREAMS
@@ -8476,11 +8468,8 @@ public class GroupMetadataManager {
     ) throws GroupIdNotFoundException {
         StreamsGroup group = streamsGroup(groupId);
 
-        // The pushed epoch was validated against the current topology epoch in a separate read
-        // op; the plugin call and this write happen later, so the group may have advanced (or a
-        // concurrent higher-epoch push may have already recorded its epoch) in between. Only
-        // advance the field, never regress it, so a slow stale push cannot move stored/failed
-        // backwards below an already-recorded higher epoch.
+        // Only advance these epochs, never regress them: a stale push committing after the group
+        // advanced (or after a concurrent higher-epoch push) must not move stored/failed back.
         int newStored = permanentFailure
             ? group.storedDescriptionTopologyEpoch()
             : Math.max(group.storedDescriptionTopologyEpoch(), pushedEpoch);
