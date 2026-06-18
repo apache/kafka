@@ -47,6 +47,9 @@ import org.junit.jupiter.api.Timeout;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -323,6 +326,87 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
 
             verifySharePartitionLag(admin, groupId, tp, 2L);
             verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    @Timeout(120)
+    public void testTransactionalShareAckCommitAcrossMultipleShareStatePartitions() throws Exception {
+        String groupId = "txn-share-commit-multi-share-state";
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Admin admin = createAdminClient()) {
+            List<TopicIdPartition> topicIdPartitions = createTopicIdPartitionsMappedToAllShareStatePartitions(
+                groupId,
+                "txn-share-multi-state-topic",
+                12,
+                1
+            );
+            String topicName = topicIdPartitions.get(0).topic();
+            List<TopicPartition> topicPartitions = topicIdPartitions.stream()
+                .map(TopicIdPartition::topicPartition)
+                .toList();
+
+            try (Producer<byte[], byte[]> producer = createProducer();
+                 Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-commit-multi-share-state-producer");
+                 ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                     groupId,
+                     Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+                shareConsumer.subscribe(Set.of(topicName));
+                waitedPoll(shareConsumer, 2500L, 0, true, groupId, topicPartitions);
+
+                for (TopicIdPartition topicIdPartition : topicIdPartitions) {
+                    producer.send(record(topicIdPartition.topicPartition(), "partition-" + topicIdPartition.partition())).get();
+                }
+                producer.flush();
+
+                Map<TopicPartition, ConsumerRecord<byte[], byte[]>> recordsByPartition = new HashMap<>();
+                Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgementsByPartition = new HashMap<>();
+                TestUtils.waitForCondition(
+                    () -> {
+                        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(500));
+                        records.forEach(record -> {
+                            recordsByPartition.put(new TopicPartition(record.topic(), record.partition()), record);
+                            shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                        });
+                        if (records.count() > 0) {
+                            acknowledgementsByPartition.putAll(shareConsumer.acknowledgementsForTransaction().acknowledgements());
+                        }
+                        return recordsByPartition.keySet().containsAll(topicPartitions);
+                    },
+                    DEFAULT_MAX_WAIT_MS,
+                    DEFAULT_POLL_INTERVAL_MS,
+                    () -> "Timed out waiting for records from all partitions for " + topicName
+                );
+
+                ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+                for (TopicIdPartition topicIdPartition : topicIdPartitions) {
+                    ConsumerRecord<byte[], byte[]> record = recordsByPartition.get(topicIdPartition.topicPartition());
+                    assertNotNull(record);
+                    assertEquals(0L, record.offset());
+                    assertEquals(
+                        "partition-" + topicIdPartition.partition(),
+                        new String(record.value(), StandardCharsets.UTF_8)
+                    );
+                }
+
+                ShareAcknowledgements acknowledgements = new ShareAcknowledgements(acknowledgementsByPartition);
+                assertEquals(topicIdPartitions.size(), acknowledgements.acknowledgements().size());
+                assertEquals(sgsTopicPartitions.size(), mappedShareStatePartitions(groupId, acknowledgements).size());
+
+                transactionalProducer.initTransactions();
+                transactionalProducer.partitionsFor(topicName);
+                transactionalProducer.beginTransaction();
+                transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+                transactionalProducer.commitTransaction();
+
+                for (TopicIdPartition topicIdPartition : topicIdPartitions) {
+                    verifySharePartitionLag(admin, groupId, topicIdPartition.topicPartition(), 0L);
+                }
+                assertEquals(0, shareConsumer.poll(Duration.ofMillis(500)).count());
+                verifyShareGroupStateTopicRecordsProduced();
+            }
         }
     }
 
@@ -612,6 +696,45 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
     private ProducerRecord<byte[], byte[]> record(TopicPartition topicPartition, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         return new ProducerRecord<>(topicPartition.topic(), topicPartition.partition(), null, bytes, bytes);
+    }
+
+    private List<TopicIdPartition> createTopicIdPartitionsMappedToAllShareStatePartitions(
+        String groupId,
+        String topicPrefix,
+        int partitionCount,
+        int replicationFactor
+    ) {
+        for (int attempt = 0; attempt < 24; attempt++) {
+            String topicName = topicPrefix + "-" + attempt;
+            Uuid topicId = createTopic(topicName, partitionCount, replicationFactor);
+            List<TopicIdPartition> topicIdPartitions = java.util.stream.IntStream.range(0, partitionCount)
+                .mapToObj(partition -> new TopicIdPartition(topicId, new TopicPartition(topicName, partition)))
+                .toList();
+            Map<Integer, TopicIdPartition> topicIdPartitionByShareStatePartition = new HashMap<>();
+            for (TopicIdPartition topicIdPartition : topicIdPartitions) {
+                topicIdPartitionByShareStatePartition.putIfAbsent(
+                    shareStatePartition(groupId, topicIdPartition.topicId(), topicIdPartition.partition()),
+                    topicIdPartition
+                );
+            }
+            if (topicIdPartitionByShareStatePartition.size() == sgsTopicPartitions.size()) {
+                return new ArrayList<>(topicIdPartitionByShareStatePartition.values());
+            }
+        }
+        fail("Could not find source partitions mapped to all share-state partitions.");
+        return List.of();
+    }
+
+    private Set<Integer> mappedShareStatePartitions(String groupId, ShareAcknowledgements acknowledgements) {
+        return mappedShareStatePartitions(groupId, acknowledgements.acknowledgements().keySet());
+    }
+
+    private Set<Integer> mappedShareStatePartitions(String groupId, Iterable<TopicIdPartition> topicIdPartitions) {
+        Set<Integer> mappedShareStatePartitions = new HashSet<>();
+        for (TopicIdPartition topicIdPartition : topicIdPartitions) {
+            mappedShareStatePartitions.add(shareStatePartition(groupId, topicIdPartition.topicId(), topicIdPartition.partition()));
+        }
+        return mappedShareStatePartitions;
     }
 
     private TopicIdPartition createTopicIdPartitionWithRemoteShareCoordinator(
