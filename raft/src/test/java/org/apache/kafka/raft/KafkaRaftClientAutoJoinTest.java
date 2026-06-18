@@ -49,14 +49,16 @@ public class KafkaRaftClientAutoJoinTest {
             .withAutoJoin(true)
             .withCanBecomeVoter(true)
             .build();
+        var initialSleepMs = context.fetchTimeoutMs - 1;
 
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), initialSleepMs, true);
+        initialSleepMs -= 1;
 
         // the next request should be a remove voter request
         pollAndDeliverRemoveVoter(context, oldFollower);
 
         // after sending a remove voter the next request should be a fetch
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), initialSleepMs, true);
 
         // the replica should send remove voter again because the fetch did not update the voter set
         pollAndDeliverRemoveVoter(context, oldFollower);
@@ -80,14 +82,16 @@ public class KafkaRaftClientAutoJoinTest {
             .withAutoJoin(true)
             .withCanBecomeVoter(true)
             .build();
+        var initialSleepMs = context.fetchTimeoutMs - 1;
 
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), initialSleepMs, true);
+        initialSleepMs -= 1;
 
         // the next request should be an add voter request
         pollAndSendAddVoter(context, newVoter);
 
         // expire the add voter request, the next request should be a fetch
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), initialSleepMs, true);
 
         // the replica should send add voter again because the completed fetch
         // did not update the voter set, and its timer has expired
@@ -128,7 +132,7 @@ public class KafkaRaftClientAutoJoinTest {
             .build();
 
         // advance time and complete a fetch to trigger the remove voter request
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), context.fetchTimeoutMs - 1, true);
 
         // the next request should be a remove voter request
         pollAndDeliverRemoveVoter(context, oldFollower);
@@ -142,7 +146,7 @@ public class KafkaRaftClientAutoJoinTest {
         );
 
         // advance time and complete a fetch to trigger the add voter request
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), context.fetchTimeoutMs - 1, true);
 
         // the next request should be an add voter request
         final var addVoterRequest = pollAndSendAddVoter(context, newFollowerKey);
@@ -163,7 +167,7 @@ public class KafkaRaftClientAutoJoinTest {
 
         // advance time and complete a fetch and expire the update voter set timer
         // the next request should be a fetch because the log voter configuration is up-to-date
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), context.fetchTimeoutMs - 1, true);
         context.pollUntilRequest();
         context.assertSentFetchRequest();
     }
@@ -188,7 +192,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withCanBecomeVoter(false)
             .build();
 
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), context.fetchTimeoutMs - 1, true);
 
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
@@ -217,7 +221,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withCanBecomeVoter(true)
             .build();
 
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), context.fetchTimeoutMs - 1, true);
 
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
@@ -246,7 +250,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withCanBecomeVoter(true)
             .build();
 
-        context.advanceTimeAndCompleteFetch(epoch, leader.id(), true);
+        context.advanceTimeAndCompleteFetch(epoch, leader.id(), context.fetchTimeoutMs - 1, true);
 
         context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
