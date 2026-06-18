@@ -129,23 +129,13 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
     }
 
     private File getJavadocJarFile() {
-        if (javadocJarPath.isPresent()) {
-            return javadocJarPath.get().getAsFile();
+        if (!javadocJarPath.isPresent()) {
+            throw new GradleException("kafkaPublicApiChecker.javadocJarPath is not set. "
+                    + "Either configure it explicitly on the extension, or apply this plugin to a "
+                    + "project that defines a 'javadocJar' Jar task whose output the plugin can "
+                    + "wire automatically.");
         }
-
-        File buildLibs = new File(getProject().getBuildDir(), "libs");
-
-        // Look for any javadoc JAR
-        if (buildLibs.exists()) {
-            File[] files = buildLibs.listFiles((dir, name) ->
-                name.contains("javadoc") && name.endsWith(".jar"));
-            if (files != null && files.length > 0) {
-                getLogger().warn("Using auto-detected javadoc JAR: {}", files[0].getName());
-                return files[0];
-            }
-        }
-
-        throw  new GradleException("Javadoc JAR file not found");
+        return javadocJarPath.get().getAsFile();
     }
 
     @Input
