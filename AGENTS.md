@@ -148,11 +148,12 @@ non-findings; each component page adds its own known non-findings.
 
 ## Reference docs
 
-| Topic | Location |
-|-------|----------|
+| Topic                          | Location |
+|--------------------------------|----------|
 | Build, test, broker quickstart | [README.md](README.md) |
-| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md), https://kafka.apache.org/contributing.html |
-| Message protocol / codegen | [clients/src/main/resources/common/message/README.md](clients/src/main/resources/common/message/README.md) |
-| System tests | [tests/README.md](tests/README.md) |
-| JMH benchmarks | [jmh-benchmarks/README.md](jmh-benchmarks/README.md) |
-| Client examples | [examples/README.md](examples/README.md) |
+| Contributing                   | [CONTRIBUTING.md](CONTRIBUTING.md), https://kafka.apache.org/contributing.html |
+| Message protocol / codegen     | [clients/src/main/resources/common/message/README.md](clients/src/main/resources/common/message/README.md) |
+| System tests                   | [tests/README.md](tests/README.md) |
+| JMH benchmarks                 | [jmh-benchmarks/README.md](jmh-benchmarks/README.md) |
+| Client examples                | [examples/README.md](examples/README.md) |
+| Security                       | [SECURITY.md](SECURITY.md) |
