@@ -28,6 +28,8 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
+import org.apache.kafka.clients.producer.internals.ChunkedBufferPool;
+import org.apache.kafka.clients.producer.internals.ChunkedRecordAccumulator;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.ProducerMetadata;
@@ -90,6 +92,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -456,19 +459,48 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // As per Kafka producer configuration documentation batch.size may be set to 0 to explicitly disable
             // batching which in practice actually means using a batch size of 1.
             int batchSize = Math.max(1, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
-            this.accumulator = new RecordAccumulator(logContext,
-                    batchSize,
-                    compression,
-                    lingerMs(config),
-                    retryBackoffMs,
-                    retryBackoffMaxMs,
-                    deliveryTimeoutMs,
-                    partitionerConfig,
-                    metrics,
-                    PRODUCER_METRIC_GROUP_NAME,
-                    time,
-                    transactionManager,
-                    new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
+            String allocationStrategy = config.getString(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG)
+                    .toLowerCase(Locale.ROOT);
+            boolean incremental = ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL.equals(allocationStrategy);
+            if (incremental && compression.type() != CompressionType.NONE) {
+                throw new ConfigException("The " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL
+                        + " " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG
+                        + " does not support compression yet. " + ProducerConfig.COMPRESSION_TYPE_CONFIG
+                        + " must be set to none.");
+            }
+            // Use the chunked path only when a batch is at least one full chunk
+            // (batch.size >= CHUNK_SIZE). Below that, a batch can't fill even one chunk, so chunking
+            // would reserve a whole chunk for a batch capped under it (over-reservation); the full
+            // strategy (reserving up to batch.size per batch) is both leaner and identical to trunk.
+            if (incremental && batchSize >= ChunkedRecordAccumulator.CHUNK_SIZE) {
+                this.accumulator = new ChunkedRecordAccumulator(logContext,
+                        batchSize,
+                        compression,
+                        lingerMs(config),
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        deliveryTimeoutMs,
+                        partitionerConfig,
+                        metrics,
+                        PRODUCER_METRIC_GROUP_NAME,
+                        time,
+                        transactionManager,
+                        new ChunkedBufferPool(this.totalMemorySize, ChunkedRecordAccumulator.CHUNK_SIZE, metrics, time, PRODUCER_METRIC_GROUP_NAME));
+            } else {
+                this.accumulator = new RecordAccumulator(logContext,
+                        batchSize,
+                        compression,
+                        lingerMs(config),
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        deliveryTimeoutMs,
+                        partitionerConfig,
+                        metrics,
+                        PRODUCER_METRIC_GROUP_NAME,
+                        time,
+                        transactionManager,
+                        new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
+            }
 
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);

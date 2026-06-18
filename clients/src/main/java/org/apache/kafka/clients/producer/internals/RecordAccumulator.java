@@ -398,12 +398,15 @@ public class RecordAccumulator {
 
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
         if (appendResult != null) {
-            // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
+            // Propagate without creating a new batch: either another thread already made us a batch
+            // (success), or — incremental strategy — a concurrent appender created an extendable tail
+            // (needsBufferExtension), so the caller releases its pre-allocated buffer and retries via
+            // the extension path.
             return appendResult;
         }
 
         MemoryRecordsBuilder recordsBuilder = recordsBuilderSupplier.get();
-        ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
+        ProducerBatch batch = createProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
 
@@ -411,6 +414,14 @@ public class RecordAccumulator {
         incomplete.add(batch);
 
         return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
+    }
+
+    /**
+     * Create the {@link ProducerBatch} for a new batch. The incremental strategy overrides this to
+     * create a {@link ChunkedProducerBatch}.
+     */
+    protected ProducerBatch createProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long nowMs) {
+        return new ProducerBatch(tp, recordsBuilder, nowMs);
     }
 
     /**
@@ -1057,21 +1068,14 @@ public class RecordAccumulator {
             } else {
                 batch.markBufferDeallocated();
                 if (batch.isInflight()) {
-                    // Create a fresh ByteBuffer to give to BufferPool to reuse since we can't safely call deallocate with the ProduceBatch's buffer
-                    free.deallocate(ByteBuffer.allocate(batch.initialCapacity()));
+                    // We can't safely deallocate the buffer of an inflight batch; the batch credits
+                    // the memory back to the pool in a way that suits its buffer type.
+                    batch.deallocateInflightBuffer(free);
                     throw new IllegalStateException("Attempting to deallocate a batch that is inflight. Batch is " + batch);
                 }
-                deallocateBatchBuffer(batch);
+                batch.deallocateBuffer(free);
             }
         }
-    }
-
-    /**
-     * Return the batch's underlying buffer to the pool.
-     * This default implementation returns the buffer at its initial capacity (single buffer).
-     */
-    protected void deallocateBatchBuffer(ProducerBatch batch) {
-        free.deallocate(batch.buffer(), batch.initialCapacity());
     }
 
     /**
@@ -1267,16 +1271,40 @@ public class RecordAccumulator {
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
+        /**
+         * Signal (incremental strategy) that the tail batch has logical room (writeLimit-wise) but
+         * its chunks lack physical capacity. The append was NOT attempted; the caller allocates
+         * {@link #extensionBytesNeeded} bytes of chunk capacity, attaches them via
+         * {@link ChunkedProducerBatch#addBuffers}, and retries. When {@code true}, {@code future} is null.
+         */
+        public final boolean needsBufferExtension;
+        public final int extensionBytesNeeded;
         public final int appendedBytes;
 
         public RecordAppendResult(FutureRecordMetadata future,
                                   boolean batchIsFull,
                                   boolean newBatchCreated,
                                   int appendedBytes) {
+            this(future, batchIsFull, newBatchCreated, false, 0, appendedBytes);
+        }
+
+        private RecordAppendResult(FutureRecordMetadata future,
+                                   boolean batchIsFull,
+                                   boolean newBatchCreated,
+                                   boolean needsBufferExtension,
+                                   int extensionBytesNeeded,
+                                   int appendedBytes) {
             this.future = future;
             this.batchIsFull = batchIsFull;
             this.newBatchCreated = newBatchCreated;
+            this.needsBufferExtension = needsBufferExtension;
+            this.extensionBytesNeeded = extensionBytesNeeded;
             this.appendedBytes = appendedBytes;
+        }
+
+        /** A signal-only result indicating the caller must allocate more chunk capacity. */
+        static RecordAppendResult needsExtension(int extensionBytesNeeded) {
+            return new RecordAppendResult(null, false, false, true, extensionBytesNeeded, 0);
         }
     }
 

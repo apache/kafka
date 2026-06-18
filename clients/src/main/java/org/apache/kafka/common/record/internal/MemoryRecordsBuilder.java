@@ -212,7 +212,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * The underlying output stream. Exposed so the dynamic-strategy callers can attach
+     * The underlying output stream. Exposed so the incremental-strategy callers can attach
      * pre-allocated chunks to a {@code ChunkedByteBufferOutputStream} and route deallocation
      * polymorphically.
      */
@@ -824,12 +824,52 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @return The estimated number of bytes written
      */
     private int estimatedBytesWritten() {
-        if (compression.type() == CompressionType.NONE) {
+        return estimatedBytesWritten(magic, compression.type(), estimatedCompressionRatio, uncompressedRecordsSizeInBytes);
+    }
+
+    /**
+     * Static projection of the bytes a builder with the given magic, compression type, and ratio
+     * would have written for {@code uncompressedRecordsSizeInBytes} of records. Exact for
+     * uncompressed ({@code header + uncompressedBytes}); for compressed it applies the ratio and 5%
+     * safety multiplier to the whole total, like the per-builder {@link #estimatedBytesWritten()}.
+     * <p>
+     * Used by the incremental strategy to size chunk reservations (first record, and mid-batch via
+     * {@link #estimatedBytesWrittenAfter}). This is the batch's projected total <em>output</em>,
+     * distinct from the {@link #hasRoomFor} writeLimit gate, which counts the incoming record at
+     * full uncompressed size; the two coincide for uncompressed data and diverge under compression.
+     */
+    public static int estimatedBytesWritten(byte magic, CompressionType compressionType,
+                                            float compressionRatio,
+                                            int uncompressedRecordsSizeInBytes) {
+        int batchHeaderSizeInBytes = AbstractRecords.recordBatchHeaderSizeInBytes(magic, compressionType);
+        if (compressionType == CompressionType.NONE) {
             return batchHeaderSizeInBytes + uncompressedRecordsSizeInBytes;
         } else {
-            // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
-            return batchHeaderSizeInBytes + (int) (uncompressedRecordsSizeInBytes * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return batchHeaderSizeInBytes + (int) (uncompressedRecordsSizeInBytes * compressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
+    }
+
+    /**
+     * Projected value of {@link #estimatedBytesWritten} after appending one more record with the
+     * given fields, using the record's worst-case (upper-bound) per-record size. Used by the
+     * incremental strategy to size mid-batch chunk extensions.
+     */
+    public int estimatedBytesWrittenAfter(byte[] key, byte[] value, Header[] headers) {
+        return estimatedBytesWrittenAfter(wrapNullable(key), wrapNullable(value), headers);
+    }
+
+    /**
+     * @see #estimatedBytesWrittenAfter(byte[], byte[], Header[])
+     */
+    private int estimatedBytesWrittenAfter(ByteBuffer key, ByteBuffer value, Header[] headers) {
+        final int recordSize;
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
+            recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
+        } else {
+            recordSize = DefaultRecord.recordSizeUpperBound(key, value, headers);
+        }
+        return estimatedBytesWritten(magic, compression.type(), estimatedCompressionRatio,
+                uncompressedRecordsSizeInBytes + recordSize);
     }
 
     /**

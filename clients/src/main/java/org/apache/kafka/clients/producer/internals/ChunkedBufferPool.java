@@ -28,15 +28,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 
 /**
- * A {@link BufferPool} dedicated to chunk-sized buffer reuse. The chunk size is passed to the
- * parent as its {@link #poolableSize()}.
+ * A {@link BufferPool} dedicated to chunk-sized buffer reuse (chunk size = {@link #poolableSize()}).
  * <p>
- * Adds {@link #allocateChunks(int, long)} for callers that need to acquire multiple
- * chunks at once. The implementation is atomic across the K-chunk request:
- * a single lock acquisition for the whole reservation, a single {@link Condition}
- * added to {@link #waiters} so the request is FIFO-fair against single-chunk acquirers, and
- * any failure (timeout, close, OOM) refunds the entire reservation atomically before the
- * exception propagates. No partial chunk holds are visible outside the lock during the wait.
+ * Adds {@link #allocateChunks(int, long)} to acquire multiple chunks atomically: one lock
+ * acquisition and a single {@link Condition} on {@link #waiters} (FIFO-fair against single-chunk
+ * acquirers), with any failure (timeout, close, OOM) refunding the whole reservation before the
+ * exception propagates. No partial holds are visible during the wait.
  */
 public class ChunkedBufferPool extends BufferPool {
 
@@ -45,22 +42,19 @@ public class ChunkedBufferPool extends BufferPool {
     }
 
     /**
-     * Allocate {@code ceil(totalSize / chunkSize)} chunk-sized buffers atomically.
-     * This follows the same principle as the allocate in the parent BufferPool class: if there is
-     * memory available, allocate the requested number of chunks. If not, wait for memory.
-     * If it needs to wait, it blocks up to {@code maxTimeToBlockMs} for the whole request,
-     * queued on {@link #waiters} alongside single-chunk acquirers (FIFO).
-     * <p>
-     * On any failure path every byte reserved during the call is returned to the pool
-     * and the next waiter is signaled. No partial chunk holds are visible to other threads during the wait.
-     * The reservation is tracked as bytes against {@link #nonPooledAvailableMemory} plus chunks polled from {@link #free}.
+     * Allocate {@code ceil(totalSize / chunkSize)} chunk-sized buffers atomically, mirroring
+     * {@link BufferPool#allocate}: satisfied immediately if memory is available, else blocks up to
+     * {@code maxTimeToBlockMs} for the whole request (FIFO on {@link #waiters}). The reservation is
+     * tracked as bytes against {@link #nonPooledAvailableMemory} plus chunks polled from
+     * {@link #free}; on any failure path every reserved byte is returned and the next waiter signaled.
      *
      * @param totalSize        minimum total bytes of capacity required across the returned chunks
      * @param maxTimeToBlockMs maximum time in milliseconds to block waiting for memory
      * @return list of {@code ceil(totalSize / chunkSize)} {@code ByteBuffer}s, each of capacity
      *         {@code chunkSize}
      * @throws InterruptedException     if interrupted while waiting
-     * @throws IllegalArgumentException if {@code totalSize <= 0} or {@code totalSize > totalMemory()}
+     * @throws IllegalArgumentException if {@code totalSize <= 0}, or if the request rounded up to
+     *         whole chunks exceeds {@code totalMemory()}
      * @throws BufferExhaustedException if the request can't be satisfied within {@code maxTimeToBlockMs}
      * @throws KafkaException           if the pool is closed during the wait
      */
@@ -75,11 +69,17 @@ public class ChunkedBufferPool extends BufferPool {
         int chunkSize = poolableSize();
         int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
         long memoryRequired = (long) numChunks * chunkSize;
+        // Rounding totalSize up to whole chunks can require more pool memory than buffer.memory
+        // holds even when totalSize alone fits (the single-buffer "full" path reserves exactly the
+        // record size, so it never hits this). Reject it here to fail fast, instead of blocking for
+        // max.block.ms and then throwing BufferExhausted for a request that can never be satisfied.
+        if (memoryRequired > totalMemory())
+            throw new IllegalArgumentException("Attempt to allocate " + numChunks + " chunks of "
+                + chunkSize + " bytes (" + memoryRequired + " bytes total), but there is a hard limit of "
+                + totalMemory() + " on memory allocations.");
 
-        // Chunks pulled from the free list during the reservation. Remaining bytes
-        // (memoryRequired - pooled.size() * chunkSize) are reserved against
-        // nonPooledAvailableMemory and materialized as raw allocations after the lock is
-        // released.
+        // Chunks pulled from the free list; the remaining bytes are reserved against
+        // nonPooledAvailableMemory and materialized as raw allocations after the lock is released.
         List<ByteBuffer> pooled = new ArrayList<>(numChunks);
 
         lock.lock();
@@ -95,8 +95,7 @@ public class ChunkedBufferPool extends BufferPool {
                     pooled.add(free.pollFirst());
                 long remainingBytes = memoryRequired - (long) pooled.size() * chunkSize;
                 if (remainingBytes > 0) {
-                    // remainingBytes is bounded by memoryRequired ≤ totalMemory; the entry check
-                    // rejects requests larger than that, so the int cast is safe in practice.
+                    // remainingBytes <= memoryRequired <= totalMemory (validated above), so the int cast is safe.
                     freeUp((int) remainingBytes);
                     this.nonPooledAvailableMemory -= remainingBytes;
                 }

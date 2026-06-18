@@ -32,10 +32,9 @@ import java.util.List;
  * chunks), {@link IllegalStateException} is thrown. The caller is responsible for attaching
  * additional chunks before any such write.
  * <p>
- * Automatic mid-write growth (allocating a chunk from inside {@code write()}) will be added
- * together with compression support in a follow-up: compressor buffering can cause a record's
- * write to exceed its reservation, which the caller can't predict in advance. Until then, the
- * write path stays allocation-free and deterministic.
+ * Automatic mid-write growth (allocating from inside {@code write()}) is a follow-up tied to
+ * compression support, where compressor buffering can make a write exceed its reservation; until
+ * then the write path stays allocation-free and deterministic.
  * <p>
  * When {@link #buffer()} is called (typically at batch close), all chunks are flattened into a
  * single contiguous ByteBuffer — exactly one copy operation.
@@ -110,11 +109,10 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Advances {@code currentChunk} to the next pre-supplied chunk. The caller is responsible
-     * for obtaining additional chunks (e.g. {@code ChunkedBufferPool.allocateChunks}) and
-     * attaching them via {@link #addBuffers(List)} before any write that would exceed
-     * {@link #remaining()}. The KIP's mid-record growth path (non-blocking pool then direct
-     * heap) lands together with compression support.
+     * Advances {@code currentChunk} to the next pre-supplied chunk; throws if none is left. The
+     * caller must attach additional chunks via {@link #addBuffers(List)} before any write that
+     * exceeds {@link #remaining()}. (Mid-record growth — non-blocking pool then heap — is a
+     * follow-up that lands with compression support.)
      */
     private void advanceToNextChunk() {
         if (currentChunkIndex + 1 >= chunks.size()) {
@@ -140,6 +138,11 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         if (flattenedBuffer != null && !dirty) {
             return flattenedBuffer;
         }
+        // TODO: KAFKA-20687. This flatten runs at batch close, when the chunk set is final.
+        //  Today all chunks (used and unused) are returned to the pool only when the batch
+        //  completes (via deallocate(pool)). Consider releasing the fully-unused chunks
+        //  early, at close, rather than holding them until completion — removing them from
+        //  `chunks` here so the completion-time deallocate(pool) does not double-return them.
         int totalSize = 0;
         for (ByteBuffer chunk : chunks) {
             totalSize += chunk.position();
@@ -153,6 +156,12 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
             chunk.position(chunkPos);
         }
         dirty = false;
+        // The bytes are now copied into flattenedBuffer, but we intentionally do not release the
+        //  chunks until batch completion, so the in-flight data stays reserved against the
+        //  buffer.memory budget (the pool's available memory reflects it), consistent with the
+        //  "full" strategy. Releasing here would return that memory to the pool while the bytes are
+        //  still in flight in the heap copy, letting the pool admit more than buffer.memory intends.
+        //  This flattening is an initial approach and will be removed with KAFKA-20580.
         return flattenedBuffer;
     }
 
@@ -219,15 +228,14 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public void ensureRemaining(int remainingBytesRequired) {
-        // The stream advances one chunk at a time — the most any single ensureChunkCapacity
-        // call can guarantee is `chunkSize` of contiguous-by-chunk space. Callers needing more
-        // than that are expected to attach chunks via addBuffers before writing; write(byte[])
-        // itself loops across chunks so contiguous capacity isn't required.
+        // A single call can guarantee at most `chunkSize` of space (the stream advances one chunk
+        // at a time); callers needing more attach chunks via addBuffers first. write(byte[]) loops
+        // across chunks, so contiguous capacity isn't required.
         ensureChunkCapacity(Math.min(remainingBytesRequired, chunkSize));
     }
 
     /**
-     * Returns all pool-allocated chunks to the buffer pool.
+     * Returns all pool-allocated chunks to the buffer pool. Called at batch completion.
      */
     public void deallocate(BufferPool pool) {
         if (pool != null) {

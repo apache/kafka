@@ -228,6 +228,20 @@ public class ProducerConfig extends AbstractConfig {
                                                     + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
                                                     + "compression is enabled) as well as for maintaining in-flight requests.";
 
+    /** <code>buffer.memory.allocation.strategy</code> */
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG = "buffer.memory.allocation.strategy";
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL = "full";
+    public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL = "incremental";
+    private static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_DOC = "Controls how the producer allocates memory from <code>" + BUFFER_MEMORY_CONFIG + "</code> for record batches. The following values are supported: "
+                                                    + "<ul>"
+                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL + "</code>: reserve <code>" + BATCH_SIZE_CONFIG + "</code> bytes up front for each in-progress batch, "
+                                                    + "regardless of the actual size of the records appended to it.</li>"
+                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL + "</code>: allocate memory on demand as records are appended, growing each batch "
+                                                    + "up to <code>" + BATCH_SIZE_CONFIG + "</code> bytes. This keeps memory usage proportional to the data actually buffered rather than to the number of "
+                                                    + "active partitions, which allows larger <code>" + BATCH_SIZE_CONFIG + "</code> values (e.g. for high-latency clusters) without reserving "
+                                                    + "<code>" + BATCH_SIZE_CONFIG + "</code> bytes for every active partition.</li>"
+                                                    + "</ul>";
+
     /** <code>retry.backoff.ms</code> */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 
@@ -399,6 +413,13 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
+                                .define(BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG,
+                                        Type.STRING,
+                                        BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL,
+                                        ConfigDef.CaseInsensitiveValidString
+                                                .in(BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL, BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL),
+                                        Importance.MEDIUM,
+                                        BUFFER_MEMORY_ALLOCATION_STRATEGY_DOC)
                                 .define(RETRIES_CONFIG, Type.INT, Integer.MAX_VALUE, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
                                         Type.STRING,

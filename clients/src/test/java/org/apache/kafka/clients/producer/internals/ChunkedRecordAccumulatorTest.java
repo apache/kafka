@@ -157,20 +157,6 @@ public class ChunkedRecordAccumulatorTest {
         accum.close();
     }
 
-    /** Compression is rejected at batch creation in PR1 with a clear message. */
-    @Test
-    public void testCompressionThrowsAtBatchCreation() {
-        int chunkSize = 256;
-        ChunkedRecordAccumulator accum = newAccumulator(1024, chunkSize, 16L * chunkSize, Compression.gzip().build());
-
-        UnsupportedOperationException ex = assertThrows(UnsupportedOperationException.class, () ->
-                accum.append(topic, partition1, 0L, key, new byte[32], Record.EMPTY_HEADERS, null,
-                        maxBlockTimeMs, time.milliseconds(), cluster));
-        assertTrue(ex.getMessage().contains("not implemented yet"),
-                "Expected 'not implemented yet' in message, got: " + ex.getMessage());
-        accum.close();
-    }
-
     /**
      * Race between two concurrent appenders on the same chunked tail. Both threads probe
      * {@code extensionBytesNeeded} under the deque lock against the same physical remaining
@@ -344,6 +330,83 @@ public class ChunkedRecordAccumulatorTest {
             }
         }
         assertEquals(1, count, "expected exactly 1 record after close");
+
+        accum.close();
+    }
+
+    /**
+     * Chunks attached grow with the batch's cumulative projected output, not per-record. With a
+     * chunkSize smaller than the batch's eventual content, a sequence of small records should
+     * extend the chunks as the running total (header + uncompressed bytes for NONE) crosses
+     * chunk boundaries — not allocate the first record's worth and then never extend until
+     * physical capacity is exhausted (which the per-record formula would do).
+     */
+    @Test
+    public void testExtensionTracksCumulativeBatchSize() throws Exception {
+        int chunkSize = 64;
+        int batchSize = 512;
+        ChunkedRecordAccumulator accum = newAccumulator(batchSize, chunkSize, 64L * chunkSize, Compression.NONE);
+
+        byte[] smallValue = new byte[24];
+        for (int i = 0; i < 6; i++) {
+            accum.append(topic, partition1, 0L, key, smallValue, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+        }
+
+        Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+        assertEquals(1, dq.size());
+        ProducerBatch batch = dq.peekFirst();
+        assertNotNull(batch);
+        assertEquals(6, batch.recordCount);
+
+        // batch.close() flattens chunks and writes the header. If chunks under-allocated, this
+        // throws (insufficient capacity in the underlying buffer).
+        batch.close();
+        MemoryRecords records = batch.records();
+        int actualSize = records.sizeInBytes();
+        // Under NONE compression, estimatedBytesWritten is exact: physical bytes ≈ header + sum
+        // of per-record bytes. The chunks attached must cover that, so actualSize must be >
+        // chunkSize for a multi-record batch with non-trivial content.
+        assertTrue(actualSize > chunkSize,
+                "batch should have grown beyond a single chunk; got " + actualSize);
+
+        accum.close();
+    }
+
+    /**
+     * The cumulative sizing formula counts the batch header once. The previous per-record
+     * formula effectively included the batch header in each record's upper bound, which
+     * over-allocated as records accumulated. With the cumulative formula, chunk count for N
+     * small records of total uncompressed size {@code U} is {@code ceil((header + U) / chunkSize)},
+     * not {@code N × ceil((header + recordSize) / chunkSize)}.
+     */
+    @Test
+    public void testCumulativeAccountsForHeaderOnce() throws Exception {
+        int chunkSize = 256;
+        int batchSize = 8192;
+        long totalMemory = 64L * chunkSize;
+        ChunkedBufferPool pool = new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics");
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, batchSize, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool);
+
+        long beforeAlloc = pool.availableMemory();
+        // First record establishes the batch. Each subsequent small record contributes its
+        // uncompressed bytes to the cumulative target; the batch header is NOT re-counted.
+        byte[] smallValue = new byte[8];
+        for (int i = 0; i < 4; i++) {
+            accum.append(topic, partition1, 0L, key, smallValue, Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+        }
+
+        // Each per-record append adds ~10-30 bytes (key + value + record overhead, V2). Cumulative
+        // total for 4 records is well below chunkSize=256, so only 1 chunk should ever be attached.
+        // The per-record formula (header counted once per record) would have allocated more.
+        long held = beforeAlloc - pool.availableMemory();
+        assertEquals(chunkSize, held,
+                "cumulative formula should hold exactly one chunk for a small-record batch; "
+                        + "header double-counting (per-record formula) would inflate this");
 
         accum.close();
     }

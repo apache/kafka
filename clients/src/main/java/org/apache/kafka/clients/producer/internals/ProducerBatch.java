@@ -31,7 +31,6 @@ import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 
@@ -58,7 +57,7 @@ import static org.apache.kafka.common.record.internal.RecordBatch.NO_TIMESTAMP;
  *
  * This class is not thread safe and external synchronization must be used when modifying it
  */
-public final class ProducerBatch {
+public class ProducerBatch {
 
     private static final Logger log = LoggerFactory.getLogger(ProducerBatch.class);
 
@@ -141,35 +140,22 @@ public final class ProducerBatch {
 
 
     /**
-     * Bytes of physical buffer this batch needs before {@code tryAppend} could accept the given
-     * record. Returns 0 when the record fits (either logically full, or stream has room).
-     * Positive when {@code hasRoomFor} allows the record but the underlying stream lacks
-     * physical capacity — used by the dynamic strategy to allocate exactly the missing bytes
-     * before retrying.
-     * <p>
-     * For batches with the default {@link ByteBufferOutputStream} (legacy path), the stream's
-     * {@code remaining()} is large enough that this almost always returns 0.
+     * Return this batch's buffer memory to the pool. The default single-buffer batch returns
+     * the pooled buffer at its initial capacity; {@link ChunkedProducerBatch} overrides this
+     * to return all of its chunks.
      */
-    int extensionBytesNeeded(long timestamp, byte[] key, byte[] value, Header[] headers) {
-        if (recordCount == 0)
-            return 0;
-        if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers))
-            return 0;
-        // Upper-bound estimate is fine: over-counting by header bytes only over-allocates by a
-        // small fraction of one chunk. Under-estimation would be unsafe.
-        int recordSize = AbstractRecords.estimateSizeInBytesUpperBound(
-                magic(), recordsBuilder.compression().type(), key, value, headers);
-        int gap = recordSize - recordsBuilder.bufferStream().remaining();
-        return Math.max(0, gap);
+    protected void deallocateBuffer(BufferPool pool) {
+        pool.deallocate(buffer(), initialCapacity());
     }
 
     /**
-     * The batch's underlying output stream. Exposed for the dynamic strategy to attach
-     * extension chunks and route deallocation through the chunked stream rather than the
-     * standard {@code BufferPool.deallocate(ByteBuffer, int)} path.
+     * Credit this batch's memory back to the pool when it is unexpectedly still inflight
+     * (KAFKA-19012): the buffer can't be touched (the network may still be reading it), so the
+     * default donates a fresh same-capacity buffer. {@link ChunkedProducerBatch} instead returns
+     * the actual chunks (safe — inflight bytes live in the separate flattened buffer).
      */
-    ByteBufferOutputStream bufferStream() {
-        return recordsBuilder.bufferStream();
+    protected void deallocateInflightBuffer(BufferPool pool) {
+        pool.deallocate(ByteBuffer.allocate(initialCapacity()));
     }
 
     /**

@@ -144,6 +144,31 @@ public abstract class AbstractRecords implements Records {
     }
 
     /**
+     * Upper-bound size of one record's contribution to a batch, <em>excluding</em> the batch header.
+     * For magic v2 it's {@link #estimateSizeInBytesUpperBound} minus
+     * {@link #recordBatchHeaderSizeInBytes}; for older magic it equals
+     * {@link #estimateSizeInBytesUpperBound}. Used by the incremental strategy's cumulative sizing,
+     * where the header is counted once via {@link MemoryRecordsBuilder#estimatedBytesWritten}.
+     */
+    public static int recordSizeUpperBound(byte magic, CompressionType compressionType, byte[] key,
+                                           byte[] value, Header[] headers) {
+        return recordSizeUpperBound(magic, compressionType, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
+    }
+
+    /**
+     * @see #recordSizeUpperBound(byte, CompressionType, byte[], byte[], Header[])
+     */
+    private static int recordSizeUpperBound(byte magic, CompressionType compressionType, ByteBuffer key,
+                                            ByteBuffer value, Header[] headers) {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2)
+            return DefaultRecord.recordSizeUpperBound(key, value, headers);
+        else if (compressionType != CompressionType.NONE)
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, key, value);
+        else
+            return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
+    }
+
+    /**
      * Return the size of the record batch header.
      *
      * For V0 and V1 with no compression, it's unclear if Records.LOG_OVERHEAD or 0 should be chosen. There is no header
