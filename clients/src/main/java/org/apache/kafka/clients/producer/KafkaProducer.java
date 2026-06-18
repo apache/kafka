@@ -471,7 +471,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // Use the chunked path only when a batch is at least one full chunk
             // (batch.size >= CHUNK_SIZE). Below that, a batch can't fill even one chunk, so chunking
             // would reserve a whole chunk for a batch capped under it (over-reservation); the full
-            // strategy (reserving up to batch.size per batch) is both leaner and identical to trunk.
+            // strategy (reserving max(batch.size, record size) per batch) is both leaner and identical to trunk.
             if (incremental && batchSize >= ChunkedRecordAccumulator.CHUNK_SIZE) {
                 this.accumulator = new ChunkedRecordAccumulator(logContext,
                         batchSize,

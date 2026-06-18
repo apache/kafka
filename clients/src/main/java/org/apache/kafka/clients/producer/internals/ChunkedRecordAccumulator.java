@@ -42,8 +42,8 @@ import java.util.List;
 
 /**
  * A {@link RecordAccumulator} variant that uses chunked buffer allocation: each new batch
- * pre-allocates {@code ceil(recordSize / chunkSize)} chunks from a {@link ChunkedBufferPool},
- * and grows mid-batch by attaching additional chunks via
+ * pre-allocates the chunks needed for the first record's estimated size (batch header plus the
+ * record), and grows mid-batch by attaching additional chunks via
  * {@link ChunkedProducerBatch#addBuffers(List)} when later records would overflow.
  * <p>
  * This is the "incremental" buffer.memory allocation strategy: memory consumption scales with

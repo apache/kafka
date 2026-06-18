@@ -246,10 +246,10 @@ public class ChunkedRecordAccumulatorTest {
     /**
      * Regression guard: an inflight chunked batch returns all K chunks to the pool on the
      * expiration / broker-disconnect path, not just one {@code initialCapacity} chunkSize.
-     * The parent {@code RecordAccumulator.deallocate} for inflight batches credits only
-     * {@code initialCapacity} back to the pool and throws; {@link ChunkedRecordAccumulator}
-     * overrides {@code deallocate} to return all chunks before the throw. Removing that
-     * override would re-introduce a (K−1)×chunkSize leak and fail this test.
+     * For an inflight batch the parent {@code RecordAccumulator.deallocate} calls
+     * {@code batch.deallocateInflightBuffer(pool)} and then throws; {@link ChunkedProducerBatch}
+     * overrides that hook to return all chunks (instead of donating one fresh buffer). Removing
+     * that override would re-introduce a (K−1)×chunkSize leak and fail this test.
      */
     @Test
     public void testInflightExpirationReturnsAllChunksToPool() throws Exception {
@@ -297,11 +297,11 @@ public class ChunkedRecordAccumulatorTest {
     /**
      * Sender's drain (and any other caller of {@code batch.close()}) cascades through
      * {@code MemoryRecordsBuilder.closeForRecordAppends()} →
-     * {@code appendStream.close()} → {@code bufferStream.close()}. The chunked stream's
-     * buffer must remain readable after that cascade so the builder can flatten chunks into
-     * the heap buffer it sends over the network. If the chunked stream's {@code close()}
-     * prematurely returns chunks to the pool, the flattened buffer is empty and the header
-     * write fails (or produces an empty record set).
+     * {@code appendStream.close()} → {@code bufferStream.close()}. The chunk data must remain
+     * readable through that cascade so the builder can flatten the chunks into the heap buffer it
+     * sends over the network — chunks are returned to the pool only at batch completion
+     * (deallocate), never at close. If they were released at close, the flattened buffer would be
+     * empty and the header write would fail (or produce an empty record set).
      */
     @Test
     public void testBatchCloseDoesNotDeallocateChunksPrematurely() throws Exception {
@@ -316,7 +316,7 @@ public class ChunkedRecordAccumulatorTest {
         ProducerBatch batch = dq.peekFirst();
         assertNotNull(batch);
 
-        // Matches the call sites in RecordAccumulator.drain (line 941) and Sender.
+        // Matches the call sites in RecordAccumulator.drain and Sender.
         batch.close();
         MemoryRecords records = batch.records();
         assertTrue(records.sizeInBytes() > 0,
@@ -364,7 +364,7 @@ public class ChunkedRecordAccumulatorTest {
         batch.close();
         MemoryRecords records = batch.records();
         int actualSize = records.sizeInBytes();
-        // Under NONE compression, estimatedBytesWritten is exact: physical bytes ≈ header + sum
+        // Under NONE compression, estimatedBytesWritten is exact: physical bytes = header + sum
         // of per-record bytes. The chunks attached must cover that, so actualSize must be >
         // chunkSize for a multi-record batch with non-trivial content.
         assertTrue(actualSize > chunkSize,

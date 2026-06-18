@@ -45,8 +45,9 @@ public class ChunkedProducerBatch extends ProducerBatch {
 
     /**
      * Bytes of physical buffer this batch needs before {@code tryAppend} could accept the given
-     * record. Returns 0 when the record fits (either logically full, or the stream's combined
-     * chunk capacity has room). Positive when {@code hasRoomFor} allows the record but the
+     * record. Returns 0 when no extension is needed: the batch is empty (first record), it is
+     * logically full, or the stream's combined chunk capacity already has room. Positive when
+     * {@code hasRoomFor} allows the record but the
      * chunks lack physical capacity — the accumulator allocates exactly the missing bytes
      * (rounded up to whole chunks) and attaches them via {@link #addBuffers} before retrying.
      */

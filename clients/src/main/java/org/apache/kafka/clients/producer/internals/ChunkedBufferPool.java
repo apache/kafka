@@ -61,22 +61,11 @@ public class ChunkedBufferPool extends BufferPool {
     public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
         if (totalSize <= 0)
             throw new IllegalArgumentException("totalSize must be positive: " + totalSize);
-        if (totalSize > totalMemory())
-            throw new IllegalArgumentException("Attempt to allocate " + totalSize
-                + " bytes across chunks, but there is a hard limit of "
-                + totalMemory() + " on memory allocations.");
+        throwIfChunksNeededExceedsPool(totalSize);
 
         int chunkSize = poolableSize();
         int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
         long memoryRequired = (long) numChunks * chunkSize;
-        // Rounding totalSize up to whole chunks can require more pool memory than buffer.memory
-        // holds even when totalSize alone fits (the single-buffer "full" path reserves exactly the
-        // record size, so it never hits this). Reject it here to fail fast, instead of blocking for
-        // max.block.ms and then throwing BufferExhausted for a request that can never be satisfied.
-        if (memoryRequired > totalMemory())
-            throw new IllegalArgumentException("Attempt to allocate " + numChunks + " chunks of "
-                + chunkSize + " bytes (" + memoryRequired + " bytes total), but there is a hard limit of "
-                + totalMemory() + " on memory allocations.");
 
         // Chunks pulled from the free list; the remaining bytes are reserved against
         // nonPooledAvailableMemory and materialized as raw allocations after the lock is released.
@@ -195,5 +184,18 @@ public class ChunkedBufferPool extends BufferPool {
                 releaseReservedBytes(memoryRequired);
             }
         }
+    }
+
+    /**
+     * Throw if rounding {@code totalSize} up to whole chunks would exceed the pool.
+     */
+    private void throwIfChunksNeededExceedsPool(int totalSize) {
+        int chunkSize = poolableSize();
+        int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
+        long memoryRequired = (long) numChunks * chunkSize;
+        if (memoryRequired > totalMemory())
+            throw new IllegalArgumentException("Attempt to allocate " + totalSize + " bytes ("
+                + numChunks + " chunks of " + chunkSize + " = " + memoryRequired + " bytes), but the "
+                + "hard limit on memory allocations is " + totalMemory() + ".");
     }
 }
