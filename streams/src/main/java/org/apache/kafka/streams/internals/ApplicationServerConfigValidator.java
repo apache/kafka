@@ -19,6 +19,7 @@ package org.apache.kafka.streams.internals;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.state.HostInfo;
 
 public class ApplicationServerConfigValidator implements ConfigDef.Validator {
 
@@ -29,23 +30,13 @@ public class ApplicationServerConfigValidator implements ConfigDef.Validator {
         }
 
         final String endPoint = (String) value;
-
         if (Utils.isBlank(endPoint)) {
             return;
         }
-
-        final String host = Utils.getHost(endPoint);
-        final Integer port;
         try {
-            port = Utils.getPort(endPoint);
-        } catch (final NumberFormatException e) {
-            throw new ConfigException(name, value, "Invalid port: " + e.getMessage());
-        }
-
-        if (host == null || port == null) {
-            throw new ConfigException(
-                    name, value, String.format("Error parsing host address %s. Expected format host:port.", endPoint)
-            );
+            HostInfo.buildFromEndpoint(endPoint);
+        } catch (final ConfigException e) {
+            throw new ConfigException(name, value, e.getMessage());
         }
     }
 

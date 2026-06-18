@@ -1903,7 +1903,7 @@ public class StreamsConfigTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"dummy:host", "dummy:9999999999999999999999999", "dummy", "dummy:", ":port"})
+    @ValueSource(strings = {"dummy:host", "dummy:9999999999999999999999999", "dummy", "dummy:", ":port", ":", ":8080"})
     public void shouldThrowConfigExceptionWithInvalidApplicationServerConfigValue(final String applicationServerConfig) {
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, applicationServerConfig);
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
