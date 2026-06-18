@@ -633,7 +633,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
-                StreamsGroupHeartbeatResult.withoutEpochContext(
+                StreamsGroupHeartbeatResult.forError(
                     new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                 )
             );
@@ -645,7 +645,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         } catch (Throwable ex) {
             ApiError apiError = ApiError.fromThrowable(ex);
             return CompletableFuture.completedFuture(
-                StreamsGroupHeartbeatResult.withoutEpochContext(
+                StreamsGroupHeartbeatResult.forError(
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(apiError.error().code())
                         .setErrorMessage(apiError.message())
@@ -662,7 +662,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             heartbeat = heartbeat.thenApply(result -> {
                 try {
                     return streamsGroupTopologyDescriptionManager.maybeSetTopologyDescriptionRequired(
-                        result, request.groupId(), context.requestVersion());
+                        result, request.groupId(), context.requestVersion(), request.memberEpoch());
                 } catch (Throwable t) {
                     // The heartbeat has already committed durably; if decoration fails (e.g.
                     // because of an unexpected response shape) we log and return the
@@ -682,7 +682,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request,
             exception,
             (error, message) ->
-                StreamsGroupHeartbeatResult.withoutEpochContext(
+                StreamsGroupHeartbeatResult.forError(
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(error.code())
                         .setErrorMessage(message)

@@ -496,6 +496,29 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testHeartbeatSkipsFlagForDepartingMember() throws Exception {
+        // A leave heartbeat carries a negative member epoch. Even though the result shows the
+        // stored epoch lagging (which would otherwise solicit a push), the gate must not arm
+        // the back-off or set the flag for a member on its way out.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleWriteOperation(
+            eq("streams-group-heartbeat"),
+            eq(GROUP_TP),
+            any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of(), 5, -1, -1)));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        StreamsGroupHeartbeatResult result = service.streamsGroupHeartbeat(
+            requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
+            validHeartbeatRequest().setMemberEpoch(-1)
+        ).get(5, TimeUnit.SECONDS);
+
+        assertFalse(result.data().topologyDescriptionRequired());
+    }
+
+    @Test
     public void testHeartbeatArmSuppressReSolicitCycle() throws Exception {
         // End-to-end exercise of the arm → suppress → re-solicit cycle through the
         // service + TopologyDescriptionManager. Backoff primitive tests cover this in
