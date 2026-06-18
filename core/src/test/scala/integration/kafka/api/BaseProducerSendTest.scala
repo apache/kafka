@@ -101,6 +101,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
+  /**
+   * Additional producer properties applied to every producer created via [[createProducer]].
+   * Subclasses override this to run the whole suite under a different producer configuration
+   * (e.g. a different buffer.memory.allocation.strategy).
+   */
+  protected def producerOverrides: Properties = new Properties()
+
   protected def createProducer(lingerMs: Int = 0,
                                deliveryTimeoutMs: Int = 2 * 60 * 1000,
                                batchSize: Int = 16384,
@@ -117,7 +124,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       deliveryTimeoutMs = deliveryTimeoutMs,
       maxBlockMs = maxBlockMs,
       batchSize = batchSize,
-      bufferSize = bufferSize)
+      bufferSize = bufferSize,
+      additionalProperties = Some(producerOverrides))
     registerProducer(producer)
   }
 
