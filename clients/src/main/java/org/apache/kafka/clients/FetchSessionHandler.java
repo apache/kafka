@@ -536,7 +536,8 @@ public class FetchSessionHandler {
                 // Other fetch-session errors (e.g. INVALID_FETCH_SESSION_EPOCH, FETCH_SESSION_TOPIC_ID_ERROR) are
                 // also recoverable and self-healing: the existing session is closed and a new one is re-established
                 // with a full fetch.
-                log.debug("Node {} was unable to process the fetch request with {}: {}.",
+                log.debug("Node {} was unable to process the fetch request with {}: {}. " +
+                    "Re-sending a full fetch request, which closes the existing session on the broker and establishes a new one.",
                     node, nextMetadata, response.error());
                 nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             }
