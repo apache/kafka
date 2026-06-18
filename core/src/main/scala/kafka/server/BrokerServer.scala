@@ -778,7 +778,7 @@ class BrokerServer(
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupDLQManagerClassName, classOf[Object]).asInstanceOf[Class[ShareGroupDLQManager]]
       if (klass.getName.equals(classOf[DefaultShareGroupDLQManager].getName)) {
         DefaultShareGroupDLQManager.instance(
-          NetworkUtils.buildNetworkClient("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
+          InterBrokerNetworkClientFactory.create("ShareGroupDLQManager", config, metrics, Time.SYSTEM, new LogContext(s"[ShareGroupDLQManager broker=${config.brokerId}]")),
           new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName, groupConfigManager),
           Time.SYSTEM,
           shareGroupTimer,
