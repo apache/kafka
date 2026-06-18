@@ -20,9 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
-import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
@@ -747,14 +744,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "streams-group-set-stored-topology-epoch",
                     tp,
                     coordinator -> coordinator.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch)
-                ).handle((unused, throwable) -> finishPostPluginWrite(
+                ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
                     groupId, pushedEpoch, throwable,
                     new StreamsGroupTopologyDescriptionUpdateResponseData()));
                 case PERMANENT -> runtime.scheduleWriteOperation(
                     "streams-group-set-failed-topology-epoch",
                     tp,
                     coordinator -> coordinator.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch)
-                ).handle((unused, throwable) -> finishPostPluginWrite(
+                ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
                     groupId, pushedEpoch, throwable,
                     topologyDescriptionUpdateError(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message())));
                 case TRANSIENT -> {
@@ -770,40 +767,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 GroupCoordinatorService::topologyDescriptionUpdateError,
                 log
             ));
-    }
-
-    /**
-     * Apply the back-off mutation for the terminal disposition of a post-plugin bookkeeping
-     * write, then either return the response (write committed) or rethrow so the chain's
-     * terminal {@code exceptionally} maps the error.
-     */
-    private StreamsGroupTopologyDescriptionUpdateResponseData finishPostPluginWrite(
-        String groupId,
-        int pushedEpoch,
-        Throwable throwable,
-        StreamsGroupTopologyDescriptionUpdateResponseData responseOnWriteCommit
-    ) {
-        if (throwable == null) {
-            streamsGroupTopologyDescriptionManager.clearBackoff(groupId, pushedEpoch);
-            return responseOnWriteCommit;
-        }
-        Throwable cause = Errors.maybeUnwrapException(throwable);
-        if (cause instanceof GroupIdNotFoundException) {
-            // The group was deleted between the plugin call and the bookkeeping write — the push
-            // already took effect at the plugin and no live group remains to throttle, so drop
-            // the orphaned back-off entry instead of arming one nobody will clear.
-            streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
-        } else if (cause instanceof NotCoordinatorException
-            || cause instanceof CoordinatorLoadInProgressException
-            || cause instanceof CoordinatorNotAvailableException) {
-            // This broker stopped being the coordinator between the plugin call and the write.
-            // The client retries against the new coordinator, which holds no back-off entry of
-            // its own; arming a broker-wide entry here would leak until expiry and could
-            // suppress a legitimate solicitation if the group migrates back. Leave it alone.
-        } else {
-            streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
-        }
-        throw new CompletionException(throwable);
     }
 
     private static StreamsGroupTopologyDescriptionUpdateResponseData topologyDescriptionUpdateError(
