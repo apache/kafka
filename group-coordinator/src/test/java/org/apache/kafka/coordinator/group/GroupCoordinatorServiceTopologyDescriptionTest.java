@@ -710,7 +710,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         DeleteGroupsResponseData.DeletableGroupResult result = results.find("foo");
         assertNotNull(result);
         assertEquals(Errors.GROUP_DELETION_FAILED.code(), result.errorCode());
-        assertEquals("plugin offline", result.errorMessage());
+        // The raw plugin message ("plugin offline") must not be forwarded to the client.
+        assertEquals("Topology description plugin failed to delete the topology.", result.errorMessage());
         verify(runtime, never()).scheduleWriteOperation(
             eq("delete-groups"), any(), any());
     }
@@ -886,7 +887,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         DeleteGroupsResponseData.DeletableGroupResult badResult = results.find("bad");
         assertNotNull(badResult);
         assertEquals(Errors.GROUP_DELETION_FAILED.code(), badResult.errorCode());
-        assertEquals("rejected", badResult.errorMessage());
+        assertEquals("Topology description plugin failed to delete the topology.", badResult.errorMessage());
     }
 
     private static StreamsGroupTopologyDescriptionUpdateRequestData validUpdateRequest() {

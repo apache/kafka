@@ -1641,7 +1641,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     return CompletableFuture.completedFuture(deletableGroupResults);
                 }
 
-                return runPrePluginDelete(topicPartition, retainedGroupIds)
+                return deleteStreamsTopologyDescriptions(topicPartition, retainedGroupIds)
                     .thenCompose(streamsErrMap -> {
                         List<String> afterStreams = filterStreamsTopologyErrors(
                             streamsErrMap, retainedGroupIds, deletableGroupResults);
@@ -1654,11 +1654,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     })
                     .exceptionally(exception -> {
                         // Defensive net for any uncaught synchronous throw in the
-                        // post-runPrePluginDelete stage. Without this, the exception would
+                        // post-deleteStreamsTopologyDescriptions stage. Without this, the exception would
                         // propagate through FutureUtils.combineFutures.join() and fail the
                         // whole cross-partition DeleteGroups response — including groups on
                         // other partitions that already succeeded. Runtime read failures
-                        // inside runPrePluginDelete are absorbed there, so they never reach
+                        // inside deleteStreamsTopologyDescriptions are absorbed there, so they never reach
                         // this branch; what we are catching here is the synchronous stages
                         // (filterStreamsTopologyErrors etc.). Fold the exception into
                         // per-group failures for any retainedGroupIds not yet recorded.
@@ -1752,7 +1752,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * pass through the more specific runtime error rather than collapsing everything to
      * {@code GROUP_DELETION_FAILED}.
      */
-    private CompletableFuture<Map<String, ApiError>> runPrePluginDelete(
+    private CompletableFuture<Map<String, ApiError>> deleteStreamsTopologyDescriptions(
         TopicPartition topicPartition,
         List<String> groupIds
     ) {
@@ -1775,17 +1775,24 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         groupsWithStored.forEach(streamsGroupTopologyDescriptionManager::clearBackoffGroup);
                         return failures;
                     }))
-            .exceptionally(exception -> {
-                // Use ApiError.fromThrowable so the error reported to the client matches what
-                // the sibling DeleteGroups paths return: it unwraps CompletionException so the
-                // ErrorMessage is the cause's own message rather than the FQCN-prefixed
-                // toString(), and it suppresses the message for UNKNOWN_SERVER_ERROR so we do
-                // not leak plugin internals.
-                ApiError apiError = ApiError.fromThrowable(exception);
-                Map<String, ApiError> failures = new HashMap<>();
-                groupIds.forEach(id -> failures.put(id, apiError));
-                return failures;
-            });
+            .exceptionally(exception -> handleOperationException(
+                // Route through handleOperationException (not bare ApiError.fromThrowable) so a
+                // read failure reports the same translated, retriable code the rest of the
+                // DeleteGroups pipeline returns: NOT_LEADER_OR_FOLLOWER/KAFKA_STORAGE_ERROR ->
+                // NOT_COORDINATOR, NOT_ENOUGH_REPLICAS/REQUEST_TIMED_OUT -> COORDINATOR_NOT_AVAILABLE,
+                // etc. It also unwraps CompletionException and suppresses the UNKNOWN_SERVER_ERROR
+                // message so we don't leak plugin internals.
+                "streams-group-topology-pre-delete",
+                groupIds,
+                exception,
+                (error, message) -> {
+                    ApiError apiError = new ApiError(error, message);
+                    Map<String, ApiError> failures = new HashMap<>();
+                    groupIds.forEach(id -> failures.put(id, apiError));
+                    return failures;
+                },
+                log
+            ));
     }
 
     /**

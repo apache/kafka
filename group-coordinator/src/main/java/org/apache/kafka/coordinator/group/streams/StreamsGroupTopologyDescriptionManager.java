@@ -195,9 +195,11 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
-     * Drop the back-off entry for a group unconditionally. Used by paths that remove the
-     * group entirely (explicit DeleteGroups, periodic cleanup of naturally-expired
-     * groups, post-plugin write failing with GroupIdNotFoundException). Delegates to
+     * Drop the back-off entry for a group unconditionally. Currently called when a group is
+     * removed via explicit DeleteGroups and on a post-plugin write failing with
+     * GroupIdNotFoundException. NOTE: groups removed by other lifecycle paths (session expiry,
+     * partition unload, tombstone-via-replay) are not yet wired to this, so their back-off
+     * entries can leak until the group id is reused. Delegates to
      * {@link StreamsGroupTopologyDescriptionBackoff#clearGroup}.
      */
     public void clearBackoffGroup(String groupId) {
@@ -254,9 +256,11 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         if (throwable == null) {
             return null;
         }
-        Throwable cause = Errors.maybeUnwrapException(throwable);
-        String message = cause != null ? cause.getMessage() : "Plugin failure (no cause).";
-        return Map.entry(groupId, new ApiError(Errors.GROUP_DELETION_FAILED, message));
+        // Do not forward the plugin's raw exception message to the client: it can be null and
+        // may leak plugin internals (the ErrorMessage is serialized at DeleteGroups v3+). Use a
+        // fixed generic message, mirroring invokeSetTopology.
+        return Map.entry(groupId, new ApiError(Errors.GROUP_DELETION_FAILED,
+            "Topology description plugin failed to delete the topology."));
     }
 
     // Visible for testing.
