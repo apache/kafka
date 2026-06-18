@@ -74,10 +74,12 @@ import java.util.Random;
  *
  * Unattached transitions to:
  *    Unattached: After learning of a new election with a higher epoch
- *    Follower:   After discovering a leader with an equal or larger epoch
+ *    Follower:   After discovering a leader or new leader endpoints
+ *                with an equal or larger epoch
  *
  * Follower transitions to:
- *    Unattached: After learning of a new election with a higher epoch
+ *    Unattached: After learning of a new election with a higher epoch, or after
+ *                expiration of the fetch timeout
  *    Follower:   After discovering a leader with a larger epoch
  *
  */
