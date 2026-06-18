@@ -753,29 +753,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     coordinator -> coordinator.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch)
                 ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
                     groupId, pushedEpoch, throwable,
-                    topologyDescriptionUpdateError(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message())));
+                    new StreamsGroupTopologyDescriptionUpdateResponseData()
+                        .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
+                        .setErrorMessage(pluginOutcome.message())));
                 case TRANSIENT -> {
                     streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
-                    yield CompletableFuture.completedFuture(topologyDescriptionUpdateError(
-                        Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED, pluginOutcome.message()));
+                    yield CompletableFuture.completedFuture(new StreamsGroupTopologyDescriptionUpdateResponseData()
+                        .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
+                        .setErrorMessage(pluginOutcome.message()));
                 }
             })
             .exceptionally(exception -> handleOperationException(
                 "streams-group-topology-description-update",
                 request,
                 exception,
-                GroupCoordinatorService::topologyDescriptionUpdateError,
+                (error, message) -> new StreamsGroupTopologyDescriptionUpdateResponseData()
+                    .setErrorCode(error.code())
+                    .setErrorMessage(message),
                 log
             ));
-    }
-
-    private static StreamsGroupTopologyDescriptionUpdateResponseData topologyDescriptionUpdateError(
-        Errors error,
-        String message
-    ) {
-        return new StreamsGroupTopologyDescriptionUpdateResponseData()
-            .setErrorCode(error.code())
-            .setErrorMessage(message);
     }
 
     private void throwIfStreamsGroupTopologyDescriptionUpdateInvalid(
