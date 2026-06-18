@@ -527,11 +527,17 @@ public class FetchSessionHandler {
     public boolean handleResponse(FetchResponse response, short version) {
         if (response.error() != Errors.NONE) {
             if (response.error() == Errors.FETCH_SESSION_ID_NOT_FOUND) {
-                // This is a recoverable condition logged at DEBUG to avoid noise from routine cache churn.
+                // Recoverable and self-healing, so logged at DEBUG to avoid noise from routine cache churn.
                 log.debug("Node {} returned a {} error; the fetch session {} was likely evicted from the broker's " +
                     "fetch session cache. Re-sending a full fetch request to establish a new session.",
                     node, response.error(), nextMetadata.sessionId());
                 nextMetadata = FetchMetadata.INITIAL;
+            } else if (response.error() == Errors.INVALID_FETCH_SESSION_EPOCH) {
+                // Recoverable and self-healing, so logged at DEBUG.
+                log.debug("Node {} returned a {} error; the fetch session {} epoch is out of sync with the broker. " +
+                    "Re-sending a full fetch request to establish a new session.",
+                    node, response.error(), nextMetadata.sessionId());
+                nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             } else {
                 log.info("Node {} was unable to process the fetch request with {}: {}.",
                     node, nextMetadata, response.error());
