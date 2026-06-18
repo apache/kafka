@@ -518,7 +518,7 @@ public class KafkaConsumerTest {
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
         long lastOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
-        assertEquals(invalidRecordNumber - 2, lastOffset);
+        assertEquals(invalidRecordOffset - 1, lastOffset);
         assertEquals(1, records.nextOffsets().size());
         assertEquals(new OffsetAndMetadata(lastOffset + 1), records.nextOffsets().get(tp0));
 
