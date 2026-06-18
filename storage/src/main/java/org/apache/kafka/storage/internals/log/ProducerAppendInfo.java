@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
+import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.record.internal.EndTransactionMarker;
 import org.apache.kafka.common.record.internal.Record;
@@ -154,12 +155,11 @@ public class ProducerAppendInfo {
     }
 
     private void checkSequence(short producerEpoch, int appendFirstSeq, long offset) {
-        // For transactions v2 idempotent producers, reject non-zero sequences when there is no producer ID state
-        if (verificationStateEntry != null && verificationStateEntry.supportsEpochBump() &&
-            appendFirstSeq != 0 && currentEntry.isEmpty()) {
-            throw new OutOfOrderSequenceException("Invalid sequence number for producer " + producerId + " at " +
-                "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
-                " (incoming seq. number). Expected sequence 0 for transactions v2 idempotent producer with no existing state.");
+        if (updatedEntry.producerEpoch() == RecordBatch.NO_PRODUCER_EPOCH && appendFirstSeq != 0 &&
+                (verificationStateEntry == null || verificationStateEntry.supportsEpochBump())) {
+            throw new UnknownProducerIdException("Found no record of producer " + producerId + " at " +
+                    "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
+                    " (incoming seq. number). Expected sequence 0 for the first batch with no producer state.");
         }
         if (verificationStateEntry != null && appendFirstSeq > verificationStateEntry.lowestSequence()) {
             throw new OutOfOrderSequenceException("Out of order sequence number for producer " + producerId + " at " +
@@ -183,9 +183,7 @@ public class ProducerAppendInfo {
             else
                 currentLastSeq = RecordBatch.NO_SEQUENCE;
 
-            // If there is no current producer epoch (possibly because all producer records have been deleted due to
-            // retention or the DeleteRecords API) accept writes with any sequence number
-            if (!(currentEntry.producerEpoch() == RecordBatch.NO_PRODUCER_EPOCH || inSequence(currentLastSeq, appendFirstSeq))) {
+            if (!inSequence(currentLastSeq, appendFirstSeq)) {
                 throw new OutOfOrderSequenceException("Out of order sequence number for producer " + producerId + " at " +
                         "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
                         " (incoming seq. number), " + currentLastSeq + " (current end sequence number)");
