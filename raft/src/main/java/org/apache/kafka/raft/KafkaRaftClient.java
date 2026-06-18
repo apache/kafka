@@ -1725,13 +1725,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             leaderEndpoints = Endpoints.empty();
         }
 
-        maybeSwitchObserverFetchToLeader(
-            responseEpoch,
-            responseLeaderId,
-            leaderEndpoints,
-            currentTimeMs
-        );
-
         Optional<Boolean> handled = maybeHandleCommonResponse(
             error,
             responseLeaderId,
@@ -2616,32 +2609,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     /**
-     * If the local replica is an observer currently routing fetches to bootstrap servers,
-     * and a non-leader source's fetch response advertises the leader's endpoints, switch
-     * the observer back to fetching from the leader.
-     */
-    private void maybeSwitchObserverFetchToLeader(
-        int responseEpoch,
-        OptionalInt responseLeaderId,
-        Endpoints leaderEndpoints,
-        long currentTimeMs
-    ) {
-        if (!hasConsistentLeader(responseEpoch, responseLeaderId)) {
-            throw new IllegalStateException("Received request or response with leader " + responseLeaderId +
-                " and epoch " + responseEpoch + " which is inconsistent with current leader " +
-                quorum.leaderId() + " and epoch " + quorum.epoch());
-        } else if (responseEpoch == quorum.epoch() && quorum.isUnattached() &&
-            responseLeaderId.isPresent() && !leaderEndpoints.isEmpty()) {
-            transitionToFollower(
-                responseEpoch,
-                responseLeaderId.getAsInt(),
-                leaderEndpoints,
-                currentTimeMs
-            );
-        }
-    }
-
-    /**
      * Handle response errors that are common across request types.
      *
      * @param error Error from the received response
@@ -2739,10 +2706,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             }
         } else if (
             leaderId.isPresent() &&
-                (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size())
+                (!quorum.hasLeader() || leaderEndpoints.size() > quorum.leaderEndpoints().size() ||
+                    (quorum.isUnattached() && !leaderEndpoints.isEmpty()))
         ) {
             // The request or response indicates the leader of the current epoch
-            // which are currently unknown or the replica has discovered more endpoints
+            // which are currently unknown, the replica has discovered more endpoints,
+            // or the replica is unattached but the has discovered endpoints for the leader.
             transitionToFollower(epoch, leaderId.getAsInt(), leaderEndpoints, currentTimeMs);
         }
     }
