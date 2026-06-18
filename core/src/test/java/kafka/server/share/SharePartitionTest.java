@@ -255,6 +255,23 @@ public class SharePartitionTest {
         sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join();
         assertTrue(sharePartition.cachedState().isEmpty());
         assertEquals(11, sharePartition.startOffset());
+
+        ArgumentCaptor<WriteShareGroupStateParameters> captor =
+            ArgumentCaptor.forClass(WriteShareGroupStateParameters.class);
+        Mockito.verify(persister, Mockito.times(1)).writeState(captor.capture());
+        PartitionStateBatchData partitionData = captor.getValue()
+            .groupTopicPartitionData()
+            .topicsData()
+            .get(0)
+            .partitions()
+            .get(0);
+        PersisterStateBatch stateBatch = partitionData.stateBatches().get(0);
+        assertEquals(5L, stateBatch.firstOffset());
+        assertEquals(10L, stateBatch.lastOffset());
+        assertEquals(RecordState.ACKNOWLEDGED.id(), stateBatch.deliveryState());
+        assertEquals(PersisterStateBatch.NO_STAGED_PRODUCER_ID, stateBatch.stagedProducerId());
+        assertEquals(PersisterStateBatch.NO_STAGED_PRODUCER_EPOCH, stateBatch.stagedProducerEpoch());
+        assertEquals(PersisterStateBatch.NO_STAGED_ACK_TYPE, stateBatch.stagedAckType());
     }
 
     @Test
@@ -13999,6 +14016,28 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testApplyTxnMarkerRetryAfterCommitIsIdempotent() {
+        Persister persister = Mockito.mock(Persister.class);
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)));
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 1,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+
+        sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join();
+        sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join();
+
+        assertTrue(sharePartition.cachedState().isEmpty());
+        assertEquals(15, sharePartition.startOffset());
+        Mockito.verify(persister, Mockito.times(2)).writeState(Mockito.any());
+    }
+
+    @Test
     public void testApplyTxnMarkerLeavesPendingStateOnPersistFailure() {
         Persister persister = Mockito.mock(Persister.class);
         Mockito.when(persister.writeState(Mockito.any()))
@@ -14056,6 +14095,27 @@ public class SharePartitionTest {
 
         sharePartition.applyTxnMarker(999L, (short) 1, TransactionResult.COMMIT);
         assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+    }
+
+    @Test
+    public void testApplyTxnMarkerWithMismatchedProducerEpochIsNoop() {
+        Persister persister = Mockito.mock(Persister.class);
+        Mockito.when(persister.writeState(Mockito.any()))
+            .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)));
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+        fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
+
+        sharePartition.stageTxnAcknowledge(MEMBER_ID, 100L, (short) 2,
+            List.of(new ShareAcknowledgementBatch(10, 14, List.of(AcknowledgeType.ACCEPT.id)))).join();
+
+        sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join();
+        assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(100L, sharePartition.cachedState().get(10L).batchStagedProducerId());
+        assertEquals((short) 2, sharePartition.cachedState().get(10L).batchStagedProducerEpoch());
+        Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
     }
 
     @Test
