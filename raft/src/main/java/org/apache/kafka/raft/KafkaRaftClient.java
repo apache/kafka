@@ -3298,6 +3298,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private boolean shouldSendUpdateVoteRequest(FollowerState state) {
+        if (!canBecomeVoter) {
+            return false;
+        }
+
         var version = partitionState.lastKraftVersion();
         /* When the cluster supports reconfiguration, send an updated voter configuration if the
          * one in the log doesn't match the local configuration.
