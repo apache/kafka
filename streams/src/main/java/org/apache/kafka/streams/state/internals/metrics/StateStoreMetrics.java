@@ -569,10 +569,10 @@ public class StateStoreMetrics {
     }
 
     public static void addUncommittedBytesGauge(final String taskId,
-                                                 final String storeType,
-                                                 final String storeName,
-                                                 final StreamsMetricsImpl streamsMetrics,
-                                                 final Gauge<Long> uncommittedBytesGauge) {
+                                                final String storeType,
+                                                final String storeName,
+                                                final StreamsMetricsImpl streamsMetrics,
+                                                final Gauge<Long> uncommittedBytesGauge) {
         streamsMetrics.addStoreLevelMutableMetric(
                 taskId,
                 storeType,
