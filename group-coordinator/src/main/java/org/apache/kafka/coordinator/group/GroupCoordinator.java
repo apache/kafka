@@ -243,8 +243,8 @@ public interface GroupCoordinator {
      * @param context                       The coordinator request context.
      * @param groupIds                      The group ids.
      * @param includeTopologyDescription    Whether the client requested the full topology
-     *                                      description from the topology description plugin
-     *                                      (KIP-1331). When {@code false}, the
+     *                                      description from the topology description plugin.
+     *                                      When {@code false}, the
      *                                      {@code TopologyDescription} / {@code TopologyDescriptionStatus}
      *                                      fields are left at their defaults and the plugin
      *                                      is not consulted.

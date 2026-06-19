@@ -11240,7 +11240,7 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testStreamsGroupTopologyDescriptionUpdateReturnsUnsupportedVersion(): Unit = {
+  def testStreamsGroupTopologyDescriptionUpdateReturnsUnsupportedVersionWhenStreamsProtocolDisabled(): Unit = {
     // Streams group protocol disabled on this broker -> the gate at the top of
     // handleStreamsGroupTopologyDescriptionUpdate short-circuits with UNSUPPORTED_VERSION,
     // matching the sibling handleStreamsGroupHeartbeat behavior and the placeholder semantics

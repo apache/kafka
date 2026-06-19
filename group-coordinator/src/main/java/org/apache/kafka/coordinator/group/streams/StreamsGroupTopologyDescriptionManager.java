@@ -417,8 +417,17 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                 StreamsGroupTopologyDescriptionConverter.toDescribeResponse(topology));
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
         } catch (Exception conversionError) {
-            // A malformed plugin response must not poison the rest of the batch — mark this
-            // single group ERROR and leave the others untouched.
+            // Defense in depth. With the current contract this catch is unreachable: the
+            // StreamsGroupTopologyDescription record and its nested Subtopology / Source /
+            // Processor / Sink records enforce non-null collections through Objects.requireNonNull
+            // + List.copyOf in their canonical constructors, and the Node sealed interface
+            // (Source | Processor | Sink) makes the converter's "unknown node type" branch
+            // unreachable from any plugin response built via legal API. The catch survives so
+            // that a future relaxation of the sealed permits (or a contract-bypass via bytecode
+            // manipulation) folds into a per-group ERROR rather than poisoning the rest of the
+            // batch. No direct test: Mockito explicitly refuses to mock sealed interfaces, so
+            // the only way to drive this branch would be bytecode-level forgery we are
+            // unwilling to ship in tests.
             describedGroup.setTopologyDescription(null);
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
         }

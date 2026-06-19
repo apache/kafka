@@ -88,6 +88,17 @@ public final class StreamsGroupTopologyDescriptionConverter {
      * POJO returned by {@code plugin.getTopology} into the describe-response wire schema. The two
      * schemas share field names but live in different generated message classes; they are kept in
      * sync by this converter.
+     *
+     * <p>This method assumes every collection on the POJO (subtopologies, nodes, successors,
+     * topics, stores, etc.) is non-null. The {@link StreamsGroupTopologyDescription} record and
+     * its nested types enforce that invariant in their canonical constructors via
+     * {@code Objects.requireNonNull} + {@code List.copyOf} / {@code Collections.unmodifiableSet},
+     * so a well-formed plugin response can never reach this method with a null collection. A
+     * pathological plugin that bypasses the constructor invariant would surface as an
+     * {@code NullPointerException} here; that is caught at the only call site
+     * ({@code StreamsGroupTopologyDescriptionManager#attachTopologyDescriptions}) and folded
+     * into a per-group {@code TOPOLOGY_DESCRIPTION_STATUS_ERROR}, so the rest of the describe
+     * batch is unaffected.
      */
     public static StreamsGroupDescribeResponseData.TopologyDescription toDescribeResponse(
         StreamsGroupTopologyDescription topology
