@@ -3022,7 +3022,7 @@ public abstract class ConsumerCoordinatorTest {
         assertThrows(RebalanceInProgressException.class, () -> coordinator.commitOffsetsSync(singletonMap(t1p,
             new OffsetAndMetadata(100L, "metadata")), time.timer(Long.MAX_VALUE)));
 
-        final Node coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        final Node coordinatorNode = new Node(node.id(), node.host(), node.port(), null, false, true);
         client.respondFrom(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE), coordinatorNode);
 
         client.prepareResponse(body -> {

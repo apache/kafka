@@ -73,7 +73,9 @@ public class CoordinatorRequestManagerTest {
 
         Optional<Node> coordinatorOpt = coordinatorManager.coordinator();
         assertTrue(coordinatorOpt.isPresent());
-        assertEquals(Integer.MAX_VALUE - node.id(), coordinatorOpt.get().id());
+        assertEquals(node.id(), coordinatorOpt.get().id());
+        assertTrue(coordinatorOpt.get().isCoordinator());
+        assertEquals(node.id(), Node.parseNodeId(coordinatorOpt.get().idString()));
         assertEquals(node.host(), coordinatorOpt.get().host());
         assertEquals(node.port(), coordinatorOpt.get().port());
 

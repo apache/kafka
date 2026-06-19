@@ -185,13 +185,13 @@ public class CoordinatorRequestManager implements RequestManager {
         final long currentTimeMs,
         final FindCoordinatorResponseData.Coordinator coordinator
     ) {
-        // use MAX_VALUE - node.id as the coordinator id to allow separate connections
-        // for the coordinator in the underlying network client layer
-        int coordinatorConnectionId = Integer.MAX_VALUE - coordinator.nodeId();
         this.coordinator = new Node(
-                coordinatorConnectionId,
+                coordinator.nodeId(),
                 coordinator.host(),
-                coordinator.port());
+                coordinator.port(),
+                null,
+                false,
+                true);
         log.info("Discovered group coordinator {}", coordinator);
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
     }

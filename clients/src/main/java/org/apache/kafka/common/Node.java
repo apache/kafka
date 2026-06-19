@@ -31,30 +31,35 @@ public class Node {
     private final int port;
     private final String rack;
     private final boolean isFenced;
+    private final boolean isCoordinator;
 
     // Cache hashCode as it is called in performance sensitive parts of the code (e.g. RecordAccumulator.ready)
     private Integer hash;
 
     public Node(int id, String host, int port) {
-        this(id, host, port, null, false);
+        this(id, host, port, null, false, false);
     }
 
     public Node(int id, String host, int port, String rack) {
-        this.id = id;
-        this.idString = Integer.toString(id);
-        this.host = host;
-        this.port = port;
-        this.rack = rack;
-        this.isFenced = false;
+        this(id, host, port, rack, false, false);
     }
 
     public Node(int id, String host, int port, String rack, boolean isFenced) {
+        this(id, host, port, rack, isFenced, false);
+    }
+
+    public Node(int id, String host, int port, String rack, boolean isFenced, boolean isCoordinator) {
         this.id = id;
-        this.idString = Integer.toString(id);
+        if (isCoordinator) {
+            this.idString = "coordinator-[" + id + "]";
+        } else {
+            this.idString = Integer.toString(id);
+        }
         this.host = host;
         this.port = port;
         this.rack = rack;
         this.isFenced = isFenced;
+        this.isCoordinator = isCoordinator;
     }
 
     public static Node noNode() {
@@ -123,6 +128,28 @@ public class Node {
         return isFenced;
     }
 
+    /**
+     * Returns whether this node is a coordinator.
+     */
+    public boolean isCoordinator() {
+        return isCoordinator;
+    }
+
+    public static int parseNodeId(String idString) {
+        try {
+            return Integer.parseInt(idString);
+        } catch (NumberFormatException nfe) {
+            try {
+                int start = idString.indexOf('[');
+                int end = idString.indexOf(']');
+                return Integer.parseInt(idString.substring(start + 1, end));
+            } catch (Exception e) {
+                System.out.println("ARSE");
+                return -1;
+            }
+        }
+    }
+
     @Override
     public int hashCode() {
         Integer h = this.hash;
@@ -132,6 +159,7 @@ public class Node {
             result = 31 * result + port;
             result = 31 * result + ((rack == null) ? 0 : rack.hashCode());
             result = 31 * result + Objects.hashCode(isFenced);
+            result = 31 * result + Objects.hashCode(isCoordinator);
             this.hash = result;
             return result;
         } else {
@@ -150,12 +178,12 @@ public class Node {
             port == other.port &&
             Objects.equals(host, other.host) &&
             Objects.equals(rack, other.rack) &&
-            Objects.equals(isFenced, other.isFenced);
+            isFenced == other.isFenced &&
+            isCoordinator == other.isCoordinator;
     }
 
     @Override
     public String toString() {
-        return host + ":" + port + " (id: " + idString + " rack: " + rack + " isFenced: " + isFenced + ")";
+        return host + ":" + port + " (id: " + idString + " rack: " + rack + " isFenced: " + isFenced + " isCoordinator: " + isCoordinator + ")";
     }
-
 }

@@ -317,7 +317,7 @@ public class KafkaShareConsumerTest {
 
     private Node findCoordinator(MockClient client, Node node) {
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
-        return new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        return new Node(node.id(), node.host(), node.port(), null, false, true);
     }
 
     // This method generates a sequence of prepared SHARE_GROUP_HEARTBEAT responses with increasing member epochs.
