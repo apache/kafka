@@ -16,73 +16,31 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.common.network.ConnectionMode;
-import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.apache.kafka.test.TestSslUtils;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.api.ClusterConfig;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.TestInfo;
-
-import java.io.IOException;
+import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.Set;
+
+import static org.apache.kafka.common.test.api.Type.KRAFT;
 
 /**
  * Tests command line SSL setup for reset tool.
  */
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
-
-    public static final EmbeddedKafkaCluster CLUSTER;
-
-    private static final Map<String, Object> SSL_CONFIG;
-
-    static {
-        final Properties brokerProps = new Properties();
-        // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
-        // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
-        // very long sleep times
-        brokerProps.put(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, -1L);
-
-        try {
-            SSL_CONFIG = TestSslUtils.createSslConfig(false, true, ConnectionMode.SERVER, TestUtils.tempFile(), "testCert");
-            brokerProps.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "EXTERNAL:SSL,CONTROLLER:SSL,INTERNAL:SSL");
-            brokerProps.putAll(SSL_CONFIG);
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
-
-        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
-    }
-
-    @BeforeAll
-    public static void startCluster() throws IOException {
-        CLUSTER.start();
-    }
-
-    @AfterAll
-    public static void closeCluster() {
-        CLUSTER.stop();
+    public static List<ClusterConfig> clusterConfigs() {
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(KRAFT))
+                .setBrokers(1)
+                .setBrokerSecurityProtocol(SecurityProtocol.SASL_SSL)
+                .setControllerSecurityProtocol(SecurityProtocol.SASL_SSL)
+                .setServerProperties(defaultBrokerProps())
+                .build());
     }
 
     @Override
-    Map<String, Object> getClientSslConfig() {
-        return SSL_CONFIG;
+    Map<String, Object> getClientSecurityConfig() {
+        return cluster.setClientSslConfig(Map.of());
     }
-
-    @BeforeEach
-    public void before(final TestInfo testInfo) throws Exception {
-        cluster = CLUSTER;
-        prepareTest(testInfo);
-    }
-
-    @AfterEach
-    public void after() throws Exception {
-        cleanupTest();
-    }
-
 }
