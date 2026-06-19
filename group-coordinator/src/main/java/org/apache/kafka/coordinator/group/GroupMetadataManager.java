@@ -3184,9 +3184,10 @@ public class GroupMetadataManager {
             String name = initializedValue != null ? initializedValue.name() : "UNKNOWN";
 
             if (initializingSet.contains(topicId)) {
-                finalPartitions.addAll(initializing.get(topicId).partitions());
-                timestamp = initializing.get(topicId).timestamp();
-                name = initializing.get(topicId).name();
+                InitMapValue initializingValue = initializing.get(topicId);
+                finalPartitions.addAll(initializingValue.partitions());
+                timestamp = initializingValue.timestamp();
+                name = initializingValue.name();
             }
             finalInitMap.putIfAbsent(topicId, new InitMapValue(name, finalPartitions, timestamp));
         }
