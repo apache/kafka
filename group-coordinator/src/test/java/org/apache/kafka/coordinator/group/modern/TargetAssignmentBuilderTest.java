@@ -26,10 +26,13 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.any;
@@ -92,10 +95,6 @@ public class TargetAssignmentBuilderTest {
             )
         );
 
-        PartitionAssignor assignor = mock(PartitionAssignor.class);
-
-        // We use `any` here to always return an assignment but use `verify` later on
-        // to ensure that the input was correct.
         GroupAssignment groupAssignment = new GroupAssignment(Map.of(
             "member-1", new MemberAssignmentImpl(Map.of(
                 fooTopicId, Set.of(1, 2),
@@ -110,6 +109,10 @@ public class TargetAssignmentBuilderTest {
                 barTopicId, Set.of(6)
             ))
         ));
+
+        // We use `any` here to always return an assignment but use `verify` later on
+        // to ensure that the input was correct.
+        PartitionAssignor assignor = mock(PartitionAssignor.class);
         when(assignor.assign(any(), any()))
             .thenReturn(groupAssignment);
 
@@ -127,23 +130,21 @@ public class TargetAssignmentBuilderTest {
         verify(assignor, times(1))
             .assign(groupSpec, new SubscribedTopicDescriberImpl(metadataImage));
 
-        assertEquals(
-            Map.of(
-                "member-1", new Assignment(Map.of(
-                    fooTopicId, Set.of(1, 2),
-                    barTopicId, Set.of(1, 2)
-                )),
-                "member-2", new Assignment(Map.of(
-                    fooTopicId, Set.of(3, 4, 5),
-                    barTopicId, Set.of(3, 4, 5)
-                )),
-                "member-3", new Assignment(Map.of(
-                    fooTopicId, Set.of(6),
-                    barTopicId, Set.of(6)
-                ))
-            ),
-            result.targetAssignment()
-        );
+        Map<String, Assignment> expectedAssignment = new HashMap<>();
+        expectedAssignment.put("member-1", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2),
+            mkTopicAssignment(barTopicId, 1, 2)
+        )));
+        expectedAssignment.put("member-2", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 3, 4, 5),
+            mkTopicAssignment(barTopicId, 3, 4, 5)
+        )));
+        expectedAssignment.put("member-3", new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 6),
+            mkTopicAssignment(barTopicId, 6)
+        )));
+
+        assertEquals(expectedAssignment, result.targetAssignment());
         assertEquals(12345L, result.assignmentTimestampMs());
     }
 }

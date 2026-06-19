@@ -19,12 +19,11 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
@@ -42,9 +41,6 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,13 +56,13 @@ public class TargetAssignmentBuilderTest {
     public void testBuildEmptyAssignmentWhenTopologyNotReady() {
         TaskAssignor assignor = mock(TaskAssignor.class);
         ConfiguredTopology topology = mock(ConfiguredTopology.class);
-        Map<String, String> assignmentConfigs = new HashMap<>();
 
         when(topology.isReady()).thenReturn(false);
 
-        TargetAssignmentBuilder builder = new TargetAssignmentBuilder(assignor, assignmentConfigs)
+        TargetAssignmentBuilder builder = new TargetAssignmentBuilder(assignor)
             .withTime(new MockTime(0, 12345L, 12345L))
-            .withTopology(topology);
+            .withTopology(topology)
+            .withGroupSpec(new GroupSpecImpl(Map.of(), Map.of()));
 
         TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
 
@@ -76,90 +72,119 @@ public class TargetAssignmentBuilderTest {
 
     @ParameterizedTest
     @EnumSource(TaskRole.class)
-    public void testCreateAssignmentMemberSpec(TaskRole taskRole) {
+    public void testAssignment(TaskRole taskRole) {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 6)
+            .addTopic(barTopicId, "bar", 6)
+            .buildCoordinatorMetadataImage();
+
         String fooSubtopologyId = Uuid.randomUuid().toString();
         String barSubtopologyId = Uuid.randomUuid().toString();
 
-        final Map<String, String> clientTags = mkMap(mkEntry("tag1", "value1"), mkEntry("tag2", "value2"));
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member-id")
-            .setRackId("rackId")
-            .setInstanceId("instanceId")
-            .setProcessId("processId")
-            .setClientTags(clientTags)
-            .build();
+        SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>(Map.of(
+            fooSubtopologyId, new ConfiguredSubtopology(6, Set.of(fooTopicId.toString()), Map.of(), Set.of(), Map.of()),
+            barSubtopologyId, new ConfiguredSubtopology(6, Set.of(barTopicId.toString()), Map.of(), Set.of(), Map.of())
+        ));
+        ConfiguredTopology topology = new ConfiguredTopology(0, 0, Optional.of(subtopologies), new HashMap<>(),
+            Optional.empty());
 
-        TasksTuple assignment = mkTasksTuple(taskRole,
-            mkTasks(fooSubtopologyId, 1, 2, 3),
-            mkTasks(barSubtopologyId, 1, 2, 3)
-        );
-
-        AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
-            member,
-            assignment
-        );
-
-        assertEquals(new AssignmentMemberSpec(
-            Optional.of("instanceId"),
-            Optional.of("rackId"),
-            assignment.activeTasks(),
-            assignment.standbyTasks(),
-            assignment.warmupTasks(),
-            "processId",
-            clientTags,
-            Map.of(),
-            Map.of()
-        ), assignmentMemberSpec);
-    }
-
-    @Test
-    public void testEmpty() {
-        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(12345L);
-
-        org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(Map.of(), result.targetAssignment());
-        assertEquals(12345L, result.assignmentTimestampMs());
-    }
-
-
-    @ParameterizedTest
-    @EnumSource(TaskRole.class)
-    public void testAssignment(TaskRole taskRole) {
-        TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(12345L);
-
-        String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
-        String barSubtopologyId = context.addSubtopologyWithSingleSourceTopic("bar", 6);
-
-        context.addGroupMember("member-1", mkTasksTuple(taskRole,
+        TasksTuple assignment1 = mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2),
             mkTasks(barSubtopologyId, 1, 2)
-        ));
-
-        context.addGroupMember("member-2", mkTasksTuple(taskRole,
+        );
+        TasksTuple assignment2 = mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 3, 4),
             mkTasks(barSubtopologyId, 3, 4)
-        ));
-
-        context.addGroupMember("member-3", mkTasksTuple(taskRole,
+        );
+        TasksTuple assignment3 = mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 5, 6),
             mkTasks(barSubtopologyId, 5, 6)
-        ));
+        );
 
-        context.prepareMemberAssignment("member-1", mkTasksTuple(taskRole,
+        GroupSpec groupSpec = new GroupSpecImpl(
+            Map.of(
+                "member-1", new AssignmentMemberSpec(
+                    Optional.empty(),
+                    Optional.empty(),
+                    assignment1.activeTasks(),
+                    assignment1.standbyTasks(),
+                    assignment1.warmupTasks(),
+                    "processId",
+                    Map.of("tag1", "value1"),
+                    Map.of(),
+                    Map.of()
+                ),
+                "member-2", new AssignmentMemberSpec(
+                    Optional.empty(),
+                    Optional.of("rack-2"),
+                    assignment2.activeTasks(),
+                    assignment2.standbyTasks(),
+                    assignment2.warmupTasks(),
+                    "processId",
+                    Map.of(),
+                    Map.of(),
+                    Map.of()
+                ),
+                "member-3", new AssignmentMemberSpec(
+                    Optional.of("instance-3"),
+                    Optional.empty(),
+                    assignment3.activeTasks(),
+                    assignment3.standbyTasks(),
+                    assignment3.warmupTasks(),
+                    "processId",
+                    Map.of(),
+                    Map.of(),
+                    Map.of()
+                )
+            ),
+            Map.of()
+        );
+
+        TasksTuple newAssignment1 = mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2),
             mkTasks(barSubtopologyId, 1, 2)
-        ));
-
-        context.prepareMemberAssignment("member-2", mkTasksTuple(taskRole,
+        );
+        TasksTuple newAssignment2 = mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 3, 4, 5),
             mkTasks(barSubtopologyId, 3, 4, 5)
-        ));
-
-        context.prepareMemberAssignment("member-3", mkTasksTuple(taskRole,
+        );
+        TasksTuple newAssignment3 = mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 6),
             mkTasks(barSubtopologyId, 6)
+        );
+
+        GroupAssignment groupAssignment = new GroupAssignment(Map.of(
+            "member-1", new MemberAssignment(newAssignment1.activeTasks(), newAssignment1.standbyTasks(), newAssignment1.warmupTasks()),
+            "member-2", new MemberAssignment(newAssignment2.activeTasks(), newAssignment2.standbyTasks(), newAssignment2.warmupTasks()),
+            "member-3", new MemberAssignment(newAssignment3.activeTasks(), newAssignment3.standbyTasks(), newAssignment3.warmupTasks())
         ));
 
-        org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
+        // Prepare the expected topology metadata.
+        TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
+
+        // We use `any` here to always return an assignment but use `verify` later on
+        // to ensure that the input was correct.
+        TaskAssignor assignor = mock(TaskAssignor.class);
+        when(assignor.assign(any(), any()))
+            .thenReturn(groupAssignment);
+
+        // Create and populate the assignment builder.
+        TargetAssignmentBuilder builder = new TargetAssignmentBuilder(assignor)
+            .withTime(new MockTime(0, 12345L, 12345L))
+            .withTopology(topology)
+            .withMetadataImage(metadataImage)
+            .withGroupSpec(groupSpec);
+
+        // Execute the builder.
+        TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
+
+        // Verify that the assignor was called once with the expected
+        // assignment spec.
+        verify(assignor, times(1))
+            .assign(groupSpec, topologyMetadata);
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", mkTasksTuple(taskRole, 
@@ -177,100 +202,5 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(expectedAssignment, result.targetAssignment());
         assertEquals(12345L, result.assignmentTimestampMs());
-    }
-
-    
-    public static class TargetAssignmentBuilderTestContext {
-
-        private final long assignmentTimestamp;
-        private final TaskAssignor assignor = mock(TaskAssignor.class);
-        private final SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
-        private final ConfiguredTopology topology = new ConfiguredTopology(0, 0, Optional.of(subtopologies), new HashMap<>(),
-            Optional.empty());
-        private final Map<String, StreamsGroupMember> members = new HashMap<>();
-        private final Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata = new HashMap<>();
-        private final Map<String, TasksTuple> targetAssignment = new HashMap<>();
-        private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
-        private MetadataImageBuilder topicsImageBuilder = new MetadataImageBuilder();
-
-        public TargetAssignmentBuilderTestContext(long assignmentTimestamp) {
-            this.assignmentTimestamp = assignmentTimestamp;
-        }
-
-        public void addGroupMember(
-            String memberId,
-            TasksTuple targetTasks
-        ) {
-            StreamsGroupMember.Builder memberBuilder = new StreamsGroupMember.Builder(memberId);
-            memberBuilder.setProcessId("processId");
-            memberBuilder.setClientTags(Map.of());
-            memberBuilder.setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host").setPort(9090));
-            memberBuilder.setInstanceId(null);
-            memberBuilder.setRackId(null);
-            members.put(memberId, memberBuilder.build());
-            targetAssignment.put(memberId, targetTasks);
-        }
-
-        public String addSubtopologyWithSingleSourceTopic(
-            String topicName,
-            int numTasks
-        ) {
-            String subtopologyId = Uuid.randomUuid().toString();
-            Uuid topicId = Uuid.randomUuid();
-            topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numTasks);
-            subtopologies.put(subtopologyId, new ConfiguredSubtopology(numTasks, Set.of(topicId.toString()), Map.of(), Set.of(), Map.of()));
-
-            return subtopologyId;
-        }
-
-        public void prepareMemberAssignment(
-            String memberId,
-            TasksTuple assignment
-        ) {
-            memberAssignments.put(memberId, new MemberAssignment(assignment.activeTasks(), assignment.standbyTasks(), assignment.warmupTasks()));
-        }
-
-        public org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult build() {
-            // Prepare expected member specs.
-            Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
-            members.forEach((memberId, member) ->
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
-                        member,
-                        targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY)
-                    )
-                ));
-
-            CoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(topicsImageBuilder.build());
-
-            // Prepare the expected topology metadata.
-            TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
-
-            // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, new HashMap<>());
-
-            // We use `any` here to always return an assignment but use `verify` later on
-            // to ensure that the input was correct.
-            when(assignor.assign(any(), any()))
-                .thenReturn(new GroupAssignment(memberAssignments));
-
-            // Create and populate the assignment builder.
-            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder builder = new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
-                assignor, Map.of())
-                .withTime(new MockTime(0, assignmentTimestamp, assignmentTimestamp))
-                .withMembers(members)
-                .withTopology(topology)
-                .withMetadataImage(metadataImage)
-                .withTargetAssignment(targetAssignment);
-
-            // Execute the builder.
-            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
-
-            // Verify that the assignor was called once with the expected
-            // assignment spec.
-            verify(assignor, times(1))
-                .assign(groupSpec, topologyMetadata);
-
-            return result;
-        }
     }
 }

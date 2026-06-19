@@ -18,15 +18,13 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -48,24 +46,9 @@ public class TargetAssignmentBuilder {
     private final TaskAssignor assignor;
 
     /**
-     * The assignment configs.
-     */
-    private final Map<String, String> assignmentConfigs;
-
-    /**
-     * The members in the group.
-     */
-    private Map<String, StreamsGroupMember> members = Map.of();
-
-    /**
      * The metadata image.
      */
     private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
-
-    /**
-     * The existing target assignment.
-     */
-    private Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment = Map.of();
 
     /**
      * The topology.
@@ -73,33 +56,19 @@ public class TargetAssignmentBuilder {
     private ConfiguredTopology topology;
 
     /**
+     * The {@link GroupSpec} describing the members of the group and their existing assignments.
+     */
+    private GroupSpec groupSpec;
+
+    /**
      * Constructs the object.
      *
      * @param assignor   The assignor to use to compute the target assignment.
      */
     public TargetAssignmentBuilder(
-        TaskAssignor assignor,
-        Map<String, String> assignmentConfigs
+        TaskAssignor assignor
     ) {
         this.assignor = Objects.requireNonNull(assignor);
-        this.assignmentConfigs = Objects.requireNonNull(assignmentConfigs);
-    }
-
-    static AssignmentMemberSpec createAssignmentMemberSpec(
-        StreamsGroupMember member,
-        TasksTuple targetAssignment
-    ) {
-        return new AssignmentMemberSpec(
-            member.instanceId(),
-            member.rackId(),
-            targetAssignment.activeTasks(),
-            targetAssignment.standbyTasks(),
-            targetAssignment.warmupTasks(),
-            member.processId(),
-            member.clientTags(),
-            Map.of(),
-            Map.of()
-        );
     }
 
     /**
@@ -110,19 +79,6 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentBuilder withTime(Time time) {
         this.time = time;
-        return this;
-    }
-
-    /**
-     * Adds all the existing members.
-     *
-     * @param members The existing members in the streams group.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withMembers(
-        Map<String, StreamsGroupMember> members
-    ) {
-        this.members = members;
         return this;
     }
 
@@ -140,19 +96,6 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the existing target assignment.
-     *
-     * @param targetAssignment The existing target assignment.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withTargetAssignment(
-        Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment
-    ) {
-        this.targetAssignment = targetAssignment;
-        return this;
-    }
-
-    /**
      * Adds the topology image.
      *
      * @param topology The topology.
@@ -166,20 +109,23 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Sets the {@link GroupSpec} to be passed to the assignor.
+     *
+     * @param groupSpec The {@link GroupSpec}.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withGroupSpec(GroupSpec groupSpec) {
+        this.groupSpec = groupSpec;
+        return this;
+    }
+
+    /**
      * Builds the new target assignment.
      *
      * @return A TargetAssignmentResult which contains the records to update the existing target assignment.
      * @throws TaskAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws TaskAssignorException {
-        Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
-
-        // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
-            member,
-            targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY)
-        )));
-
         // Compute the assignment.
         GroupAssignment newGroupAssignment;
         if (topology.isReady()) {
@@ -187,19 +133,16 @@ public class TargetAssignmentBuilder {
                 throw new IllegalStateException("Subtopologies must be present if topology is ready.");
             }
             newGroupAssignment = assignor.assign(
-                new GroupSpecImpl(
-                    Collections.unmodifiableMap(memberSpecs),
-                    assignmentConfigs
-                ),
+                groupSpec,
                 new TopologyMetadata(metadataImage, topology.subtopologies().get())
             );
         } else {
             newGroupAssignment = new GroupAssignment(
-                memberSpecs.keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignment.empty())));
+                groupSpec.members().keySet().stream().collect(Collectors.toMap(x -> x, x -> MemberAssignment.empty())));
         }
 
         Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> newTargetAssignment = new HashMap<>();
-        memberSpecs.keySet().forEach(memberId -> {
+        groupSpec.members().keySet().forEach(memberId -> {
             newTargetAssignment.put(memberId, newMemberAssignment(newGroupAssignment, memberId));
         });
 
