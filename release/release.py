@@ -346,6 +346,10 @@ svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
 cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
+# Publishes the KIP-1265 plugin artifacts (kafka-internal-api-checker Gradle plugin marker and
+# kafka-internal-api-checker-maven-plugin) to the same Nexus staging repo. buildSrc is a separate
+# Gradle build so the root :publish task does not descend into it.
+cmd("Building and uploading archives", "./gradlew :buildSrc:publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk25_env, shell=True)
 
 # TODO: Many of these suggested validation steps could be automated
