@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.modern.Assignment;
+import org.apache.kafka.coordinator.group.modern.GroupSpecBuilder;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
@@ -89,7 +90,9 @@ public class TargetAssignmentBuilderBenchmark {
 
     private UpdatedMembersAndTargetAssignmentView<ConsumerGroupMember, Assignment> updatedMembersAndTargetAssignment;
 
-    private TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder targetAssignmentBuilder;
+    private GroupSpecBuilder.ConsumerGroupSpecBuilder groupSpecBuilder;
+
+    private TargetAssignmentBuilder targetAssignmentBuilder;
 
     private TargetAssignmentRecordsBuilder<Assignment> targetAssignmentRecordsBuilder;
 
@@ -126,12 +129,15 @@ public class TargetAssignmentBuilderBenchmark {
         updatedMembersAndTargetAssignment = new UpdatedMembersAndTargetAssignmentView<>(members, Map.of(), existingTargetAssignment, ConsumerGroupMember::instanceId);
         updatedMembersAndTargetAssignment.addOrUpdateMember(newMember.memberId(), newMember);
 
-        targetAssignmentBuilder = new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(GROUP_EPOCH, partitionAssignor)
-            .withTime(Time.SYSTEM)
+        groupSpecBuilder = new GroupSpecBuilder.ConsumerGroupSpecBuilder()
             .withMembers(updatedMembersAndTargetAssignment.members())
             .withSubscriptionType(subscriptionType)
             .withTargetAssignment(updatedMembersAndTargetAssignment.targetAssignment())
             .withInvertedTargetAssignment(invertedTargetAssignment)
+            .withMetadataImage(metadataImage);
+
+        targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_EPOCH, partitionAssignor)
+            .withTime(Time.SYSTEM)
             .withMetadataImage(metadataImage);
 
         targetAssignmentRecordsBuilder =
@@ -210,7 +216,11 @@ public class TargetAssignmentBuilderBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void build() {
-        TargetAssignmentBuilder.TargetAssignmentResult assignmentResult = targetAssignmentBuilder.build();
+        GroupSpec groupSpec = groupSpecBuilder.build();
+
+        TargetAssignmentBuilder.TargetAssignmentResult assignmentResult = targetAssignmentBuilder
+            .withGroupSpec(groupSpec)
+            .build();
 
         targetAssignmentRecordsBuilder
             .withTargetAssignmentMetadata(assignmentResult.targetAssignmentMetadata())
