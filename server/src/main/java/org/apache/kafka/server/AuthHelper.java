@@ -185,20 +185,18 @@ public class AuthHelper {
     public record PartitionResult<T>(List<T> authorized, List<T> unauthorized) {
     }
 
-    private <T> PartitionResult<T> partitionByAuthorized(
+    public <T> PartitionResult<T> partitionByAuthorized(
         RequestContext requestContext,
         AclOperation operation,
         ResourceType resourceType,
         List<T> resources,
-        boolean logIfAllowed,
-        boolean logIfDenied,
         Function<T, String> resourceName
     ) {
         if (authorizer.isEmpty()) {
             return new PartitionResult<>(resources, List.of());
         }
         Set<String> authorizedResourceNames = filterByAuthorized(
-            requestContext, operation, resourceType, resources, logIfAllowed, logIfDenied, resourceName
+            requestContext, operation, resourceType, resources, true, true, resourceName
         );
         List<T> authorized = new ArrayList<>();
         List<T> unauthorized = new ArrayList<>();
@@ -210,16 +208,6 @@ public class AuthHelper {
             }
         }
         return new PartitionResult<>(authorized, unauthorized);
-    }
-
-    public <T> PartitionResult<T> partitionByAuthorized(
-        RequestContext requestContext,
-        AclOperation operation,
-        ResourceType resourceType,
-        List<T> resources,
-        Function<T, String> resourceName
-    ) {
-        return partitionByAuthorized(requestContext, operation, resourceType, resources, true, true, resourceName);
     }
 
     public DescribeClusterResponseData computeDescribeClusterResponse(

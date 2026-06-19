@@ -1,6 +1,6 @@
 ---
 title: Upgrade Guide
-description: 
+description: Kafka Streams upgrade guidance and compatibility notes.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 

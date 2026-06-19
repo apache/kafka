@@ -182,6 +182,7 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1402,6 +1403,23 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Validates whether a classic member is allowed to join or rejoin the consumer group. When the
+     * migration policy is disabled, no classic member may join or rejoin the consumer group.
+     *
+     * @param consumerGroup The consumer group the classic member wants to join.
+     * @throws InconsistentGroupProtocolException if the classic member cannot join the consumer group.
+     */
+    private void throwIfClassicMemberCannotJoinConsumerGroup(ConsumerGroup consumerGroup) {
+        if (config.consumerGroupMigrationPolicy() == ConsumerGroupMigrationPolicy.DISABLED) {
+            log.info("Cannot join the consumer group {} with the classic protocol because the group migration is disabled.",
+                consumerGroup.groupId());
+            throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
+                String.format("Cannot join the consumer group %s with the classic protocol because the group migration is disabled.", consumerGroup.groupId())
+            );
+        }
+    }
+
+    /**
      * Creates a ConsumerGroup corresponding to the given classic group.
      *
      * @param classicGroup  The ClassicGroup to convert.
@@ -2308,7 +2326,13 @@ public class GroupMetadataManager {
 
         response.setStatus(returnedStatus);
 
-        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated, updatedTopology.topologyEpoch()));
+        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(
+            response,
+            internalTopicsToBeCreated,
+            updatedTopology.topologyEpoch(),
+            group.storedDescriptionTopologyEpoch(),
+            group.failedDescriptionTopologyEpoch()
+        ));
     }
 
     /**
@@ -2601,6 +2625,8 @@ public class GroupMetadataManager {
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) throws ApiException {
+        throwIfClassicMemberCannotJoinConsumerGroup(group);
+
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
         final String groupId = request.groupId();
@@ -4447,7 +4473,13 @@ public class GroupMetadataManager {
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
             log.info("[GroupId {}][MemberId {}] Member {} left the streams group.", groupId, memberId, memberId);
-            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch()));
+            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(
+                response,
+                Map.of(),
+                group.currentTopologyEpoch(),
+                group.storedDescriptionTopologyEpoch(),
+                group.failedDescriptionTopologyEpoch()
+            ));
         } else {
             StreamsGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -4459,7 +4491,13 @@ public class GroupMetadataManager {
             } else {
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} left the streams group.",
                     group.groupId(), memberId, memberId, instanceId);
-                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch()));
+                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(
+                    response,
+                    Map.of(),
+                    group.currentTopologyEpoch(),
+                    group.storedDescriptionTopologyEpoch(),
+                    group.failedDescriptionTopologyEpoch()
+                ));
             }
         }
     }
@@ -4528,7 +4566,13 @@ public class GroupMetadataManager {
 
         return new CoordinatorResult<>(
             List.of(record),
-            new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch())
+            new StreamsGroupHeartbeatResult(
+                response,
+                Map.of(),
+                group.currentTopologyEpoch(),
+                group.storedDescriptionTopologyEpoch(),
+                group.failedDescriptionTopologyEpoch()
+            )
         );
     }
 
@@ -8319,26 +8363,130 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates that a streams group exists and that the given member is a current member of it.
-     * Used by the StreamsGroupTopologyDescriptionUpdate RPC handler to enforce the
-     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID contract before consulting the topology description plugin.
-     * The lookup runs at {@code committedOffset} so an uncommitted fence/leave does not cause a
-     * still-live member to appear unknown (or vice versa).
+     * Validates that a streams group exists, that the given member is a current member of it,
+     * and that {@code pushedEpoch} matches the group's current topology epoch. Used by the
+     * StreamsGroupTopologyDescriptionUpdate RPC handler to enforce the
+     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID / INVALID_REQUEST contract before consulting
+     * the topology description plugin.
+     *
+     * <p>The epoch check rejects stale or out-of-order pushes so they cannot regress
+     * {@code storedDescriptionTopologyEpoch} or be persisted at an epoch the group never
+     * advertised. The lookup runs at {@code committedOffset} so an uncommitted
+     * fence/leave does not cause a still-live member to appear unknown (or vice versa).
      *
      * @param groupId         The group ID.
      * @param memberId        The member ID.
+     * @param pushedEpoch     The topology epoch carried by the push request.
      * @param committedOffset A committed offset corresponding to the desired snapshot.
      * @return The matching {@link StreamsGroupMember}.
      * @throws GroupIdNotFoundException if no streams group with this id exists.
      * @throws UnknownMemberIdException if the member is not currently in the group.
+     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
+     *                                  current topology epoch.
      */
-    public StreamsGroupMember validateStreamsGroupMember(
+    public StreamsGroupMember validateStreamsGroupTopologyDescriptionUpdate(
         String groupId,
         String memberId,
+        int pushedEpoch,
         long committedOffset
-    ) throws GroupIdNotFoundException, UnknownMemberIdException {
+    ) throws GroupIdNotFoundException, UnknownMemberIdException, InvalidRequestException {
         StreamsGroup group = streamsGroup(groupId, committedOffset);
-        return group.getMemberOrThrow(memberId, committedOffset);
+        StreamsGroupMember member = group.getMemberOrThrow(memberId, committedOffset);
+        int currentEpoch = group.currentTopologyEpoch();
+        if (pushedEpoch != currentEpoch) {
+            throw new InvalidRequestException(
+                "Topology epoch " + pushedEpoch + " does not match the group's current topology epoch "
+                    + currentEpoch + ".");
+        }
+        return member;
+    }
+
+    /**
+     * Filter the given group ids down to those that are streams groups with a non-default
+     * {@code StoredDescriptionTopologyEpoch}. The result is used by {@code DeleteGroups}
+     * to decide which groups warrant a {@code plugin.deleteTopology} call before the
+     * group is tombstoned. Non-existent groups and non-streams groups are silently
+     * skipped — they have no plugin state to clean up.
+     *
+     * @param groupIds        Candidate group ids on this shard.
+     * @param committedOffset A committed offset corresponding to the desired snapshot.
+     * @return The subset of {@code groupIds} that are streams groups with a stored topology.
+     */
+    public Set<String> streamsGroupsWithStoredTopologyDescription(
+        Collection<String> groupIds,
+        long committedOffset
+    ) {
+        Set<String> withStored = new HashSet<>();
+        for (String groupId : groupIds) {
+            // Non-throwing lookup + type check: silently skip absent or non-streams groups.
+            Group group = groups.get(groupId, committedOffset);
+            if (group != null
+                && group.type() == STREAMS
+                && ((StreamsGroup) group).storedDescriptionTopologyEpoch(committedOffset) != -1) {
+                withStored.add(groupId);
+            }
+        }
+        return withStored;
+    }
+
+    /**
+     * Advance {@code StoredDescriptionTopologyEpoch} to {@code pushedEpoch} after a successful
+     * plugin {@code setTopology}, so subsequent heartbeats at the same epoch do not re-solicit.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record that updates the field.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setStoredDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) throws GroupIdNotFoundException {
+        return updateTopologyDescriptionEpochs(groupId, pushedEpoch, false);
+    }
+
+    /**
+     * Advance {@code FailedDescriptionTopologyEpoch} to {@code pushedEpoch} after a permanent
+     * plugin failure, so subsequent heartbeats at the same epoch do not re-solicit a push.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record that updates the field.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setFailedDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) throws GroupIdNotFoundException {
+        return updateTopologyDescriptionEpochs(groupId, pushedEpoch, true);
+    }
+
+    private CoordinatorResult<Void, CoordinatorRecord> updateTopologyDescriptionEpochs(
+        String groupId,
+        int pushedEpoch,
+        boolean permanentFailure
+    ) throws GroupIdNotFoundException {
+        StreamsGroup group = streamsGroup(groupId);
+
+        // Only advance these epochs, never regress them: a stale push committing after the group
+        // advanced (or after a concurrent higher-epoch push) must not move stored/failed back.
+        int newStored = permanentFailure
+            ? group.storedDescriptionTopologyEpoch()
+            : Math.max(group.storedDescriptionTopologyEpoch(), pushedEpoch);
+        int newFailed = permanentFailure
+            ? Math.max(group.failedDescriptionTopologyEpoch(), pushedEpoch)
+            : group.failedDescriptionTopologyEpoch();
+
+        CoordinatorRecord record = newStreamsGroupMetadataRecord(
+            groupId,
+            group.groupEpoch(),
+            group.metadataHash(),
+            group.validatedTopologyEpoch(),
+            group.lastAssignmentConfigs(),
+            newStored,
+            newFailed
+        );
+        return new CoordinatorResult<>(List.of(record), null);
     }
 
     /**

@@ -1,6 +1,6 @@
 ---
 title: Upgrading
-description: 
+description: Find upgrade steps for Kafka clusters and clients, along with compatibility requirements and notable changes across releases.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 

@@ -91,7 +91,7 @@ public final class KafkaRaftClientFetchTest {
             context.fetchResponse(epoch, electedLeader.id(), records, 0L, Errors.NONE)
         );
 
-        context.client.poll();
+        context.poll();
 
         assertEquals(oldLogEndOffset, context.log.endOffset().offset());
     }
@@ -437,7 +437,7 @@ public final class KafkaRaftClientFetchTest {
             context.fetchResponse(epoch, electedLeader.id(), records, 0L, Errors.NONE)
         );
 
-        context.client.poll();
+        context.poll();
 
         // Check that only the first batch was appended because the second batch has a greater epoch
         assertEquals(oldLogEndOffset + numberOfRecords, context.log.endOffset().offset());
@@ -541,7 +541,7 @@ public final class KafkaRaftClientFetchTest {
 
         // Check that the fetch response was deferred
         for (var i = 0; i < 10; ++i) {
-            context.client.poll();
+            context.poll();
             assertEquals(List.of(), context.drainSentResponses(ApiKeys.FETCH));
         }
     }
@@ -587,7 +587,7 @@ public final class KafkaRaftClientFetchTest {
 
         // Check that the fetch response was deferred
         for (var i = 0; i < 10; ++i) {
-            context.client.poll();
+            context.poll();
             assertEquals(List.of(), context.drainSentResponses(ApiKeys.FETCH));
         }
     }
@@ -695,7 +695,7 @@ public final class KafkaRaftClientFetchTest {
 
         // Check that the fetch response was deferred
         for (var i = 0; i < 10; ++i) {
-            context.client.poll();
+            context.poll();
             assertEquals(List.of(), context.drainSentResponses(ApiKeys.FETCH));
         }
     }
@@ -746,7 +746,7 @@ public final class KafkaRaftClientFetchTest {
 
         // Check that the fetch response was deferred
         for (var i = 0; i < 10; ++i) {
-            context.client.poll();
+            context.poll();
             assertEquals(List.of(), context.drainSentResponses(ApiKeys.FETCH));
         }
 
