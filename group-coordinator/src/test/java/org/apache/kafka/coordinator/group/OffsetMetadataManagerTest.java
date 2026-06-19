@@ -338,6 +338,10 @@ public class OffsetMetadataManagerTest {
             return isOffsetsEmptyForGroup;
         }
 
+        public boolean allOffsetsExpired(String groupId, long currentTimestampMs) {
+            return offsetMetadataManager.allOffsetsExpired(groupId, currentTimestampMs);
+        }
+
         public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
             String groupId,
             List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
@@ -3247,6 +3251,119 @@ public class OffsetMetadataManagerTest {
         records = new ArrayList<>();
         assertFalse(context.cleanupExpiredOffsets("group-id", records));
         assertEquals(List.of(), records);
+    }
+
+    @Test
+    public void testAllOffsetsExpiredReturnsTrueWhenGroupHasNoOffsetsAndNoOpenTxn() {
+        // offsetsByGroup == null branch: no offsets committed for this group, and no pending
+        // transactional offsets either. The group's metadata is fully expirable.
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        assertTrue(context.allOffsetsExpired("unknown-group-id", context.time.milliseconds()));
+    }
+
+    @Test
+    public void testAllOffsetsExpiredReturnsFalseWhenGroupHasNoOffsetsButHasOpenTxn() {
+        // offsetsByGroup == null branch with an open transaction recorded for the group: still
+        // not expirable, the txn could land more offsets. cleanupExpiredOffsets uses the same
+        // gate; allOffsetsExpired must agree.
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withOffsetsRetentionMinutes(1)
+            .build();
+
+        // A pending transactional commit creates an openTransactions entry without populating
+        // the durable offsets map.
+        context.commitOffset(42L, "group-id", "foo", 0, 100L, 0, context.time.milliseconds());
+        assertFalse(context.allOffsetsExpired("group-id", context.time.milliseconds()));
+    }
+
+    @Test
+    public void testAllOffsetsExpiredReturnsFalseWhenExpirationConditionEmpty() {
+        // offsetExpirationCondition.isEmpty() branch: e.g., a classic-style group with no
+        // expiration policy. The eligibility check must conservatively return false rather
+        // than treating the absence of a policy as "always expirable".
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        Group group = mock(Group.class);
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .build();
+
+        context.commitOffset("group-id", "foo", 0, 100L, 0);
+        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(group.offsetExpirationCondition()).thenReturn(Optional.empty());
+
+        assertFalse(context.allOffsetsExpired("group-id", context.time.milliseconds()));
+    }
+
+    @Test
+    public void testAllOffsetsExpiredReturnsFalseWhenSubscribedToTopic() {
+        // isSubscribedToTopic branch: an offset whose topic is in the group's live
+        // subscription is not eligible for expiration regardless of age — even after the
+        // retention window elapses, an active subscription holds the offset.
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        Group group = mock(Group.class);
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .withOffsetsRetentionMinutes(1)
+            .build();
+
+        context.commitOffset("group-id", "foo", 0, 100L, 0, context.time.milliseconds());
+        context.time.sleep(Duration.ofMinutes(1).toMillis());
+
+        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(group.offsetExpirationCondition()).thenReturn(Optional.of(
+            new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
+        when(group.isSubscribedToTopic("foo")).thenReturn(true);
+
+        assertFalse(context.allOffsetsExpired("group-id", context.time.milliseconds()));
+    }
+
+    @Test
+    public void testAllOffsetsExpiredReturnsFalseWhenPendingTransactionalOffset() {
+        // Pending transactional offset branch: an unsubscribed topic whose retention window
+        // has elapsed is still not eligible if a transactional offset is pending on the same
+        // partition — the txn could commit a fresh value the cleanup would lose.
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        Group group = mock(Group.class);
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .withOffsetsRetentionMinutes(1)
+            .build();
+
+        long commitTimestamp = context.time.milliseconds();
+        context.commitOffset("group-id", "foo", 0, 100L, 0, commitTimestamp);
+        // Concurrent transactional commit on the same partition; not yet visible.
+        context.commitOffset(10L, "group-id", "foo", 0, 101L, 0, commitTimestamp + 500);
+        context.time.sleep(Duration.ofMinutes(1).toMillis());
+
+        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(group.offsetExpirationCondition()).thenReturn(Optional.of(
+            new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
+        when(group.isSubscribedToTopic("foo")).thenReturn(false);
+
+        assertFalse(context.allOffsetsExpired("group-id", context.time.milliseconds()));
+    }
+
+    @Test
+    public void testAllOffsetsExpiredReturnsTrueWhenAllOffsetsPastRetentionAndUnsubscribed() {
+        // Happy path: an unsubscribed topic whose offset has aged past retention, no pending
+        // transactional offsets. The group is fully eligible for the downstream cleanup pass.
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        Group group = mock(Group.class);
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .withOffsetsRetentionMinutes(1)
+            .build();
+
+        long commitTimestamp = context.time.milliseconds();
+        context.commitOffset("group-id", "foo", 0, 100L, 0, commitTimestamp);
+        context.time.sleep(Duration.ofMinutes(1).toMillis());
+
+        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(group.offsetExpirationCondition()).thenReturn(Optional.of(
+            new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
+        when(group.isSubscribedToTopic("foo")).thenReturn(false);
+
+        assertTrue(context.allOffsetsExpired("group-id", context.time.milliseconds()));
     }
 
     private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(

@@ -57,6 +57,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1035,6 +1036,60 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * Whether the offset committed for {@code (groupId, topic, partition)} is currently
+     * eligible for expiration: its age exceeds {@code offsets.retention.ms} per the group's
+     * {@link OffsetExpirationCondition}, and there is no pending transactional offset on the
+     * partition. Shared between {@link #cleanupExpiredOffsets} (the write path that tombstones
+     * eligible offsets) and {@link #allOffsetsExpired} (the read-only check used by the
+     * topology-description cleanup cycle) so the two cannot drift.
+     */
+    private boolean isOffsetExpirable(
+        String groupId,
+        String topic,
+        int partition,
+        OffsetAndMetadata offsetAndMetadata,
+        OffsetExpirationCondition condition,
+        long currentTimestampMs
+    ) {
+        return condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
+            && !hasPendingTransactionalOffsets(groupId, topic, partition);
+    }
+
+    /**
+     * Read-only counterpart to {@link #cleanupExpiredOffsets(String, List)}: returns whether
+     * every committed offset for the group is currently eligible for expiration and no pending
+     * transactional offsets remain. Used by the topology-description plugin cleanup cycle on
+     * the eligibility read side, where the sweep must not mutate any record but still needs to
+     * decide whether the group is fully expirable before driving a {@code plugin.deleteTopology}.
+     */
+    public boolean allOffsetsExpired(String groupId, long currentTimestampMs) {
+        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
+            offsets.offsetsByGroup.get(groupId);
+        if (offsetsByTopic == null) {
+            return !openTransactions.contains(groupId);
+        }
+        Group group = groupMetadataManager.group(groupId);
+        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
+        if (offsetExpirationCondition.isEmpty()) {
+            return false;
+        }
+        OffsetExpirationCondition condition = offsetExpirationCondition.get();
+        for (Map.Entry<String, TimelineHashMap<Integer, OffsetAndMetadata>> topicEntry : offsetsByTopic.entrySet()) {
+            String topic = topicEntry.getKey();
+            if (group.isSubscribedToTopic(topic)) {
+                return false;
+            }
+            for (Map.Entry<Integer, OffsetAndMetadata> partitionEntry : topicEntry.getValue().entrySet()) {
+                if (!isOffsetExpirable(groupId, topic, partitionEntry.getKey(),
+                        partitionEntry.getValue(), condition, currentTimestampMs)) {
+                    return false;
+                }
+            }
+        }
+        return !openTransactions.contains(groupId);
+    }
+
+    /**
      * Remove expired offsets for the given group.
      *
      * @param groupId The group id.
@@ -1065,9 +1120,7 @@ public class OffsetMetadataManager {
         offsetsByTopic.forEach((topic, partitions) -> {
             if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
-                    // We don't expire the offset yet if there is a pending transactional offset for the partition.
-                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
-                        !hasPendingTransactionalOffsets(groupId, topic, partition)) {
+                    if (isOffsetExpirable(groupId, topic, partition, offsetAndMetadata, condition, currentTimestampMs)) {
                         appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {

@@ -144,9 +144,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -352,6 +354,23 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * Boolean indicating whether the coordinator is active or not.
      */
     private final AtomicBoolean isActive = new AtomicBoolean(false);
+
+    /**
+     * Single-flight guard for the periodic streams-group topology-description cleanup cycle:
+     * a new cycle that fires while the previous one is still settling per-group plugin calls
+     * and conditional-clear writes is dropped. Set true at the top of {@code runStreams...
+     * CleanupCycle}, released by the {@code whenComplete} that joins all per-partition reads
+     * and per-group futures.
+     */
+    private final AtomicBoolean streamsTopologyCleanupCycleInFlight = new AtomicBoolean(false);
+
+    /**
+     * The currently-scheduled cleanup tick on the broker-level {@link Timer}. Self-rescheduled
+     * inside the {@link TimerTask}'s {@code run}; {@code shutdown} cancels this snapshot and the
+     * task's own re-arm check observes {@code isActive == false} so the next tick does not
+     * re-schedule itself.
+     */
+    private volatile TimerTask streamsTopologyCleanupTask;
 
     /**
      * The set of supported consumer group assignors.
@@ -784,6 +803,163 @@ public class GroupCoordinatorService implements GroupCoordinator {
         throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfNull(request.topologyDescription(), "TopologyDescription can't be null.");
+    }
+
+    /**
+     * Schedule the next topology-description cleanup tick on the broker-level {@link Timer}.
+     * The {@link TimerTask} self-reschedules from inside its own {@code run} so the cycle keeps
+     * firing every {@code offsets.retention.check.interval.ms} until {@code shutdown} flips
+     * {@code isActive} to false. No-op when no plugin is configured.
+     *
+     * <p>This lifecycle lives on the service rather than on
+     * {@link StreamsGroupTopologyDescriptionManager} because the cycle drives a runtime chain
+     * (per-shard read → per-group plugin call → conditional metadata write); per the existing
+     * separation, the manager exposes plugin-invocation and back-off building blocks and the
+     * service assembles the chain.
+     */
+    private void scheduleStreamsGroupTopologyCleanupCycle() {
+        if (!streamsGroupTopologyDescriptionManager.isPluginConfigured()) return;
+        if (!isActive.get()) return;
+        TimerTask task = new TimerTask(config.offsetsRetentionCheckIntervalMs()) {
+            @Override
+            public void run() {
+                if (!isActive.get()) return;
+                try {
+                    runStreamsGroupTopologyCleanupCycle();
+                } catch (Throwable t) {
+                    log.warn("Unexpected error running topology-description cleanup cycle.", t);
+                }
+                if (isActive.get()) scheduleStreamsGroupTopologyCleanupCycle();
+            }
+        };
+        streamsTopologyCleanupTask = task;
+        timer.add(task);
+    }
+
+    /**
+     * Drive one topology-description cleanup cycle: read every shard for streams groups
+     * eligible for plugin-side cleanup (empty + all offsets expired + storedEpoch != -1), call
+     * {@code plugin.deleteTopology} for each via the manager, then for every group whose
+     * plugin call succeeded write a conditional metadata record that clears
+     * {@code StoredDescriptionTopologyEpoch} only if the persisted value still matches the
+     * epoch we observed at scan time (so a concurrent {@code setTopology} that has advanced
+     * the field is preserved). Failed plugin calls retry on the next cycle; the next sweep
+     * then tombstones the now-empty group.
+     *
+     * <p>Single-flight: a cycle that fires while a previous one is still settling per-group
+     * futures is dropped with a warn-level log.
+     *
+     * <p><b>Concurrent setTopology race vs plugin.deleteTopology.</b> {@code plugin.deleteTopology}
+     * is keyed only on {@code groupId}. If a new member joins between the
+     * eligibility scan and the cycle's plugin call and pushes a fresh topology, the plugin's
+     * row is removed regardless of the new epoch — the conditional clear above no-ops on the
+     * metadata side, but the plugin-side data the member just wrote is gone. A subsequent
+     * {@code describe} → {@code getTopology} returns null and surfaces {@code NOT_STORED} with
+     * a warn log; this is the graceful-degradation path KIP-1331 accepts under the label
+     * "plugin-side data loss". The {@code isEmpty} requirement on the scan keeps the window
+     * narrow — concurrent setTopology requires a member to join an empty, fully-expired group
+     * between scan and delete — and the next heartbeat at the same epoch will not re-solicit
+     * (storedEpoch in metadata still reflects the new push), so the group converges on
+     * NOT_STORED without churn rather than chasing the lost plugin row.
+     */
+    // Visible for testing.
+    void runStreamsGroupTopologyCleanupCycle() {
+        if (!streamsGroupTopologyDescriptionManager.isPluginConfigured()) return;
+        if (!streamsTopologyCleanupCycleInFlight.compareAndSet(false, true)) {
+            log.warn("Topology-description cleanup cycle skipped: previous cycle is still in flight.");
+            return;
+        }
+        groupCoordinatorMetrics.recordSensor(
+            GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
+
+        List<CompletableFuture<Map<String, Integer>>> partitionFutures = runtime.scheduleReadAllOperation(
+            "list-streams-groups-needing-topology-cleanup",
+            GroupCoordinatorShard::listStreamsGroupsNeedingTopologyCleanup
+        );
+
+        // ConcurrentLinkedQueue because per-partition .handle callbacks can append concurrently
+        // from whichever thread completed each runtime read.
+        Queue<CompletableFuture<?>> perGroupFutures = new ConcurrentLinkedQueue<>();
+        List<CompletableFuture<Void>> partitionDoneFutures = new ArrayList<>(partitionFutures.size());
+        for (CompletableFuture<Map<String, Integer>> partitionFuture : partitionFutures) {
+            partitionDoneFutures.add(partitionFuture.handle((eligible, throwable) -> {
+                if (throwable != null) {
+                    log.warn("Topology-description cleanup read failed for one partition.", throwable);
+                    return null;
+                }
+                if (eligible == null || eligible.isEmpty()) return null;
+                groupCoordinatorMetrics.recordSensor(
+                    GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME,
+                    eligible.size()
+                );
+                perGroupFutures.add(streamsGroupTopologyDescriptionManager
+                    .invokeDeleteTopologies(eligible.keySet())
+                    .thenAccept(failures -> {
+                        recordPluginDeleteOutcome(eligible.size(), failures.size());
+                        eligible.forEach((groupId, expectedStoredEpoch) -> {
+                            // Eligibility required the group to be empty: no member is heartbeating
+                            // anymore, so any push back-off entry is moot regardless of plugin
+                            // outcome — dropping it now avoids carrying broker-wide state forward
+                            // for an id that no live member will solicit on.
+                            streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
+                            if (failures.containsKey(groupId)) {
+                                // Plugin failed: leave stored epoch in place; next cycle retries.
+                                return;
+                            }
+                            clearStoredDescriptionTopologyEpochAsync(groupId, expectedStoredEpoch);
+                        });
+                    }));
+                return null;
+            }));
+        }
+
+        CompletableFuture.allOf(partitionDoneFutures.toArray(new CompletableFuture<?>[0]))
+            .thenCompose(__ -> CompletableFuture.allOf(perGroupFutures.toArray(new CompletableFuture<?>[0])))
+            .whenComplete((__, throwable) -> {
+                if (throwable != null) {
+                    log.warn("Topology-description cleanup cycle failed to complete cleanly.", throwable);
+                }
+                streamsTopologyCleanupCycleInFlight.set(false);
+            });
+    }
+
+    /**
+     * Record per-call outcomes from a batched {@code plugin.deleteTopology} invocation against
+     * the shared {@code delete-success} / {@code delete-error} sensors (KIP-1331). Used by both
+     * the explicit {@code DeleteGroups} flow and the periodic cleanup cycle so a single pair of
+     * meters tracks every {@code plugin.deleteTopology} the broker drives, regardless of
+     * trigger. Each sensor receives a single batched observation per call rather than N
+     * individual records, matching the {@code Meter} semantics used by {@code OFFSET_EXPIRED}.
+     */
+    private void recordPluginDeleteOutcome(int attempted, int errors) {
+        int successes = attempted - errors;
+        if (successes > 0) {
+            groupCoordinatorMetrics.recordSensor(
+                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME, successes);
+        }
+        if (errors > 0) {
+            groupCoordinatorMetrics.recordSensor(
+                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME, errors);
+        }
+    }
+
+    /**
+     * Fire-and-forget conditional metadata write that clears {@code StoredDescriptionTopologyEpoch}
+     * for {@code groupId} only when the persisted value still equals {@code expectedStoredEpoch}.
+     * Mismatches and missing groups are silently ignored by the shard-side method; this layer
+     * just logs runtime write failures (NOT_COORDINATOR etc.) so the next cycle can retry.
+     */
+    private void clearStoredDescriptionTopologyEpochAsync(String groupId, int expectedStoredEpoch) {
+        runtime.<Void>scheduleWriteOperation(
+            "clear-stored-topology-epoch",
+            topicPartitionFor(groupId),
+            coordinator -> coordinator.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch)
+        ).whenComplete((__, throwable) -> {
+            if (throwable != null) {
+                log.warn("Failed to clear StoredDescriptionTopologyEpoch for group {}; the next cleanup cycle will retry.",
+                    groupId, throwable);
+            }
+        });
     }
 
     /**
@@ -1697,6 +1873,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .thenCompose(groupsWithStored ->
                 streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(groupsWithStored)
                     .thenApply(failures -> {
+                        recordPluginDeleteOutcome(groupsWithStored.size(), failures.size());
                         // Clear back-off entries for every group whose plugin state we
                         // attempted to delete (regardless of plugin outcome): the group is
                         // about to be tombstoned on success and re-evaluated by the next
@@ -2624,6 +2801,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         log.info("Starting up.");
         numPartitions = groupMetadataTopicPartitionCount.getAsInt();
         isActive.set(true);
+        // Schedule the periodic topology-description cleanup cycle now that the coordinator is
+        // active. The helper short-circuits when no plugin is configured.
+        scheduleStreamsGroupTopologyCleanupCycle();
         log.info("Startup complete.");
     }
 
@@ -2639,6 +2819,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         log.info("Shutting down.");
         isActive.set(false);
+        // Cancel the in-flight cleanup tick (if any) before tearing down the runtime and the
+        // manager — the task's re-arm check will also observe isActive==false and refuse to
+        // schedule a follow-up tick.
+        TimerTask cleanupTaskSnapshot = streamsTopologyCleanupTask;
+        if (cleanupTaskSnapshot != null) {
+            cleanupTaskSnapshot.cancel();
+        }
         Utils.closeQuietly(runtime, "coordinator runtime");
         Utils.closeQuietly(streamsGroupTopologyDescriptionManager, "streams group topology description manager");
         Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
