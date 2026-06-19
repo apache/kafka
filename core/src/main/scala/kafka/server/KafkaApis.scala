@@ -2975,7 +2975,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.streamsGroupDescribe(
         request.context,
-        authorizedGroups.asJava
+        authorizedGroups.asJava,
+        streamsGroupDescribeRequest.data.includeTopologyDescription
       ).handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, streamsGroupDescribeRequest.getErrorResponse(exception))

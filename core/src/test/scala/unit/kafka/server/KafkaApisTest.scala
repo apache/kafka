@@ -11834,7 +11834,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11946,7 +11947,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     future.complete(util.List.of)
     kafkaApis = createKafkaApis(
@@ -11973,7 +11975,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11981,6 +11984,42 @@ class KafkaApisTest extends Logging {
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[StreamsGroupDescribeResponse](requestChannelRequest)
     assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.groups.get(0).errorCode)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testStreamsGroupDescribeForwardsIncludeTopologyDescriptionFlag(includeTopologyDescription: Boolean): Unit = {
+    // The KafkaApis layer must thread IncludeTopologyDescription from the request schema
+    // through to the coordinator unchanged — the coordinator gates the plugin call on it,
+    // so a silent drop here would make the flag unobservable to operators.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
+      .setIncludeTopologyDescription(includeTopologyDescription)
+    streamsGroupDescribeRequestData.groupIds.add("group-id")
+    // IncludeTopologyDescription is v1+ and v1 is marked latestVersionUnstable; build at v1
+    // explicitly so the field reaches the wire.
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData).build(1.toShort))
+
+    val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.streamsGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]],
+      ArgumentMatchers.eq(includeTopologyDescription)
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    future.complete(util.List.of(new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId("group-id")))
+    verify(groupCoordinator).streamsGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]],
+      ArgumentMatchers.eq(includeTopologyDescription)
+    )
   }
 
   @ParameterizedTest
@@ -12023,7 +12062,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer)

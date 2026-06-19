@@ -1330,12 +1330,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List)}.
+     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List, boolean)}.
      */
     @Override
     public CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        boolean includeTopologyDescription
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(StreamsGroupDescribeRequest.getErrorDescribedGroupList(
@@ -1367,7 +1368,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "streams-group-describe",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset)
-                ).thenApply(StreamsGroupDescribeResult::describedGroups)
+                ).thenCompose(result -> includeTopologyDescription
+                    ? streamsGroupTopologyDescriptionManager.attachTopologyDescriptions(result)
+                    : CompletableFuture.completedFuture(result.describedGroups()))
                 .exceptionally(exception -> handleOperationException(
                     "streams-group-describe",
                     groupList,

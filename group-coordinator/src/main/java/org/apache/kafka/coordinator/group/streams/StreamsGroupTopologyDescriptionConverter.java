@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription.GlobalStore;
@@ -26,6 +27,7 @@ import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescri
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription.Source;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription.Subtopology;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -79,6 +81,65 @@ public final class StreamsGroupTopologyDescriptionConverter {
             );
         }
         return new GlobalStore((Source) source, (Processor) processor);
+    }
+
+    /**
+     * Sibling of {@link #fromRequest}: translates the broker-side {@link StreamsGroupTopologyDescription}
+     * POJO returned by {@code plugin.getTopology} into the describe-response wire schema. The two
+     * schemas share field names but live in different generated message classes; they are kept in
+     * sync by this converter.
+     */
+    public static StreamsGroupDescribeResponseData.TopologyDescription toDescribeResponse(
+        StreamsGroupTopologyDescription topology
+    ) {
+        List<StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology> subtopologies =
+            new ArrayList<>(topology.subtopologies().size());
+        for (Subtopology subtopology : topology.subtopologies()) {
+            List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> nodes =
+                new ArrayList<>(subtopology.nodes().size());
+            for (Node node : subtopology.nodes()) {
+                nodes.add(toResponseNode(node));
+            }
+            subtopologies.add(
+                new StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology()
+                    .setSubtopologyId(subtopology.id())
+                    .setNodes(nodes)
+            );
+        }
+        List<StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore> globalStores =
+            new ArrayList<>(topology.globalStores().size());
+        for (GlobalStore globalStore : topology.globalStores()) {
+            globalStores.add(
+                new StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore()
+                    .setSource(toResponseNode(globalStore.source()))
+                    .setProcessor(toResponseNode(globalStore.processor()))
+            );
+        }
+        return new StreamsGroupDescribeResponseData.TopologyDescription()
+            .setSubtopologies(subtopologies)
+            .setGlobalStores(globalStores);
+    }
+
+    private static StreamsGroupDescribeResponseData.TopologyDescriptionNode toResponseNode(Node node) {
+        StreamsGroupDescribeResponseData.TopologyDescriptionNode wire =
+            new StreamsGroupDescribeResponseData.TopologyDescriptionNode()
+                .setName(node.name())
+                .setSuccessors(new ArrayList<>(node.successors()));
+        if (node instanceof Source source) {
+            wire.setNodeType(NODE_TYPE_SOURCE);
+            wire.setSourceTopics(new ArrayList<>(source.topics()));
+        } else if (node instanceof Processor processor) {
+            wire.setNodeType(NODE_TYPE_PROCESSOR);
+            wire.setStores(new ArrayList<>(processor.stores()));
+        } else if (node instanceof Sink sink) {
+            wire.setNodeType(NODE_TYPE_SINK);
+            sink.topic().ifPresent(wire::setSinkTopic);
+        } else {
+            throw new IllegalStateException(
+                "Unknown topology node type: " + node.getClass().getName()
+            );
+        }
+        return wire;
     }
 
     private static Node convertNode(
