@@ -540,6 +540,7 @@ public abstract class AbstractResetIntegrationTest {
             return admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
         }
     }
+
     protected void assertInternalTopicsGotDeleted(final String additionalExistingTopic) throws Exception {
         final Set<String> remainingTopics = additionalExistingTopic == null ?
                 Set.of(INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN, Topic.GROUP_METADATA_TOPIC_NAME) :
