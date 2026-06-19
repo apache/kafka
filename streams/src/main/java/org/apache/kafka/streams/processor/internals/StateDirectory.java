@@ -67,6 +67,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -308,6 +309,10 @@ public class StateDirectory implements AutoCloseable {
         return taskOffsetSums.entrySet().stream()
                 .filter(e -> tasks.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    public Map<TaskId, Long> taskOffsetSums() {
+        return taskOffsetSums;
     }
 
     public void updateTaskOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {

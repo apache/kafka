@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -58,7 +57,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
-import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_UNKNOWN;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
@@ -623,133 +621,6 @@ class DefaultStateUpdaterTest {
         final InOrder orderVerifier = inOrder(changelogReader, task1, task2);
         orderVerifier.verify(changelogReader, times(2)).enforceRestoreActive();
         orderVerifier.verify(changelogReader).transitToUpdateStandby();
-    }
-
-    @Test
-    public void shouldPublishEmptyTaskOffsetSumSnapshotBeforeStart() {
-        assertThat(stateUpdater.taskOffsetSumSnapshot(), is(Collections.emptyMap()));
-    }
-
-    @Test
-    public void shouldPublishTaskOffsetSumSnapshotForRestoringTask() throws Exception {
-        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
-        when(task.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 42L));
-        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        when(changelogReader.restore(anyMap())).thenReturn(1L);
-        stateUpdater.add(task);
-        stateUpdater.start();
-
-        assertSnapshotEntry(TASK_0_0, 42L);
-    }
-
-    @Test
-    public void shouldPublishTaskOffsetSumSnapshotForMultipleRestoringTasks() throws Exception {
-        final StreamTask t1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
-        final StandbyTask t2 = standbyTask(TASK_1_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
-        when(t1.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 100L));
-        when(t2.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_B_0, 200L));
-        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        when(changelogReader.restore(anyMap())).thenReturn(1L);
-        stateUpdater.add(t1);
-        stateUpdater.add(t2);
-        stateUpdater.start();
-
-        waitForCondition(
-            () -> {
-                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskOffsetSumSnapshot();
-                return s.size() == 2
-                    && Long.valueOf(100L).equals(s.get(new StreamsRebalanceData.TaskId("0", 0)))
-                    && Long.valueOf(200L).equals(s.get(new StreamsRebalanceData.TaskId("1", 0)));
-            },
-            VERIFICATION_TIMEOUT,
-            "Snapshot did not publish both restoring tasks"
-        );
-    }
-
-    @Test
-    public void shouldReportZeroInSnapshotWhenAnyOffsetIsUnknownAndNoOverflow() throws Exception {
-        // Any UNKNOWN partition makes the task's reported sum 0 (i.e., "no reliable progress data"),
-        // even if other partitions in the task have known offsets. This avoids leaking sentinel
-        // values onto the wire while still signalling task presence to the broker.
-        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_A_1)).inState(State.RESTORING).build();
-        when(task.changelogOffsets()).thenReturn(Map.of(
-            TOPIC_PARTITION_A_0, 7L,
-            TOPIC_PARTITION_A_1, OFFSET_UNKNOWN
-        ));
-        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        when(changelogReader.restore(anyMap())).thenReturn(1L);
-        stateUpdater.add(task);
-        stateUpdater.start();
-
-        assertSnapshotEntry(TASK_0_0, 0L);
-    }
-
-    @Test
-    public void shouldPinPublishedSnapshotSumToMaxValueOnOverflow() throws Exception {
-        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_A_1)).inState(State.RESTORING).build();
-        when(task.changelogOffsets()).thenReturn(Map.of(
-            TOPIC_PARTITION_A_0, Long.MAX_VALUE - 1L,
-            TOPIC_PARTITION_A_1, 100L
-        ));
-        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        when(changelogReader.restore(anyMap())).thenReturn(1L);
-        stateUpdater.add(task);
-        stateUpdater.start();
-
-        assertSnapshotEntry(TASK_0_0, Long.MAX_VALUE);
-    }
-
-    @Test
-    public void shouldKeepMaxValueOnOverflowEvenIfSomeOffsetsAreUnknown() throws Exception {
-        // Overflow wins over UNKNOWN: if the known portion of the sum already overflowed
-        // (pinned to MAX_VALUE), the presence of an additional UNKNOWN partition does not
-        // reset the result to 0 — the overflow is the more informative signal.
-        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_A_1, TOPIC_PARTITION_B_0))
-            .inState(State.RESTORING).build();
-        when(task.changelogOffsets()).thenReturn(Map.of(
-            TOPIC_PARTITION_A_0, Long.MAX_VALUE - 1L,
-            TOPIC_PARTITION_A_1, 100L,
-            TOPIC_PARTITION_B_0, OFFSET_UNKNOWN
-        ));
-        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        when(changelogReader.restore(anyMap())).thenReturn(1L);
-        stateUpdater.add(task);
-        stateUpdater.start();
-
-        assertSnapshotEntry(TASK_0_0, Long.MAX_VALUE);
-    }
-
-    @Test
-    public void shouldExcludeStatelessTaskFromPublishedSnapshot() throws Exception {
-        final StreamTask stateless = statelessTask(TASK_0_0).inState(State.RESTORING).build();
-        final StreamTask stateful = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
-        when(stateful.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 5L));
-        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
-        when(changelogReader.restore(anyMap())).thenReturn(1L);
-        stateUpdater.add(stateless);
-        stateUpdater.add(stateful);
-        stateUpdater.start();
-
-        waitForCondition(
-            () -> {
-                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskOffsetSumSnapshot();
-                return s.size() == 1 && Long.valueOf(5L).equals(s.get(new StreamsRebalanceData.TaskId("0", 1)));
-            },
-            VERIFICATION_TIMEOUT,
-            "Snapshot did not exclude stateless task"
-        );
-    }
-
-    private void assertSnapshotEntry(final TaskId taskId, final long expectedSum) throws Exception {
-        final StreamsRebalanceData.TaskId key = new StreamsRebalanceData.TaskId(String.valueOf(taskId.subtopology()), taskId.partition());
-        waitForCondition(
-            () -> {
-                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskOffsetSumSnapshot();
-                return s.size() == 1 && Long.valueOf(expectedSum).equals(s.get(key));
-            },
-            VERIFICATION_TIMEOUT,
-            () -> "Snapshot did not publish expected entry " + key + "=" + expectedSum + "; got " + stateUpdater.taskOffsetSumSnapshot()
-        );
     }
 
     @Test

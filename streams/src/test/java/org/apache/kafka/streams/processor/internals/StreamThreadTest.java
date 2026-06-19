@@ -3447,6 +3447,7 @@ public class StreamThreadTest {
         final InOrder inOrder = Mockito.inOrder(mainConsumer, thread.taskManager());
         inOrder.verify(mainConsumer).poll(Mockito.any());
         inOrder.verify(thread.taskManager()).updateLags();
+        inOrder.verify(thread.taskManager()).maybeUpdateTaskOffsetSumSnapshot();
     }
 
 

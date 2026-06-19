@@ -107,6 +107,11 @@ public class TaskManager {
 
     private final Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
 
+    // Published by the stream thread (via maybeUpdateTaskOffsetSumSnapshot) and read lock-free by the
+    // streams-protocol heartbeat thread. Covers standby, warmup, restoring-active and dormant tasks; running-active
+    // tasks are omitted (their assignment is not offset-driven, and they are caught up by definition).
+    private final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSumSnapshot = new AtomicReference<>(Map.of());
+
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
@@ -1251,11 +1256,41 @@ public class TaskManager {
     }
 
     /**
-     * Returns the per-task changelog offset-sum snapshot published by the state updater.
-     * Safe to invoke from any thread
+     * Returns the per-task changelog offset-sum snapshot for the streams-protocol rebalance. Safe to invoke from any
+     * thread; the snapshot is refreshed by the stream thread via {@link #maybeUpdateTaskOffsetSumSnapshot()}.
      */
     public Map<StreamsRebalanceData.TaskId, Long> taskOffsetSumSnapshot() {
-        return stateUpdater.taskOffsetSumSnapshot();
+        return taskOffsetSumSnapshot.get();
+    }
+
+    /**
+     * Recomputes the offset-sum snapshot reported to the streams-group coordinator from the offset sums maintained in
+     * the {@link StateDirectory}, which already cover all stateful tasks with state on disk (standby, warmup,
+     * restoring-active and dormant) using a conservative (per-partition lower-bound) sum. Running-active tasks are
+     * excluded: their assignment is not offset-driven and they are caught up by definition.
+     */
+    public void maybeUpdateTaskOffsetSumSnapshot() {
+        final Set<TaskId> runningActiveTasks = new HashSet<>();
+        for (final Task task : allTasks().values()) {
+            if (task.isActive() && task.state() == State.RUNNING) {
+                runningActiveTasks.add(task.id());
+            }
+        }
+
+        final Map<TaskId, Long> offsetSums = stateDirectory.taskOffsetSums();
+        final Map<StreamsRebalanceData.TaskId, Long> snapshot = new HashMap<>(offsetSums.size());
+        for (final Map.Entry<TaskId, Long> entry : offsetSums.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            if (runningActiveTasks.contains(taskId)) {
+                continue;
+            }
+            snapshot.put(
+                new StreamsRebalanceData.TaskId(String.valueOf(taskId.subtopology()), taskId.partition()),
+                entry.getValue()
+            );
+        }
+
+        taskOffsetSumSnapshot.set(Collections.unmodifiableMap(snapshot));
     }
 
     /**
