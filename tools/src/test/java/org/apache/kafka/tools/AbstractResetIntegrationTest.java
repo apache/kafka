@@ -81,7 +81,7 @@ public abstract class AbstractResetIntegrationTest {
 
     static ClusterInstance cluster;
 
-    private static final MockTime MOCK_TIME = new MockTime();
+    private static MockTime mockTime = new MockTime();
     protected static KafkaStreams streams;
     protected static Admin adminClient;
 
@@ -125,7 +125,7 @@ public abstract class AbstractResetIntegrationTest {
             // we align time to seconds to get clean window boundaries and thus ensure the same result for each run
             // otherwise, input records could fall into different windows for different runs depending on the initial mock time
             final long alignedTime = (System.currentTimeMillis() / 1000 + 1) * 1000;
-            MOCK_TIME.setCurrentTimeMs(alignedTime);
+            mockTime.setCurrentTimeMs(alignedTime);
             currentTimeSet = true;
         } catch (final IllegalArgumentException e) {
             // don't care will retry until set
@@ -213,12 +213,11 @@ public abstract class AbstractResetIntegrationTest {
                                                                    KeyValue.pair(1L, "jjj"));
 
         for (final KeyValue<Long, String> record : records) {
-            MOCK_TIME.sleep(10);
-            produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Set.of(record), producerConfig, MOCK_TIME.milliseconds());
+            mockTime.sleep(10);
+            produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Set.of(record), producerConfig, mockTime.milliseconds());
         }
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testResetWhenInternalTopicsAreSpecified(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -248,7 +247,6 @@ public abstract class AbstractResetIntegrationTest {
         assertInternalTopicsGotDeleted(internalTopics.get(0));
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -283,14 +281,12 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, null, null, appID);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
         testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false, testInfo);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -317,14 +313,14 @@ public abstract class AbstractResetIntegrationTest {
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         // insert bad record to make sure intermediate user topic gets seekToEnd()
-        MOCK_TIME.sleep(1);
+        mockTime.sleep(1);
         final KeyValue<Long, String> badMessage = new KeyValue<>(-1L, "badRecord-ShouldBeSkipped");
         if (!useRepartitioned) {
             produceKeyValuesSynchronouslyWithTimestamp(
                 INTERMEDIATE_USER_TOPIC,
                 Set.of(badMessage),
                 producerConfig,
-                MOCK_TIME.milliseconds());
+                mockTime.milliseconds());
         }
 
         // RESET

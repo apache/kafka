@@ -64,7 +64,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void shouldNotAllowToResetWhileStreamsIsRunning(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -90,7 +89,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams.close();
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void shouldNotAllowToResetWhenInputTopicAbsent(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -108,7 +106,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertEquals(1, exitCode);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void shouldDefaultToClassicGroupProtocol(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -127,7 +124,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertEquals(0, exitCode, "Resetter should use the CLASSIC group protocol");
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void shouldAllowGroupProtocolClassic(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -147,7 +143,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertEquals(0, exitCode, "Resetter should allow setting group protocol to CLASSIC");
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void shouldOverwriteGroupProtocolOtherThanClassic(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -167,7 +162,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertEquals(0, exitCode, "Resetter should overwrite the group protocol to CLASSIC");
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void shouldNotAllowToResetWhenIntermediateTopicAbsent(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -185,7 +179,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertEquals(1, exitCode);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void shouldNotAllowToResetWhenSpecifiedInternalTopicDoesNotExist(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -203,7 +196,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertEquals(1, exitCode);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -221,7 +213,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertEquals(1, exitCode);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testDeprecatedConfig(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -246,7 +237,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         }
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testCommandConfig(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -270,7 +260,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         }
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testCommandConfigAndDeprecatedConfigPresent(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -298,7 +287,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         }
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testResetWhenLongSessionTimeoutConfiguredWithForceOption(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -337,7 +325,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanGlobal(false, "--force", null, appID);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -381,7 +368,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanGlobal(false, null, null, appID);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
@@ -430,7 +416,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         cleanGlobal(false, null, null, appID);
     }
 
-    @Timeout(600)
     @ClusterTemplate("clusterConfigs")
     public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic(final ClusterInstance clusterInstance, final TestInfo testInfo) throws Exception {
         prepareTest(clusterInstance, testInfo);
