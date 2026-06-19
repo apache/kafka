@@ -112,6 +112,22 @@ The annotation lives in `kafka-clients`:
 </dependency>
 ```
 
+## Kafka version requirement
+
+The checker reads `@InterfaceAudience.Public` annotations off the **Kafka libraries your
+project depends on at compile time**, not off the version of Kafka the checker plugin
+itself was published from. If your project still depends on a Kafka release that pre-dates
+KIP-1265 — i.e., one that doesn't yet carry the audience annotations on any class — the
+checker will see zero public APIs and report every `org.apache.kafka.*` reference in your
+bytecode as a violation, including references to genuinely-public types like
+`KafkaProducer` or `Topology`.
+
+Make sure each `org.apache.kafka:*` dependency on your compile classpath
+(`kafka-clients`, `kafka-streams`, `connect-api`, `kafka-tools-api`, …) is at least
+`{{< param fullDotVersion >}}` before turning `failOnViolation = true`. For older
+dependencies, either upgrade them, or temporarily set `failOnViolation = false` so the
+checker only generates reports while you migrate.
+
 ## What counts as "internal"
 
 A Kafka class is considered public when:
