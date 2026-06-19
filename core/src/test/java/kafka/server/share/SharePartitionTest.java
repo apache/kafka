@@ -248,8 +248,8 @@ public class SharePartitionTest {
 
         InFlightBatch inFlightBatch = sharePartition.cachedState().get(5L);
         assertEquals(RecordState.TX_PENDING, inFlightBatch.batchState());
-        assertEquals(100L, inFlightBatch.batchStagedProducerId());
-        assertEquals((short) 1, inFlightBatch.batchStagedProducerEpoch());
+        assertEquals(100L, inFlightBatch.batchStagedTxnOwnerId());
+        assertEquals((short) 1, inFlightBatch.batchStagedTxnOwnerEpoch());
         assertEquals(AcknowledgeType.ACCEPT.id, inFlightBatch.batchStagedAckType());
 
         sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join();
@@ -13833,8 +13833,8 @@ public class SharePartitionTest {
         assertEquals(RecordState.TX_PENDING, offsetState.get(12L).state());
         assertEquals(RecordState.ACQUIRED, offsetState.get(13L).state());
         assertEquals(RecordState.ACQUIRED, offsetState.get(14L).state());
-        assertEquals(100L, offsetState.get(12L).stagedProducerId());
-        assertEquals((short) 1, offsetState.get(12L).stagedProducerEpoch());
+        assertEquals(100L, offsetState.get(12L).stagedTxnOwnerId());
+        assertEquals((short) 1, offsetState.get(12L).stagedTxnOwnerEpoch());
         assertEquals(AcknowledgeType.ACCEPT.id, offsetState.get(12L).stagedAckType());
         assertEquals(RecordState.ACKNOWLEDGED.id(), offsetState.get(12L).stagedDeliveryState());
 
@@ -13885,8 +13885,8 @@ public class SharePartitionTest {
         for (long offset = 10L; offset <= 14L; offset++) {
             int index = Math.toIntExact(offset - 10L);
             assertEquals(RecordState.TX_PENDING, offsetState.get(offset).state());
-            assertEquals(100L, offsetState.get(offset).stagedProducerId());
-            assertEquals((short) 1, offsetState.get(offset).stagedProducerEpoch());
+            assertEquals(100L, offsetState.get(offset).stagedTxnOwnerId());
+            assertEquals((short) 1, offsetState.get(offset).stagedTxnOwnerEpoch());
             assertEquals(acknowledgeTypes.get(index), offsetState.get(offset).stagedAckType());
             assertEquals(acknowledgeTypes.get(index) == AcknowledgeType.ACCEPT.id ?
                 RecordState.ACKNOWLEDGED.id() : RecordState.ARCHIVED.id(), offsetState.get(offset).stagedDeliveryState());
@@ -13976,7 +13976,7 @@ public class SharePartitionTest {
 
         assertFutureThrows(GroupIdNotFoundException.class, stage);
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
-        assertEquals(-1L, sharePartition.cachedState().get(10L).batchStagedProducerId());
+        assertEquals(-1L, sharePartition.cachedState().get(10L).batchStagedTxnOwnerId());
     }
 
     @Test
@@ -14055,7 +14055,7 @@ public class SharePartitionTest {
 
         assertFutureThrows(GroupIdNotFoundException.class, marker);
         assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
-        assertEquals(100L, sharePartition.cachedState().get(10L).batchStagedProducerId());
+        assertEquals(100L, sharePartition.cachedState().get(10L).batchStagedTxnOwnerId());
     }
 
     @Test
@@ -14086,7 +14086,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testApplyTxnMarkerWithMismatchedProducerIsNoop() {
+    public void testApplyTxnMarkerWithMismatchedTxnOwnerIsNoop() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
 
@@ -14098,7 +14098,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testApplyTxnMarkerWithMismatchedProducerEpochIsNoop() {
+    public void testApplyTxnMarkerWithMismatchedTxnOwnerEpochIsNoop() {
         Persister persister = Mockito.mock(Persister.class);
         Mockito.when(persister.writeState(Mockito.any()))
             .thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult(Errors.NONE)));
@@ -14113,8 +14113,8 @@ public class SharePartitionTest {
 
         sharePartition.applyTxnMarker(100L, (short) 1, TransactionResult.COMMIT).join();
         assertEquals(RecordState.TX_PENDING, sharePartition.cachedState().get(10L).batchState());
-        assertEquals(100L, sharePartition.cachedState().get(10L).batchStagedProducerId());
-        assertEquals((short) 2, sharePartition.cachedState().get(10L).batchStagedProducerEpoch());
+        assertEquals(100L, sharePartition.cachedState().get(10L).batchStagedTxnOwnerId());
+        assertEquals((short) 2, sharePartition.cachedState().get(10L).batchStagedTxnOwnerEpoch());
         Mockito.verify(persister, Mockito.times(1)).writeState(Mockito.any());
     }
 
@@ -14134,7 +14134,7 @@ public class SharePartitionTest {
         assertNotNull(offsetState);
         for (long offset = 10L; offset <= 14L; offset++) {
             assertEquals(RecordState.ACQUIRED, offsetState.get(offset).state());
-            assertEquals(-1L, offsetState.get(offset).stagedProducerId());
+            assertEquals(-1L, offsetState.get(offset).stagedTxnOwnerId());
         }
     }
 
@@ -14149,11 +14149,11 @@ public class SharePartitionTest {
 
         assertTrue(sharePartition.cachedState().get(10L).revertBatchStagedTxnAcknowledge(100L, (short) 1));
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
-        assertEquals(-1L, sharePartition.cachedState().get(10L).batchStagedProducerId());
+        assertEquals(-1L, sharePartition.cachedState().get(10L).batchStagedTxnOwnerId());
     }
 
     @Test
-    public void testRevertStagedTxnAcknowledgeRejectsMismatchedProducer() {
+    public void testRevertStagedTxnAcknowledgeRejectsMismatchedTxnOwner() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 5), 5);
 

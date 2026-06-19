@@ -234,7 +234,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     @Override
-    public void replay(long offset, long producerId, short producerEpoch, CoordinatorRecord record) throws RuntimeException {
+    public void replay(long offset, long txnOwnerId, short txnOwnerEpoch, CoordinatorRecord record) throws RuntimeException {
         ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
@@ -309,21 +309,21 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     @Override
-    public void replayEndTransactionMarker(long producerId, short producerEpoch, TransactionResult result) throws RuntimeException {
-        CoordinatorShard.super.replayEndTransactionMarker(producerId, producerEpoch, result);
+    public void replayEndTransactionMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result) throws RuntimeException {
+        CoordinatorShard.super.replayEndTransactionMarker(txnOwnerId, txnOwnerEpoch, result);
     }
 
     public CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> completeTransaction(
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         TransactionResult result
     ) {
-        return completeTransaction(producerId, producerEpoch, result, TransactionVersion.TV_1.featureLevel());
+        return completeTransaction(txnOwnerId, txnOwnerEpoch, result, TransactionVersion.TV_1.featureLevel());
     }
 
     public CoordinatorResult<Set<SharePartitionKey>, CoordinatorRecord> completeTransaction(
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         TransactionResult result,
         short transactionVersion
     ) {
@@ -339,7 +339,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             boolean hasMatchingPendingBatch = false;
 
             for (PersisterStateBatch batch : currentState.stateBatches()) {
-                if (isMatchingPendingBatch(batch, producerId, producerEpoch, transactionVersion)) {
+                if (isMatchingPendingBatch(batch, txnOwnerId, txnOwnerEpoch, transactionVersion)) {
                     byte finalState = finalDeliveryState(batch, result);
                     finalizedBatches.add(new PersisterStateBatch(
                         batch.firstOffset(),
@@ -381,16 +381,16 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     private boolean isMatchingPendingBatch(
         PersisterStateBatch batch,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         short transactionVersion
     ) {
-        short expectedStagedProducerEpoch = transactionVersion >= TransactionVersion.TV_2.featureLevel() ?
-            (short) (producerEpoch - 1) :
-            producerEpoch;
+        short expectedStagedTxnOwnerEpoch = transactionVersion >= TransactionVersion.TV_2.featureLevel() ?
+            (short) (txnOwnerEpoch - 1) :
+            txnOwnerEpoch;
         return batch.deliveryState() == DELIVERY_STATE_TX_PENDING
-            && batch.stagedProducerId() == producerId
-            && batch.stagedProducerEpoch() == expectedStagedProducerEpoch;
+            && batch.stagedProducerId() == txnOwnerId
+            && batch.stagedProducerEpoch() == expectedStagedTxnOwnerEpoch;
     }
 
     private byte finalDeliveryState(PersisterStateBatch batch, TransactionResult result) {

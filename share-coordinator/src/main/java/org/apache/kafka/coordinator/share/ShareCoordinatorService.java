@@ -1009,8 +1009,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
     @Override
     public CompletableFuture<Set<SharePartitionKey>> completeTransaction(
         TopicPartition tp,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
         short transactionVersion
@@ -1034,7 +1034,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         return runtime.scheduleWriteOperation(
             "complete-share-transaction",
             tp,
-            coordinator -> coordinator.completeTransaction(producerId, producerEpoch, result, transactionVersion)
+            coordinator -> coordinator.completeTransaction(txnOwnerId, txnOwnerEpoch, result, transactionVersion)
         );
     }
 

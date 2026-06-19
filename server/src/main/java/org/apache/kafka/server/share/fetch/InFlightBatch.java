@@ -98,8 +98,8 @@ public class InFlightBatch {
         AcquisitionLockTimerTask acquisitionLockTimeoutTask,
         AcquisitionLockTimeoutHandler timeoutHandler,
         SharePartitionMetrics sharePartitionMetrics,
-        long stagedProducerId,
-        short stagedProducerEpoch,
+        long stagedTxnOwnerId,
+        short stagedTxnOwnerEpoch,
         byte stagedAckType
     ) {
         this.timer = timer;
@@ -113,8 +113,8 @@ public class InFlightBatch {
             deliveryCount,
             memberId,
             acquisitionLockTimeoutTask,
-            stagedProducerId,
-            stagedProducerEpoch,
+            stagedTxnOwnerId,
+            stagedTxnOwnerEpoch,
             stagedAckType,
             PersisterStateBatch.NO_STAGED_DELIVERY_STATE
         );
@@ -240,34 +240,42 @@ public class InFlightBatch {
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
     public InFlightState stageBatchTxnAcknowledge(
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         org.apache.kafka.clients.consumer.AcknowledgeType ackType,
         RecordState stagedDeliveryState
     ) {
-        return inFlightState().stageTxnAcknowledge(producerId, producerEpoch, ackType, stagedDeliveryState);
+        return inFlightState().stageTxnAcknowledge(txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState);
     }
 
     public InFlightState applyBatchTxnMarker(
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         org.apache.kafka.common.requests.TransactionResult result,
         boolean dlqSupportEnabled
     ) {
-        return inFlightState().applyTxnMarker(producerId, producerEpoch, result, dlqSupportEnabled);
+        return inFlightState().applyTxnMarker(txnOwnerId, txnOwnerEpoch, result, dlqSupportEnabled);
     }
 
-    public boolean revertBatchStagedTxnAcknowledge(long producerId, short producerEpoch) {
-        return inFlightState().revertStagedTxnAcknowledge(producerId, producerEpoch);
+    public boolean revertBatchStagedTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch) {
+        return inFlightState().revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch);
     }
 
     // Visible for testing.
+    public long batchStagedTxnOwnerId() {
+        return inFlightState().stagedTxnOwnerId();
+    }
+
+    public short batchStagedTxnOwnerEpoch() {
+        return inFlightState().stagedTxnOwnerEpoch();
+    }
+
     public long batchStagedProducerId() {
-        return inFlightState().stagedProducerId();
+        return batchStagedTxnOwnerId();
     }
 
     public short batchStagedProducerEpoch() {
-        return inFlightState().stagedProducerEpoch();
+        return batchStagedTxnOwnerEpoch();
     }
 
     public byte batchStagedAckType() {

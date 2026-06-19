@@ -407,12 +407,12 @@ public class SharePartitionManager implements AutoCloseable {
     public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> acknowledgeTransactional(
         String memberId,
         String groupId,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics
     ) {
-        log.trace("Txn acknowledge request for topicIdPartitions: {} groupId: {} producerId={}",
-            acknowledgeTopics.keySet(), groupId, producerId);
+        log.trace("Txn acknowledge request for topicIdPartitions: {} groupId: {} txnOwnerId={}",
+            acknowledgeTopics.keySet(), groupId, txnOwnerId);
         Map<TopicIdPartition, CompletableFuture<Throwable>> futures = new HashMap<>();
         acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
             SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
@@ -426,7 +426,7 @@ public class SharePartitionManager implements AutoCloseable {
                             future.complete(throwable);
                             return;
                         }
-                        sharePartition.stageTxnAcknowledge(memberId, producerId, producerEpoch, acknowledgePartitionBatches)
+                        sharePartition.stageTxnAcknowledge(memberId, txnOwnerId, txnOwnerEpoch, acknowledgePartitionBatches)
                             .whenComplete((result, throwable) -> {
                                 if (throwable != null) {
                                     throwable = Errors.maybeUnwrapException(throwable);
@@ -444,10 +444,10 @@ public class SharePartitionManager implements AutoCloseable {
         return mapAcknowledgementFutures(futures, Optional.empty());
     }
 
-    public CompletableFuture<Void> applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
-        log.debug("Broadcasting txn marker producerId={} epoch={} result={}", producerId, producerEpoch, result);
+    public CompletableFuture<Void> applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result) {
+        log.debug("Broadcasting txn marker txnOwnerId={} epoch={} result={}", txnOwnerId, txnOwnerEpoch, result);
         return CompletableFuture.allOf(partitionCache.values().stream()
-            .map(sp -> sp.applyTxnMarker(producerId, producerEpoch, result))
+            .map(sp -> sp.applyTxnMarker(txnOwnerId, txnOwnerEpoch, result))
             .toArray(CompletableFuture[]::new));
     }
 

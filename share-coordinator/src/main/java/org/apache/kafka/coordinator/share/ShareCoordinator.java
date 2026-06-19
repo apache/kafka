@@ -111,8 +111,8 @@ public interface ShareCoordinator {
 
     CompletableFuture<Set<SharePartitionKey>> completeTransaction(
         TopicPartition tp,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
         short transactionVersion

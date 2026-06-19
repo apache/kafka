@@ -57,9 +57,9 @@ public class InFlightState {
     // to any other state. This could happen because of LSO movement etc.
     private boolean isTerminalState = false;
 
-    // Populated only when state == TX_PENDING; identifies the producer that staged this ack.
-    private long stagedProducerId = -1L;
-    private short stagedProducerEpoch = -1;
+    // Populated only when state == TX_PENDING; identifies the transaction owner that staged this ack.
+    private long stagedTxnOwnerId = -1L;
+    private short stagedTxnOwnerEpoch = -1;
     private byte stagedAckType = -1;
     private byte stagedDeliveryState = -1;
 
@@ -77,8 +77,8 @@ public class InFlightState {
         int deliveryCount,
         String memberId,
         AcquisitionLockTimerTask acquisitionLockTimeoutTask,
-        long stagedProducerId,
-        short stagedProducerEpoch,
+        long stagedTxnOwnerId,
+        short stagedTxnOwnerEpoch,
         byte stagedAckType,
         byte stagedDeliveryState
     ) {
@@ -86,8 +86,8 @@ public class InFlightState {
         this.deliveryCount = deliveryCount;
         this.memberId = memberId;
         this.acquisitionLockTimeoutTask = acquisitionLockTimeoutTask;
-        this.stagedProducerId = stagedProducerId;
-        this.stagedProducerEpoch = stagedProducerEpoch;
+        this.stagedTxnOwnerId = stagedTxnOwnerId;
+        this.stagedTxnOwnerEpoch = stagedTxnOwnerEpoch;
         this.stagedAckType = stagedAckType;
         this.stagedDeliveryState = stagedDeliveryState;
     }
@@ -270,17 +270,25 @@ public class InFlightState {
     }
 
     /**
-     * @return The producer id staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
+     * @return The transaction owner id staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
      */
-    public long stagedProducerId() {
-        return stagedProducerId;
+    public long stagedTxnOwnerId() {
+        return stagedTxnOwnerId;
     }
 
     /**
-     * @return The producer epoch staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
+     * @return The transaction owner epoch staged for this transactional acknowledgment, or -1 if not in TX_PENDING.
      */
+    public short stagedTxnOwnerEpoch() {
+        return stagedTxnOwnerEpoch;
+    }
+
+    public long stagedProducerId() {
+        return stagedTxnOwnerId;
+    }
+
     public short stagedProducerEpoch() {
-        return stagedProducerEpoch;
+        return stagedTxnOwnerEpoch;
     }
 
     /**
@@ -294,24 +302,24 @@ public class InFlightState {
         return stagedDeliveryState;
     }
 
-    public InFlightState stageTxnAcknowledge(long producerId, short producerEpoch, AcknowledgeType ackType) {
-        return stageTxnAcknowledge(producerId, producerEpoch, ackType, defaultStagedDeliveryState(ackType));
+    public InFlightState stageTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch, AcknowledgeType ackType) {
+        return stageTxnAcknowledge(txnOwnerId, txnOwnerEpoch, ackType, defaultStagedDeliveryState(ackType));
     }
 
     /**
      * Stage this record into an open producer transaction. Transitions state from ACQUIRED to TX_PENDING,
      * cancels the acquisition lock timer (transaction timeout governs the hold instead), and records the
-     * producer identity and ack type for later resolution by {@link #applyTxnMarker}.
+     * transaction owner identity and ack type for later resolution by {@link #applyTxnMarker}.
      * Only ACCEPT and REJECT are valid ack types inside a transaction.
      */
-    public InFlightState stageTxnAcknowledge(long producerId, short producerEpoch, AcknowledgeType ackType, RecordState stagedDeliveryState) {
+    public InFlightState stageTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch, AcknowledgeType ackType, RecordState stagedDeliveryState) {
         if (ackType != AcknowledgeType.ACCEPT && ackType != AcknowledgeType.REJECT) {
             throw new IllegalArgumentException("Only ACCEPT or REJECT are valid inside a transaction, got: " + ackType);
         }
         try {
             state = state.validateTransition(RecordState.TX_PENDING);
-            this.stagedProducerId = producerId;
-            this.stagedProducerEpoch = producerEpoch;
+            this.stagedTxnOwnerId = txnOwnerId;
+            this.stagedTxnOwnerEpoch = txnOwnerEpoch;
             this.stagedAckType = ackType.id;
             this.stagedDeliveryState = stagedDeliveryState.id;
             cancelAndClearAcquisitionLockTimeoutTask();
@@ -322,16 +330,16 @@ public class InFlightState {
         }
     }
 
-    public boolean revertStagedTxnAcknowledge(long producerId, short producerEpoch) {
+    public boolean revertStagedTxnAcknowledge(long txnOwnerId, short txnOwnerEpoch) {
         if (state != RecordState.TX_PENDING) {
             return false;
         }
-        if (this.stagedProducerId != producerId || this.stagedProducerEpoch != producerEpoch) {
+        if (this.stagedTxnOwnerId != txnOwnerId || this.stagedTxnOwnerEpoch != txnOwnerEpoch) {
             return false;
         }
         state = RecordState.ACQUIRED;
-        stagedProducerId = -1L;
-        stagedProducerEpoch = -1;
+        stagedTxnOwnerId = -1L;
+        stagedTxnOwnerEpoch = -1;
         stagedAckType = -1;
         stagedDeliveryState = -1;
         return true;
@@ -341,13 +349,13 @@ public class InFlightState {
      * Apply a transaction commit or abort marker to a TX_PENDING record.
      * On COMMIT: ACCEPT resolves to ACKNOWLEDGED, REJECT resolves to ARCHIVING or ARCHIVED based on DLQ configuration.
      * On ABORT: reverts to AVAILABLE so the record can be redelivered.
-     * Returns null if the state is not TX_PENDING or the producer identity does not match.
+     * Returns null if the state is not TX_PENDING or the transaction owner identity does not match.
      */
-    public InFlightState applyTxnMarker(long producerId, short producerEpoch, TransactionResult result, boolean dlqSupportEnabled) {
+    public InFlightState applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result, boolean dlqSupportEnabled) {
         if (state != RecordState.TX_PENDING) {
             return null;
         }
-        if (this.stagedProducerId != producerId || this.stagedProducerEpoch != producerEpoch) {
+        if (this.stagedTxnOwnerId != txnOwnerId || this.stagedTxnOwnerEpoch != txnOwnerEpoch) {
             return null;
         }
         try {
@@ -361,8 +369,8 @@ public class InFlightState {
                 state = state.validateTransition(RecordState.AVAILABLE);
                 memberId = EMPTY_MEMBER_ID;
             }
-            stagedProducerId = -1L;
-            stagedProducerEpoch = -1;
+            stagedTxnOwnerId = -1L;
+            stagedTxnOwnerEpoch = -1;
             stagedAckType = -1;
             stagedDeliveryState = -1;
             return this;
@@ -372,8 +380,8 @@ public class InFlightState {
         }
     }
 
-    public InFlightState applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
-        return applyTxnMarker(producerId, producerEpoch, result, true);
+    public InFlightState applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result) {
+        return applyTxnMarker(txnOwnerId, txnOwnerEpoch, result, true);
     }
 
     private RecordState defaultStagedDeliveryState(AcknowledgeType ackType) {
@@ -398,7 +406,7 @@ public class InFlightState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(state, deliveryCount, memberId, stagedProducerId, stagedProducerEpoch, stagedAckType, stagedDeliveryState);
+        return Objects.hash(state, deliveryCount, memberId, stagedTxnOwnerId, stagedTxnOwnerEpoch, stagedAckType, stagedDeliveryState);
     }
 
     @Override
@@ -413,8 +421,8 @@ public class InFlightState {
         return state == that.state
             && deliveryCount == that.deliveryCount
             && memberId.equals(that.memberId)
-            && stagedProducerId == that.stagedProducerId
-            && stagedProducerEpoch == that.stagedProducerEpoch
+            && stagedTxnOwnerId == that.stagedTxnOwnerId
+            && stagedTxnOwnerEpoch == that.stagedTxnOwnerEpoch
             && stagedAckType == that.stagedAckType
             && stagedDeliveryState == that.stagedDeliveryState;
     }
@@ -425,8 +433,8 @@ public class InFlightState {
             "state=" + state +
             ", deliveryCount=" + deliveryCount +
             ", memberId=" + memberId +
-            ", stagedProducerId=" + stagedProducerId +
-            ", stagedProducerEpoch=" + stagedProducerEpoch +
+            ", stagedTxnOwnerId=" + stagedTxnOwnerId +
+            ", stagedTxnOwnerEpoch=" + stagedTxnOwnerEpoch +
             ", stagedAckType=" + stagedAckType +
             ", stagedDeliveryState=" + stagedDeliveryState +
             ")";

@@ -1087,11 +1087,11 @@ public class SharePartition {
 
     public CompletableFuture<Void> stageTxnAcknowledge(
         String memberId,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         List<ShareAcknowledgementBatch> acknowledgementBatches
     ) {
-        log.trace("Txn stage request for share partition: {}-{} producerId={}", groupId, topicIdPartition, producerId);
+        log.trace("Txn stage request for share partition: {}-{} txnOwnerId={}", groupId, topicIdPartition, txnOwnerId);
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         Throwable throwable = null;
@@ -1128,8 +1128,8 @@ public class SharePartition {
 
                 throwable = stageBatchTxnRecords(
                     memberId,
-                    producerId,
-                    producerEpoch,
+                    txnOwnerId,
+                    txnOwnerEpoch,
                     batch,
                     ackTypeMap,
                     subMap,
@@ -1141,7 +1141,7 @@ public class SharePartition {
 
             if (throwable != null) {
                 for (InFlightState s : stagedThisCall) {
-                    s.revertStagedTxnAcknowledge(producerId, producerEpoch);
+                    s.revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch);
                 }
             }
         } finally {
@@ -1156,7 +1156,7 @@ public class SharePartition {
                     lock.writeLock().lock();
                     try {
                         persisterBatches.forEach(persisterBatch ->
-                            persisterBatch.updatedState().revertStagedTxnAcknowledge(producerId, producerEpoch));
+                            persisterBatch.updatedState().revertStagedTxnAcknowledge(txnOwnerId, txnOwnerEpoch));
                     } finally {
                         lock.writeLock().unlock();
                     }
@@ -1170,8 +1170,8 @@ public class SharePartition {
 
     private Throwable stageBatchTxnRecords(
         String memberId,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         ShareAcknowledgementBatch batch,
         Map<Long, Byte> ackTypeMap,
         NavigableMap<Long, InFlightBatch> subMap,
@@ -1198,13 +1198,13 @@ public class SharePartition {
                 byte ackType = ackTypeMap.get(batch.firstOffset());
                 RecordState stagedDeliveryState = recordStateWithDlq(ackType);
                 if (inFlightBatch.batchState() == RecordState.TX_PENDING) {
-                    if (matchesStagedTxnAcknowledge(inFlightBatch, producerId, producerEpoch, ackType, stagedDeliveryState)) {
+                    if (matchesStagedTxnAcknowledge(inFlightBatch, txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState)) {
                         continue;
                     }
                     return new InvalidRecordStateException("A different transactional acknowledgement is already pending");
                 }
                 InFlightState staged = inFlightBatch.stageBatchTxnAcknowledge(
-                    producerId, producerEpoch, AcknowledgeType.forId(ackType), stagedDeliveryState);
+                    txnOwnerId, txnOwnerEpoch, AcknowledgeType.forId(ackType), stagedDeliveryState);
                 if (staged == null) {
                     return new InvalidRecordStateException("Cannot stage txn ack: batch not in ACQUIRED state");
                 }
@@ -1225,13 +1225,13 @@ public class SharePartition {
                     byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(os.getKey()) : batch.acknowledgeTypes().get(0);
                     RecordState stagedDeliveryState = recordStateWithDlq(ackType);
                     if (os.getValue().state() == RecordState.TX_PENDING) {
-                        if (matchesStagedTxnAcknowledge(os.getValue(), producerId, producerEpoch, ackType, stagedDeliveryState)) {
+                        if (matchesStagedTxnAcknowledge(os.getValue(), txnOwnerId, txnOwnerEpoch, ackType, stagedDeliveryState)) {
                             continue;
                         }
                         return new InvalidRecordStateException("A different transactional acknowledgement is already pending");
                     }
                     InFlightState staged = os.getValue().stageTxnAcknowledge(
-                        producerId, producerEpoch, AcknowledgeType.forId(ackType), stagedDeliveryState);
+                        txnOwnerId, txnOwnerEpoch, AcknowledgeType.forId(ackType), stagedDeliveryState);
                     if (staged == null) {
                         return new InvalidRecordStateException("Cannot stage txn ack: offset " + os.getKey() + " not ACQUIRED");
                     }
@@ -1253,20 +1253,20 @@ public class SharePartition {
             lastOffset,
             state.state().id(),
             (short) state.deliveryCount(),
-            state.stagedProducerId(),
-            state.stagedProducerEpoch(),
+            state.stagedTxnOwnerId(),
+            state.stagedTxnOwnerEpoch(),
             state.stagedAckType(),
             state.stagedDeliveryState()
         );
     }
 
-    public CompletableFuture<Void> applyTxnMarker(long producerId, short producerEpoch, TransactionResult result) {
+    public CompletableFuture<Void> applyTxnMarker(long txnOwnerId, short txnOwnerEpoch, TransactionResult result) {
         List<TxnMarkerBatch> markerBatches = new ArrayList<>();
         lock.writeLock().lock();
         try {
             for (InFlightBatch batch : cachedState.values()) {
                 if (batch.offsetState() == null) {
-                    if (matchesTxnMarker(batch, producerId, producerEpoch)) {
+                    if (matchesTxnMarker(batch, txnOwnerId, txnOwnerEpoch)) {
                         markerBatches.add(new TxnMarkerBatch(
                             batch,
                             null,
@@ -1278,7 +1278,7 @@ public class SharePartition {
                     }
                 } else {
                     for (Map.Entry<Long, InFlightState> state : batch.offsetState().entrySet()) {
-                        if (matchesTxnMarker(state.getValue(), producerId, producerEpoch)) {
+                        if (matchesTxnMarker(state.getValue(), txnOwnerId, txnOwnerEpoch)) {
                             markerBatches.add(new TxnMarkerBatch(
                                 null,
                                 state.getValue(),
@@ -1312,7 +1312,7 @@ public class SharePartition {
                 lock.writeLock().lock();
                 try {
                     for (TxnMarkerBatch markerBatch : markerBatches) {
-                        InFlightState updatedState = applyTxnMarkerToBatch(markerBatch, producerId, producerEpoch, result);
+                        InFlightState updatedState = applyTxnMarkerToBatch(markerBatch, txnOwnerId, txnOwnerEpoch, result);
                         if (updatedState == null) {
                             continue;
                         }
@@ -1369,42 +1369,42 @@ public class SharePartition {
         }
     }
 
-    private boolean matchesTxnMarker(InFlightState state, long producerId, short producerEpoch) {
+    private boolean matchesTxnMarker(InFlightState state, long txnOwnerId, short txnOwnerEpoch) {
         return state.state() == RecordState.TX_PENDING &&
-            state.stagedProducerId() == producerId &&
-            state.stagedProducerEpoch() == producerEpoch;
+            state.stagedTxnOwnerId() == txnOwnerId &&
+            state.stagedTxnOwnerEpoch() == txnOwnerEpoch;
     }
 
-    private boolean matchesTxnMarker(InFlightBatch batch, long producerId, short producerEpoch) {
+    private boolean matchesTxnMarker(InFlightBatch batch, long txnOwnerId, short txnOwnerEpoch) {
         return batch.batchState() == RecordState.TX_PENDING &&
-            batch.batchStagedProducerId() == producerId &&
-            batch.batchStagedProducerEpoch() == producerEpoch;
+            batch.batchStagedTxnOwnerId() == txnOwnerId &&
+            batch.batchStagedTxnOwnerEpoch() == txnOwnerEpoch;
     }
 
     private boolean matchesStagedTxnAcknowledge(
         InFlightState state,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         byte ackType,
         RecordState stagedDeliveryState
     ) {
         return state.state() == RecordState.TX_PENDING &&
-            state.stagedProducerId() == producerId &&
-            state.stagedProducerEpoch() == producerEpoch &&
+            state.stagedTxnOwnerId() == txnOwnerId &&
+            state.stagedTxnOwnerEpoch() == txnOwnerEpoch &&
             state.stagedAckType() == ackType &&
             state.stagedDeliveryState() == stagedDeliveryState.id();
     }
 
     private boolean matchesStagedTxnAcknowledge(
         InFlightBatch batch,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         byte ackType,
         RecordState stagedDeliveryState
     ) {
         return batch.batchState() == RecordState.TX_PENDING &&
-            batch.batchStagedProducerId() == producerId &&
-            batch.batchStagedProducerEpoch() == producerEpoch &&
+            batch.batchStagedTxnOwnerId() == txnOwnerId &&
+            batch.batchStagedTxnOwnerEpoch() == txnOwnerEpoch &&
             batch.batchStagedAckType() == ackType &&
             batch.batchStagedDeliveryState() == stagedDeliveryState.id();
     }
@@ -1425,15 +1425,15 @@ public class SharePartition {
 
     private InFlightState applyTxnMarkerToBatch(
         TxnMarkerBatch markerBatch,
-        long producerId,
-        short producerEpoch,
+        long txnOwnerId,
+        short txnOwnerEpoch,
         TransactionResult result
     ) {
         boolean dlqSupportEnabled = markerBatch.finalState() == RecordState.ARCHIVING;
         if (markerBatch.batch() != null) {
-            return markerBatch.batch().applyBatchTxnMarker(producerId, producerEpoch, result, dlqSupportEnabled);
+            return markerBatch.batch().applyBatchTxnMarker(txnOwnerId, txnOwnerEpoch, result, dlqSupportEnabled);
         }
-        return markerBatch.state().applyTxnMarker(producerId, producerEpoch, result, dlqSupportEnabled);
+        return markerBatch.state().applyTxnMarker(txnOwnerId, txnOwnerEpoch, result, dlqSupportEnabled);
     }
 
     private PersisterStateBatch txnMarkerStateBatch(TxnMarkerBatch markerBatch) {

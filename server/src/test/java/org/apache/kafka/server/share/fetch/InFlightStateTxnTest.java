@@ -30,8 +30,8 @@ import static org.mockito.Mockito.verify;
 
 public class InFlightStateTxnTest {
 
-    private static final long PRODUCER_ID = 100L;
-    private static final short PRODUCER_EPOCH = 1;
+    private static final long TXN_OWNER_ID = 100L;
+    private static final short TXN_OWNER_EPOCH = 1;
     private static final String MEMBER_ID = "member-1";
 
     // ── stageTxnAcknowledge — happy paths ────────────────────────────────────
@@ -39,12 +39,12 @@ public class InFlightStateTxnTest {
     @Test
     public void testStageTxnAcknowledge_fromAcquired_accept_succeeds() {
         InFlightState state = acquired();
-        InFlightState result = state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.ACCEPT);
+        InFlightState result = state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.ACCEPT);
 
         assertNotNull(result);
         assertEquals(RecordState.TX_PENDING, result.state());
-        assertEquals(PRODUCER_ID, result.stagedProducerId());
-        assertEquals(PRODUCER_EPOCH, result.stagedProducerEpoch());
+        assertEquals(TXN_OWNER_ID, result.stagedTxnOwnerId());
+        assertEquals(TXN_OWNER_EPOCH, result.stagedTxnOwnerEpoch());
         assertEquals(AcknowledgeType.ACCEPT.id, result.stagedAckType());
         assertNull(result.acquisitionLockTimeoutTask());
     }
@@ -52,7 +52,7 @@ public class InFlightStateTxnTest {
     @Test
     public void testStageTxnAcknowledge_fromAcquired_reject_succeeds() {
         InFlightState state = acquired();
-        InFlightState result = state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.REJECT);
+        InFlightState result = state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.REJECT);
 
         assertNotNull(result);
         assertEquals(RecordState.TX_PENDING, result.state());
@@ -64,36 +64,36 @@ public class InFlightStateTxnTest {
     @Test
     public void testStageTxnAcknowledge_fromAvailable_returnsNull() {
         InFlightState state = new InFlightState(RecordState.AVAILABLE, 0, MEMBER_ID);
-        assertNull(state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.ACCEPT));
+        assertNull(state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.ACCEPT));
         assertEquals(RecordState.AVAILABLE, state.state());
     }
 
     @Test
     public void testStageTxnAcknowledge_fromAcknowledged_returnsNull() {
         InFlightState state = new InFlightState(RecordState.ACKNOWLEDGED, 1, MEMBER_ID);
-        assertNull(state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.ACCEPT));
+        assertNull(state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.ACCEPT));
         assertEquals(RecordState.ACKNOWLEDGED, state.state());
     }
 
     @Test
     public void testStageTxnAcknowledge_fromTxPending_returnsNull() {
         InFlightState state = acquired();
-        state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.ACCEPT);
-        assertNull(state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.ACCEPT));
+        state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.ACCEPT);
+        assertNull(state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.ACCEPT));
     }
 
     @Test
     public void testStageTxnAcknowledge_withRelease_throwsIllegalArgument() {
         InFlightState state = acquired();
         assertThrows(IllegalArgumentException.class,
-            () -> state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.RELEASE));
+            () -> state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.RELEASE));
     }
 
     @Test
     public void testStageTxnAcknowledge_withRenew_throwsIllegalArgument() {
         InFlightState state = acquired();
         assertThrows(IllegalArgumentException.class,
-            () -> state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.RENEW));
+            () -> state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.RENEW));
     }
 
     // ── applyTxnMarker — COMMIT paths ────────────────────────────────────────
@@ -101,22 +101,22 @@ public class InFlightStateTxnTest {
     @Test
     public void testApplyTxnMarker_commit_accept_transitionsToAcknowledged() {
         InFlightState state = staged(AcknowledgeType.ACCEPT);
-        InFlightState result = state.applyTxnMarker(PRODUCER_ID, PRODUCER_EPOCH, TransactionResult.COMMIT);
+        InFlightState result = state.applyTxnMarker(TXN_OWNER_ID, TXN_OWNER_EPOCH, TransactionResult.COMMIT);
 
         assertNotNull(result);
         assertEquals(RecordState.ACKNOWLEDGED, result.state());
-        assertEquals(-1L, result.stagedProducerId());
+        assertEquals(-1L, result.stagedTxnOwnerId());
         assertEquals((byte) -1, result.stagedAckType());
     }
 
     @Test
     public void testApplyTxnMarker_commit_reject_transitionsToArchiving() {
         InFlightState state = staged(AcknowledgeType.REJECT);
-        InFlightState result = state.applyTxnMarker(PRODUCER_ID, PRODUCER_EPOCH, TransactionResult.COMMIT);
+        InFlightState result = state.applyTxnMarker(TXN_OWNER_ID, TXN_OWNER_EPOCH, TransactionResult.COMMIT);
 
         assertNotNull(result);
         assertEquals(RecordState.ARCHIVING, result.state());
-        assertEquals(-1L, result.stagedProducerId());
+        assertEquals(-1L, result.stagedTxnOwnerId());
     }
 
     // ── applyTxnMarker — ABORT path ──────────────────────────────────────────
@@ -124,43 +124,43 @@ public class InFlightStateTxnTest {
     @Test
     public void testApplyTxnMarker_abort_accept_transitionsToAvailable() {
         InFlightState state = staged(AcknowledgeType.ACCEPT);
-        InFlightState result = state.applyTxnMarker(PRODUCER_ID, PRODUCER_EPOCH, TransactionResult.ABORT);
+        InFlightState result = state.applyTxnMarker(TXN_OWNER_ID, TXN_OWNER_EPOCH, TransactionResult.ABORT);
 
         assertNotNull(result);
         assertEquals(RecordState.AVAILABLE, result.state());
         assertEquals(InFlightState.EMPTY_MEMBER_ID, result.memberId());
-        assertEquals(-1L, result.stagedProducerId());
+        assertEquals(-1L, result.stagedTxnOwnerId());
     }
 
     @Test
     public void testApplyTxnMarker_abort_reject_alsoTransitionsToAvailable() {
         InFlightState state = staged(AcknowledgeType.REJECT);
-        InFlightState result = state.applyTxnMarker(PRODUCER_ID, PRODUCER_EPOCH, TransactionResult.ABORT);
+        InFlightState result = state.applyTxnMarker(TXN_OWNER_ID, TXN_OWNER_EPOCH, TransactionResult.ABORT);
 
         assertNotNull(result);
         assertEquals(RecordState.AVAILABLE, result.state());
     }
 
-    // ── applyTxnMarker — stale / wrong producer fencing ─────────────────────
+    // ── applyTxnMarker — stale / wrong txn owner fencing ─────────────────────
 
     @Test
-    public void testApplyTxnMarker_wrongProducerId_returnsNull() {
+    public void testApplyTxnMarker_wrongTxnOwnerId_returnsNull() {
         InFlightState state = staged(AcknowledgeType.ACCEPT);
-        assertNull(state.applyTxnMarker(999L, PRODUCER_EPOCH, TransactionResult.COMMIT));
+        assertNull(state.applyTxnMarker(999L, TXN_OWNER_EPOCH, TransactionResult.COMMIT));
         assertEquals(RecordState.TX_PENDING, state.state());
     }
 
     @Test
-    public void testApplyTxnMarker_wrongProducerEpoch_returnsNull() {
+    public void testApplyTxnMarker_wrongTxnOwnerEpoch_returnsNull() {
         InFlightState state = staged(AcknowledgeType.ACCEPT);
-        assertNull(state.applyTxnMarker(PRODUCER_ID, (short) 99, TransactionResult.COMMIT));
+        assertNull(state.applyTxnMarker(TXN_OWNER_ID, (short) 99, TransactionResult.COMMIT));
         assertEquals(RecordState.TX_PENDING, state.state());
     }
 
     @Test
     public void testApplyTxnMarker_onNonTxPendingRecord_returnsNull() {
         InFlightState state = acquired();
-        assertNull(state.applyTxnMarker(PRODUCER_ID, PRODUCER_EPOCH, TransactionResult.COMMIT));
+        assertNull(state.applyTxnMarker(TXN_OWNER_ID, TXN_OWNER_EPOCH, TransactionResult.COMMIT));
         assertEquals(RecordState.ACQUIRED, state.state());
     }
 
@@ -179,7 +179,7 @@ public class InFlightStateTxnTest {
     public void testStagingClearsAcquisitionLockTimer() {
         AcquisitionLockTimerTask mockTask = mock(AcquisitionLockTimerTask.class);
         InFlightState state = new InFlightState(RecordState.ACQUIRED, 1, MEMBER_ID, mockTask);
-        state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, AcknowledgeType.ACCEPT);
+        state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, AcknowledgeType.ACCEPT);
         assertNull(state.acquisitionLockTimeoutTask());
         verify(mockTask).cancel();
     }
@@ -202,7 +202,7 @@ public class InFlightStateTxnTest {
 
     private InFlightState staged(AcknowledgeType ackType) {
         InFlightState state = acquired();
-        state.stageTxnAcknowledge(PRODUCER_ID, PRODUCER_EPOCH, ackType);
+        state.stageTxnAcknowledge(TXN_OWNER_ID, TXN_OWNER_EPOCH, ackType);
         return state;
     }
 }
