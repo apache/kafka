@@ -735,6 +735,27 @@ public class QuorumControllerTest {
         }
     }
 
+    /**
+     * Verifies that the controller's periodic "electPreferred" task automatically rebalances
+     * partition leaders back to their preferred replicas after a transient broker failure.
+     *
+     * Test lifecycle:
+     * 1. Register and unfence 3 brokers, create a topic with 3 partitions (RF=3).
+     *    Each partition's preferred leader is replicas[0], assigned round-robin.
+     * 2. Fence broker 3 by withholding its heartbeat past the session timeout.
+     *    This forces partitions whose preferred leader was broker 3 to elect a new leader
+     *    from the remaining ISR — creating an "imbalanced" state.
+     * 3. Re-register and unfence broker 3, then issue an AlterPartition to expand the ISR
+     *    of the imbalanced partition back to [1,2,3]. The preferred leader (broker 3) is now
+     *    eligible again but NOT automatically elected — AlterPartition uses ONLINE election,
+     *    not PREFERRED.
+     * 4. Wait for the controller's periodic "electPreferred" task to fire. This task iterates
+     *    over imbalancedPartitions and triggers PartitionChangeBuilder with Election.PREFERRED,
+     *    which moves leadership to replicas[0] if it's in the ISR and active.
+     *
+     * The check interval is set low (100ms) to tolerate CI thread-scheduling jitter, since
+     * KafkaEventQueue schedules deferred tasks using real wall-clock cond.awaitNanos().
+     */
     @Test
     public void testBalancePartitionLeaders() throws Throwable {
         List<Integer> allBrokers = List.of(1, 2, 3);
@@ -743,7 +764,7 @@ public class QuorumControllerTest {
         short replicationFactor = (short) allBrokers.size();
         short numberOfPartitions = (short) allBrokers.size();
         long sessionTimeoutMillis = 2000;
-        long leaderImbalanceCheckIntervalNs = 1_000_000_000;
+        long leaderImbalanceCheckIntervalNs = 100_000_000;
 
         try (
             MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).
@@ -868,7 +889,7 @@ public class QuorumControllerTest {
                     }
                     return !active.replicationControl().arePartitionLeadersImbalanced();
                 },
-                TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalNs * 10, TimeUnit.NANOSECONDS),
+                TimeUnit.MILLISECONDS.convert(leaderImbalanceCheckIntervalNs * 100, TimeUnit.NANOSECONDS),
                 "Leaders were not balanced after unfencing all of the brokers"
             );
 
