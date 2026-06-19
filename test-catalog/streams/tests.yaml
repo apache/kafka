@@ -1891,6 +1891,7 @@ org.apache.kafka.streams.processor.internals.GlobalProcessorContextImplTest:
 - shouldReturnGlobalOrNullStore
 - shouldThrowOnCurrentStreamTime
 org.apache.kafka.streams.processor.internals.GlobalStateManagerImplTest:
+- shouldAggregateApproximateNumUncommittedBytesAcrossRegisteredStores
 - shouldAttemptToCloseAllStoresEvenWhenSomeException
 - shouldCheckpointOffsets
 - shouldCheckpointRestoredOffsetsToFile
@@ -1915,6 +1916,7 @@ org.apache.kafka.streams.processor.internals.GlobalStateManagerImplTest:
 - shouldNotRetryWhenPositionThrowsTimeoutExceptionAndTaskTimeoutIsZero
 - shouldNotWriteDowngradeCheckpointOnCloseWhenUpgradeFromIsNull
 - shouldReadCheckpointOffsets
+- shouldReportZeroApproximateNumUncommittedBytesBeforeStoresAreRegistered
 - shouldRestoreRecordsFromCheckpointToHighWatermark
 - shouldRestoreRecordsUpToHighwatermark
 - shouldRetryAtLeastOnceWhenEndOffsetsThrowsTimeoutException
@@ -1943,6 +1945,7 @@ org.apache.kafka.streams.processor.internals.GlobalStateTaskTest:
 - shouldCommitIfReceivedEnoughRecordsFromMultipleTopicsAndCommitIntervalElapsed
 - shouldCommitOffsetsWhenStateIsFlushed
 - shouldCommitStateManagerWithOffsets
+- shouldDelegateApproximateNumUncommittedBytesToStateManager
 - shouldInitializeContext
 - shouldInitializeProcessorTopology
 - shouldInitializeStateManager
@@ -1958,6 +1961,8 @@ org.apache.kafka.streams.processor.internals.GlobalStateTaskTest:
 - shouldThrowStreamsExceptionWhenValueDeserializationFails
 - shouldWipeGlobalStateDirectory
 org.apache.kafka.streams.processor.internals.GlobalStreamThreadTest:
+- shouldAllowResizingMaxUncommittedBytesBeforeStart
+- shouldAllowResizingMaxUncommittedBytesWhileRunning
 - shouldBeRunningAfterSuccessfulStart
 - shouldCloseStateStoresOnClose
 - shouldDieOnInvalidOffsetExceptionDuringStartup
@@ -2823,6 +2828,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldCheckStateUpdater
 - shouldCheckStateUpdaterInBetweenProcessCalls
 - shouldCommitAfterCommitInterval
+- shouldCommitWhenUncommittedBytesExceedLimit
 - shouldConstructAdminMetrics
 - shouldCreateMetricsAtStartup
 - shouldCreateStandbyTask
@@ -2844,6 +2850,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldNotCloseTaskProducerWhenSuspending
 - shouldNotCommitBeforeTheCommitInterval
 - shouldNotCommitNonRunningNonRestoringTasks
+- shouldNotCommitOnUncommittedBytesWhenLimitIsDisabled
 - shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled
 - shouldNotCreateStandbyTaskWithoutStateStores
 - shouldNotEnforceRebalanceOnShutdownRequestUnderStreamsProtocol
@@ -2868,6 +2875,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore
 - shouldReinitializeRevivedTasksInAnyState
 - shouldRemoveMetricsDelegatingReporterOnShutdown
+- shouldResizeMaxUncommittedBytes
 - shouldRespectNumIterationsInMainLoopWithoutProcessingThreads
 - shouldRespectPollTimeInPartitionsAssignedStateWithStateUpdater
 - shouldResumePollingForPartitionsWithAvailableSpaceBeforePolling
