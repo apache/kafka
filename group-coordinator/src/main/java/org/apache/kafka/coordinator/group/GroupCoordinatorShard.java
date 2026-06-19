@@ -1038,6 +1038,19 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Clear {@code StoredDescriptionTopologyEpoch} to {@code -1} for {@code groupId}, but only
+     * when the persisted value still equals {@code expectedStoredEpoch}. Called from the
+     * topology-description cleanup cycle so a concurrent {@code setTopology} that has advanced
+     * the field is preserved.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpoch(
+        String groupId,
+        int expectedStoredEpoch
+    ) {
+        return groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch);
+    }
+
+    /**
      * Handles a ShareGroupDescribe request.
      *
      * @param groupIds      The IDs of the groups to describe.
@@ -1133,6 +1146,27 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
         return new CoordinatorResult<>(records, false);
+    }
+
+    /**
+     * Decide whether the natural-expiration sweep must defer tombstoning {@code group} so the
+     * broker-level topology-description cleanup cycle can drive {@code plugin.deleteTopology}
+     * and clear {@code StoredDescriptionTopologyEpoch} first. Returns true only when all of:
+     * a plugin is configured on this broker (otherwise no cycle would ever clear the field
+     * and the gate would prevent natural expiration indefinitely), the group is a streams
+     * group, and its {@code StoredDescriptionTopologyEpoch} is not the {@code -1} default.
+     *
+     * <p>The {@code (StreamsGroup) group} cast is safe because the {@code group.type() == STREAMS}
+     * check precedes it via short-circuit evaluation; pulling this out of the sweep lambda
+     * keeps the gate's intent and the cast's precondition next to each other.
+     */
+    private static boolean deferStreamsGroupTombstoneForPluginCleanup(
+        boolean topologyPluginConfigured,
+        Group group
+    ) {
+        return topologyPluginConfigured
+            && group.type() == Group.GroupType.STREAMS
+            && ((StreamsGroup) group).storedDescriptionTopologyEpoch() != -1;
     }
 
     /**

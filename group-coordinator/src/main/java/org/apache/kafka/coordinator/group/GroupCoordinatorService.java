@@ -355,6 +355,23 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final AtomicBoolean isActive = new AtomicBoolean(false);
 
     /**
+     * Single-flight guard for the periodic streams-group topology-description cleanup cycle:
+     * a new cycle that fires while the previous one is still settling per-group plugin calls
+     * and conditional-clear writes is dropped. Set true at the top of {@code runStreams...
+     * CleanupCycle}, released by the {@code whenComplete} that joins all per-partition reads
+     * and per-group futures.
+     */
+    private final AtomicBoolean streamsTopologyCleanupCycleInFlight = new AtomicBoolean(false);
+
+    /**
+     * The currently-scheduled cleanup tick on the broker-level {@link Timer}. Self-rescheduled
+     * inside the {@link TimerTask}'s {@code run}; {@code shutdown} cancels this snapshot and the
+     * task's own re-arm check observes {@code isActive == false} so the next tick does not
+     * re-schedule itself.
+     */
+    private volatile TimerTask streamsTopologyCleanupTask;
+
+    /**
      * The set of supported consumer group assignors.
      */
     private final Set<String> consumerGroupAssignors;
@@ -1844,6 +1861,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .thenCompose(groupsWithStored ->
                 streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(groupsWithStored)
                     .thenApply(failures -> {
+                        recordPluginDeleteOutcome(groupsWithStored.size(), failures.size());
                         // Clear back-off entries for every group whose plugin state we
                         // attempted to delete (regardless of plugin outcome): the group is
                         // about to be tombstoned on success and re-evaluated by the next
