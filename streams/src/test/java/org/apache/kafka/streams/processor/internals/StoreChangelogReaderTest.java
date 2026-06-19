@@ -1038,11 +1038,7 @@ public class StoreChangelogReaderTest {
         // we should be able to restore to the log end offsets since there's no limit
         changelogReader.restore(mockTasks);
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        // For non-source-topic standbys, the reader refreshes restoreEndOffset from the consumer's
-        // cached Fetch high-water-mark every restore batch (no RPC) so taskEndOffsetSumSnapshot
-        // can publish lag for warm-up promotion. The records went up to offset 11, so the
-        // exclusive limit lands at the partition's next-to-be-assigned offset 12.
-        assertEquals(12L, (long) changelogReader.changelogMetadata(tp).endOffset());
+        assertNull(changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, changelogReader.changelogMetadata(tp).totalRestored());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());

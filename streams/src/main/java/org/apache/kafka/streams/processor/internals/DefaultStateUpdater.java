@@ -451,7 +451,13 @@ public class DefaultStateUpdater implements StateUpdater {
         // end-offsets are not tracked there, so the end-offset-sum is computed here from the changelog reader's
         // (logical) end-offsets for the tasks the state updater is currently restoring/updating.
         private void updateTaskEndOffsetSumSnapshot() {
-            final Map<TopicPartition, Long> changelogEndOffsets = changelogReader.logicalChangelogEndOffsets();
+            final Map<TopicPartition, Long> changelogEndOffsets;
+            if (!updatingTasks.isEmpty()) {
+                changelogEndOffsets = changelogReader.logicalChangelogEndOffsets();
+            } else {
+                changelogEndOffsets = Collections.emptyMap();
+            }
+
             final Map<StreamsRebalanceData.TaskId, Long> endOffsetSnapshot = new HashMap<>(updatingTasks.size());
 
             for (final Task task : updatingTasks.values()) {

@@ -669,7 +669,6 @@ public class StoreChangelogReader implements ChangelogReader {
         if (numRecords != 0) {
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
             final OptionalLong optionalLag = restoreConsumer.currentLag(partition);
-            maybeRefreshNonSourceStandbyEndOffset(changelogMetadata, partition, optionalLag);
             stateManager.restore(storeMetadata, records, optionalLag);
 
             // NOTE here we use removeRange of ArrayList in order to achieve efficiency with range shifting,
@@ -729,21 +728,6 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         return numRecords;
-    }
-
-    // For non-source-topic standby changelogs, the reader never populates restoreEndOffset
-    // through initializeChangelogs / maybeUpdateLimitOffsetsForStandbyChangelogs. Refresh it
-    // here from data we already have on hand (the consumer's cached Fetch high-water-mark),
-    // so taskEndOffsetSumSnapshot can report the changelog's log-end-offset for warm-up lag
-    // without issuing a new RPC.
-    private void maybeRefreshNonSourceStandbyEndOffset(final ChangelogMetadata changelogMetadata,
-                                                       final TopicPartition partition,
-                                                       final OptionalLong optionalLag) {
-        if (optionalLag.isPresent()
-                && changelogMetadata.stateManager.taskType() == TaskType.STANDBY
-                && !changelogMetadata.stateManager.changelogAsSource(partition)) {
-            changelogMetadata.restoreEndOffset = optionalLag.getAsLong() + restoreConsumer.position(partition);
-        }
     }
 
     private Set<Task> getTasksFromPartitions(final Map<TaskId, Task> tasks,
