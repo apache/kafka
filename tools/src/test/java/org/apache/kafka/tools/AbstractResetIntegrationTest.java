@@ -24,10 +24,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -492,7 +494,7 @@ public abstract class AbstractResetIntegrationTest {
             topic,
             60000L
         );
-        try (final Consumer<K, V> consumer = new org.apache.kafka.clients.consumer.KafkaConsumer<>(consumerConfig)) {
+        try (final Consumer<K, V> consumer = new KafkaConsumer<>(consumerConfig)) {
             consumer.subscribe(List.of(topic));
             TestUtils.waitForCondition(() -> {
                 final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(100));
@@ -514,7 +516,7 @@ public abstract class AbstractResetIntegrationTest {
                     .members()
                     .isEmpty();
         } catch (final ExecutionException e) {
-            if (e.getCause() instanceof org.apache.kafka.common.errors.GroupIdNotFoundException) {
+            if (e.getCause() instanceof GroupIdNotFoundException) {
                 return true;
             }
             throw e;
