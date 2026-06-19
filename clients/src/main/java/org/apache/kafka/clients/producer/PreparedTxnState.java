@@ -19,19 +19,18 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.common.record.internal.RecordBatch;
 
 /**
- * Class containing the state of a transaction after it has been prepared for a two-phase commit.
- * This state includes the producer ID and epoch, which are needed to commit or abort the transaction.
+ * Class containing the owner fence of a transaction after it has been prepared for a two-phase commit.
  */
 public class PreparedTxnState {
-    private final long producerId;
-    private final short epoch;
+    private final long txnOwnerId;
+    private final short txnOwnerEpoch;
 
     /**
      * Creates a new empty PreparedTxnState
      */
     public PreparedTxnState() {
-        this.producerId = RecordBatch.NO_PRODUCER_ID;
-        this.epoch = RecordBatch.NO_PRODUCER_EPOCH;
+        this.txnOwnerId = RecordBatch.NO_PRODUCER_ID;
+        this.txnOwnerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
     }
 
     /**
@@ -42,8 +41,8 @@ public class PreparedTxnState {
      */
     public PreparedTxnState(String serializedState) {
         if (serializedState == null || serializedState.isEmpty()) {
-            this.producerId = RecordBatch.NO_PRODUCER_ID;
-            this.epoch = RecordBatch.NO_PRODUCER_EPOCH;
+            this.txnOwnerId = RecordBatch.NO_PRODUCER_ID;
+            this.txnOwnerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
             return;
         }
 
@@ -53,13 +52,12 @@ public class PreparedTxnState {
                 throw new IllegalArgumentException("Invalid serialized transaction state format: " + serializedState);
             }
 
-            this.producerId = Long.parseLong(parts[0]);
-            this.epoch = Short.parseShort(parts[1]);
+            this.txnOwnerId = Long.parseLong(parts[0]);
+            this.txnOwnerEpoch = Short.parseShort(parts[1]);
 
-            // Validate the producerId and epoch values.
-            if (!(this.producerId >= 0 && this.epoch >= 0)) {
-                throw new IllegalArgumentException("Invalid producer ID and epoch values: " +
-                    producerId + ":" + epoch + ". Both must be >= 0");
+            if (!(this.txnOwnerId >= 0 && this.txnOwnerEpoch >= 0)) {
+                throw new IllegalArgumentException("Invalid transaction owner ID and epoch values: " +
+                    txnOwnerId + ":" + txnOwnerEpoch + ". Both must be >= 0");
             }
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid serialized transaction state format: " + serializedState, e);
@@ -67,48 +65,56 @@ public class PreparedTxnState {
     }
 
     /**
-     * Creates a new PreparedTxnState with the given producer ID and epoch
+     * Creates a new PreparedTxnState with the given transaction owner ID and epoch
      *
-     * @param producerId        The producer ID
-     * @param epoch             The producer epoch
+     * @param txnOwnerId        The transaction owner ID
+     * @param txnOwnerEpoch     The transaction owner epoch
      */
-    PreparedTxnState(long producerId, short epoch) {
-        this.producerId = producerId;
-        this.epoch = epoch;
+    PreparedTxnState(long txnOwnerId, short txnOwnerEpoch) {
+        this.txnOwnerId = txnOwnerId;
+        this.txnOwnerEpoch = txnOwnerEpoch;
     }
 
     /**
-     * Gets the producer ID associated with this prepared transaction state.
+     * Gets the transaction owner ID associated with this prepared transaction state.
      *
-     * @return The producer ID
+     * @return The transaction owner ID
      */
+    public long txnOwnerId() {
+        return txnOwnerId;
+    }
+
+    /**
+     * Gets the transaction owner epoch associated with this prepared transaction state.
+     *
+     * @return The transaction owner epoch
+     */
+    public short txnOwnerEpoch() {
+        return txnOwnerEpoch;
+    }
+
     public long producerId() {
-        return producerId;
+        return txnOwnerId;
     }
 
-    /**
-     * Gets the producer epoch associated with this prepared transaction state.
-     *
-     * @return The producer epoch
-     */
     public short epoch() {
-        return epoch;
+        return txnOwnerEpoch;
     }
 
     /**
-     * Checks if this preparedTxnState represents an initialized transaction with a valid producer ID
+     * Checks if this preparedTxnState represents an initialized transaction with a valid owner ID
      * that is not -1 (the uninitialized value).
      *
      * @return true if the state has an initialized transaction, false otherwise.
      */
     public boolean hasTransaction() {
-        return producerId != RecordBatch.NO_PRODUCER_ID;
+        return txnOwnerId != RecordBatch.NO_PRODUCER_ID;
     }
 
     /**
      * Returns a serialized string representation of this transaction state.
-     * The format is "producerId:epoch" for an initialized state, or an empty string
-     * for an uninitialized state (where producerId and epoch are both -1).
+     * The format is "txnOwnerId:txnOwnerEpoch" for an initialized state, or an empty string
+     * for an uninitialized state.
      *
      * @return a serialized string representation
      */
@@ -117,7 +123,7 @@ public class PreparedTxnState {
         if (!hasTransaction()) {
             return "";
         }
-        return producerId + ":" + epoch;
+        return txnOwnerId + ":" + txnOwnerEpoch;
     }
 
     @Override
@@ -125,14 +131,14 @@ public class PreparedTxnState {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PreparedTxnState that = (PreparedTxnState) o;
-        return producerId == that.producerId && epoch == that.epoch;
+        return txnOwnerId == that.txnOwnerId && txnOwnerEpoch == that.txnOwnerEpoch;
     }
 
     @Override
     public int hashCode() {
         int result = 31;
-        result = 31 * result + Long.hashCode(producerId);
-        result = 31 * result + (int) epoch;
+        result = 31 * result + Long.hashCode(txnOwnerId);
+        result = 31 * result + (int) txnOwnerEpoch;
         return result;
     }
 }

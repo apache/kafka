@@ -384,7 +384,7 @@ public class TransactionManager {
     /**
      * Prepare a transaction for a two-phase commit.
      * This transitions the transaction to the PREPARED_TRANSACTION state.
-     * The preparedTxnState is set with the current producer ID and epoch.
+     * The preparedTxnState is set with the current transaction owner fence.
      */
     public synchronized void prepareTransaction() {
         ensureTransactional();
@@ -2257,11 +2257,11 @@ public class TransactionManager {
     }
 
     /**
-     * Returns a ProducerIdAndEpoch object containing the producer ID and epoch
+     * Returns a ProducerIdAndEpoch object containing Kafka's transaction owner ID and epoch
      * of the ongoing transaction.
      * This is used when preparing a transaction for a two-phase commit.
      *
-     * @return a ProducerIdAndEpoch with the current producer ID and epoch.
+     * @return a ProducerIdAndEpoch with the current transaction owner ID and epoch.
      */
     public ProducerIdAndEpoch preparedTransactionState() {
         return this.preparedTxnState;

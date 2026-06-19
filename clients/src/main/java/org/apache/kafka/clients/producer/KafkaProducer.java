@@ -868,8 +868,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         flush();
         transactionManager.prepareTransaction();
         producerMetrics.recordPrepareTxn(time.nanoseconds() - now);
-        ProducerIdAndEpoch producerIdAndEpoch = transactionManager.preparedTransactionState();
-        return new PreparedTxnState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        ProducerIdAndEpoch transactionOwner = transactionManager.preparedTransactionState();
+        return new PreparedTxnState(transactionOwner.producerId, transactionOwner.epoch);
     }
 
     /**
@@ -972,9 +972,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 "Call prepareTransaction() first, or make sure initTransaction(true) was called.");
         }
         
-        // Get the current prepared transaction state
-        ProducerIdAndEpoch currentProducerIdAndEpoch = transactionManager.preparedTransactionState();
-        PreparedTxnState currentPreparedState = new PreparedTxnState(currentProducerIdAndEpoch.producerId, currentProducerIdAndEpoch.epoch);
+        ProducerIdAndEpoch currentTransactionOwner = transactionManager.preparedTransactionState();
+        PreparedTxnState currentPreparedState = new PreparedTxnState(currentTransactionOwner.producerId, currentTransactionOwner.epoch);
         
         // Compare the prepared transaction state token and commit or abort accordingly
         if (currentPreparedState.equals(preparedTxnState)) {

@@ -1470,8 +1470,8 @@ public class KafkaProducerTest {
 
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
             PreparedTxnState returned = producer.prepareTransaction();
-            assertEquals(expectedProducerId, returned.producerId());
-            assertEquals(expectedEpoch, returned.epoch());
+            assertEquals(expectedProducerId, returned.txnOwnerId());
+            assertEquals(expectedEpoch, returned.txnOwnerEpoch());
 
             verify(ctx.transactionManager).prepareTransaction();
             verify(ctx.accumulator).beginFlush();
@@ -1624,10 +1624,10 @@ public class KafkaProducerTest {
         when(ctx.sender.isRunning()).thenReturn(true);
 
         // Create prepared states with matching values
-        long producerId = 12345L;
-        short epoch = 5;
-        PreparedTxnState inputState = new PreparedTxnState(producerId, epoch);
-        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        long txnOwnerId = 12345L;
+        short txnOwnerEpoch = 5;
+        PreparedTxnState inputState = new PreparedTxnState(txnOwnerId, txnOwnerEpoch);
+        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(txnOwnerId, txnOwnerEpoch);
 
         // Set up the transaction manager to return the prepared state
         when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
@@ -1662,10 +1662,10 @@ public class KafkaProducerTest {
         when(ctx.sender.isRunning()).thenReturn(true);
 
         // Create txn prepared states with different values
-        long producerId = 12345L;
-        short epoch = 5;
-        PreparedTxnState inputState = new PreparedTxnState(producerId + 1, epoch);
-        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        long txnOwnerId = 12345L;
+        short txnOwnerEpoch = 5;
+        PreparedTxnState inputState = new PreparedTxnState(txnOwnerId + 1, txnOwnerEpoch);
+        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(txnOwnerId, txnOwnerEpoch);
 
         // Set up the transaction manager to return the prepared state
         when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);

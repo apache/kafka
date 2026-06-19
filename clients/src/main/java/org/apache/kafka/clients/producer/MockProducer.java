@@ -228,8 +228,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
         
-        // Return a new PreparedTxnState with mock values for producerId and epoch
-        // Using 1000L and (short)1 as arbitrary values for a valid PreparedTxnState
         return new PreparedTxnState(1000L, (short) 1);
     }
 
@@ -288,8 +286,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
             throw new IllegalStateException("There is no prepared transaction to complete.");
         }
 
-        // For testing purposes, we'll consider a prepared state with producerId=1000L and epoch=1 as valid
-        // This should match what's returned in prepareTransaction()
         PreparedTxnState currentState = new PreparedTxnState(1000L, (short) 1);
         
         if (currentState.equals(preparedTxnState)) {

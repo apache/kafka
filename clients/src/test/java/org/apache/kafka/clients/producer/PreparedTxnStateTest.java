@@ -33,18 +33,20 @@ public class PreparedTxnStateTest {
     public void testDefaultConstructor() {
         PreparedTxnState state = new PreparedTxnState();
         assertEquals("", state.toString(), "Empty state should serialize to an empty string");
-        assertEquals(-1L, state.producerId(), "Default producerId should be -1");
-        assertEquals((short) -1, state.epoch(), "Default epoch should be -1");
+        assertEquals(-1L, state.txnOwnerId(), "Default txnOwnerId should be -1");
+        assertEquals((short) -1, state.txnOwnerEpoch(), "Default txnOwnerEpoch should be -1");
         assertFalse(state.hasTransaction(), "Default state should not have a transaction");
     }
 
     @Test
     public void testParameterizedConstructor() {
-        long producerId = 123L;
-        short epoch = 45;
-        PreparedTxnState state = new PreparedTxnState(producerId, epoch);
-        assertEquals(producerId, state.producerId(), "ProducerId should match");
-        assertEquals(epoch, state.epoch(), "Epoch should match");
+        long txnOwnerId = 123L;
+        short txnOwnerEpoch = 45;
+        PreparedTxnState state = new PreparedTxnState(txnOwnerId, txnOwnerEpoch);
+        assertEquals(txnOwnerId, state.txnOwnerId(), "TxnOwnerId should match");
+        assertEquals(txnOwnerEpoch, state.txnOwnerEpoch(), "TxnOwnerEpoch should match");
+        assertEquals(txnOwnerId, state.producerId(), "ProducerId alias should match");
+        assertEquals(txnOwnerEpoch, state.epoch(), "Epoch alias should match");
         assertTrue(state.hasTransaction(), "State should have a transaction");
         assertEquals("123:45", state.toString(), "Serialized form should match expected format");
     }
@@ -54,8 +56,8 @@ public class PreparedTxnStateTest {
         String serialized = "123:45";
         PreparedTxnState state = new PreparedTxnState(serialized);
         assertEquals(serialized, state.toString(), "Deserialized state should match the original serialized string");
-        assertEquals(123L, state.producerId(), "Deserialized producerId should match");
-        assertEquals((short) 45, state.epoch(), "Deserialized epoch should match");
+        assertEquals(123L, state.txnOwnerId(), "Deserialized txnOwnerId should match");
+        assertEquals((short) 45, state.txnOwnerEpoch(), "Deserialized txnOwnerEpoch should match");
         assertTrue(state.hasTransaction(), "Deserialized state should have a transaction");
     }
 
@@ -70,22 +72,22 @@ public class PreparedTxnStateTest {
         // Deserialize again to verify
         PreparedTxnState stateAgain = new PreparedTxnState(serialized);
         assertEquals(original, stateAgain.toString(), "Re-deserialized state should match original");
-        assertEquals(state.producerId(), stateAgain.producerId(), "Producer IDs should match");
-        assertEquals(state.epoch(), stateAgain.epoch(), "Epochs should match");
+        assertEquals(state.txnOwnerId(), stateAgain.txnOwnerId(), "Transaction owner IDs should match");
+        assertEquals(state.txnOwnerEpoch(), stateAgain.txnOwnerEpoch(), "Transaction owner epochs should match");
 
         // Test round trip for uninitialized state (empty string)
         String emptyString = "";
         PreparedTxnState emptyState = new PreparedTxnState(emptyString);
         String emptyStateSerialized = emptyState.toString();
         assertEquals(emptyString, emptyStateSerialized, "Round-trip of empty string should remain empty");
-        assertEquals(-1L, emptyState.producerId(), "Empty string should result in producerId -1");
-        assertEquals((short) -1, emptyState.epoch(), "Empty string should result in epoch -1");
+        assertEquals(-1L, emptyState.txnOwnerId(), "Empty string should result in txnOwnerId -1");
+        assertEquals((short) -1, emptyState.txnOwnerEpoch(), "Empty string should result in txnOwnerEpoch -1");
 
         // Deserialize empty state again to verify
         PreparedTxnState emptyStateAgain = new PreparedTxnState(emptyStateSerialized);
         assertEquals(emptyString, emptyStateAgain.toString(), "Re-deserialized empty state should still be empty");
-        assertEquals(-1L, emptyStateAgain.producerId(), "Empty string should result in producerId -1");
-        assertEquals((short) -1, emptyStateAgain.epoch(), "Empty string should result in epoch -1");
+        assertEquals(-1L, emptyStateAgain.txnOwnerId(), "Empty string should result in txnOwnerId -1");
+        assertEquals((short) -1, emptyStateAgain.txnOwnerEpoch(), "Empty string should result in txnOwnerEpoch -1");
     }
 
     @Test
@@ -101,12 +103,11 @@ public class PreparedTxnStateTest {
 
     @Test
     public void testMaxValues() {
-        // Test with maximum possible values for producer ID and epoch
         String maxValues = Long.MAX_VALUE + ":" + Short.MAX_VALUE;
         PreparedTxnState state = new PreparedTxnState(maxValues);
         assertEquals(maxValues, state.toString(), "Max values should be handled correctly");
-        assertEquals(Long.MAX_VALUE, state.producerId(), "Max producer ID should be handled correctly");
-        assertEquals(Short.MAX_VALUE, state.epoch(), "Max epoch should be handled correctly");
+        assertEquals(Long.MAX_VALUE, state.txnOwnerId(), "Max txn owner ID should be handled correctly");
+        assertEquals(Short.MAX_VALUE, state.txnOwnerEpoch(), "Max txn owner epoch should be handled correctly");
         assertTrue(state.hasTransaction(), "State with max values should have a transaction");
     }
 
@@ -119,8 +120,8 @@ public class PreparedTxnStateTest {
 
         // Test equals
         assertEquals(state1, state2, "Equal states should be equal");
-        assertNotEquals(state1, state3, "States with different producer IDs should not be equal");
-        assertNotEquals(state1, state4, "States with different epochs should not be equal");
+        assertNotEquals(state1, state3, "States with different txn owner IDs should not be equal");
+        assertNotEquals(state1, state4, "States with different txn owner epochs should not be equal");
         assertNotEquals(null, state1, "State should not equal null");
 
         // Test hashCode
@@ -130,13 +131,11 @@ public class PreparedTxnStateTest {
 
     @Test
     public void testHasTransaction() {
-        // State with transaction (producer ID >= 0)
         PreparedTxnState stateWithTransaction = new PreparedTxnState(0L, (short) 0);
-        assertTrue(stateWithTransaction.hasTransaction(), "State with producerId 0 should have a transaction");
+        assertTrue(stateWithTransaction.hasTransaction(), "State with txnOwnerId 0 should have a transaction");
 
-        // State without transaction (producer ID = -1)
         PreparedTxnState stateWithoutTransaction = new PreparedTxnState(-1L, (short) -1);
-        assertFalse(stateWithoutTransaction.hasTransaction(), "State with producerId -1 should not have a transaction");
+        assertFalse(stateWithoutTransaction.hasTransaction(), "State with txnOwnerId -1 should not have a transaction");
     }
 
     @Test
@@ -151,10 +150,9 @@ public class PreparedTxnStateTest {
             () -> new PreparedTxnState("123:45:67"),
             "String with extra parts should throw IllegalArgumentException");
 
-        // Test with non-numeric producer ID
         assertThrows(IllegalArgumentException.class,
             () -> new PreparedTxnState("abc:45"),
-            "Non-numeric producer ID should throw IllegalArgumentException");
+            "Non-numeric txn owner ID should throw IllegalArgumentException");
 
         // Test with non-numeric epoch
         assertThrows(IllegalArgumentException.class,
@@ -168,29 +166,24 @@ public class PreparedTxnStateTest {
         new PreparedTxnState("0:0");
         new PreparedTxnState("123:45");
 
-        // Invalid: producerId >= 0, epoch < 0
         assertThrows(IllegalArgumentException.class,
             () -> new PreparedTxnState("123:-2"),
-            "Positive producerId with negative epoch (not -1) should throw IllegalArgumentException");
+            "Positive txnOwnerId with negative epoch should throw IllegalArgumentException");
 
-        // Invalid: producerId < 0 (not -1), epoch >= 0
         assertThrows(IllegalArgumentException.class,
             () -> new PreparedTxnState("-2:45"),
-            "Negative producerId (not -1) with positive epoch should throw IllegalArgumentException");
+            "Negative txnOwnerId with positive epoch should throw IllegalArgumentException");
 
-        // Invalid: producerId < 0 (not -1), epoch < 0 (not -1)
         assertThrows(IllegalArgumentException.class,
             () -> new PreparedTxnState("-2:-2"),
-            "Negative producerId and epoch (not -1) should throw IllegalArgumentException");
+            "Negative txnOwnerId and epoch should throw IllegalArgumentException");
 
-        // Invalid: producerId = -1, epoch >= 0
         assertThrows(IllegalArgumentException.class,
             () -> new PreparedTxnState("-1:45"),
-            "ProducerId -1 with positive epoch should throw IllegalArgumentException");
+            "TxnOwnerId -1 with positive epoch should throw IllegalArgumentException");
 
-        // Invalid: producerId >= 0, epoch = -1
         assertThrows(IllegalArgumentException.class,
             () -> new PreparedTxnState("123:-1"),
-            "Positive producerId with epoch -1 should throw IllegalArgumentException");
+            "Positive txnOwnerId with epoch -1 should throw IllegalArgumentException");
     }
 }
