@@ -44,10 +44,10 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.common.test.api.Type.KRAFT;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.apache.kafka.common.test.api.Type.KRAFT;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
