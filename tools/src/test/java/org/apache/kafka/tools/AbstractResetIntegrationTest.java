@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.types.Password;
@@ -173,6 +174,7 @@ public abstract class AbstractResetIntegrationTest {
     private static final String OUTPUT_TOPIC_2_RERUN = "outputTopic2_rerun";
     private static final String INTERMEDIATE_USER_TOPIC = "userTopic";
 
+    private static final long DEFAULT_TIMEOUT = 60000L;
     protected static final int STREAMS_CONSUMER_TIMEOUT = 2000;
     protected static final int CLEANUP_CONSUMER_TIMEOUT = 2000;
     protected static final int TIMEOUT_MULTIPLIER = 30;
@@ -473,41 +475,42 @@ public abstract class AbstractResetIntegrationTest {
     protected static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
                                                                             final Collection<KeyValue<K, V>> records,
                                                                             final Properties producerConfig,
-                                                                            final long timestamp) {
-        try (final KafkaProducer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+                                                                            final Long timestamp) {
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
             for (final KeyValue<K, V> record : records) {
-                producer.send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value)).get();
+                producer.send(new ProducerRecord<>(topic, null, timestamp, record.key, record.value, null));
             }
-            producer.flush();
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
         }
     }
 
     protected static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
                                                                                      final String topic,
                                                                                      final int expectedNumRecords) throws Exception {
+        return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
+    }
+
+    protected static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
+                                                                                     final String topic,
+                                                                                     final int expectedNumRecords,
+                                                                                     final long waitTime) throws Exception {
         final List<KeyValue<K, V>> accumData = new ArrayList<>();
         final String reason = String.format(
             "Did not receive all %d records from topic %s within %d ms",
             expectedNumRecords,
             topic,
-            60000L
+            waitTime
         );
-        try (final Consumer<K, V> consumer = new KafkaConsumer<>(consumerConfig)) {
-            consumer.subscribe(List.of(topic));
-            TestUtils.waitForCondition(() -> {
-                final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(100));
-                for (final ConsumerRecord<K, V> record : records) {
-                    accumData.add(KeyValue.pair(record.key(), record.value()));
-                }
-                return accumData.size() >= expectedNumRecords;
-            }, 60000L, reason + ", currently accumulated data is " + accumData);
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+            TestUtils.retryOnExceptionWithTimeout(waitTime, () -> {
+                final List<KeyValue<K, V>> readData = readKeyValues(topic, consumer, waitTime, expectedNumRecords);
+                accumData.addAll(readData);
+                assertTrue(accumData.size() >= expectedNumRecords, reason + ", currently accumulated data is " + accumData);
+            });
         }
         return accumData;
     }
 
-    protected static boolean isEmptyConsumerGroup(final Admin adminClient, final String appID) throws Exception {
+    protected static boolean isEmptyConsumerGroup(final Admin adminClient, final String appID) {
         try {
             return adminClient.describeConsumerGroups(List.of(appID))
                     .describedGroups()
@@ -516,19 +519,20 @@ public abstract class AbstractResetIntegrationTest {
                     .members()
                     .isEmpty();
         } catch (final ExecutionException e) {
-            if (e.getCause() instanceof GroupIdNotFoundException) {
-                return true;
-            }
-            throw e;
+            return e.getCause() instanceof GroupIdNotFoundException;
+        } catch (final InterruptedException e) {
+            return false;
         }
     }
 
     protected void waitForEmptyConsumerGroup(final Admin adminClient,
                                              final String appID,
                                              final long timeout) throws Exception {
-        try (final Admin freshAdmin = Admin.create(commonClientConfig)) {
-            TestUtils.waitForCondition(() -> isEmptyConsumerGroup(freshAdmin, appID), timeout, "Group is not empty: " + appID);
-        }
+        TestUtils.waitForCondition(
+                () -> isEmptyConsumerGroup(adminClient, appID),
+                timeout,
+                "Test consumer group " + appID + " still active even after waiting " + timeout + " ms."
+        );
     }
 
     protected static void createTopics(final String... topics) throws Exception {
@@ -537,10 +541,55 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
-    protected static Set<String> getAllTopicsInCluster() throws Exception {
+    protected static Set<String> getAllTopicsInCluster() {
         try (final Admin admin = cluster.admin()) {
             return admin.listTopics(new ListTopicsOptions().listInternal(true)).names().get();
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
         }
+    }
+
+    private static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic,
+                                                            final Consumer<K, V> consumer,
+                                                            final long waitTime,
+                                                            final int maxMessages) {
+        final List<KeyValue<K, V>> consumedValues = new ArrayList<>();
+        final List<ConsumerRecord<K, V>> records = readRecords(topic, consumer, waitTime, maxMessages);
+        for (final ConsumerRecord<K, V> record : records) {
+            consumedValues.add(new KeyValue<>(record.key(), record.value()));
+        }
+        return consumedValues;
+    }
+
+    private static <K, V> List<ConsumerRecord<K, V>> readRecords(final String topic,
+                                                                 final Consumer<K, V> consumer,
+                                                                 final long waitTime,
+                                                                 final int maxMessages) {
+        final List<ConsumerRecord<K, V>> consumerRecords = new ArrayList<>();
+        consumer.subscribe(List.of(topic));
+        final int pollIntervalMs = 100;
+        int totalPollTimeMs = 0;
+        while (totalPollTimeMs < waitTime && continueConsuming(consumerRecords.size(), maxMessages)) {
+            totalPollTimeMs += pollIntervalMs;
+            final ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(pollIntervalMs));
+            for (final ConsumerRecord<K, V> record : records) {
+                consumerRecords.add(record);
+            }
+        }
+        return consumerRecords;
+    }
+
+    private static boolean continueConsuming(final int messagesConsumed, final int maxMessages) {
+        return maxMessages > 0 && messagesConsumed < maxMessages;
+    }
+
+    private static <K, V> KafkaConsumer<K, V> createConsumer(final Properties consumerConfig) {
+        final Properties filtered = new Properties();
+        filtered.putAll(consumerConfig);
+        filtered.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        filtered.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        filtered.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        return new KafkaConsumer<>(filtered);
     }
 
     protected void assertInternalTopicsGotDeleted(final String additionalExistingTopic) throws Exception {
