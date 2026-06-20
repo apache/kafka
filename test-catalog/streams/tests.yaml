@@ -2621,7 +2621,6 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldNotCreateBaseDirectory
 - shouldNotCreateGlobalStateDirectory
 - shouldNotCreateTaskStateDirectory
-- shouldNotDeleteAppDirWhenCleanUpIfNotEmpty
 - shouldNotFailWhenCreatingTaskDirectoryInParallel
 - shouldNotHoldLockAfterInitializeStartupStores
 - shouldNotInitializeStartupStateWhenNoLocalState
@@ -2641,6 +2640,9 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldRemoveNonEmptyNamedTopologyDirsWhenCallingClean
 - shouldRemoveNonEmptyNamedTopologyDirsWhenCallingClearLocalStateForNamedTopology
 - shouldReportDirectoryEmpty
+- shouldRetainAppDirAndNotWarnWhenOnlyExpectedMetadataFilesRemainDuringClean
+- shouldRetainAppDirAndNotWarnWhenOnlyLockFileRemainsDuringClean
+- shouldRetainAppDirAndNotWarnWhenOnlyProcessFileRemainsDuringClean
 - shouldReturnEmptyArrayForNonPersistentApp
 - shouldReturnEmptyArrayIfListFilesReturnsNull
 - shouldReturnEmptyArrayIfStateDirDoesntExist
@@ -2649,6 +2651,7 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldThrowProcessorStateExceptionIfTestDirOccupied
 - shouldUnlockStartupStateOnClose
 - shouldUpdateSecurePermissions
+- shouldWarnWhenUnexpectedFilesRemainDuringClean
 org.apache.kafka.streams.processor.internals.StateManagerUtilConverterTest:
 - shouldReturnIdentityConverterForPlainToHeadersInMemoryKeyValueStore
 - shouldReturnIdentityConverterForPlainToHeadersInMemorySessionStore
