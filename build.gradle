@@ -2169,7 +2169,6 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':storage')
-    testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
     testImplementation testFixtures(project(':clients'))
     implementation project(':server-common')
