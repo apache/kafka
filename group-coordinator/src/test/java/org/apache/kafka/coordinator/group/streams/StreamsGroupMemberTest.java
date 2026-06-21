@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAss
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue.TaskIds;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.KeyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -87,6 +88,14 @@ public class StreamsGroupMemberTest {
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS5.toArray(Integer[]::new))),
             mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS6.toArray(Integer[]::new)))
         );
+    private static final Map<TaskId, Long> TASK_OFFSETS = mkMap(
+        mkEntry(new TaskId(SUBTOPOLOGY1, 1), 100L),
+        mkEntry(new TaskId(SUBTOPOLOGY1, 2), 200L)
+    );
+    private static final Map<TaskId, Long> TASK_END_OFFSETS = mkMap(
+        mkEntry(new TaskId(SUBTOPOLOGY1, 1), 150L),
+        mkEntry(new TaskId(SUBTOPOLOGY1, 2), 250L)
+    );
 
     @Test
     public void testBuilderWithMemberIdIsNull() {
@@ -146,6 +155,8 @@ public class StreamsGroupMemberTest {
         assertEquals(Map.of(), member.clientTags());
         assertEquals(TasksTupleWithEpochs.EMPTY, member.assignedTasks());
         assertEquals(TasksTupleWithEpochs.EMPTY, member.tasksPendingRevocation());
+        assertEquals(Map.of(), member.taskOffsets());
+        assertEquals(Map.of(), member.taskEndOffsets());
     }
 
     @Test
@@ -166,6 +177,8 @@ public class StreamsGroupMemberTest {
         assertEquals(CLIENT_TAGS, member.clientTags());
         assertEquals(ASSIGNED_TASKS, member.assignedTasks());
         assertEquals(TASKS_PENDING_REVOCATION, member.tasksPendingRevocation());
+        assertEquals(TASK_OFFSETS, member.taskOffsets());
+        assertEquals(TASK_END_OFFSETS, member.taskEndOffsets());
     }
 
     @Test
@@ -393,6 +406,18 @@ public class StreamsGroupMemberTest {
                             .setPartitions(assignedTasks1))
                     )
             )
+            .setTaskOffsets(List.of(
+                new StreamsGroupDescribeResponseData.TaskOffset()
+                    .setSubtopologyId(SUBTOPOLOGY1).setPartition(1).setOffset(100L),
+                new StreamsGroupDescribeResponseData.TaskOffset()
+                    .setSubtopologyId(SUBTOPOLOGY1).setPartition(2).setOffset(200L)
+            ))
+            .setTaskEndOffsets(List.of(
+                new StreamsGroupDescribeResponseData.TaskOffset()
+                    .setSubtopologyId(SUBTOPOLOGY1).setPartition(1).setOffset(150L),
+                new StreamsGroupDescribeResponseData.TaskOffset()
+                    .setSubtopologyId(SUBTOPOLOGY1).setPartition(2).setOffset(250L)
+            ))
             .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint()
                 .setHost(USER_ENDPOINT.host())
                 .setPort(USER_ENDPOINT.port())
@@ -472,6 +497,8 @@ public class StreamsGroupMemberTest {
             .setClientTags(CLIENT_TAGS)
             .setAssignedTasks(ASSIGNED_TASKS)
             .setTasksPendingRevocation(TASKS_PENDING_REVOCATION)
+            .setTaskOffsets(TASK_OFFSETS)
+            .setTaskEndOffsets(TASK_END_OFFSETS)
             .build();
     }
 }
