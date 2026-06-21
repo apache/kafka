@@ -1784,12 +1784,18 @@ class StreamsGroupHeartbeatRequestManagerTest {
             );
             result3.unsentRequests.get(0).handler().onComplete(response3);
 
-            long thirdWarnCount = logAppender.getMessages("WARN").stream()
+            List<String> missingTagWarnings = logAppender.getMessages("WARN").stream()
                 .filter(m -> m.contains("Missing required client tags"))
-                .count();
-            assertEquals(2, thirdWarnCount, "MISSING_CLIENT_TAGS warning should be logged again when the detail changes");
-            assertTrue(logAppender.getMessages("WARN").stream().anyMatch(m -> m.contains("[zone]")),
-                "The logged warning should contain the changed missing client tags detail [zone]");
+                .collect(Collectors.toList());
+            assertEquals(2, missingTagWarnings.size(),
+                "MISSING_CLIENT_TAGS warning should be logged again when the detail changes");
+            // The second log line must reflect only the new detail: it contains [zone] and must no
+            // longer report the previous [zone, cluster] detail.
+            String secondWarning = missingTagWarnings.get(1);
+            assertTrue(secondWarning.contains("[zone]"),
+                "The second logged warning should contain the changed missing client tags detail [zone]");
+            assertFalse(secondWarning.contains("[zone, cluster]"),
+                "The second logged warning should not contain the stale detail [zone, cluster]");
 
             // Fourth heartbeat with the status cleared (e.g. broker reverted its required tags) — nothing to log,
             // but the de-duplication marker should be reset.
