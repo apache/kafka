@@ -55,25 +55,14 @@ public record StreamsGroupHeartbeatResult(
     }
 
     /**
-     * Build a heartbeat result that bypasses the service-layer topology post-processing.
-     * Used at two distinct call sites:
-     *
-     * <ul>
-     *   <li>Failure-fast paths in {@code GroupCoordinatorService#streamsGroupHeartbeat}
-     *       — broker not active, request validation rejected, runtime error translated
-     *       by {@code handleOperationException}. The group is not resolved, so there is
-     *       no epoch context to track.</li>
-     *   <li>Departing-member paths in {@code GroupMetadataManager} (leave or fence).
-     *       The group exists but the member will not push a topology description, so
-     *       attaching the live epoch would arm a back-off window on its behalf and
-     *       delay solicitation for the rest of the group.</li>
-     * </ul>
-     *
-     * <p>All three epoch fields are set to -1, causing
-     * {@code maybeSetTopologyDescriptionRequired} to short-circuit before arming the
-     * back-off or setting the {@code TopologyDescriptionRequired} flag.
+     * Build a heartbeat result for an error response — a failure-fast path in
+     * {@code GroupCoordinatorService#streamsGroupHeartbeat} (broker not active, request
+     * validation rejected, or a runtime error translated by {@code handleOperationException}).
+     * No group is resolved, so there are no internal topics to create and no epoch context:
+     * all three epoch fields are -1, and {@code maybeSetTopologyDescriptionRequired}
+     * short-circuits on the error code anyway. Callers must pass a response carrying an error.
      */
-    public static StreamsGroupHeartbeatResult withoutEpochContext(StreamsGroupHeartbeatResponseData data) {
+    public static StreamsGroupHeartbeatResult forError(StreamsGroupHeartbeatResponseData data) {
         return new StreamsGroupHeartbeatResult(data, Map.of(), -1, -1, -1);
     }
 }

@@ -335,6 +335,15 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        long total = 0;
+        for (final S segment : segments.allSegments(true)) {
+            total += segment.approximateNumUncommittedBytes();
+        }
+        return total;
+    }
+
+    @Override
     public void close() {
         open = false;
         segments.close();

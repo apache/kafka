@@ -1,6 +1,6 @@
 ---
 title: Running Streams Applications
-description: 
+description: Guide to running and scaling Kafka Streams applications.
 weight: 10
 tags: ['kafka', 'docs']
 aliases: 

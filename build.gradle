@@ -285,6 +285,7 @@ if (repo != null) {
         'gradle/wrapper/gradle-wrapper.properties',
         'trogdor/README.md',
         '**/README.md',
+        '**/AGENTS.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
@@ -1308,6 +1309,8 @@ project(':core') {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     into 'site-docs'
     duplicatesStrategy 'exclude'
   }

@@ -1,6 +1,6 @@
 ---
 title: Configuring a Streams Application
-description: 
+description: Kafka Streams application configuration options and runtime settings.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 
