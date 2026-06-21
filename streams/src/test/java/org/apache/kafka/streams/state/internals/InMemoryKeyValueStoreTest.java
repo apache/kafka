@@ -38,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -447,4 +448,28 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         return Bytes.wrap(key.getBytes());
     }
 
+    @Test
+    public void shouldPrefixScanPrefixWithNoUpperBound() {
+        final Serializer<byte[]> serializer = (topic, data) -> data;
+
+        byteStore.put(Bytes.wrap(new byte[] {(byte) 0xFE}), new byte[] {0});
+        byteStore.put(Bytes.wrap(new byte[] {(byte) 0xFF}), new byte[] {1});
+        byteStore.put(Bytes.wrap(new byte[] {(byte) 0xFF, 0x00}), new byte[] {2});
+
+        final List<Bytes> keys = new ArrayList<>();
+        try (final KeyValueIterator<Bytes, byte[]> iterator =
+                byteStore.prefixScan(new byte[] {(byte) 0xFF}, serializer)) {
+            while (iterator.hasNext()) {
+                keys.add(iterator.next().key);
+            }
+        }
+
+        assertEquals(
+            Arrays.asList(
+                Bytes.wrap(new byte[] {(byte) 0xFF}),
+                Bytes.wrap(new byte[] {(byte) 0xFF, 0x00})
+            ),
+            keys
+        );
+    }
 }

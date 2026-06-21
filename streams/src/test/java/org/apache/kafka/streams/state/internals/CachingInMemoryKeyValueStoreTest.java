@@ -20,6 +20,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -458,6 +459,31 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         assertEquals(2, numberOfKeysReturned);
         assertEquals(Arrays.asList("abcd", "abcdd"), keys);
         assertEquals(Arrays.asList("2", "1"), values);
+    }
+
+    @Test
+    public void shouldPrefixScanPrefixWithNoUpperBound() {
+        final Serializer<byte[]> serializer = (topic, data) -> data;
+
+        store.put(Bytes.wrap(new byte[] {(byte) 0xFE}), new byte[] {0});
+        store.put(Bytes.wrap(new byte[] {(byte) 0xFF}), new byte[] {1});
+        store.put(Bytes.wrap(new byte[] {(byte) 0xFF, 0x00}), new byte[] {2});
+
+        final List<Bytes> keys = new ArrayList<>();
+        try (final KeyValueIterator<Bytes, byte[]> iterator =
+                store.prefixScan(new byte[] {(byte) 0xFF}, serializer)) {
+            while (iterator.hasNext()) {
+                keys.add(iterator.next().key);
+            }
+        }
+
+        assertEquals(
+            Arrays.asList(
+                Bytes.wrap(new byte[] {(byte) 0xFF}),
+                Bytes.wrap(new byte[] {(byte) 0xFF, 0x00})
+            ),
+            keys
+        );
     }
 
     @Test

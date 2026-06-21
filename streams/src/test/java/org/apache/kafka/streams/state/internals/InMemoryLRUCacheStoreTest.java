@@ -17,14 +17,18 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -161,5 +165,31 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         // and there are no other entries ...
         assertEquals(10, driver.sizeOf(store));
+    }
+
+    @Test
+    public void shouldPrefixScanPrefixWithNoUpperBound() {
+        final Serializer<byte[]> serializer = (topic, data) -> data;
+        final MemoryNavigableLRUCache byteStore = new MemoryNavigableLRUCache("byte-store", 10);
+
+        byteStore.put(Bytes.wrap(new byte[] {(byte) 0xFE}), new byte[] {0});
+        byteStore.put(Bytes.wrap(new byte[] {(byte) 0xFF}), new byte[] {1});
+        byteStore.put(Bytes.wrap(new byte[] {(byte) 0xFF, 0x00}), new byte[] {2});
+
+        final List<Bytes> keys = new ArrayList<>();
+        try (final KeyValueIterator<Bytes, byte[]> iterator =
+                 byteStore.prefixScan(new byte[] {(byte) 0xFF}, serializer)) {
+            while (iterator.hasNext()) {
+                keys.add(iterator.next().key);
+            }
+        }
+
+        assertEquals(
+            Arrays.asList(
+                Bytes.wrap(new byte[] {(byte) 0xFF}),
+                Bytes.wrap(new byte[] {(byte) 0xFF, 0x00})
+            ),
+            keys
+        );
     }
 }
