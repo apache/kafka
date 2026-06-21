@@ -19381,6 +19381,71 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupHeartbeatPersistsTaskOffsetsAndSurfacesThemInDescribe() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // Join the group.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        // Send a follow-up heartbeat reporting task offsets and task end-offsets.
+        context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setTaskOffsets(List.of(
+                    new StreamsGroupHeartbeatRequestData.TaskOffset().setSubtopologyId(subtopology1).setPartition(0).setOffset(100L),
+                    new StreamsGroupHeartbeatRequestData.TaskOffset().setSubtopologyId(subtopology1).setPartition(1).setOffset(200L)))
+                .setTaskEndOffsets(List.of(
+                    new StreamsGroupHeartbeatRequestData.TaskOffset().setSubtopologyId(subtopology1).setPartition(0).setOffset(150L),
+                    new StreamsGroupHeartbeatRequestData.TaskOffset().setSubtopologyId(subtopology1).setPartition(1).setOffset(250L))));
+
+        // The describe response surfaces the reported offsets for the member.
+        context.commit();
+        List<StreamsGroupDescribeResponseData.DescribedGroup> described = context.sendStreamsGroupDescribe(List.of(groupId));
+        assertEquals(1, described.size());
+        assertEquals(1, described.get(0).members().size());
+        StreamsGroupDescribeResponseData.Member describedMember = described.get(0).members().get(0);
+
+        assertEquals(List.of(
+            new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(subtopology1).setPartition(0).setOffset(100L),
+            new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(subtopology1).setPartition(1).setOffset(200L)
+        ), describedMember.taskOffsets());
+        assertEquals(List.of(
+            new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(subtopology1).setPartition(0).setOffset(150L),
+            new StreamsGroupDescribeResponseData.TaskOffset().setSubtopologyId(subtopology1).setPartition(1).setOffset(250L)
+        ), describedMember.taskEndOffsets());
+    }
+
+    @Test
     public void testStreamsGroupHeartbeatResponseVersion0() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -22918,6 +22983,8 @@ public class GroupMetadataManagerTest {
                 TaskAssignmentTestUtil.mkTasksPerSubtopology(TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
             ))
             .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
+            .setTaskOffsets(Map.of())
+            .setTaskEndOffsets(Map.of())
             .build();
 
         // The group and the member are created if they do not exist.

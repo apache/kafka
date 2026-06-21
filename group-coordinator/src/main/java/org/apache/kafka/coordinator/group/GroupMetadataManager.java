@@ -162,6 +162,7 @@ import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
@@ -2040,6 +2041,8 @@ public class GroupMetadataManager {
      * @param ownedWarmupTasks    The list of owned warmup tasks from the request or null.
      * @param userEndpoint        User-defined endpoint for Interactive Queries, or null.
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
+     * @param taskOffsets         The last received cumulative changelog offsets for the member's tasks, or null.
+     * @param taskEndOffsets      The last received cumulative changelog end-offsets for the member's tasks, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @param memberEndpointEpoch The last endpoint information epoch seen be the group member.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
@@ -2060,6 +2063,8 @@ public class GroupMetadataManager {
         String processId,
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
+        List<StreamsGroupHeartbeatRequestData.TaskOffset> taskOffsets,
+        List<StreamsGroupHeartbeatRequestData.TaskOffset> taskEndOffsets,
         boolean shutdownApplication,
         int memberEndpointEpoch
     ) throws ApiException {
@@ -2118,6 +2123,13 @@ public class GroupMetadataManager {
             .setClientHost(clientHost)
             .maybeUpdateProcessId(Optional.ofNullable(processId))
             .maybeUpdateClientTags(Optional.ofNullable(clientTags).map(x -> x.stream().collect(Collectors.toMap(KeyValue::key, KeyValue::value))));
+
+        if (taskOffsets != null) {
+            updatedMemberBuilder.setTaskOffsets(taskOffsetsFromRequest(taskOffsets));
+        }
+        if (taskEndOffsets != null) {
+            updatedMemberBuilder.setTaskEndOffsets(taskOffsetsFromRequest(taskEndOffsets));
+        }
 
         if (isJoining) {
             StreamsGroupMemberMetadataValue.Endpoint userEndpointMetadata = userEndpoint == null ? null :
@@ -2240,6 +2252,9 @@ public class GroupMetadataManager {
 
         // 5. Reconcile the member's assignment with the target assignment if the member is not
         // fully reconciled yet.
+        boolean taskOffsetsChanged = !Objects.equals(member.taskOffsets(), updatedMember.taskOffsets())
+            || !Objects.equals(member.taskEndOffsets(), updatedMember.taskEndOffsets());
+        int recordsSizeBeforeReconcile = records.size();
         updatedMember = maybeReconcile(
             groupId,
             updatedMember,
@@ -2253,6 +2268,13 @@ public class GroupMetadataManager {
             ownedWarmupTasks,
             records
         );
+
+        // If the task offsets changed but reconciliation did not already persist a new current-assignment
+        // record, persist one so that the updated offsets are replayed into the member's state and surfaced
+        // in the describe response.
+        if (taskOffsetsChanged && records.size() == recordsSizeBeforeReconcile) {
+            records.add(newStreamsGroupCurrentAssignmentRecord(groupId, updatedMember));
+        }
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
         if (shutdownApplication) {
@@ -2333,6 +2355,20 @@ public class GroupMetadataManager {
             group.storedDescriptionTopologyEpoch(),
             group.failedDescriptionTopologyEpoch()
         ));
+    }
+
+    /**
+     * Converts the task offsets carried in a Streams group heartbeat request into a map keyed by task.
+     *
+     * @param taskOffsets The list of task offsets from the request.
+     * @return A map from {@link TaskId} to the offset.
+     */
+    private static Map<TaskId, Long> taskOffsetsFromRequest(List<StreamsGroupHeartbeatRequestData.TaskOffset> taskOffsets) {
+        Map<TaskId, Long> offsets = new HashMap<>();
+        for (StreamsGroupHeartbeatRequestData.TaskOffset taskOffset : taskOffsets) {
+            offsets.put(new TaskId(taskOffset.subtopologyId(), taskOffset.partition()), taskOffset.offset());
+        }
+        return offsets;
     }
 
     /**
@@ -5384,6 +5420,8 @@ public class GroupMetadataManager {
                 request.processId(),
                 request.userEndpoint(),
                 request.clientTags(),
+                request.taskOffsets(),
+                request.taskEndOffsets(),
                 request.shutdownApplication(),
                 request.endpointInformationEpoch()
             );

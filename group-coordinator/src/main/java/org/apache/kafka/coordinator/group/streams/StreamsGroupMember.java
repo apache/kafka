@@ -301,7 +301,17 @@ public record StreamsGroupMember(String memberId,
                     record.memberEpoch()
                 )
             );
+            setTaskOffsets(taskOffsetsFromRecord(record.taskOffsets()));
+            setTaskEndOffsets(taskOffsetsFromRecord(record.taskEndOffsets()));
             return this;
+        }
+
+        private static Map<TaskId, Long> taskOffsetsFromRecord(List<StreamsGroupCurrentMemberAssignmentValue.TaskOffset> taskOffsets) {
+            Map<TaskId, Long> offsets = new HashMap<>();
+            for (StreamsGroupCurrentMemberAssignmentValue.TaskOffset taskOffset : taskOffsets) {
+                offsets.put(new TaskId(taskOffset.subtopologyId(), taskOffset.partition()), taskOffset.offset());
+            }
+            return offsets;
         }
 
         public static Builder withDefaults(String memberId) {

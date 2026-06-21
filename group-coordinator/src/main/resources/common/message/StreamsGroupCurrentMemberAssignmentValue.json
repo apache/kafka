@@ -37,7 +37,11 @@
     { "name": "StandbyTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
       "about": "The standby tasks that must be revoked by this member." },
     { "name": "WarmupTasksPendingRevocation", "versions": "0+", "type": "[]TaskIds",
-      "about": "The warmup tasks that must be revoked by this member." }
+      "about": "The warmup tasks that must be revoked by this member." },
+    { "name": "TaskOffsets", "versions": "0+", "taggedVersions": "0+", "tag": 0, "type": "[]TaskOffset",
+      "about": "The last received cumulative changelog offsets for the member's tasks." },
+    { "name": "TaskEndOffsets", "versions": "0+", "taggedVersions": "0+", "tag": 1, "type": "[]TaskOffset",
+      "about": "The last received cumulative changelog end-offsets for the member's tasks." }
   ],
   "commonStructs": [
     { "name": "TaskIds", "versions": "0+", "fields": [
@@ -47,6 +51,14 @@
         "about": "The partitions of the input topics processed by this member." },
       { "name": "AssignmentEpochs", "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 0, "type": "[]int32", "default": null,
         "about": "The epoch at which the partition was assigned to the member. Used to fence zombie commits requests. Of the same length as Partitions. Only defined for active tasks." }
+    ]},
+    { "name": "TaskOffset", "versions": "0+", "fields": [
+      { "name": "SubtopologyId", "type": "string", "versions": "0+",
+        "about": "The subtopology ID." },
+      { "name": "Partition", "type": "int32", "versions": "0+",
+        "about": "The partition." },
+      { "name": "Offset", "type": "int64", "versions": "0+",
+        "about": "The offset." }
     ]}
   ]
 }

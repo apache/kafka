@@ -30,6 +30,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskId;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
@@ -284,7 +285,9 @@ public class StreamsCoordinatorRecordHelpers {
                     .setWarmupTasks(toTaskIds(member.assignedTasks().warmupTasks()))
                     .setActiveTasksPendingRevocation(toTaskIdsWithEpochs(member.tasksPendingRevocation().activeTasksWithEpochs()))
                     .setStandbyTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().standbyTasks()))
-                    .setWarmupTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().warmupTasks())),
+                    .setWarmupTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().warmupTasks()))
+                    .setTaskOffsets(toTaskOffsets(member.taskOffsets()))
+                    .setTaskEndOffsets(toTaskOffsets(member.taskEndOffsets())),
                 (short) 0
             )
         );
@@ -349,6 +352,21 @@ public class StreamsCoordinatorRecordHelpers {
         });
         taskIds.sort(Comparator.comparing(StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopologyId));
         return taskIds;
+    }
+
+    private static List<StreamsGroupCurrentMemberAssignmentValue.TaskOffset> toTaskOffsets(
+        Map<TaskId, Long> offsets
+    ) {
+        if (offsets == null) {
+            return List.of();
+        }
+        return offsets.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(entry -> new StreamsGroupCurrentMemberAssignmentValue.TaskOffset()
+                .setSubtopologyId(entry.getKey().subtopologyId())
+                .setPartition(entry.getKey().partition())
+                .setOffset(entry.getValue()))
+            .toList();
     }
 
     /**
