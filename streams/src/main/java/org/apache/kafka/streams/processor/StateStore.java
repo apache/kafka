@@ -216,6 +216,15 @@ public interface StateStore {
     }
 
     /**
+     * Returns an approximation of the number of uncommitted bytes currently buffered in this store's
+     * transaction buffer, or 0 if the store is not transactional. This is used to trigger early
+     * commits when the buffer grows too large.
+     */
+    default long approximateNumUncommittedBytes() {
+        return 0;
+    }
+
+    /**
      * Returns the position the state store is at with respect to the input topic/partitions
      */
     @Evolving

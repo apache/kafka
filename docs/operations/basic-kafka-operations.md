@@ -1,6 +1,6 @@
 ---
 title: Basic Kafka Operations
-description: Basic Kafka Operations
+description: Common Kafka cluster administration tasks and command-line tools.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 

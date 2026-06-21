@@ -1,6 +1,6 @@
 ---
 title: Upgrade Guide
-description: 
+description: Kafka Streams upgrade guidance and compatibility notes.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 
@@ -64,6 +64,10 @@ Kafka Streams does not support running multiple instances of the same applicatio
 Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured by setting `"processing.guarantee"` to `"exactly_once_v2"` for application versions 3.0+, or setting it to `"exactly_once_beta"` for versions between 2.6 and 2.8. To use this new feature, your brokers must be on version 2.5.x or newer. If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+, you first need to upgrade your application to version 3.0.x, staying on `"exactly_once"`, and then do second round of rolling bounces to switch to `"exactly_once_v2"`. If you are upgrading an EOS application from an older (pre-2.6) version to a version between 2.6 and 2.8, follow these same steps but with the config `"exactly_once_beta"` instead. No special steps are required to upgrade an application using `"exactly_once_beta"` from version 2.6+ to 3.0 or higher: you can just change the config from `"exactly_once_beta"` to `"exactly_once_v2"` during the rolling upgrade. For a downgrade, do the reverse: first switch the config from `"exactly_once_v2"` to `"exactly_once"` to disable the feature in your 2.6.x application. Afterward, you can downgrade your application to a pre-2.6.x version. 
 
 Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.
+
+## Streams API changes in 4.4.0
+
+Kafka Streams no longer emits a WARN from `KafkaStreams#cleanUp()` when the application state directory cannot be deleted only because expected metadata files remain, such as `kafka-streams-process-metadata` and/or `.lock`. In this case, the local state cleanup is considered successful and the application state directory may be retained. Users who require a full local reset including persisted process metadata should manually delete the application state directory after the Kafka Streams instance has been closed. More details can be found in [KIP-1283](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1283:+Clarify+KafkaStreams+cleanUp+semantics+to+preserve+process+metadata+and+state+directory+lock+file)
 
 ## Streams API changes in 4.3.0
 
