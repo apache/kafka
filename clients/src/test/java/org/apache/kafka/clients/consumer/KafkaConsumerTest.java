@@ -368,7 +368,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testUnSubscribingNonExisingMetricsDoesntCauseError(GroupProtocol groupProtocol) {
+    public void testUnsubscribingNonExistingMetricsDoesntCauseError(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -518,7 +518,7 @@ public class KafkaConsumerTest {
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
         long lastOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
-        assertEquals(invalidRecordNumber - 2, lastOffset);
+        assertEquals(invalidRecordOffset - 1, lastOffset);
         assertEquals(1, records.nextOffsets().size());
         assertEquals(new OffsetAndMetadata(lastOffset + 1), records.nextOffsets().get(tp0));
 
@@ -680,7 +680,7 @@ public class KafkaConsumerTest {
             appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
             consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
             assertFalse(
-                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production-ready!")),
                     "Should not log recommendation when no group.id is set"
             );
         }

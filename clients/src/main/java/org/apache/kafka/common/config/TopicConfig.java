@@ -31,12 +31,17 @@ public class TopicConfig {
     public static final String SEGMENT_BYTES_CONFIG = "segment.bytes";
     public static final String SEGMENT_BYTES_DOC = "This configuration controls the segment file size for " +
         "the log. Retention and cleaning is always done a file at a time so a larger segment size means " +
-        "fewer files but less granular control over retention.";
+        "fewer files but less granular control over retention. " +
+        "The active segment is rolled once it reaches this size.";
 
     public static final String SEGMENT_MS_CONFIG = "segment.ms";
     public static final String SEGMENT_MS_DOC = "This configuration controls the period of time after " +
         "which Kafka will force the log to roll even if the segment file isn't full to ensure that retention " +
-        "can delete or compact old data.";
+        "can delete or compact old data. " +
+        "This forces active segment rolling by time, even if the active segment has not reached " +
+        "<code>segment.bytes</code>. For compacted topics, <code>max.compaction.lag.ms</code> can trigger " +
+        "active segment rolling sooner: the effective time-based roll threshold is the smaller of " +
+        "<code>segment.ms</code> and <code>max.compaction.lag.ms</code>.";
 
     public static final String SEGMENT_JITTER_MS_CONFIG = "segment.jitter.ms";
     public static final String SEGMENT_JITTER_MS_DOC = "The maximum random jitter subtracted from the scheduled " +
@@ -151,7 +156,13 @@ public class TopicConfig {
 
     public static final String MAX_COMPACTION_LAG_MS_CONFIG = "max.compaction.lag.ms";
     public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
-        "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
+        "ineligible for compaction in the log. Only applicable for logs that are being compacted. " +
+        "Because the active segment is never compacted, for compacted topics this value also drives " +
+        "active segment rolling: the effective time-based roll threshold is the smaller of " +
+        "<code>segment.ms</code> and <code>max.compaction.lag.ms</code>. Active segment rolling moves " +
+        "records out of the active segment, after which <code>max.compaction.lag.ms</code> makes them " +
+        "eligible for compaction even if <code>min.cleanable.dirty.ratio</code> is not met. See " +
+        "<a href=\"https://kafka.apache.org/documentation/#compaction\">log compaction</a>.";
 
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +

@@ -65,6 +65,10 @@ Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS v
 
 Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.
 
+## Streams API changes in 4.4.0
+
+Kafka Streams no longer emits a WARN from `KafkaStreams#cleanUp()` when the application state directory cannot be deleted only because expected metadata files remain, such as `kafka-streams-process-metadata` and/or `.lock`. In this case, the local state cleanup is considered successful and the application state directory may be retained. Users who require a full local reset including persisted process metadata should manually delete the application state directory after the Kafka Streams instance has been closed. More details can be found in [KIP-1283](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1283:+Clarify+KafkaStreams+cleanUp+semantics+to+preserve+process+metadata+and+state+directory+lock+file)
+
 ## Streams API changes in 4.3.0
 
 **Note:** Kafka Streams 4.3.0 contains a critical native memory leak in the RocksDB state store layer ([KAFKA-20616](https://issues.apache.org/jira/browse/KAFKA-20616)). The `ColumnFamilyOptions` for the offsets column family is not closed, and column family handles can leak on close-path exceptions, which under cascading task closes (e.g., rebalances or error-triggered recoveries) leads to unbounded off-heap memory growth and eventual OOM. Users running Kafka Streams should consider upgrading directly to 4.3.1, which includes the fix for it.
