@@ -944,11 +944,11 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testSubscriptionOnNullTopic
 - testSubscriptionOnNullTopicCollection
 - testSubscriptionWithEmptyPartitionAssignment
-- testUnSubscribingNonExisingMetricsDoesntCauseError
 - testUnsubscribeDoesNotCommitOffsetsEvenWithAutoCommitEnabled
 - testUnsubscribeShouldTriggerPartitionsLostWithNoGeneration
 - testUnsubscribeShouldTriggerPartitionsRevokedWithValidGeneration
 - testUnsubscribingCustomMetricsWithSameNameDoesntAffectConsumerMetrics
+- testUnsubscribingNonExistingMetricsDoesntCauseError
 - testUnusedConfigs
 - testWakeupWithFetchDataAvailable
 - verifyHeartbeatSent
