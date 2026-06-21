@@ -40,6 +40,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -60,6 +62,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
@@ -84,6 +87,7 @@ import static org.mockito.Mockito.when;
 public class StreamsMembershipManagerTest {
 
     private static final String GROUP_ID = "test-group";
+    private static final String INSTANCE_ID = "instance-1";
     private static final int MEMBER_EPOCH = 1;
 
     private static final String SUBTOPOLOGY_ID_0 = "subtopology-0";
@@ -1452,7 +1456,7 @@ public class StreamsMembershipManagerTest {
     public void testLeaveGroupEpochIsStaticMemberEpochForStaticMember() {
         final StreamsMembershipManager staticMember = new StreamsMembershipManager(
             GROUP_ID,
-            Optional.of("instance-1"),
+            Optional.of(INSTANCE_ID),
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"), time, new Metrics(time)
         );
@@ -1463,7 +1467,7 @@ public class StreamsMembershipManagerTest {
     public void testLeaveGroupEpochIsDynamicMemberEpochForStaticMemberWithLeaveGroupOperation() {
         final StreamsMembershipManager staticMember = new StreamsMembershipManager(
             GROUP_ID,
-            Optional.of("instance-1"),
+            Optional.of(INSTANCE_ID),
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"), time, new Metrics(time)
         );
@@ -1476,7 +1480,7 @@ public class StreamsMembershipManagerTest {
     public void testLeaveGroupEpochIsStaticMemberEpochForStaticMemberWithRemainInGroup() {
         final StreamsMembershipManager staticMember = new StreamsMembershipManager(
             GROUP_ID,
-            Optional.of("instance-1"),
+            Optional.of(INSTANCE_ID),
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"), time, new Metrics(time)
         );
@@ -1490,7 +1494,7 @@ public class StreamsMembershipManagerTest {
         setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
         final StreamsMembershipManager staticMember = new StreamsMembershipManager(
             GROUP_ID,
-            Optional.of("instance-1"),
+            Optional.of(INSTANCE_ID),
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"), time, new Metrics(time)
         );
@@ -1542,39 +1546,16 @@ public class StreamsMembershipManagerTest {
         verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
     }
 
-    @Test
-    public void testStaticMemberRemainInGroupUsesStaticLeaveEpochOnClose() {
-        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
-        MemberState expectedState = MemberState.LEAVING;
-        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
-        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
-    }
-
-    @Test
-    public void testStaticMemberDefaultUsesLeaveGroupStaticMemberEpochOnClose() {
-        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.DEFAULT;
-        MemberState expectedState = MemberState.LEAVING;
-        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
-        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
-    }
-
-    @Test
-    public void testStaticMemberLeaveGroupUsesLeaveGroupEpochOnClose() {
-        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
-        MemberState expectedState = MemberState.LEAVING;
-        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
-    }
-
-    private void verifyStaticMemberLeaveOnClose(
-        CloseOptions.GroupMembershipOperation membershipOperation,
-        MemberState expectedMemberState,
-        int expectedMemberEpoch
+    @ParameterizedTest
+    @MethodSource("staticMemberLeaveOnCloseOperations")
+    public void testStaticMemberUsesExpectedLeaveEpochOnClose(
+        final CloseOptions.GroupMembershipOperation operation,
+        final int expectedEpoch
     ) {
         final Metrics localMetrics = new Metrics(time);
         StreamsMembershipManager membershipManagerWithStaticMember = new StreamsMembershipManager(
             GROUP_ID,
-            Optional.of("instance-1"),
+            Optional.of(INSTANCE_ID),
             streamsRebalanceData,
             subscriptionState,
             backgroundEventHandler,
@@ -1585,11 +1566,28 @@ public class StreamsMembershipManagerTest {
         membershipManagerWithStaticMember.registerStateListener(memberStateListener);
         joining(membershipManagerWithStaticMember);
 
-        CompletableFuture<Void> onGroupLeft = membershipManagerWithStaticMember.leaveGroupOnClose(membershipOperation);
+        CompletableFuture<Void> onGroupLeft = membershipManagerWithStaticMember.leaveGroupOnClose(operation);
 
-        assertEquals(expectedMemberState, membershipManagerWithStaticMember.state());
-        assertEquals(expectedMemberEpoch, membershipManagerWithStaticMember.memberEpoch());
+        assertEquals(MemberState.LEAVING, membershipManagerWithStaticMember.state());
+        assertEquals(expectedEpoch, membershipManagerWithStaticMember.memberEpoch());
         assertFalse(onGroupLeft.isDone());
+    }
+
+    private static Stream<Arguments> staticMemberLeaveOnCloseOperations() {
+        return Stream.of(
+            Arguments.of(
+                CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP,
+                StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH
+            ),
+            Arguments.of(
+                CloseOptions.GroupMembershipOperation.DEFAULT,
+                StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH
+            ),
+            Arguments.of(
+                CloseOptions.GroupMembershipOperation.LEAVE_GROUP,
+                StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH
+            )
+        );
     }
 
     @Test
