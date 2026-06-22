@@ -1,6 +1,6 @@
 ---
 title: Streams Security
-description: 
+description: Security configuration and required ACLs for Kafka Streams applications.
 weight: 12
 tags: ['kafka', 'docs']
 aliases: 

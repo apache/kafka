@@ -1,6 +1,6 @@
 ---
 title: Streams Rebalance Protocol
-description:
+description: Kafka Streams rebalance protocol behavior, migration paths, and limitations.
 weight: 14
 tags: ['kafka', 'docs']
 aliases:

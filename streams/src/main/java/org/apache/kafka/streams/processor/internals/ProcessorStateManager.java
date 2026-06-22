@@ -629,6 +629,14 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
+    long approximateNumUncommittedBytes() {
+        long total = 0;
+        for (final StateStoreMetadata metadata : stores.values()) {
+            total += metadata.stateStore.approximateNumUncommittedBytes();
+        }
+        return total;
+    }
+
     /**
      * {@link StateStore#close() Close} all stores (even in case of failure).
      * Log all exceptions and re-throw the first exception that occurred at the end.
