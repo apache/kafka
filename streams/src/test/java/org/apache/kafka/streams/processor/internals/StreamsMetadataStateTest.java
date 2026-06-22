@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -54,6 +55,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class StreamsMetadataStateTest {
 
@@ -135,8 +141,14 @@ public class StreamsMetadataStateTest {
     }
 
     static class MultiValuedPartitioner implements StreamPartitioner<String, Object> {
+        @SuppressWarnings("removal")
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
             final Set<Integer> partitions = new HashSet<>();
             partitions.add(0);
             partitions.add(1);
@@ -384,6 +396,20 @@ public class StreamsMetadataStateTest {
         );
         streamsMetadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
         assertNotNull(streamsMetadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), partitioner));
+    }
+
+    @Test
+    public void shouldPropagateHeadersToPartitioner() {
+        final Headers headers = new RecordHeaders();
+        headers.add("key", "value".getBytes());
+
+        @SuppressWarnings("unchecked")
+        final StreamPartitioner<String, Object> mockPartitioner = mock(StreamPartitioner.class);
+        when(mockPartitioner.partitions(eq("topic-three"), eq("the-key"), eq(null), eq(headers), anyInt())).thenReturn(Optional.of(Collections.singleton(0)));
+
+        metadataState.keyQueryMetadataForKey("table-three", "the-key", headers, mockPartitioner);
+
+        verify(mockPartitioner).partitions("topic-three", "the-key", null, headers, 1);
     }
 
     @Test

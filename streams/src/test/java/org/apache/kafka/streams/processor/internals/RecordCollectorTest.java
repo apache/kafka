@@ -109,6 +109,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -137,8 +138,21 @@ public class RecordCollectorTest {
     private final StringSerializer stringSerializer = new StringSerializer();
     private final ByteArraySerializer byteArraySerializer = new ByteArraySerializer();
 
-    private final StreamPartitioner<String, Object> streamPartitioner =
-        (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Integer.parseInt(key) % numPartitions));
+    private final StreamPartitioner<String, Object> streamPartitioner = new StreamPartitioner<String, Object>() {
+        @SuppressWarnings("removal")
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+            if (headers != null && headers.lastHeader("key") != null) {
+                assertEquals("value", new String(headers.lastHeader("key").value()));
+            }
+            return Optional.of(Collections.singleton(Integer.parseInt(key) % numPartitions));
+        }
+    };
 
     private final MockProducer<byte[], byte[]> mockProducer
         = new MockProducer<>(cluster, true, new org.apache.kafka.clients.producer.RoundRobinPartitioner(), new ByteArraySerializer(), new ByteArraySerializer());
@@ -304,8 +318,17 @@ public class RecordCollectorTest {
     @Test
     public void shouldSendOnlyToEvenPartitions() {
         class EvenPartitioner implements StreamPartitioner<String, Object> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+                if (headers != null && headers.lastHeader("key") != null) {
+                    assertEquals("value", new String(headers.lastHeader("key").value()));
+                }
                 final Set<Integer> partitions = new HashSet<>();
                 for (int i = 0; i < numPartitions; i += 2) {
                     partitions.add(i);
@@ -369,8 +392,17 @@ public class RecordCollectorTest {
     public void shouldBroadcastToAllPartitions() {
 
         class BroadcastingPartitioner implements StreamPartitioner<String, Object> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+                if (headers != null && headers.lastHeader("key") != null) {
+                    assertEquals("value", new String(headers.lastHeader("key").value()));
+                }
                 return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
             }
         }
@@ -430,8 +462,17 @@ public class RecordCollectorTest {
     public void shouldDropAllRecords() {
 
         class DroppingPartitioner implements StreamPartitioner<String, Object> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+                if (headers != null && headers.lastHeader("key") != null) {
+                    assertEquals("value", new String(headers.lastHeader("key").value()));
+                }
                 return Optional.of(Collections.emptySet());
             }
         }
@@ -503,8 +544,17 @@ public class RecordCollectorTest {
     public void shouldUseDefaultPartitionerViaPartitions() {
 
         class DefaultPartitioner implements StreamPartitioner<String, Object> {
+            @SuppressWarnings("removal")
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+                if (headers != null && headers.lastHeader("key") != null) {
+                    assertEquals("value", new String(headers.lastHeader("key").value()));
+                }
                 return Optional.empty();
             }
         }
@@ -562,8 +612,21 @@ public class RecordCollectorTest {
     @Test
     public void shouldUseDefaultPartitionerAsPartitionReturnsEmptyOptional() {
 
-        final StreamPartitioner<String, Object> streamPartitioner =
-                (topic, key, value, numPartitions) -> Optional.empty();
+        final StreamPartitioner<String, Object> streamPartitioner = new StreamPartitioner<String, Object>() {
+            @SuppressWarnings("removal")
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                throw new AssertionError("Deprecated 4-argument partitions method was called instead of 5-argument method containing headers.");
+            }
+
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
+                if (headers != null && headers.lastHeader("key") != null) {
+                    assertEquals("value", new String(headers.lastHeader("key").value()));
+                }
+                return Optional.empty();
+            }
+        };
 
         final SinkNode<?, ?> sinkNode = new SinkNode<>(
                 sinkNodeName,
@@ -611,6 +674,18 @@ public class RecordCollectorTest {
         assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
         assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
+    }
+
+    @Test
+    public void shouldPropagateHeadersToPartitioner() {
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+        @SuppressWarnings("unchecked")
+        final StreamPartitioner<String, Object> mockPartitioner = mock(StreamPartitioner.class);
+        when(mockPartitioner.partitions(topic, "3", "0", headers, 3)).thenReturn(Optional.of(Collections.singleton(0)));
+
+        collector.send(topic, "3", "0", headers, null, stringSerializer, stringSerializer, null, context, mockPartitioner);
+
+        verify(mockPartitioner).partitions(topic, "3", "0", headers, 3);
     }
 
     @Test
