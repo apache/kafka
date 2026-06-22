@@ -13,7 +13,6 @@
 package kafka.api
 
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
-import kafka.security.JaasTestUtils
 import kafka.server.KafkaBroker
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
@@ -23,6 +22,7 @@ import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPart
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteStorageMetrics}
@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
-
 
 import java.util.{Locale, Properties}
 import scala.jdk.CollectionConverters._
@@ -44,7 +43,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
-    s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME}"
+    s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasUtils.KAFKA_SERVER_CONTEXT_NAME}"
   this.serverConfig.setProperty(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")
   // intentionally slow message down conversion via gzip compression to ensure we can measure the time it takes

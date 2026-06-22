@@ -27,11 +27,11 @@ import java.util.{Optional, Properties, UUID}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
-import kafka.security.JaasTestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.internals.{AsyncKafkaConsumer, StreamsRebalanceData, StreamsRebalanceListener}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig}
@@ -170,8 +170,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   def clientSecurityProps(certAlias: String): Properties = {
-    JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile), certAlias,
-      JaasTestUtils.SSL_CERTIFICATE_CN, OptionConverters.toJava(clientSaslProperties))
+    JaasUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile), certAlias,
+      JaasUtils.SSL_CERTIFICATE_CN, OptionConverters.toJava(clientSaslProperties))
   }
 
   def superuserSecurityProps(certAlias: String): Properties = {

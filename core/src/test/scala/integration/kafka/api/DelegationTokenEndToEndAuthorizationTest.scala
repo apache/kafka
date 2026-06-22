@@ -16,8 +16,6 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
-
 import java.util.Properties
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
@@ -25,6 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.metadata.storage.Formatter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -44,11 +43,11 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_USER)
-  private val clientPassword = JaasTestUtils.KAFKA_SCRAM_PASSWORD
+  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasUtils.KAFKA_SCRAM_USER)
+  private val clientPassword = JaasUtils.KAFKA_SCRAM_PASSWORD
 
-  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_ADMIN)
-  protected val kafkaPassword = JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasUtils.KAFKA_SCRAM_ADMIN)
+  protected val kafkaPassword = JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD
 
   protected val privilegedAdminClientConfig = new Properties()
 
@@ -66,7 +65,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ")
     formatter.setScramArguments(
-      java.util.List.of(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
+      java.util.List.of(s"SCRAM-SHA-256=[name=${JaasUtils.KAFKA_SCRAM_ADMIN},password=${JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def createPrivilegedAdminClient(): Admin = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
@@ -90,11 +89,11 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     privilegedAdminClientConfig.putAll(adminClientConfig)
 
     // pass token to client jaas config
-    val clientLoginContext = JaasTestUtils.tokenClientLoginModule(token.tokenInfo().tokenId(), token.hmacAsBase64String())
+    val clientLoginContext = JaasUtils.tokenClientLoginModule(token.tokenInfo().tokenId(), token.hmacAsBase64String())
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
-    val privilegedClientLoginContext = JaasTestUtils.tokenClientLoginModule(privilegedToken.tokenInfo().tokenId(), privilegedToken.hmacAsBase64String())
+    val privilegedClientLoginContext = JaasUtils.tokenClientLoginModule(privilegedToken.tokenInfo().tokenId(), privilegedToken.hmacAsBase64String())
     privilegedAdminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
     superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
   }

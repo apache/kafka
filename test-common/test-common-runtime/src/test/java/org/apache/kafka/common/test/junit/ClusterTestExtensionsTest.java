@@ -447,7 +447,7 @@ public class ClusterTestExtensionsTest {
             SaslConfigs.SASL_JAAS_CONFIG,
             String.format(
                 "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-                JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD
+                JaasUtils.KAFKA_PLAIN_USER, JaasUtils.KAFKA_PLAIN_PASSWORD
             )
         );
         try (Admin admin = clusterInstance.admin(nonAdminConfig)) {
@@ -568,7 +568,7 @@ public class ClusterTestExtensionsTest {
             SaslConfigs.SASL_JAAS_CONFIG,
             String.format(
                 "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
-                JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD
+                JaasUtils.KAFKA_PLAIN_USER, JaasUtils.KAFKA_PLAIN_PASSWORD
             )
         );
         try (Admin admin = clusterInstance.admin(nonAdminConfig, true)) {

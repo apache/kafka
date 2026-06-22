@@ -71,7 +71,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -257,7 +256,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         private Optional<File> maybeSetupJaasFile() throws Exception {
             if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name) ||
                     brokerSecurityProtocol.equals(SecurityProtocol.SASL_SSL.name)) {
-                File file = JaasUtils.writeJaasContextsToFile(Set.of(
+                File file = JaasUtils.writeJaasContextsToFile(List.of(
                     new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
                         List.of(
                             JaasModule.plainLoginModule(
@@ -265,7 +264,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD,
                                 true,
                                 Map.of(
-                                    JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD,
+                                    JaasUtils.KAFKA_PLAIN_USER, JaasUtils.KAFKA_PLAIN_PASSWORD,
                                     JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD)
                             )
                         )

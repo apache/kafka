@@ -16,11 +16,10 @@
   */
 package kafka.server
 
-import kafka.security.JaasTestUtils
-
 import java.util
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
+import org.apache.kafka.common.test.JaasUtils
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions.assertThrows
 
@@ -41,7 +40,7 @@ class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val securityProps: util.Map[Object, Object] =
-      JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
+      JaasUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config
   }

@@ -16,7 +16,6 @@
  */
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.acl._
@@ -25,6 +24,7 @@ import org.apache.kafka.common.resource.ResourceType.USER
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
+import org.apache.kafka.common.test.JaasUtils
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -51,8 +51,8 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
 
   override def createDelegationTokenOptions(): CreateDelegationTokenOptions = new CreateDelegationTokenOptions().owner(clientPrincipal)
 
-  private val tokenRequesterPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_USER_2)
-  private val tokenRequesterPassword = JaasTestUtils.KAFKA_SCRAM_PASSWORD_2
+  private val tokenRequesterPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasUtils.KAFKA_SCRAM_USER_2)
+  private val tokenRequesterPassword = JaasUtils.KAFKA_SCRAM_PASSWORD_2
 
   private val otherClientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "other-client-principal")
   private val otherClientPassword = "other-client-password"

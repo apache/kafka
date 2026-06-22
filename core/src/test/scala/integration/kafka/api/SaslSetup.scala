@@ -17,16 +17,14 @@
 
 package kafka.api
 
-import kafka.security.JaasTestUtils
-import kafka.security.JaasTestUtils.JaasSection
-import kafka.security.minikdc.MiniKdc
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
+import org.apache.kafka.common.test.JaasUtils.JaasSection
+import org.apache.kafka.common.test.{JaasUtils, MiniKdc}
 
 import java.io.File
 import java.util
@@ -51,7 +49,7 @@ trait SaslSetup {
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
 
-    val hasKerberos = jaasSections.exists(_.getModules.asScala.exists(_.name().endsWith("Krb5LoginModule")))
+    val hasKerberos = jaasSections.exists(_.modules.asScala.exists(_.name().endsWith("Krb5LoginModule")))
 
     if (hasKerberos) {
       initializeKerberos()
@@ -64,9 +62,9 @@ trait SaslSetup {
     val (serverKeytabFile, clientKeytabFile) = maybeCreateEmptyKeytabFiles()
     kdc = new MiniKdc(kdcConf, workDir)
     kdc.start()
-    kdc.createPrincipal(serverKeytabFile, java.util.List.of(JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost"))
+    kdc.createPrincipal(serverKeytabFile, java.util.List.of(JaasUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME + "/localhost"))
     kdc.createPrincipal(clientKeytabFile,
-      java.util.List.of(JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2))
+      java.util.List.of(JaasUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME, JaasUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2))
   }
 
   /** Return a tuple with the path to the server keytab file and client keytab file */
@@ -80,17 +78,17 @@ trait SaslSetup {
 
   def jaasSections(kafkaServerSaslMechanisms: Seq[String],
                    kafkaClientSaslMechanism: Option[String],
-                   kafkaServerEntryName: String = JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME): Seq[JaasSection] = {
+                   kafkaServerEntryName: String = JaasUtils.KAFKA_SERVER_CONTEXT_NAME): Seq[JaasSection] = {
     val hasKerberos = kafkaServerSaslMechanisms.contains("GSSAPI") || kafkaClientSaslMechanism.contains("GSSAPI")
     if (hasKerberos)
       maybeCreateEmptyKeytabFiles()
-    Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms.asJava, serverKeytabFile.toJava),
-      JaasTestUtils.kafkaClientSection(kafkaClientSaslMechanism.toJava, clientKeytabFile.toJava))
+    Seq(JaasUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms.asJava, serverKeytabFile.toJava),
+      JaasUtils.kafkaClientSection(kafkaClientSaslMechanism.toJava, clientKeytabFile.toJava))
   }
 
   private def writeJaasConfigurationToFile(jaasSections: Seq[JaasSection]): Unit = {
-    val file = JaasTestUtils.writeJaasContextsToFile(jaasSections.asJava)
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, file.getAbsolutePath)
+    val file = JaasUtils.writeJaasContextsToFile(jaasSections.asJava)
+    System.setProperty(org.apache.kafka.common.security.JaasUtils.JAVA_LOGIN_CONFIG_PARAM, file.getAbsolutePath)
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
   }
@@ -100,7 +98,7 @@ trait SaslSetup {
       kdc.stop()
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
-    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+    System.clearProperty(org.apache.kafka.common.security.JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
   }
 
@@ -121,20 +119,20 @@ trait SaslSetup {
 
   def jaasClientLoginModule(clientSaslMechanism: String, serviceName: Option[String] = None): String = {
     if (serviceName.isDefined)
-      JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile.toJava, serviceName.get)
+      JaasUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile.toJava, serviceName.get)
     else
-      JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile.toJava)
+      JaasUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile.toJava)
   }
 
   def jaasAdminLoginModule(clientSaslMechanism: String, serviceName: Option[String] = None): String = {
     if (serviceName.isDefined)
-      JaasTestUtils.adminLoginModule(clientSaslMechanism, serverKeytabFile.toJava, serviceName.get)
+      JaasUtils.adminLoginModule(clientSaslMechanism, serverKeytabFile.toJava, serviceName.get)
     else
-      JaasTestUtils.adminLoginModule(clientSaslMechanism, serverKeytabFile.toJava)
+      JaasUtils.adminLoginModule(clientSaslMechanism, serverKeytabFile.toJava)
   }
 
   def jaasScramClientLoginModule(clientSaslScramMechanism: String, scramUser: String, scramPassword: String): String = {
-    JaasTestUtils.scramClientLoginModule(clientSaslScramMechanism, scramUser, scramPassword)
+    JaasUtils.scramClientLoginModule(clientSaslScramMechanism, scramUser, scramPassword)
   }
 
   def createPrivilegedAdminClient(): Admin = {
@@ -147,7 +145,7 @@ trait SaslSetup {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =
-      JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
+      JaasUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config.put(SaslConfigs.SASL_JAAS_CONFIG, jaasScramClientLoginModule(scramMechanism, user, password))
     Admin.create(config)

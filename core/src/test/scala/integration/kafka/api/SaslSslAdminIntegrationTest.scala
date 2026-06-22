@@ -13,7 +13,6 @@
 package kafka.api
 
 import java.time
-import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin._
@@ -30,6 +29,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.internals.SecurityUtils
 import org.apache.kafka.common.security.token.delegation.DelegationToken
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
@@ -49,7 +49,7 @@ import scala.util.{Failure, Success, Try}
 class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetup {
   val clusterResourcePattern = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
   val kraftAuthorizerClassName = classOf[StandardAuthorizer].getName
-  val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME)
+  val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME)
   var superUserAdmin: Admin = _
   val secretKey = "secretKey"
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
@@ -74,7 +74,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
   }
 
   def setUpSasl(): Unit = {
-    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), JaasUtils.KAFKA_SERVER_CONTEXT_NAME))
 
     val loginContext = jaasAdminLoginModule("GSSAPI")
     superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, loginContext)

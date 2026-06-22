@@ -30,7 +30,6 @@ import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.api.SaslSetup
 import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
-import kafka.security.JaasTestUtils
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -53,6 +52,7 @@ import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PR
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.MetadataLogConfig
@@ -100,8 +100,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private val trustStoreFile1 = TestUtils.tempFile("truststore", ".jks")
   private val trustStoreFile2 = TestUtils.tempFile("truststore", ".jks")
-  private val sslProperties1 = JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, Optional.of(trustStoreFile1), "kafka")
-  private val sslProperties2 = JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, Optional.of(trustStoreFile2), "kafka")
+  private val sslProperties1 = JaasUtils.sslConfigs(ConnectionMode.SERVER, false, Optional.of(trustStoreFile1), "kafka")
+  private val sslProperties2 = JaasUtils.sslConfigs(ConnectionMode.SERVER, false, Optional.of(trustStoreFile2), "kafka")
   private val invalidSslProperties = invalidSslConfigs
 
   override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {

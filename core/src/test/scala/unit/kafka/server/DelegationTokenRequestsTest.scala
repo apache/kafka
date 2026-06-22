@@ -17,11 +17,11 @@
 package kafka.server
 
 import kafka.api.{IntegrationTestHarness, SaslSetup}
-import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.errors.{DelegationTokenNotFoundException, InvalidPrincipalTypeException}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.common.utils.internals.SecurityUtils
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.junit.jupiter.api.Assertions._
@@ -50,7 +50,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), JaasUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
   }
 
@@ -58,7 +58,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val securityProps: util.Map[Object, Object] =
-      JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
+      JaasUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config
   }

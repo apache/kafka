@@ -23,7 +23,6 @@ import java.util
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import kafka.integration.KafkaServerTestHarness
-import kafka.security.JaasTestUtils
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
@@ -34,6 +33,7 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerLogConfigs
@@ -77,7 +77,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
 
     admin = TestUtils.createAdminClient(brokers, listenerName,
-        JaasTestUtils.securityConfigs(ConnectionMode.CLIENT,
+        JaasUtils.securityConfigs(ConnectionMode.CLIENT,
           securityProtocol,
           OptionConverters.toJava(trustStoreFile),
           "adminClient",

@@ -16,8 +16,6 @@
  */
 package kafka.api
 
-import kafka.security.JaasTestUtils._
-import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -26,6 +24,8 @@ import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
+import org.apache.kafka.common.test.{JaasModule, JaasUtils}
+import org.apache.kafka.common.test.JaasUtils.JaasSection
 import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -50,9 +50,9 @@ object SaslPlainSslEndToEndAuthorizationTest {
       assertTrue(sslPrincipal.endsWith(s"CN=${TestUtils.SslCertificateCn}"), s"Unexpected SSL principal $sslPrincipal")
 
       saslContext.server.getAuthorizationID match {
-        case KAFKA_PLAIN_ADMIN =>
+        case JaasUtils.KAFKA_PLAIN_ADMIN =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, controllerPrincipalName)
-        case KAFKA_PLAIN_USER =>
+        case JaasUtils.KAFKA_PLAIN_USER =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
         case _ =>
           KafkaPrincipal.ANONYMOUS
@@ -61,9 +61,9 @@ object SaslPlainSslEndToEndAuthorizationTest {
   }
 
   object Credentials {
-    val allUsers = Map(KAFKA_PLAIN_USER -> "user1-password",
-      KAFKA_PLAIN_USER_2 -> KAFKA_PLAIN_PASSWORD_2,
-      KAFKA_PLAIN_ADMIN -> "broker-password")
+    val allUsers = Map(JaasUtils.KAFKA_PLAIN_USER -> "user1-password",
+      JaasUtils.KAFKA_PLAIN_USER_2 -> JaasUtils.KAFKA_PLAIN_PASSWORD_2,
+      JaasUtils.KAFKA_PLAIN_ADMIN -> "broker-password")
   }
 
   class TestServerCallbackHandler extends AuthenticateCallbackHandler {
@@ -91,7 +91,7 @@ object SaslPlainSslEndToEndAuthorizationTest {
         callback match {
           case nameCallback: NameCallback => nameCallback.setName(username)
           case passwordCallback: PasswordCallback =>
-            if (username == KAFKA_PLAIN_USER || username == KAFKA_PLAIN_ADMIN)
+            if (username == JaasUtils.KAFKA_PLAIN_USER || username == JaasUtils.KAFKA_PLAIN_ADMIN)
               passwordCallback.setPassword(Credentials.allUsers(username).toCharArray)
           case _ => throw new UnsupportedCallbackException(callback)
         }
@@ -129,17 +129,17 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def jaasSections(kafkaServerSaslMechanisms: Seq[String],
                             kafkaClientSaslMechanism: Option[String],
                             kafkaServerEntryName: String): Seq[JaasSection] = {
-    val brokerLogin = JaasModule.plainLoginModule(KAFKA_PLAIN_ADMIN, "", false, util.Map.of()) // Password provided by callback handler
-    val clientLogin = JaasModule.plainLoginModule(KAFKA_PLAIN_USER_2, KAFKA_PLAIN_PASSWORD_2, false, util.Map.of())
+    val brokerLogin = JaasModule.plainLoginModule(JaasUtils.KAFKA_PLAIN_ADMIN, "", false, util.Map.of()) // Password provided by callback handler
+    val clientLogin = JaasModule.plainLoginModule(JaasUtils.KAFKA_PLAIN_USER_2, JaasUtils.KAFKA_PLAIN_PASSWORD_2, false, util.Map.of())
     Seq(new JaasSection(kafkaServerEntryName, Collections.singletonList(brokerLogin)),
-      new JaasSection(KAFKA_CLIENT_CONTEXT_NAME, Collections.singletonList(clientLogin)))
+      new JaasSection(JaasUtils.KAFKA_CLIENT_CONTEXT_NAME, Collections.singletonList(clientLogin)))
   }
 
   // Generate SSL certificates for clients since we are enabling TLS mutual authentication
   // in this test for the SASL_SSL listener.
   override def clientSecurityProps(certAlias: String): Properties = {
-    JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
-      certAlias, JaasTestUtils.SSL_CERTIFICATE_CN, OptionConverters.toJava(clientSaslProperties),
+    JaasUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
+      certAlias, JaasUtils.SSL_CERTIFICATE_CN, OptionConverters.toJava(clientSaslProperties),
       TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS, Optional.of(true))
   }
 }

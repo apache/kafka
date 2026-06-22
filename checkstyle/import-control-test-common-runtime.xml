@@ -29,4 +29,9 @@
     <allow pkg="java" />
     <allow pkg="scala.jdk.javaapi" />
     <allow pkg="javax.security" />
+
+    <allow pkg="org.apache.commons" />
+    <allow pkg="org.apache.directory" />
+    <allow pkg="org.apache.mina.core.service" />
+
 </import-control>

@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.api.AbstractSaslTest;
-import kafka.security.JaasTestUtils;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -26,6 +25,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.metadata.storage.Formatter;
 import org.apache.kafka.test.TestUtils;
 
@@ -100,14 +100,14 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     @Override
     public void addFormatterSettings(Formatter formatter) {
         formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ");
-        formatter.setScramArguments(List.of("SCRAM-SHA-256=[name=" + JaasTestUtils.KAFKA_SCRAM_ADMIN +
-            ",password=" + JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD + "]"));
+        formatter.setScramArguments(List.of("SCRAM-SHA-256=[name=" + JaasUtils.KAFKA_SCRAM_ADMIN +
+            ",password=" + JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD + "]"));
     }
 
     @Override
     public Admin createPrivilegedAdminClient() {
         return createAdminClient(bootstrapServers(listenerName()), securityProtocol(), trustStoreFile(), clientSaslProperties(),
-            KAFKA_CLIENT_SASL_MECHANISM, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD);
+            KAFKA_CLIENT_SASL_MECHANISM, JaasUtils.KAFKA_SCRAM_ADMIN, JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD);
     }
 
     @BeforeEach
@@ -115,7 +115,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     public void setUp(TestInfo testInfo) {
         startSasl(jaasSections(KAFKA_SERVER_SASL_MECHANISMS,
             Some$.MODULE$.apply(KAFKA_CLIENT_SASL_MECHANISM),
-            JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME));
+            JaasUtils.KAFKA_SERVER_CONTEXT_NAME));
         String superuserLoginContext = jaasAdminLoginModule(KAFKA_CLIENT_SASL_MECHANISM, Option.empty());
         this.superuserClientConfig().put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext);
         super.setUp(testInfo);
@@ -152,7 +152,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
     @MethodSource("getTestGroupProtocolParametersAll")
     public void testConsumerGroupServiceWithAuthenticationSuccess(String groupProtocol) throws Exception {
-        createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
+        createScramCredentialsViaPrivilegedAdminClient(JaasUtils.KAFKA_SCRAM_USER_2, JaasUtils.KAFKA_SCRAM_PASSWORD_2);
         try (
             ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
             Consumer<byte[], byte[]> consumer = createConsumer()

@@ -16,12 +16,11 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
-
 import java.util.Properties
 import kafka.utils._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.test.TestSslUtils
 
@@ -32,9 +31,9 @@ import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
   override protected def kafkaServerSaslMechanisms = ScramMechanism.mechanismNames.asScala.toList
-  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_USER)
-  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_SCRAM_ADMIN)
-  private val kafkaPassword = JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD
+  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasUtils.KAFKA_SCRAM_USER)
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasUtils.KAFKA_SCRAM_ADMIN)
+  private val kafkaPassword = JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD
 
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
     super.configureSecurityBeforeServersStart(testInfo)
@@ -48,7 +47,7 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setClusterId("XcZZOzUqS4yHOjhMQB6JLQ")
     formatter.setScramArguments(java.util.List.of(
-      s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
+      s"SCRAM-SHA-256=[name=${JaasUtils.KAFKA_SCRAM_ADMIN},password=${JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def configureListeners(props: collection.Seq[Properties]): Unit = {
@@ -62,8 +61,8 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   override def setUp(testInfo: TestInfo): Unit = {
       super.setUp(testInfo)
       // Create client credentials after starting brokers so that dynamic credential creation is also tested
-      createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER, JaasTestUtils.KAFKA_SCRAM_PASSWORD)
-      createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2)
+      createScramCredentialsViaPrivilegedAdminClient(JaasUtils.KAFKA_SCRAM_USER, JaasUtils.KAFKA_SCRAM_PASSWORD)
+      createScramCredentialsViaPrivilegedAdminClient(JaasUtils.KAFKA_SCRAM_USER_2, JaasUtils.KAFKA_SCRAM_PASSWORD_2)
   }
 
   @Test

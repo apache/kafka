@@ -16,7 +16,6 @@ package kafka.api
 
 import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
-import kafka.security.{JaasModule, JaasTestUtils}
 import kafka.server._
 import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
@@ -27,6 +26,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.common.test.{JaasModule, JaasUtils}
 import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
@@ -64,7 +64,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), JaasUtils.KAFKA_SERVER_CONTEXT_NAME))
     this.serverConfig.setProperty(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, classOf[GroupedUserQuotaCallback].getName)
     this.serverConfig.setProperty(s"${listenerName.configPrefix}${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG}",
       classOf[GroupedUserPrincipalBuilder].getName)
@@ -74,7 +74,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     super.setUp(testInfo)
 
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
-      JaasModule.scramLoginModule(JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
+      JaasModule.scramLoginModule(JaasUtils.KAFKA_SCRAM_ADMIN, JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
     producerWithoutQuota = createProducer()
   }
 
@@ -88,17 +88,17 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   override def configureSecurityAfterServersStart(): Unit = {
     super.configureSecurityAfterServersStart()
-    createScramCredentials(createAdminClient(), JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
+    createScramCredentials(createAdminClient(), JaasUtils.KAFKA_SCRAM_ADMIN, JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setScramArguments(
-      util.List.of(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
+      util.List.of(s"SCRAM-SHA-256=[name=${JaasUtils.KAFKA_SCRAM_ADMIN},password=${JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def createPrivilegedAdminClient() = {
     createAdminClient(bootstrapServers(), securityProtocol, trustStoreFile, clientSaslProperties,
-      kafkaClientSaslMechanism, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
+      kafkaClientSaslMechanism, JaasUtils.KAFKA_SCRAM_ADMIN, JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -221,7 +221,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
       config.put(key.toString, value)
     }
     config.put(SaslConfigs.SASL_JAAS_CONFIG,
-      JaasModule.scramLoginModule(JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
+      JaasModule.scramLoginModule(JaasUtils.KAFKA_SCRAM_ADMIN, JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
     admin = Admin.create(config)
     admin
   }

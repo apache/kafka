@@ -16,7 +16,6 @@ import java.util
 import java.util.concurrent._
 import java.util.Properties
 import com.yammer.metrics.core.Gauge
-import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{AdminClientConfig, CreateAclsResult, DescribeClusterOptions}
 import org.apache.kafka.common.acl._
@@ -29,6 +28,7 @@ import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrinci
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.common.network.ConnectionMode
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.authorizer.{ClusterMetadataAuthorizer, StandardAuthorizer}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -137,7 +137,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val configs = super.kraftControllerConfigs(testInfo)
-    JaasTestUtils.sslConfigs(ConnectionMode.SERVER, false, OptionConverters.toJava(trustStoreFile), s"controller")
+    JaasUtils.sslConfigs(ConnectionMode.SERVER, false, OptionConverters.toJava(trustStoreFile), s"controller")
       .forEach((k, v) => configs.foreach(c => c.put(k, v)))
     configs
   }
@@ -335,7 +335,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   // Override the CN to create a principal based on it
   override def superuserSecurityProps(certAlias: String): Properties = {
-    val props = JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
+    val props = JaasUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
       certAlias, SslAdminIntegrationTest.superuserCn, OptionConverters.toJava(clientSaslProperties))
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
@@ -343,7 +343,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   // Override the CN to create a principal based on it
   override def clientSecurityProps(certAlias: String): Properties = {
-    val props = JaasTestUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
+    val props = JaasUtils.securityConfigs(ConnectionMode.CLIENT, securityProtocol, OptionConverters.toJava(trustStoreFile),
       certAlias, SslAdminIntegrationTest.clientCn, OptionConverters.toJava(clientSaslProperties))
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props

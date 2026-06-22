@@ -66,11 +66,4 @@
     <allow pkg="org.apache.kafka" />
   </subpackage>
 
-  <subpackage name="security">
-    <allow pkg="org.apache.commons" />
-    <allow pkg="org.apache.directory" />
-    <allow pkg="org.apache.mina.core.service" />
-    <allow pkg="org.apache.kafka.test" />
-  </subpackage>
-
 </import-control>

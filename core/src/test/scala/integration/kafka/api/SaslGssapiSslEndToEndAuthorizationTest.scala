@@ -16,17 +16,17 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.common.test.JaasUtils
 import org.junit.jupiter.api.Assertions.assertNull
 
 class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE,
-    JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME)
+    JaasUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME)
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE,
-    JaasTestUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME)
+    JaasUtils.KAFKA_SERVER_PRINCIPAL_UNQUALIFIED_NAME)
 
   override protected def kafkaClientSaslMechanism = "GSSAPI"
   override protected def kafkaServerSaslMechanisms = List("GSSAPI")

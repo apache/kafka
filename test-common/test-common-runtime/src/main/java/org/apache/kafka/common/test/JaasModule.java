@@ -18,6 +18,7 @@ package org.apache.kafka.common.test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public record JaasModule(String name, boolean debug, Map<String, String> entries) {
@@ -34,6 +35,63 @@ public record JaasModule(String name, boolean debug, Map<String, String> entries
             name,
             debug,
             entries
+        );
+    }
+
+    public static JaasModule krb5LoginModule(boolean useKeyTab, boolean storeKey, String keyTab, String principal, boolean debug, Optional<String> serviceName, boolean isIbmSecurity) {
+        String name = isIbmSecurity ? "com.ibm.security.auth.module.Krb5LoginModule" : "com.sun.security.auth.module.Krb5LoginModule";
+
+        Map<String, String> entries = new HashMap<>();
+        if (isIbmSecurity) {
+            entries.put("principal", principal);
+            entries.put("credsType", "both");
+            if (useKeyTab) {
+                entries.put("useKeytab", "file:" + keyTab);
+            }
+        } else {
+            entries.put("useKeyTab", Boolean.toString(useKeyTab));
+            entries.put("storeKey", Boolean.toString(storeKey));
+            entries.put("keyTab", keyTab);
+            entries.put("principal", principal);
+            serviceName.ifPresent(s -> entries.put("serviceName", s));
+        }
+
+        return new JaasModule(
+                name,
+                debug,
+                entries
+        );
+    }
+
+    public static JaasModule oAuthBearerLoginModule(String username, boolean debug) {
+        String name = "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule";
+
+        Map<String, String> entries = new HashMap<>();
+        entries.put("unsecuredLoginStringClaim_sub", username);
+
+        return new JaasModule(
+                name,
+                debug,
+                entries
+        );
+    }
+
+    public static JaasModule scramLoginModule(String username, String password) {
+        return scramLoginModule(username, password, false, Map.of());
+    }
+
+    public static JaasModule scramLoginModule(String username, String password, boolean debug, Map<String, String> tokenProps) {
+        String name = "org.apache.kafka.common.security.scram.ScramLoginModule";
+
+        Map<String, String> entries = new HashMap<>();
+        entries.put("username", username);
+        entries.put("password", password);
+        entries.putAll(tokenProps);
+
+        return new JaasModule(
+                name,
+                debug,
+                entries
         );
     }
 

@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.security.minikdc;
+package org.apache.kafka.common.test;
 
-import kafka.utils.TestUtils;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -38,7 +38,7 @@ public class MiniKdcTest {
         config.setProperty(MiniKdc.MAX_RENEWABLE_LIFETIME, "604800000");
         config.setProperty(MiniKdc.INSTANCE, "DefaultKrbServer");
 
-        MiniKdc minikdc = MiniKdc.start(TestUtils.tempDir(), config, TestUtils.tempFile(), List.of("foo"));
+        MiniKdc minikdc = MiniKdc.start(TestUtils.tempDirectory(), config, TestUtils.tempFile(), List.of("foo"));
         boolean running = System.getProperty(MiniKdc.JAVA_SECURITY_KRB5_CONF) != null;
         try {
             Assertions.assertTrue(running, "MiniKdc stopped immediately; it should not have");

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.security.minikdc;
+package org.apache.kafka.common.test;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
@@ -93,7 +93,7 @@ import java.util.UUID;
  * - kdc.port=0 (ephemeral port)
  * - instance=DefaultKrbServer
  * - max.ticket.lifetime=86400000 (1 day)
- * - max.renewable.lifetime604800000 (7 days)
+ * - max.renewable.lifetime=604800000 (7 days)
  * - transport=TCP
  * - debug=false
  *
@@ -221,18 +221,18 @@ public class MiniKdc {
         miniKdc.start();
         miniKdc.createPrincipal(keytabFile, principals);
         String infoMessage = String.format(
-                "\n" +
-                        "Standalone MiniKdc Running\n" +
-                        "---------------------------------------------------\n" +
-                        "  Realm           : %s\n" +
-                        "  Running at      : %s:%d\n" +
-                        "  krb5conf        : %s\n" +
-                        "\n" +
-                        "  created keytab  : %s\n" +
-                        "  with principals : %s\n" +
-                        "\n" +
-                        "Hit <CTRL-C> or kill <PID> to stop it\n" +
-                        "---------------------------------------------------\n",
+                "%n" +
+                        "Standalone MiniKdc Running%n" +
+                        "---------------------------------------------------%n" +
+                        "  Realm           : %s%n" +
+                        "  Running at      : %s:%d%n" +
+                        "  krb5conf        : %s%n" +
+                        "%n" +
+                        "  created keytab  : %s%n" +
+                        "  with principals : %s%n" +
+                        "%n" +
+                        "Hit <CTRL-C> or kill <PID> to stop it%n" +
+                        "---------------------------------------------------%n",
                 miniKdc.getRealm(), miniKdc.getHost(), miniKdc.getPort(), miniKdc.getKrb5conf().getAbsolutePath(),
                 keytabFile.getAbsolutePath(), String.join(", ", principals)
         );
@@ -379,7 +379,7 @@ public class MiniKdc {
         map.put("2", orgName.toUpperCase(Locale.ENGLISH));
         map.put("3", orgDomain.toUpperCase(Locale.ENGLISH));
         map.put("4", bindAddress);
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(getResourceAsStream("minikdc.ldiff")))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(getResourceAsStream("minikdc.ldiff"), StandardCharsets.UTF_8))) {
             StringBuilder builder = new StringBuilder();
             reader.lines().forEach(line -> builder.append(line).append("\n"));
             addEntriesToDirectoryService(StrSubstitutor.replace(builder, map));

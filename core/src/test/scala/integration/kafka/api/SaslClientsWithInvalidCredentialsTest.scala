@@ -12,8 +12,6 @@
   */
 package kafka.api
 
-import kafka.security.JaasTestUtils
-
 import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.{ExecutionException, TimeUnit}
@@ -27,6 +25,7 @@ import org.junit.jupiter.api.Assertions._
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.JaasUtils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.storage.Formatter
@@ -61,18 +60,18 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setScramArguments(
-      java.util.List.of(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
+      java.util.List.of(s"SCRAM-SHA-256=[name=${JaasUtils.KAFKA_SCRAM_ADMIN},password=${JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def createPrivilegedAdminClient() = {
     createAdminClient(bootstrapServers(), securityProtocol, trustStoreFile, clientSaslProperties,
-      kafkaClientSaslMechanism, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
+      kafkaClientSaslMechanism, JaasUtils.KAFKA_SCRAM_ADMIN, JaasUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism),
-      JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+      JaasUtils.KAFKA_SERVER_CONTEXT_NAME))
     val superuserLoginContext = jaasAdminLoginModule(kafkaClientSaslMechanism)
     superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext)
     super.setUp(testInfo)
@@ -170,7 +169,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
   @Test
   def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
-    val props = JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
+    val props = JaasUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val adminClient = Admin.create(props)
 
@@ -197,7 +196,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   }
 
   private def createClientCredential(): Unit = {
-    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2)
+    createScramCredentialsViaPrivilegedAdminClient(JaasUtils.KAFKA_SCRAM_USER_2, JaasUtils.KAFKA_SCRAM_PASSWORD_2)
   }
 
   private def sendOneRecord(producer: KafkaProducer[Array[Byte], Array[Byte]], maxWaitMs: Long = 15000): Unit = {

@@ -14,10 +14,10 @@
 
 package kafka.api
 
-import kafka.security.JaasTestUtils
 import kafka.server.KafkaBroker
 import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.test.JaasUtils
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 class UserQuotaTest extends BaseQuotaTest with SaslSetup {
@@ -31,7 +31,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("GSSAPI"), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("GSSAPI"), JaasUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
     quotaTestClients.alterClientQuotas(
       quotaTestClients.clientQuotaAlteration(
@@ -54,7 +54,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     val adminClient = createAdminClient()
 
     new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer, adminClient) {
-      override val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2)
+      override val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2)
 
       override def quotaMetricTags(clientId: String): Map[String, String] = {
         Map("user" -> userPrincipal.getName, "client-id" -> "")
