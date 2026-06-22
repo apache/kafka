@@ -51,7 +51,10 @@ public class Node {
     public Node(int id, String host, int port, String rack, boolean isFenced, boolean isCoordinator) {
         this.id = id;
         if (isCoordinator) {
-            this.idString = "coordinator-[" + id + "]";
+            if (id < 0) {
+                throw new IllegalArgumentException("Node id for coordinator node cannot be negative");
+            }
+            this.idString = "+" + id;
         } else {
             this.idString = Integer.toString(id);
         }
@@ -133,21 +136,6 @@ public class Node {
      */
     public boolean isCoordinator() {
         return isCoordinator;
-    }
-
-    public static int parseNodeId(String idString) {
-        try {
-            return Integer.parseInt(idString);
-        } catch (NumberFormatException nfe) {
-            try {
-                int start = idString.indexOf('[');
-                int end = idString.indexOf(']');
-                return Integer.parseInt(idString.substring(start + 1, end));
-            } catch (Exception e) {
-                System.out.println("ARSE");
-                return -1;
-            }
-        }
     }
 
     @Override

@@ -1137,7 +1137,7 @@ public class NetworkClient implements KafkaClient {
                 // provided that the metadata recovery strategy is not NONE. (KIP-1242)
                 if (metadataRecoveryStrategy != MetadataRecoveryStrategy.NONE && metadataClusterCheckEnable) {
                     String clusterId = this.metadataUpdater.clusterId();
-                    int nodeId = Node.parseNodeId(node);
+                    int nodeId = Integer.parseInt(node);
                     if (clusterId != null && nodeId >= 0) {
                         apiVersionRequestBuilder.setClusterId(clusterId);
                         apiVersionRequestBuilder.setNodeId(nodeId);
