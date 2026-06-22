@@ -382,7 +382,33 @@ class ShareGroupDLQStateManagerTest {
         verifyNoInteractions(mockMetrics);
     }
 
-    // ---- DLQ topic validation tests (no thread start required) ----
+    @Test
+    public void testDlqBeforeStartFailsWithIllegalState() {
+        stateManager = builder().build();
+        // dlq() is invoked without a prior start(); the lifecycle guard must reject it with a
+        // failed future rather than enqueueing onto a sender thread that is not running.
+        CompletableFuture<Void> result = stateManager.dlq(param());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertInstanceOf(IllegalStateException.class, getCause(result));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    @Test
+    public void testDlqAfterStopFailsWithIllegalState() throws Exception {
+        stateManager = builder().build();
+        stateManager.start();
+        stateManager.stop();
+        // Once stopped, dlq() must fail fast rather than enqueueing onto a shut-down sender thread
+        // where the future would never complete.
+        CompletableFuture<Void> result = stateManager.dlq(param());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertInstanceOf(IllegalStateException.class, getCause(result));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    // ---- DLQ topic validation tests ----
 
     @Test
     public void testDlqEmptyTopicNameFailsValidation() throws Exception {
@@ -391,6 +417,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("empty"));
@@ -404,6 +431,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("__"));
@@ -419,6 +447,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(false);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("DLQ is not enabled"));
@@ -434,6 +463,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(false);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("auto create is disabled"));
@@ -449,6 +479,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("does not comply with the DLQ topic prefix"));
@@ -456,17 +487,20 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
-    public void testDlqValidationFailureCompletesFutureBeforeStart() throws Exception {
+    public void testDlqValidationFailureCompletesFutureSynchronously() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.empty());
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
 
-        // validateDlqTopic runs synchronously inside dlq(), so it should fail without the sender thread.
+        // validateDlqTopic runs synchronously inside dlq() on the calling thread, so a validation
+        // failure completes the returned future before dlq() returns - no sender-thread round trip.
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         CompletableFuture<Void> result = stateManager.dlq(param());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
         assertFalse(result.isCancelled());
+        assertInstanceOf(ConfigException.class, getCause(result));
         verifyNoInteractions(mockMetrics);
     }
 

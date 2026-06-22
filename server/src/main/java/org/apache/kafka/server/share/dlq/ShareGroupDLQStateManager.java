@@ -185,6 +185,9 @@ public class ShareGroupDLQStateManager {
 
     // Visibility for tests
     CompletableFuture<Void> dlq(ShareGroupDLQRecordParameter param, long requestBackoffMs, long requestBackoffMaxMs, int maxRequestAttempts) {
+        if (!this.isStarted.get()) {
+            return CompletableFuture.failedFuture(new IllegalStateException("ShareGroupDLQStateManager is not started."));
+        }
         CompletableFuture<Void> future = new CompletableFuture<>();
         ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future, requestBackoffMs, requestBackoffMaxMs, maxRequestAttempts);
         enqueue(requestHandler);
