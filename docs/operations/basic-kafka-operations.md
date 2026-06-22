@@ -240,7 +240,7 @@ It has 3 execution options:
   * \--to-latest : Reset offsets to latest offset. 
   * \--shift-by <Long: number-of-offsets> : Reset offsets shifting current offset by 'n', where 'n' can be positive or negative. 
   * \--from-file : Reset offsets to values defined in CSV file. 
-  * \--to-current : Resets offsets to current offset. 
+  * \--to-current : Reset offsets to current offset. 
   * \--by-duration <String: duration> : Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS' 
   * \--to-offset : Reset offsets to a specific offset. 
 
@@ -311,7 +311,7 @@ It has 3 execution options:
   * \--to-earliest : Reset offsets to earliest offset. 
   * \--to-latest : Reset offsets to latest offset. 
   * \--from-file : Reset offsets to values defined in CSV file.
-  * \--to-current : Resets offsets to current offset.
+  * \--to-current : Reset offsets to current offset.
   * \--to-offset : Reset offsets to a specific offset.
 
 

@@ -52,6 +52,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String RESET_OFFSETS_DOC = "Reset offsets of streams group. The instances should be inactive." + NL +
         "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to update the offsets." + NL +
         "If you use --execute, all internal topics linked to the group will also be deleted." + NL +
+        "Additionally, the --export option can be used to generate the offsets in CSV format for export to a file." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
         "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +
         "To define the scope, use --all-input-topics or --input-topic. The scope must be specified unless you use --from-file." + NL +

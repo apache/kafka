@@ -44,7 +44,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of share group. Supports one share group at a time, and instances must be inactive." + NL +
         "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to reset the offsets. " + NL +
-        "Additionally, the --export option is used to export the offsets in CSV format." + NL +
+        "Additionally, the --export option can be used to generate the offsets in CSV format for export to a file." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --to-earliest, --to-latest, --from-file, --to-current, --to-offset." + NL +
         "To define the scope, use --all-topics or --topic. The scope must be specified unless you use --from-file." + NL +
         "Fails if neither --dry-run nor --execute is specified.";

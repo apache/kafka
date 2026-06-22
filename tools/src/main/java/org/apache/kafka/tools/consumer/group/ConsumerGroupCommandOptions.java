@@ -45,8 +45,8 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         "or is going through some changes).";
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client and Consumer.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of consumer group. Supports one consumer group at a time, and instances should be inactive" + NL +
-        "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " +
-        "Additionally, the --export option is used to export the offsets in CSV format." + NL +
+        "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " + NL +
+        "Additionally, the --export option can be used to generate the offsets in CSV format for export to a file." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
         "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +
         "To define the scope, use --all-topics or --topic. The scope must be specified unless you use --from-file.";
