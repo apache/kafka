@@ -59,6 +59,7 @@ import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createCo
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1023,6 +1024,24 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         parkedClearWrite.complete(null);
         service.runStreamsGroupTopologyCleanupCycle();
         verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
+    }
+
+    @Test
+    public void testCleanupCycleSingleFlightReleasesFlagOnSynchronousThrowDuringChainConstruction() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenThrow(new RuntimeException("synthetic runtime failure during chain construction"))
+            .thenReturn(List.of());
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        // First tick throws — the cycle must still release the flag so a subsequent tick runs.
+        assertThrows(RuntimeException.class, service::runStreamsGroupTopologyCleanupCycle);
+        // Second tick must reach the runtime read, confirming the flag was released.
+        service.runStreamsGroupTopologyCleanupCycle();
+
+        verify(runtime, times(2)).scheduleReadAllOperation(
+            eq("list-streams-groups-needing-topology-cleanup"), any());
     }
 
     @Test

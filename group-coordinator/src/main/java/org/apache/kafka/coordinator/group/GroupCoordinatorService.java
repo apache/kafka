@@ -869,60 +869,73 @@ public class GroupCoordinatorService implements GroupCoordinator {
             log.warn("Topology-description cleanup cycle skipped: previous cycle is still in flight.");
             return;
         }
-        groupCoordinatorMetrics.recordSensor(
-            GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
+        // Any synchronous throw between this point and the moment the terminal whenComplete
+        // is attached would leave the in-flight flag stuck at true forever (the outer timer
+        // task catches and reschedules, but every subsequent tick would short-circuit at the
+        // CAS above and never tombstone deferred streams groups). Wrap chain construction so
+        // a synchronous failure releases the flag before propagating.
+        try {
+            groupCoordinatorMetrics.recordSensor(
+                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
 
-        List<CompletableFuture<Map<String, Integer>>> partitionFutures = runtime.scheduleReadAllOperation(
-            "list-streams-groups-needing-topology-cleanup",
-            GroupCoordinatorShard::listStreamsGroupsNeedingTopologyCleanup
-        );
+            List<CompletableFuture<Map<String, Integer>>> partitionFutures = runtime.scheduleReadAllOperation(
+                "list-streams-groups-needing-topology-cleanup",
+                GroupCoordinatorShard::listStreamsGroupsNeedingTopologyCleanup
+            );
 
-        // ConcurrentLinkedQueue because per-partition .handle callbacks can append concurrently
-        // from whichever thread completed each runtime read.
-        Queue<CompletableFuture<?>> perGroupFutures = new ConcurrentLinkedQueue<>();
-        List<CompletableFuture<Void>> partitionDoneFutures = new ArrayList<>(partitionFutures.size());
-        for (CompletableFuture<Map<String, Integer>> partitionFuture : partitionFutures) {
-            partitionDoneFutures.add(partitionFuture.handle((eligible, throwable) -> {
-                if (throwable != null) {
-                    log.warn("Topology-description cleanup read failed for one partition.", throwable);
+            // ConcurrentLinkedQueue because per-partition .handle callbacks can append concurrently
+            // from whichever thread completed each runtime read.
+            Queue<CompletableFuture<?>> perGroupFutures = new ConcurrentLinkedQueue<>();
+            List<CompletableFuture<Void>> partitionDoneFutures = new ArrayList<>(partitionFutures.size());
+            for (CompletableFuture<Map<String, Integer>> partitionFuture : partitionFutures) {
+                partitionDoneFutures.add(partitionFuture.handle((eligible, throwable) -> {
+                    if (throwable != null) {
+                        log.warn("Topology-description cleanup read failed for one partition.", throwable);
+                        return null;
+                    }
+                    if (eligible == null || eligible.isEmpty()) return null;
+                    groupCoordinatorMetrics.recordSensor(
+                        GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME,
+                        eligible.size()
+                    );
+                    perGroupFutures.add(streamsGroupTopologyDescriptionManager
+                        .invokeDeleteTopologies(eligible.keySet())
+                        .thenCompose(failures -> {
+                            recordPluginDeleteOutcome(eligible.size(), failures.size());
+                            List<CompletableFuture<Void>> clearFutures = new ArrayList<>(eligible.size());
+                            eligible.forEach((groupId, expectedStoredEpoch) -> {
+                                // Eligibility required the group to be empty: no member is heartbeating
+                                // anymore, so any push back-off entry is moot regardless of plugin
+                                // outcome — dropping it now avoids carrying broker-wide state forward
+                                // for an id that no live member will solicit on.
+                                streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
+                                if (failures.containsKey(groupId)) {
+                                    // Plugin failed: leave stored epoch in place; next cycle retries.
+                                    return;
+                                }
+                                clearFutures.add(clearStoredDescriptionTopologyEpochAsync(groupId, expectedStoredEpoch));
+                            });
+                            return CompletableFuture.allOf(clearFutures.toArray(new CompletableFuture<?>[0]));
+                        }));
                     return null;
-                }
-                if (eligible == null || eligible.isEmpty()) return null;
-                groupCoordinatorMetrics.recordSensor(
-                    GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME,
-                    eligible.size()
-                );
-                perGroupFutures.add(streamsGroupTopologyDescriptionManager
-                    .invokeDeleteTopologies(eligible.keySet())
-                    .thenCompose(failures -> {
-                        recordPluginDeleteOutcome(eligible.size(), failures.size());
-                        List<CompletableFuture<Void>> clearFutures = new ArrayList<>(eligible.size());
-                        eligible.forEach((groupId, expectedStoredEpoch) -> {
-                            // Eligibility required the group to be empty: no member is heartbeating
-                            // anymore, so any push back-off entry is moot regardless of plugin
-                            // outcome — dropping it now avoids carrying broker-wide state forward
-                            // for an id that no live member will solicit on.
-                            streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
-                            if (failures.containsKey(groupId)) {
-                                // Plugin failed: leave stored epoch in place; next cycle retries.
-                                return;
-                            }
-                            clearFutures.add(clearStoredDescriptionTopologyEpochAsync(groupId, expectedStoredEpoch));
-                        });
-                        return CompletableFuture.allOf(clearFutures.toArray(new CompletableFuture<?>[0]));
-                    }));
-                return null;
-            }));
-        }
+                }));
+            }
 
-        CompletableFuture.allOf(partitionDoneFutures.toArray(new CompletableFuture<?>[0]))
-            .thenCompose(__ -> CompletableFuture.allOf(perGroupFutures.toArray(new CompletableFuture<?>[0])))
-            .whenComplete((__, throwable) -> {
-                if (throwable != null) {
-                    log.warn("Topology-description cleanup cycle failed to complete cleanly.", throwable);
-                }
-                streamsTopologyCleanupCycleInFlight.set(false);
-            });
+            CompletableFuture.allOf(partitionDoneFutures.toArray(new CompletableFuture<?>[0]))
+                .thenCompose(__ -> CompletableFuture.allOf(perGroupFutures.toArray(new CompletableFuture<?>[0])))
+                .whenComplete((__, throwable) -> {
+                    if (throwable != null) {
+                        log.warn("Topology-description cleanup cycle failed to complete cleanly.", throwable);
+                    }
+                    streamsTopologyCleanupCycleInFlight.set(false);
+                });
+        } catch (Throwable t) {
+            // Release the single-flight flag synchronously so the next tick can run. Rethrow
+            // so the outer timer-task's catch logs the cause and reschedules — same observable
+            // result as the async failure path, just on the construction side of the chain.
+            streamsTopologyCleanupCycleInFlight.set(false);
+            throw t;
+        }
     }
 
     /**
