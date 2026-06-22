@@ -20,6 +20,8 @@ import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.admin.StreamsGroupMemberAssignment;
 import org.apache.kafka.clients.admin.StreamsGroupMemberDescription;
 import org.apache.kafka.clients.admin.StreamsGroupSubtopologyDescription;
+import org.apache.kafka.clients.admin.StreamsGroupTopologyDescription;
+import org.apache.kafka.clients.admin.StreamsGroupTopologyDescriptionStatus;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.acl.AclOperation;
@@ -38,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,14 +51,27 @@ import static org.apache.kafka.clients.admin.internals.AdminUtils.validAclOperat
 
 public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<CoordinatorKey, StreamsGroupDescription> {
 
+    static final byte NODE_TYPE_SOURCE = 1;
+    static final byte NODE_TYPE_PROCESSOR = 2;
+    static final byte NODE_TYPE_SINK = 3;
+
     private final boolean includeAuthorizedOperations;
+    private final boolean includeTopologyDescription;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DescribeStreamsGroupsHandler(
           boolean includeAuthorizedOperations,
           LogContext logContext) {
+        this(includeAuthorizedOperations, false, logContext);
+    }
+
+    public DescribeStreamsGroupsHandler(
+          boolean includeAuthorizedOperations,
+          boolean includeTopologyDescription,
+          LogContext logContext) {
         this.includeAuthorizedOperations = includeAuthorizedOperations;
+        this.includeTopologyDescription = includeTopologyDescription;
         this.log = logContext.logger(DescribeStreamsGroupsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
@@ -91,7 +107,8 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
         }).collect(Collectors.toList());
         StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
             .setGroupIds(groupIds)
-            .setIncludeAuthorizedOperations(includeAuthorizedOperations);
+            .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+            .setIncludeTopologyDescription(includeTopologyDescription);
         return new StreamsGroupDescribeRequest.Builder(data);
     }
 
@@ -120,6 +137,11 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
 
             final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
 
+            final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus =
+                StreamsGroupTopologyDescriptionStatus.forId(describedGroup.topologyDescriptionStatus());
+            final Optional<StreamsGroupTopologyDescription> topologyDescription =
+                convertTopologyDescription(topologyDescriptionStatus, describedGroup.topologyDescription());
+
             final StreamsGroupDescription streamsGroupDescription = new StreamsGroupDescription(
                     describedGroup.groupId(),
                     describedGroup.groupEpoch(),
@@ -129,7 +151,9 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
                     convertMembers(describedGroup.members()),
                     GroupState.parse(describedGroup.groupState()),
                     coordinator,
-                    authorizedOperations
+                    authorizedOperations,
+                    topologyDescription,
+                    topologyDescriptionStatus
             );
             completed.put(groupIdKey, streamsGroupDescription);
         }
@@ -187,6 +211,84 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
                 ))
             )
         ));
+    }
+
+    private Optional<StreamsGroupTopologyDescription> convertTopologyDescription(
+            final StreamsGroupTopologyDescriptionStatus status,
+            final StreamsGroupDescribeResponseData.TopologyDescription topologyDescription) {
+        // The description is present if and only if the status is AVAILABLE.
+        if (status != StreamsGroupTopologyDescriptionStatus.AVAILABLE || topologyDescription == null) {
+            return Optional.empty();
+        }
+        final List<StreamsGroupTopologyDescription.Subtopology> subtopologies = topologyDescription.subtopologies().stream()
+            .map(this::convertTopologySubtopology)
+            .collect(Collectors.toList());
+        final List<StreamsGroupTopologyDescription.GlobalStore> globalStores = topologyDescription.globalStores().stream()
+            .map(this::convertGlobalStore)
+            .collect(Collectors.toList());
+        return Optional.of(new StreamsGroupTopologyDescription(subtopologies, globalStores));
+    }
+
+    private StreamsGroupTopologyDescription.Subtopology convertTopologySubtopology(
+            final StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology subtopology) {
+        final Map<String, Set<String>> predecessors = reconstructPredecessors(subtopology.nodes());
+        final List<StreamsGroupTopologyDescription.Node> nodes = subtopology.nodes().stream()
+            .map(node -> convertTopologyNode(node, predecessors))
+            .collect(Collectors.toList());
+        return new StreamsGroupTopologyDescription.Subtopology(subtopology.subtopologyId(), nodes);
+    }
+
+    private StreamsGroupTopologyDescription.GlobalStore convertGlobalStore(
+            final StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore globalStore) {
+        // The source and processor of a global store form a single unit; reconstruct predecessors across the pair.
+        final List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> pair =
+            List.of(globalStore.source(), globalStore.processor());
+        final Map<String, Set<String>> predecessors = reconstructPredecessors(pair);
+        final StreamsGroupTopologyDescription.Node source = convertTopologyNode(globalStore.source(), predecessors);
+        final StreamsGroupTopologyDescription.Node processor = convertTopologyNode(globalStore.processor(), predecessors);
+        if (!(source instanceof StreamsGroupTopologyDescription.Source)
+                || !(processor instanceof StreamsGroupTopologyDescription.Processor)) {
+            throw new IllegalStateException("Global store must be composed of a source and a processor node.");
+        }
+        return new StreamsGroupTopologyDescription.GlobalStore(
+            (StreamsGroupTopologyDescription.Source) source,
+            (StreamsGroupTopologyDescription.Processor) processor
+        );
+    }
+
+    /**
+     * Reconstructs the predecessor relation from the successor lists carried on the wire. For every node, each of its
+     * successors gains this node as a predecessor.
+     */
+    private Map<String, Set<String>> reconstructPredecessors(
+            final List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> nodes) {
+        final Map<String, Set<String>> predecessors = new HashMap<>();
+        for (final StreamsGroupDescribeResponseData.TopologyDescriptionNode node : nodes) {
+            for (final String successor : node.successors()) {
+                predecessors.computeIfAbsent(successor, ignored -> new LinkedHashSet<>()).add(node.name());
+            }
+        }
+        return predecessors;
+    }
+
+    private StreamsGroupTopologyDescription.Node convertTopologyNode(
+            final StreamsGroupDescribeResponseData.TopologyDescriptionNode node,
+            final Map<String, Set<String>> predecessors) {
+        final Set<String> successors = new LinkedHashSet<>(node.successors());
+        final Set<String> nodePredecessors = predecessors.getOrDefault(node.name(), Set.of());
+        switch (node.nodeType()) {
+            case NODE_TYPE_SOURCE:
+                return new StreamsGroupTopologyDescription.Source(
+                    node.name(), new LinkedHashSet<>(node.sourceTopics()), successors, nodePredecessors);
+            case NODE_TYPE_PROCESSOR:
+                return new StreamsGroupTopologyDescription.Processor(
+                    node.name(), new LinkedHashSet<>(node.stores()), successors, nodePredecessors);
+            case NODE_TYPE_SINK:
+                return new StreamsGroupTopologyDescription.Sink(
+                    node.name(), Optional.ofNullable(node.sinkTopic()), successors, nodePredecessors);
+            default:
+                throw new IllegalStateException("Unknown topology node type: " + node.nodeType());
+        }
     }
 
     private StreamsGroupMemberAssignment.TaskIds convertTaskIds(final StreamsGroupDescribeResponseData.TaskIds taskIds) {

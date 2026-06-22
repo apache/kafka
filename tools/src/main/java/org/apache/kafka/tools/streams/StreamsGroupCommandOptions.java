@@ -49,6 +49,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the --describe option only.";
     private static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information." +
         "This is the default sub-action and may be used with the --describe option only.";
+    private static final String TOPOLOGY_DOC = "Describe the topology of the streams group, as recorded by the broker's topology description plugin. " +
+        "This option may be used with the '--describe' option only.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of streams group. The instances should be inactive." + NL +
         "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to update the offsets." + NL +
         "If you use --execute, all internal topics linked to the group will also be deleted." + NL +
@@ -91,6 +93,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     final OptionSpec<String> stateOpt;
     final OptionSpec<Void> membersOpt;
     final OptionSpec<Void> offsetsOpt;
+    final OptionSpec<Void> topologyOpt;
     final OptionSpec<Void> resetOffsetsOpt;
     final OptionSpec<Long> resetToOffsetOpt;
     final OptionSpec<String> resetFromFileOpt;
@@ -157,6 +160,8 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         membersOpt = parser.accepts("members", MEMBERS_DOC)
             .availableIf(describeOpt);
         offsetsOpt = parser.accepts("offsets", OFFSETS_DOC)
+            .availableIf(describeOpt);
+        topologyOpt = parser.accepts("topology", TOPOLOGY_DOC)
             .availableIf(describeOpt);
         resetOffsetsOpt = parser.accepts("reset-offsets", RESET_OFFSETS_DOC);
         resetToOffsetOpt = parser.accepts("to-offset", RESET_TO_OFFSET_DOC)
@@ -235,7 +240,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         if ((options.has(dryRunOpt) || options.has(executeOpt)) && !options.has(resetOffsetsOpt))
             CommandLineUtils.printUsageAndExit(parser, "Only Option " + resetOffsetsOpt + " accepts " + executeOpt + " or " + dryRunOpt);
 
-        CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt);
+        CommandLineUtils.checkInvalidArgs(parser, options, listOpt, membersOpt, offsetsOpt, topologyOpt);
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allGroupSelectionScopeOpts, groupOpt));
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allStreamsGroupLevelOpts, describeOpt, deleteOpt, resetOffsetsOpt));
         CommandLineUtils.checkInvalidArgs(parser, options, inputTopicOpt, minus(allStreamsGroupLevelOpts, resetOffsetsOpt));
@@ -247,7 +252,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
             CommandLineUtils.printUsageAndExit(parser,
                 "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
-        List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
+        List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt, topologyOpt);
         if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
             CommandLineUtils.printUsageAndExit(parser,
                 "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
