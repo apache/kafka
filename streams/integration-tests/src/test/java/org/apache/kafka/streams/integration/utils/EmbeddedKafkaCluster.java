@@ -412,10 +412,13 @@ public class EmbeddedKafkaCluster {
         brokerConfig.putIfAbsent(TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
         brokerConfig.putIfAbsent(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
         brokerConfig.putIfAbsent(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
-        brokerConfig.putIfAbsent(
-            GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
-            InMemoryTopologyDescriptionPlugin.class.getName()
-        );
+        final String pluginKey = GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG;
+        if ("".equals(brokerConfig.get(pluginKey))) {
+            // Empty string is a sentinel meaning "no plugin": remove so the broker sees null default.
+            brokerConfig.remove(pluginKey);
+        } else {
+            brokerConfig.putIfAbsent(pluginKey, InMemoryTopologyDescriptionPlugin.class.getName());
+        }
     }
 
     public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
