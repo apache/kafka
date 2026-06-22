@@ -1528,6 +1528,99 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
+    public void testDLQRecordCopyEnabledFetchesOnceAcrossProduceRetries() throws Exception {
+        int maxAttempts = 3;
+        // Real timer with tiny backoffs lets the produce retries fire within milliseconds.
+        Timer realTimer = new SystemTimerReaper("shareGroupDLQTestTimer",
+            new SystemTimer("shareGroupDLQTestTimer"));
+        try {
+            // param() spans offsets 0..2, so return all three records in a single read; one
+            // resolution then maps to exactly one logReader.read() call.
+            ShareGroupDLQRecordParameter param = param();
+            LogReader logReader = mock(LogReader.class);
+            LogReadResult readResult = mock(LogReadResult.class);
+            when(readResult.error()).thenReturn(Errors.NONE);
+            when(readResult.info()).thenReturn(new FetchDataInfo(
+                null,
+                MemoryRecords.withRecords(
+                    Compression.NONE,
+                    new SimpleRecord(MOCK_TIME.milliseconds(), "key0".getBytes(StandardCharsets.UTF_8), "value0".getBytes(StandardCharsets.UTF_8)),
+                    new SimpleRecord(MOCK_TIME.milliseconds(), "key1".getBytes(StandardCharsets.UTF_8), "value1".getBytes(StandardCharsets.UTF_8)),
+                    new SimpleRecord(MOCK_TIME.milliseconds(), "key2".getBytes(StandardCharsets.UTF_8), "value2".getBytes(StandardCharsets.UTF_8)))
+            ));
+            LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+            readResultMap.put(param.topicIdPartition(), readResult);
+            when(logReader.read(any(), anySet(), any(), any())).thenReturn(readResultMap);
+
+            ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+            when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+
+            MockClient client = new MockClient(MOCK_TIME);
+            // Two produce disconnects (retriable), then a successful produce.
+            client.prepareResponseFrom(body -> body instanceof ProduceRequest, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(body -> body instanceof ProduceRequest, null, DEFAULT_LEADER, true);
+            client.prepareResponseFrom(body -> body instanceof ProduceRequest, successfulProduceResponse(0), DEFAULT_LEADER);
+
+            stateManager = builder()
+                .withClient(client)
+                .withLogReader(logReader)
+                .withCacheHelper(cacheHelper)
+                .withTimer(realTimer)
+                .build();
+            stateManager.start();
+            assertNull(stateManager.dlq(param, 1L, 5L, maxAttempts).get(5, TimeUnit.SECONDS));
+
+            // Records are resolved once, before enqueue, and the memoized result is reused on every
+            // (re)send. So despite three produce attempts the source log is read exactly once.
+            verify(logReader, times(1)).read(any(), anySet(), any(), any());
+            verify(mockMetrics, times(maxAttempts)).recordDLQProduce(GROUP_ID);
+            verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+            verify(mockMetrics, never()).recordDLQProduceFailed(any());
+        } finally {
+            Utils.closeQuietly(realTimer, "shareGroupDLQTestTimer");
+        }
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledButInvalidConfigSkipsFetch() throws Exception {
+        LogReader logReader = mock(LogReader.class);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        // Misconfigured DLQ (no topic configured) - validation must fail before any record copy.
+        when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.empty());
+        when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+
+        stateManager = builder().withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        Throwable cause = getCause(stateManager.dlq(param()));
+        assertInstanceOf(ConfigException.class, cause);
+        // Even though record copy is enabled, an invalid DLQ config fails fast and the source log
+        // is never read.
+        verifyNoInteractions(logReader);
+        verifyNoInteractions(mockMetrics);
+    }
+
+    @Test
+    public void testDLQRecordCopyDisabledSkipsFetch() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        client.prepareResponseFrom(
+            body -> body instanceof ProduceRequest,
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+        LogReader logReader = mock(LogReader.class);
+
+        // Default cacheHelper has record copy disabled.
+        stateManager = builder().withClient(client).withLogReader(logReader).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param()).get(10, TimeUnit.SECONDS));
+
+        // Copy disabled => the source log is never read; the DLQ record carries headers only.
+        verifyNoInteractions(logReader);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
     public void testDLQRecordCopyEnabledWithPartialLogReaderRecords() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
         List<ProduceRequest> capturedProduces = new ArrayList<>();

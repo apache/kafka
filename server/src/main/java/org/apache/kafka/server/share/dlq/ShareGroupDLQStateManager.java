@@ -181,7 +181,27 @@ public class ShareGroupDLQStateManager {
     CompletableFuture<Void> dlq(ShareGroupDLQRecordParameter param, long requestBackoffMs, long requestBackoffMaxMs, int maxRequestAttempts) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future, requestBackoffMs, requestBackoffMaxMs, maxRequestAttempts);
-        enqueue(requestHandler);
+
+        // Validate the DLQ configuration up front, synchronously on the calling thread, so a
+        // misconfigured DLQ fails fast, and we never read source records for one. enqueue() also
+        // re-validates so that retries re-check the (dynamic) config.
+        Optional<Throwable> validationError = requestHandler.validateDlqTopic();
+        if (validationError.isPresent()) {
+            future.completeExceptionally(validationError.get());
+            return future;
+        }
+
+        // Resolve the source records once, here - on the calling thread for local offsets and, for
+        // tiered offsets, asynchronously on the remote-storage reader pool - and enqueue only once
+        // resolution finishes. This keeps both the local and remote reads off the single sender
+        // thread, and the memoized result is reused on every (re)send so retries never re-fetch.
+        // Records are only read when copy is enabled for the group and the DLQ is correctly
+        // configured (validated above); otherwise we enqueue immediately.
+        if (cacheHelper.isShareGroupDlqCopyRecordEnabled(param.groupId())) {
+            requestHandler.resolveRecords().whenComplete((ignored, ignoredError) -> enqueue(requestHandler));
+        } else {
+            enqueue(requestHandler);
+        }
         return future;
     }
 
@@ -226,17 +246,17 @@ public class ShareGroupDLQStateManager {
         private static final Logger LOG = LoggerFactory.getLogger(ShareGroupDLQStateManager.ProduceRequestHandler.class);
         private final ExponentialBackoffManager createTopicsBackoff;
         private final ExponentialBackoffManager produceRequestBackoff;
-        // These DLQ topic fields are written by populateDLQTopicData() and then read while building the
-        // produce request. Since records are resolved asynchronously, the handler can be published
-        // to the node map from the remote storage reader thread, so these are volatile to guarantee
-        // their writes are visible to the sender thread that subsequently reads them.
+        // These DLQ topic fields are written by populateDLQTopicData() and read while building the
+        // produce request - both on the sender thread (from dlqTopicExists()/handleCreateTopicsResponse()).
+        // Kept volatile defensively.
         private volatile Node dlqPartitionLeaderNode;
         private volatile int dlqDestinationPartition;
         private volatile ShareGroupDLQMetadataCacheHelper.TopicPartitionData dlqTopicPartitionData;
-        // The original source records, resolved asynchronously (possibly via remote storage) before
-        // this handler is added to the node map for produce coalescing. Volatile because it is set on
-        // the thread that completes the record fetch (the sender thread or the remote storage reader
-        // pool) and read on the sender thread while building the produce request.
+        // The original source records, resolved once before this handler is enqueued (see resolveRecords()).
+        // Volatile because resolution runs off the sender thread - on the calling thread for local offsets
+        // and, for tiered offsets, on the remote-storage reader pool - while this value is read on the
+        // sender thread when the produce request is built. Memoized: set once and reused for every (re)send,
+        // so retries never re-fetch.
         private volatile Map<Long, Record> resolvedRecordData = Map.of();
 
         public static final String HEADER_DLQ_ERRORS_TOPIC = "__dlq.errors.topic";
@@ -433,7 +453,8 @@ public class ShareGroupDLQStateManager {
                 } catch (ConfigException e) {
                     return false;
                 }
-                resolveRecordsAndAddToNodeMap(dlqPartitionLeaderNode);
+                // Source records were already resolved before enqueue; just add to the node map.
+                addRequestToNodeMap(dlqPartitionLeaderNode, this);
             }
             return isDlqTopicPresent;
         }
@@ -527,7 +548,8 @@ public class ShareGroupDLQStateManager {
                             try {
                                 populateDLQTopicData();
                                 createTopicsBackoff.resetAttempts();
-                                resolveRecordsAndAddToNodeMap(this.dlqPartitionLeaderNode);
+                                // Source records were already resolved before enqueue; just add to the node map.
+                                addRequestToNodeMap(this.dlqPartitionLeaderNode, this);
                             } catch (ConfigException e) {
                                 LOG.error("Error enqueueing after DLQ create topic response {}.", this, e);
                                 if (!createTopicsBackoff.canAttempt()) {
@@ -669,18 +691,19 @@ public class ShareGroupDLQStateManager {
         }
 
         /**
-         * Resolves the original source records for this handler (reading from the local log and, for
-         * any offsets tiered to remote storage, asynchronously from the remote tier) and only then
-         * adds the handler to the node map for produce coalescing. Resolving up front keeps the
-         * (potentially blocking) remote storage IO off the sender thread, which would otherwise stall
-         * all DLQ produce/create-topic RPCs.
+         * Resolves the original source records for this handler once, before it is enqueued - reading
+         * from the local log on the calling thread and, for any offsets tiered to remote storage,
+         * asynchronously on the remote-storage reader pool. The result is memoized in
+         * {@link #resolvedRecordData} and reused for every (re)send, so the single sender thread never
+         * reads the log (neither local nor remote) and retries do not re-fetch.
          *
-         * <p>A failed fetch is non-fatal: the handler is still enqueued and the DLQ record is produced
-         * with headers only (no key/value), mirroring how individually unavailable offsets are skipped.
+         * <p>A failed fetch is non-fatal: {@link #resolvedRecordData} stays empty and the DLQ record is
+         * produced with headers only (no key/value), mirroring how individually unavailable offsets are skipped.
          *
-         * @param node The destination node for the produce request once records are resolved.
+         * @return A future that always completes normally, once resolution has finished.
          */
-        private void resolveRecordsAndAddToNodeMap(Node node) {
+        CompletableFuture<Void> resolveRecords() {
+            CompletableFuture<Void> resolved = new CompletableFuture<>();
             maybeFetchRecordData().whenComplete((records, exception) -> {
                 if (exception != null || records == null) {
                     LOG.warn("Unable to fetch original record data for handler {}. DLQ records will be produced with headers only.", this, exception);
@@ -688,8 +711,9 @@ public class ShareGroupDLQStateManager {
                 } else {
                     this.resolvedRecordData = records;
                 }
-                addRequestToNodeMap(node, this);
+                resolved.complete(null);
             });
+            return resolved;
         }
 
         private CompletableFuture<Map<Long, Record>> maybeFetchRecordData() {
