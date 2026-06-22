@@ -10820,19 +10820,19 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testValidateStreamsGroupMemberThrowsWhenGroupAbsent() {
-        // KIP-1331: validateStreamsGroupMember surfaces GROUP_ID_NOT_FOUND for the upcoming
-        // StreamsGroupTopologyDescriptionUpdate handler.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateThrowsWhenGroupAbsent() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate surfaces GROUP_ID_NOT_FOUND for
+        // the StreamsGroupTopologyDescriptionUpdate handler.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         assertThrows(GroupIdNotFoundException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(
-                "nonexistent", "m1", context.lastCommittedOffset));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                "nonexistent", "m1", 0, context.lastCommittedOffset));
     }
 
     @Test
-    public void testValidateStreamsGroupMemberThrowsWhenMemberAbsent() {
-        // KIP-1331: validateStreamsGroupMember surfaces UNKNOWN_MEMBER_ID for the upcoming
-        // StreamsGroupTopologyDescriptionUpdate handler.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateThrowsWhenMemberAbsent() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate surfaces UNKNOWN_MEMBER_ID for
+        // the StreamsGroupTopologyDescriptionUpdate handler.
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         // Replaying a metadata record materializes a streams group with no members; commit so the
@@ -10842,14 +10842,38 @@ public class GroupMetadataManagerTest {
         context.commit();
 
         assertThrows(UnknownMemberIdException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(
-                groupId, "stranger", context.lastCommittedOffset));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, "stranger", -1, context.lastCommittedOffset));
     }
 
     @Test
-    public void testValidateStreamsGroupMemberDoesNotSeeUncommittedFence() {
-        // KIP-1331: validateStreamsGroupMember reads at committedOffset, so an uncommitted fence
-        // (member tombstone) must not make a still-committed member appear unknown.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateRejectsStaleEpoch() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate must reject a pushedEpoch that
+        // does not match the group's current topology epoch with INVALID_REQUEST. Without this
+        // check, a stale push could regress storedDescriptionTopologyEpoch and the heartbeat
+        // gate would never converge.
+        String groupId = "streams-group";
+        String memberId = "m1";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId).build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
+        context.commit();
+
+        // No topology has been pushed via heartbeat, so currentTopologyEpoch() returns -1.
+        // A push claiming epoch 4 must be rejected.
+        assertThrows(InvalidRequestException.class,
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, memberId, 4, context.lastCommittedOffset));
+    }
+
+    @Test
+    public void testValidateStreamsGroupTopologyDescriptionUpdateDoesNotSeeUncommittedFence() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate reads at committedOffset, so an
+        // uncommitted fence (member tombstone) must not make a still-committed member appear unknown.
         String groupId = "streams-group";
         String memberId = "m1";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
@@ -10870,13 +10894,15 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId));
 
         // Validating at the still-committed offset must succeed; the uncommitted tombstone is invisible.
-        StreamsGroupMember resolved = context.groupMetadataManager.validateStreamsGroupMember(
-            groupId, memberId, committedWithMember);
+        // currentTopologyEpoch() is -1 since no topology has been pushed via heartbeat.
+        StreamsGroupMember resolved = context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+            groupId, memberId, -1, committedWithMember);
         assertEquals(memberId, resolved.memberId());
 
         // Latest in-memory state, by contrast, sees the tombstone — verify by querying with Long.MAX_VALUE.
         assertThrows(UnknownMemberIdException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(groupId, memberId, Long.MAX_VALUE));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, memberId, -1, Long.MAX_VALUE));
     }
 
     @Test
@@ -14329,6 +14355,77 @@ public class GroupMetadataManagerTest {
         assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(requestWithInvalidProtocolType));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testClassicMemberJoinToConsumerGroupWithDisabledMigrationPolicy(boolean isStatic) {
+        String groupId = "group-id";
+        String classicMemberId = Uuid.randomUuid().toString();
+        String classicInstanceId = "classic-instance-id";
+        String consumerMemberId = Uuid.randomUuid().toString();
+        String consumerInstanceId = "consumer-instance-id";
+        String errorMessage = String.format(
+            "Cannot join the consumer group %s with the classic protocol because the group migration is disabled.", groupId);
+
+        // The group already contains a classic member. For the static case it also contains a
+        // consumer-protocol static member that a classic member could try to replace.
+        ConsumerGroupBuilder groupBuilder = new ConsumerGroupBuilder(groupId, 10)
+            .withMember(new ConsumerGroupMember.Builder(classicMemberId)
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(10)
+                .setPreviousMemberEpoch(10)
+                .setInstanceId(isStatic ? classicInstanceId : null)
+                .setClassicMemberMetadata(
+                    new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSessionTimeoutMs(5000)
+                        .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                            GroupMetadataManagerTestContext.toProtocols("range"))))
+                .build());
+        if (isStatic) {
+            groupBuilder.withMember(new ConsumerGroupMember.Builder(consumerMemberId)
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(10)
+                .setPreviousMemberEpoch(10)
+                .setInstanceId(consumerInstanceId)
+                .build());
+        }
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.toString())
+            .withConsumerGroup(groupBuilder)
+            .build();
+
+        // A new classic member cannot join
+        JoinGroupRequestData newMemberRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withGroupInstanceId(isStatic ? "new-instance-id" : null)
+            .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
+            .build();
+        assertEquals(errorMessage,
+            assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(newMemberRequest, isStatic)).getMessage());
+
+        // The existing classic member cannot rejoin.
+        JoinGroupRequestData rejoinRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(isStatic ? UNKNOWN_MEMBER_ID : classicMemberId)
+            .withGroupInstanceId(isStatic ? classicInstanceId : null)
+            .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
+            .build();
+        assertEquals(errorMessage,
+            assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(rejoinRequest, isStatic)).getMessage());
+
+        if (isStatic) {
+            // A classic member cannot replace an existing consumer-protocol static member.
+            JoinGroupRequestData replaceRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withGroupInstanceId(consumerInstanceId)
+                .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
+                .build();
+            assertEquals(errorMessage,
+                assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(replaceRequest, true)).getMessage());
+        }
+    }
+
     @Test
     public void testJoiningConsumerGroupWithNewDynamicMember() throws Exception {
         String groupId = "group-id";
@@ -14637,7 +14734,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new NoOpPartitionAssignor()))
             .withMetadataImage(metadataImage)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
@@ -22710,9 +22807,9 @@ public class GroupMetadataManagerTest {
                     TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
             );
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord("foo", "m1", tasks));
-        assertEquals(tasks.activeTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").activeTasks());
-        assertEquals(tasks.standbyTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").standbyTasks());
-        assertEquals(tasks.warmupTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").warmupTasks());
+        assertEquals(tasks.activeTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).activeTasks());
+        assertEquals(tasks.standbyTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).standbyTasks());
+        assertEquals(tasks.warmupTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).warmupTasks());
     }
 
     @Test
@@ -22743,7 +22840,7 @@ public class GroupMetadataManagerTest {
 
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
 
-        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").isEmpty());
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1", Optional.empty()).isEmpty());
     }
 
     @Test

@@ -1405,13 +1405,12 @@ public class RaftEventSimulationTest {
             cluster.nodeIfRunning(destination.id()).ifPresent(node -> {
                 inflight.put(correlationId, new InflightRequest(senderId, destination));
 
-                inbound.completion.whenComplete((response, exception) -> {
+                node.client.handle(inbound).whenComplete((response, exception) -> {
                     if (response != null && filters.get(destination.id()).acceptOutbound(response)) {
                         deliver(response);
                     }
                 });
 
-                node.client.handle(inbound);
             });
         }
 

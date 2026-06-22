@@ -567,12 +567,40 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Returns the target assignment of the member.
+     * Returns true if the static member exists.
      *
-     * @return The StreamsGroupMemberAssignment or an EMPTY one if it does not exist.
+     * @param instanceId The instance id.
+     *
+     * @return A boolean indicating whether the member exists or not.
      */
-    public TasksTuple targetAssignment(String memberId) {
-        return targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY);
+    public boolean hasStaticMember(String instanceId) {
+        if (instanceId == null) return false;
+        return staticMembers.containsKey(instanceId);
+    }
+    
+    /**
+     * Returns the target assignment of the member.
+     * <p>
+     * If {@code instanceId} is empty, the assignment is looked up by {@code memberId}.
+     * If {@code instanceId} is present, the assignment is looked up by the member ID
+     * associated with that static member instance ID.
+     *
+     * @param memberId The member id.
+     * @param instanceId The instance id.                   
+     * 
+     * @return The StreamsGroupMemberAssignment for the resolved member ID, or {@link TasksTuple#EMPTY}
+     *         if no assignment exists or no static member exists for {@code instanceId}.
+     */
+    public TasksTuple targetAssignment(String memberId, Optional<String> instanceId) {
+        if (instanceId.isEmpty()) {
+            return targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY);
+        } else {
+            StreamsGroupMember previousMember = staticMember(instanceId.get());
+            if (previousMember != null) {
+                return targetAssignment.getOrDefault(previousMember.memberId(), TasksTuple.EMPTY);
+            }
+        }
+        return TasksTuple.EMPTY;
     }
 
     /**
@@ -1274,11 +1302,13 @@ public class StreamsGroup implements Group {
      *
      * @param updatedMember The member that was just updated (may have a stale entry in the members map).
      * @param metadataImage The current metadata image for resolving topic partitions.
+     * @param maybeReplacedStaticMember The replaced static member. it can be null.
      * @return The list of endpoint-to-partitions mappings for all members with endpoints.
      */
     public List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpointToPartitions(
         StreamsGroupMember updatedMember,
-        CoordinatorMetadataImage metadataImage
+        CoordinatorMetadataImage metadataImage,
+        StreamsGroupMember maybeReplacedStaticMember
     ) {
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
         if (updatedMember == null) {
@@ -1288,6 +1318,9 @@ public class StreamsGroup implements Group {
         }
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
             if (entry.getKey().equals(updatedMember.memberId())) {
+                continue;
+            }
+            if (maybeReplacedStaticMember != null && entry.getKey().equals(maybeReplacedStaticMember.memberId())) {
                 continue;
             }
             getOrComputeEndpointToPartitions(entry.getValue(), metadataImage)
