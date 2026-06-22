@@ -369,7 +369,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testUnSubscribingNonExisingMetricsDoesntCauseError(GroupProtocol groupProtocol) {
+    public void testUnsubscribingNonExistingMetricsDoesntCauseError(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -519,7 +519,7 @@ public class KafkaConsumerTest {
         assertEquals(Set.of(tp0), records.partitions());
         assertEquals(invalidRecordNumber - 1, records.records(tp0).size());
         long lastOffset = records.records(tp0).get(records.records(tp0).size() - 1).offset();
-        assertEquals(invalidRecordNumber - 2, lastOffset);
+        assertEquals(invalidRecordOffset - 1, lastOffset);
         assertEquals(1, records.nextOffsets().size());
         assertEquals(new OffsetAndMetadata(lastOffset + 1), records.nextOffsets().get(tp0));
 
@@ -683,7 +683,7 @@ public class KafkaConsumerTest {
             appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
             consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
             assertFalse(
-                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production ready!")),
+                    appender.getMessages().stream().anyMatch(m -> m.contains("The consumer rebalance protocol (KIP-848) is production-ready!")),
                     "Should not log recommendation when no group.id is set"
             );
         }
@@ -2245,6 +2245,60 @@ public class KafkaConsumerTest {
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testCloseInterrupt(GroupProtocol groupProtocol) throws Exception {
         consumerCloseTest(groupProtocol, Long.MAX_VALUE, Collections.emptyList(), 0, true);
+    }
+
+    @Test
+    public void testClassicConsumerCloseRunsRevocationCallbackAndAttemptsLeaveGroupWhenInterrupted() {
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Map.of(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        final KafkaConsumer<String, String> consumer = newConsumer(
+            GroupProtocol.CLASSIC,
+            time,
+            client,
+            subscription,
+            metadata,
+            assignor,
+            false,
+            Optional.empty()
+        );
+
+        AtomicInteger revokedCount = new AtomicInteger(0);
+        AtomicReference<Set<TopicPartition>> revokedPartitions = new AtomicReference<>();
+
+        ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                assertTrue(Thread.currentThread().isInterrupted());
+                revokedCount.incrementAndGet();
+                revokedPartitions.set(Set.copyOf(partitions));
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                // Preserve the existing helper behavior so assignment setup remains equivalent.
+                for (TopicPartition partition : partitions)
+                    consumer.seek(partition, 0);
+            }
+        };
+
+        consumer.subscribe(Set.of(topic), listener);
+        prepareRebalance(client, node, assignor, List.of(tp0), null);
+        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
+
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(InterruptException.class, () -> consumer.close(CloseOptions.timeout(Duration.ofMillis(Long.MAX_VALUE))));
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertEquals(1, revokedCount.get());
+        assertEquals(Set.of(tp0), revokedPartitions.get());
+        assertTrue(requestGenerated(client, ApiKeys.LEAVE_GROUP));
     }
 
     @ParameterizedTest

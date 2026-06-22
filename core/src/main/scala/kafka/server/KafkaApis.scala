@@ -1456,6 +1456,17 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setErrorCode(error.code))
         }
       } else {
+        // GROUP_DELETION_FAILED was introduced for DeleteGroups v3 (KIP-1331). Older
+        // clients cannot interpret the new code, so downgrade it to UNKNOWN_SERVER_ERROR.
+        // ErrorMessage is "versions": "3+", "ignorable": true and is stripped at the
+        // serialization layer for v<3, so only the error code needs gating here.
+        if (request.context.apiVersion < 3) {
+          results.forEach { result =>
+            if (result.errorCode == Errors.GROUP_DELETION_FAILED.code) {
+              result.setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+            }
+          }
+        }
         response.setResults(results)
       }
 
@@ -2911,13 +2922,32 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  // Stub handler for KIP-1331. The full handler lands in a later sub-task; until then this
-  // responds with UNSUPPORTED_VERSION so callers fail loud rather than hit the IllegalStateException
-  // default branch in handle().
   def handleStreamsGroupTopologyDescriptionUpdate(request: Request): CompletableFuture[Unit] = {
     val updateRequest = request.body(classOf[StreamsGroupTopologyDescriptionUpdateRequest])
-    requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!isStreamsGroupProtocolEnabled) {
+      // The streams group protocol is disabled on this broker, so the RPC is unreachable
+      // even if a topology description plugin is configured.
+      requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, updateRequest.data.groupId)) {
+      // Per KIP-1331: like offset commits, a topology push is not treated as a modification
+      // of the GROUP, so READ on the GROUP resource is sufficient. This lets apps deployed
+      // with READ-only group ACLs push topology descriptions without an ACL upgrade.
+      requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      groupCoordinator.streamsGroupTopologyDescriptionUpdate(
+        request.context,
+        updateRequest.data
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupTopologyDescriptionUpdateResponse(response))
+        }
+      }
+    }
   }
 
   def handleStreamsGroupDescribe(request: Request): CompletableFuture[Unit] = {
@@ -2945,7 +2975,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.streamsGroupDescribe(
         request.context,
-        authorizedGroups.asJava
+        authorizedGroups.asJava,
+        streamsGroupDescribeRequest.data.includeTopologyDescription
       ).handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, streamsGroupDescribeRequest.getErrorResponse(exception))

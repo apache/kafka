@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -244,21 +245,27 @@ public class GroupCoordinatorShardTest {
         );
 
         // Happy path: manager returns a member, shard returns void.
-        when(groupMetadataManager.validateStreamsGroupMember("foo", "m1", 100L))
+        when(groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate("foo", "m1", 3, 100L))
             .thenReturn(mock(StreamsGroupMember.class));
-        coordinator.validateStreamsGroupMember("foo", "m1", 100L);
+        coordinator.validateStreamsGroupTopologyDescriptionUpdate("foo", "m1", 3, 100L);
 
         // GROUP_ID_NOT_FOUND propagates.
-        when(groupMetadataManager.validateStreamsGroupMember("missing", "m1", 100L))
+        when(groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate("missing", "m1", 3, 100L))
             .thenThrow(new GroupIdNotFoundException("nope"));
         assertThrows(GroupIdNotFoundException.class,
-            () -> coordinator.validateStreamsGroupMember("missing", "m1", 100L));
+            () -> coordinator.validateStreamsGroupTopologyDescriptionUpdate("missing", "m1", 3, 100L));
 
         // UNKNOWN_MEMBER_ID propagates.
-        when(groupMetadataManager.validateStreamsGroupMember("foo", "stranger", 100L))
+        when(groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate("foo", "stranger", 3, 100L))
             .thenThrow(new UnknownMemberIdException("not a member"));
         assertThrows(UnknownMemberIdException.class,
-            () -> coordinator.validateStreamsGroupMember("foo", "stranger", 100L));
+            () -> coordinator.validateStreamsGroupTopologyDescriptionUpdate("foo", "stranger", 3, 100L));
+
+        // Stale topology epoch propagates as INVALID_REQUEST.
+        when(groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate("foo", "m1", 2, 100L))
+            .thenThrow(new InvalidRequestException("stale epoch"));
+        assertThrows(InvalidRequestException.class,
+            () -> coordinator.validateStreamsGroupTopologyDescriptionUpdate("foo", "m1", 2, 100L));
     }
 
     @Test

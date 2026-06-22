@@ -1,6 +1,6 @@
 ---
 title: Processor API
-description: 
+description: Kafka Streams Processor API for low-level stream processing.
 weight: 4
 tags: ['kafka', 'docs']
 aliases: 

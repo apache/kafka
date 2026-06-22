@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
@@ -131,6 +132,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -913,23 +915,71 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Validates that a streams group exists and that the given member is a current member of it.
-     * The lookup runs at {@code committedOffset} so an uncommitted fence/leave does not
-     * cause a still-live member to appear unknown (or vice versa). Must be scheduled on the
+     * Validates that a streams group exists, that the given member is a current member of
+     * it, and that {@code pushedEpoch} matches the group's current topology epoch. The
+     * lookup runs at {@code committedOffset} so an uncommitted fence/leave does not cause
+     * a still-live member to appear unknown (or vice versa). Must be scheduled on the
      * coordinator runtime like any other read.
      *
      * @param groupId          The group ID.
      * @param memberId         The member ID.
+     * @param pushedEpoch      The topology epoch carried by the push request.
      * @param committedOffset  A committed offset corresponding to the desired snapshot.
      * @throws GroupIdNotFoundException if the group does not exist.
      * @throws UnknownMemberIdException if the member is not in the group.
+     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
+     *                                  current topology epoch.
      */
-    public void validateStreamsGroupMember(
+    public void validateStreamsGroupTopologyDescriptionUpdate(
         String groupId,
         String memberId,
+        int pushedEpoch,
         long committedOffset
     ) {
-        groupMetadataManager.validateStreamsGroupMember(groupId, memberId, committedOffset);
+        groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+            groupId, memberId, pushedEpoch, committedOffset);
+    }
+
+    /**
+     * Advance {@code StoredDescriptionTopologyEpoch} after a successful plugin {@code setTopology}.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setStoredDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) {
+        return groupMetadataManager.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch);
+    }
+
+    /**
+     * Advance {@code FailedDescriptionTopologyEpoch} after a permanent plugin failure.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setFailedDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) {
+        return groupMetadataManager.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch);
+    }
+
+    /**
+     * Return the subset of {@code groupIds} that are streams groups with a stored topology
+     * description. Used during {@code DeleteGroups} to identify which groups need a
+     * {@code plugin.deleteTopology} call before being tombstoned.
+     */
+    public Set<String> streamsGroupsWithStoredTopologyDescription(
+        Collection<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.streamsGroupsWithStoredTopologyDescription(groupIds, committedOffset);
     }
 
     /**
