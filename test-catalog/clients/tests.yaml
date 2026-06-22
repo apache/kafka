@@ -4853,15 +4853,24 @@ org.apache.kafka.common.security.kerberos.KerberosNameTest:
 org.apache.kafka.common.security.kerberos.KerberosRuleTest:
 - testReplaceParameters
 org.apache.kafka.common.security.oauthbearer.BrokerJwtValidatorTest:
+- testAllowUnverifiedAudience
+- testAllowUnverifiedIssuer
+- testAllowUnverifiedIssuerAndAudience
+- testConfigureFailsWhenExpectedAudienceUnset
+- testConfigureFailsWhenExpectedIssuerUnset
+- testConfigureFailsWhenNeitherExpectedSet
 - testEcdsaEncryptionAlgorithm
 - testEmptySections
 - testEmptyString
+- testExpectedIssuerSet
 - testInvalidEncryptionAlgorithm
 - testMissingHeader
 - testMissingPayload
 - testMissingSignature
 - testMissingSubShouldBeValid
 - testNull
+- testRejectMissingIssuerClaimWhenExpectedIssuerSet
+- testRejectWrongAudienceWhenExpectedAudienceSet
 - testRsaEncryptionAlgorithm
 - testWhitespace
 org.apache.kafka.common.security.oauthbearer.ClaimValidationUtilsTest:
@@ -4929,6 +4938,7 @@ org.apache.kafka.common.security.oauthbearer.DefaultJwtValidatorTest:
 - testConfigureWithJwksUrl
 - testConfigureWithVerificationKeyResolver
 - testConfigureWithoutVerificationKeyResolver
+- testRejectsAttackerIssuerViaDefaultJwtValidatorWithJwksUrl
 org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetrieverTest:
 - testConfigure
 - testConfigureWithInvalidPassphrase
@@ -4964,6 +4974,8 @@ org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
 - testBasic
 - testConfigureAcceptsCustomValidatorClass
 - testFailsFastWhenJwksUrlAbsent
+- testFailsToStartWhenExpectedAudienceMissingWithJwksUrl
+- testFailsToStartWhenExpectedIssuerMissingWithJwksUrl
 - testHandlerCloseDoesNotThrowException
 - testHandlerConfigureThrowsException
 - testInvalidAccessToken
