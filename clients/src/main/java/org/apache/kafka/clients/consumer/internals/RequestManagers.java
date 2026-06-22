@@ -257,6 +257,8 @@ public class RequestManagers implements Closeable {
                         streamsGroupTopologyDescriptionRequestManager = new StreamsGroupTopologyDescriptionRequestManager(
                             logContext,
                             time,
+                            retryBackoffMs,
+                            retryBackoffMaxMs,
                             groupRebalanceConfig.groupId,
                             streamsRebalanceData.get(),
                             coordinator

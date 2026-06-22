@@ -40,15 +40,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class StreamsGroupTopologyDescriptionRequestManagerTest {
     private static final String GROUP_ID = "group-id";
     private static final String MEMBER_ID = "member-id";
+    private static final long RETRY_BACKOFF_MS = 100;
+    private static final long RETRY_BACKOFF_MAX_MS = 1000;
 
     private final MockTime time = new MockTime();
     private final LogContext logContext = new LogContext();
@@ -65,7 +67,8 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
             UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of()
         );
         manager = new StreamsGroupTopologyDescriptionRequestManager(
-            logContext, time, GROUP_ID, streamsRebalanceData, coordinatorRequestManager
+            logContext, time, RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS,
+            GROUP_ID, streamsRebalanceData, coordinatorRequestManager
         );
     }
 
@@ -218,6 +221,7 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
                 new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
             streamsRebalanceData.setTopologyPushRequired(true);
             when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            time.sleep(RETRY_BACKOFF_MAX_MS);
 
             final NetworkClientDelegate.UnsentRequest unsent =
                 manager.poll(time.milliseconds()).unsentRequests.get(0);
@@ -226,7 +230,7 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
             assertTrue(streamsRebalanceData.topologyPushRequired(),
                 "Flag should remain set after " + error);
         }
-        verify(coordinatorRequestManager, atLeastOnce()).markCoordinatorUnknown(any(), anyLong());
+        verify(coordinatorRequestManager, times(2)).markCoordinatorUnknown(any(), anyLong());
     }
 
     /**
@@ -267,6 +271,7 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
                 new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
             streamsRebalanceData.setTopologyPushRequired(true);
             when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            time.sleep(RETRY_BACKOFF_MAX_MS);
 
             final NetworkClientDelegate.UnsentRequest unsent =
                 manager.poll(time.milliseconds()).unsentRequests.get(0);
@@ -275,6 +280,30 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
             assertFalse(streamsRebalanceData.topologyPushRequired(),
                 "Flag should be cleared after " + error);
         }
+    }
+
+    /**
+     * Test the situation when the push fails with a network exception: the
+     * topologyPushRequired flag must remain set so the next poll retries, and a failed attempt
+     * is recorded so retry backoff applies.
+     */
+    @Test
+    public void testNetworkExceptionLeavesFlagSetWithBackoff() {
+        streamsRebalanceData.setMemberId(MEMBER_ID);
+        streamsRebalanceData.setWireTopologyDescription(
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
+        streamsRebalanceData.setTopologyPushRequired(true);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+
+        final NetworkClientDelegate.UnsentRequest unsent =
+            manager.poll(time.milliseconds()).unsentRequests.get(0);
+        unsent.handler().onFailure(time.milliseconds(), Errors.NETWORK_EXCEPTION.exception());
+
+        assertTrue(streamsRebalanceData.topologyPushRequired());
+        assertEquals(0, manager.poll(time.milliseconds()).unsentRequests.size());
+
+        time.sleep(RETRY_BACKOFF_MAX_MS);
+        assertEquals(1, manager.poll(time.milliseconds()).unsentRequests.size());
     }
 
     /**

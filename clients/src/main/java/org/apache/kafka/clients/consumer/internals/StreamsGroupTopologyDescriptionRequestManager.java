@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequ
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.StreamsGroupTopologyDescriptionUpdateRequest;
 import org.apache.kafka.common.requests.StreamsGroupTopologyDescriptionUpdateResponse;
-import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -36,12 +36,14 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
     private final String groupId;
     private final StreamsRebalanceData streamsRebalanceData;
     private final CoordinatorRequestManager coordinatorRequestManager;
+    private final RequestState pushRequestState;
 
-    private boolean inflight = false;
     private long nextPushTimeMs = 0L;
 
     public StreamsGroupTopologyDescriptionRequestManager(final LogContext logContext,
                                                          final Time time,
+                                                         final long retryBackoffMs,
+                                                         final long retryBackoffMaxMs,
                                                          final String groupId,
                                                          final StreamsRebalanceData streamsRebalanceData,
                                                          final CoordinatorRequestManager coordinatorRequestManager) {
@@ -50,6 +52,11 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
         this.groupId = Objects.requireNonNull(groupId);
         this.streamsRebalanceData = Objects.requireNonNull(streamsRebalanceData);
         this.coordinatorRequestManager = Objects.requireNonNull(coordinatorRequestManager);
+        this.pushRequestState = new RequestState(
+            logContext,
+            StreamsGroupTopologyDescriptionRequestManager.class.getSimpleName(),
+            retryBackoffMs,
+            retryBackoffMaxMs);
     }
 
     @Override
@@ -68,9 +75,9 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
             new StreamsGroupTopologyDescriptionUpdateRequest.Builder(data),
             coordinatorRequestManager.coordinator()
         );
-        unsent.whenComplete((response, exception) -> onResponse(response, exception, currentTimeMs));
+        unsent.whenComplete((response, exception) -> onResponse(response, exception));
 
-        inflight = true;
+        pushRequestState.onSendAttempt(currentTimeMs);
         return new NetworkClientDelegate.PollResult(Collections.singletonList(unsent));
     }
 
@@ -79,14 +86,17 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
         if (!streamsRebalanceData.topologyPushRequired()) {
             return Long.MAX_VALUE;
         }
-        if (currentTimeMs < nextPushTimeMs) {
-            return nextPushTimeMs - currentTimeMs;
+        final long backoffRemainingMs = pushRequestState.remainingBackoffMs(currentTimeMs);
+        final long throttleRemainingMs = Math.max(0L, nextPushTimeMs - currentTimeMs);
+        final long waitMs = Math.max(backoffRemainingMs, throttleRemainingMs);
+        if (waitMs > 0L) {
+            return waitMs;
         }
         return shouldSendTopologyDescriptionUpdate(currentTimeMs) ? 0L : Long.MAX_VALUE;
     }
 
     private boolean shouldSendTopologyDescriptionUpdate(final long currentTimeMs) {
-        if (inflight || currentTimeMs < nextPushTimeMs) {
+        if (!pushRequestState.canSendRequest(currentTimeMs) || currentTimeMs < nextPushTimeMs) {
             return false;
         }
         if (!streamsRebalanceData.topologyPushRequired() || streamsRebalanceData.wireTopologyDescription() == null) {
@@ -99,10 +109,11 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
         return coordinatorRequestManager.coordinator().isPresent();
     }
 
-    private void onResponse(final ClientResponse response, final Throwable exception, final long requestTimeMs) {
-        inflight = false;
+    private void onResponse(final ClientResponse response, final Throwable exception) {
+        final long responseTimeMs = time.milliseconds();
 
         if (exception != null) {
+            pushRequestState.onFailedAttempt(responseTimeMs);
             logger.warn("Topology description push failed with exception; will retry on next poll", exception);
             return;
         }
@@ -110,33 +121,38 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
         final StreamsGroupTopologyDescriptionUpdateResponse body =
             (StreamsGroupTopologyDescriptionUpdateResponse) response.responseBody();
         final Errors error = Errors.forCode(body.data().errorCode());
+        final String errorMessage = body.data().errorMessage();
 
         if (body.data().throttleTimeMs() > 0) {
-            nextPushTimeMs = requestTimeMs + body.data().throttleTimeMs();
+            nextPushTimeMs = responseTimeMs + body.data().throttleTimeMs();
         }
 
         switch (error) {
             case NONE:
+                pushRequestState.onSuccessfulAttempt(responseTimeMs);
                 streamsRebalanceData.setTopologyPushRequired(false);
                 break;
 
             case NOT_COORDINATOR:
             case COORDINATOR_NOT_AVAILABLE:
+                pushRequestState.onFailedAttempt(responseTimeMs);
                 logInfo(
                     String.format("Coordinator error %s pushing topology description. Will rediscover and retry", error),
-                    body
+                    errorMessage
                 );
-                coordinatorRequestManager.markCoordinatorUnknown(error.message(), requestTimeMs);
+                coordinatorRequestManager.markCoordinatorUnknown(errorMessage, responseTimeMs);
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
-                logInfo("Coordinator is loading; will retry on next poll", body);
+                pushRequestState.onFailedAttempt(responseTimeMs);
+                logInfo("Coordinator is loading; will retry on next poll", errorMessage);
                 break;
 
             case UNKNOWN_MEMBER_ID:
+                pushRequestState.onSuccessfulAttempt(responseTimeMs);
                 logInfo(
                     "Topology description push rejected with UNKNOWN_MEMBER_ID; heartbeat will trigger rejoin",
-                    body
+                    errorMessage
                 );
                 streamsRebalanceData.setTopologyPushRequired(false);
                 break;
@@ -147,14 +163,14 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
             case GROUP_ID_NOT_FOUND:
             case GROUP_AUTHORIZATION_FAILED:
             default:
-                logger.warn("Topology description push failed with {}: {}",
-                    error, body.data().errorMessage());
+                pushRequestState.onSuccessfulAttempt(responseTimeMs);
+                logger.warn("Topology description push failed with {}: {}", error, errorMessage);
                 streamsRebalanceData.setTopologyPushRequired(false);
                 break;
         }
     }
 
-    private void logInfo(final String message, final StreamsGroupTopologyDescriptionUpdateResponse response) {
-        logger.info("{}: {}", message, response.data().errorMessage());
+    private void logInfo(final String message, final String errorMessage) {
+        logger.info("{}: {}", message, errorMessage);
     }
 }
