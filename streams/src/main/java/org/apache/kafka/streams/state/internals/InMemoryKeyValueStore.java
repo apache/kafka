@@ -87,11 +87,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                     synchronized (position) {
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
                             final Bytes key = Bytes.wrap(record.key());
-                            if (record.value() == null) {
-                                map.remove(key);
-                            } else {
-                                map.put(key, record.value());
-                            }
+                            putInternal(key, record.value());
                             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                                 record,
                                 consistencyEnabled,
