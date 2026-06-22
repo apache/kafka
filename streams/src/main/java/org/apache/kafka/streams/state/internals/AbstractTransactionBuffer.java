@@ -129,9 +129,14 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
 
     @Override
     public void rollback() {
-        pendingWrites.clear();
-        pendingWritesBytes = 0;
-        discardPendingBatch();
+        snapshotLock.writeLock().lock();
+        try {
+            pendingWrites.clear();
+            pendingWritesBytes = 0;
+            discardPendingBatch();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
     }
 
     @Override
