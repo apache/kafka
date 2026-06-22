@@ -1,6 +1,6 @@
 ---
 title: Interactive Queries
-description: 
+description: Kafka Streams interactive queries for local and remote state stores.
 weight: 8
 tags: ['kafka', 'docs']
 aliases: 

@@ -174,11 +174,7 @@ public class Uuid implements Comparable<Uuid> {
      */
     public static Uuid[] toArray(List<Uuid> list) {
         if (list == null) return null;
-        Uuid[] array = new Uuid[list.size()];
-        for (int i = 0; i < list.size(); i++) {
-            array[i] = list.get(i);
-        }
-        return array;
+        return list.toArray(new Uuid[0]);
     }
 
     /**
@@ -189,8 +185,6 @@ public class Uuid implements Comparable<Uuid> {
      */
     public static List<Uuid> toList(Uuid[] array) {
         if (array == null) return null;
-        List<Uuid> list = new ArrayList<>(array.length);
-        list.addAll(Arrays.asList(array));
-        return list;
+        return new ArrayList<>(Arrays.asList(array));
     }
 }

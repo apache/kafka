@@ -3634,6 +3634,72 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testHandleDeleteGroupsDowngradesGroupDeletionFailedForOldClients(): Unit = {
+    // GROUP_DELETION_FAILED was introduced for DeleteGroups v3 (KIP-1331). For v<3 clients
+    // KafkaApis must downgrade it to UNKNOWN_SERVER_ERROR so the client can interpret the
+    // code; the ErrorMessage field is "versions": "3+", "ignorable": true and is stripped
+    // by the serialization layer for v<3, so this layer does not need to clear it.
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(util.List.of("group-1"))
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build(2))
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(groupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      util.List.of("group-1"),
+      RequestLocal.noCaching.bufferSupplier
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.noCaching
+    )
+
+    future.complete(new DeleteGroupsResponseData.DeletableGroupResultCollection(util.List.of(
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-1")
+        .setErrorCode(Errors.GROUP_DELETION_FAILED.code)
+        .setErrorMessage("plugin offline")
+    ).iterator))
+
+    val response = verifyNoThrottling[DeleteGroupsResponse](requestChannelRequest)
+    val result = response.data.results.find("group-1")
+    assertNotNull(result)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, result.errorCode)
+  }
+
+  @Test
+  def testHandleDeleteGroupsKeepsGroupDeletionFailedForV3Clients(): Unit = {
+    // v3+ clients understand GROUP_DELETION_FAILED, so no downgrade.
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(util.List.of("group-1"))
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build(3))
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(groupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      util.List.of("group-1"),
+      RequestLocal.noCaching.bufferSupplier
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.noCaching
+    )
+
+    future.complete(new DeleteGroupsResponseData.DeletableGroupResultCollection(util.List.of(
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-1")
+        .setErrorCode(Errors.GROUP_DELETION_FAILED.code)
+        .setErrorMessage("plugin offline")
+    ).iterator))
+
+    val response = verifyNoThrottling[DeleteGroupsResponse](requestChannelRequest)
+    val result = response.data.results.find("group-1")
+    assertNotNull(result)
+    assertEquals(Errors.GROUP_DELETION_FAILED.code, result.errorCode)
+    assertEquals("plugin offline", result.errorMessage)
+  }
+
+  @Test
   def testHandleDeleteGroupsFutureFailed(): Unit = {
     val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(util.List.of(
       "group-1",
@@ -11174,6 +11240,113 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testStreamsGroupTopologyDescriptionUpdateReturnsUnsupportedVersionWhenStreamsProtocolDisabled(): Unit = {
+    // Streams group protocol disabled on this broker -> the gate at the top of
+    // handleStreamsGroupTopologyDescriptionUpdate short-circuits with UNSUPPORTED_VERSION,
+    // matching the sibling handleStreamsGroupHeartbeat behavior and the placeholder semantics
+    // KAFKA-20620 introduced before this real handler landed.
+    val updateRequest = new StreamsGroupTopologyDescriptionUpdateRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new StreamsGroupTopologyDescriptionUpdateRequest.Builder(updateRequest).build())
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta.Builder()
+        .setImage(MetadataImage.EMPTY)
+        .build()
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[StreamsGroupTopologyDescriptionUpdateResponse](requestChannelRequest)
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, response.data.errorCode)
+  }
+
+  @Test
+  def testStreamsGroupTopologyDescriptionUpdateRequest(): Unit = {
+    // Happy path: streams protocol enabled, no authorizer configured (default ALLOW),
+    // coordinator returns a clean response that must be forwarded to the client verbatim.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val updateRequest = new StreamsGroupTopologyDescriptionUpdateRequestData().setGroupId("group")
+    val requestChannelRequest = buildRequest(new StreamsGroupTopologyDescriptionUpdateRequest.Builder(updateRequest).build())
+
+    val future = new CompletableFuture[StreamsGroupTopologyDescriptionUpdateResponseData]()
+    when(groupCoordinator.streamsGroupTopologyDescriptionUpdate(
+      requestChannelRequest.context,
+      updateRequest
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val expectedResponse = new StreamsGroupTopologyDescriptionUpdateResponseData()
+    future.complete(expectedResponse)
+    val response = verifyNoThrottling[StreamsGroupTopologyDescriptionUpdateResponse](requestChannelRequest)
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testStreamsGroupTopologyDescriptionUpdateRequestFutureFailed(): Unit = {
+    // Coordinator-side exception (e.g. NOT_COORDINATOR, fenced member, plugin transient
+    // failure) must be folded into an error response via getErrorResponse and surfaced to
+    // the client.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val updateRequest = new StreamsGroupTopologyDescriptionUpdateRequestData().setGroupId("group")
+    val requestChannelRequest = buildRequest(new StreamsGroupTopologyDescriptionUpdateRequest.Builder(updateRequest).build())
+
+    val future = new CompletableFuture[StreamsGroupTopologyDescriptionUpdateResponseData]()
+    when(groupCoordinator.streamsGroupTopologyDescriptionUpdate(
+      requestChannelRequest.context,
+      updateRequest
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
+    val response = verifyNoThrottling[StreamsGroupTopologyDescriptionUpdateResponse](requestChannelRequest)
+    assertEquals(Errors.NOT_COORDINATOR.code, response.data.errorCode)
+  }
+
+  @Test
+  def testStreamsGroupTopologyDescriptionUpdateRequestGroupAuthorizationFailed(): Unit = {
+    // Per KIP-1331 the RPC requires READ on the GROUP resource (like offset commits). When
+    // the authorizer denies that ACL, the request must NOT reach the coordinator — fail
+    // fast at the KafkaApis layer with GROUP_AUTHORIZATION_FAILED.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val updateRequest = new StreamsGroupTopologyDescriptionUpdateRequestData().setGroupId("group")
+    val requestChannelRequest = buildRequest(new StreamsGroupTopologyDescriptionUpdateRequest.Builder(updateRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(util.List.of(AuthorizationResult.DENIED))
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[StreamsGroupTopologyDescriptionUpdateResponse](requestChannelRequest)
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
+    verify(groupCoordinator, never()).streamsGroupTopologyDescriptionUpdate(any(), any())
+  }
+
+  @Test
   def testStreamsGroupHeartbeatRequestTopicAuthorizationFailed(): Unit = {
     val features = mock(classOf[FinalizedFeatures])
     when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
@@ -11661,7 +11834,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11773,7 +11947,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     future.complete(util.List.of)
     kafkaApis = createKafkaApis(
@@ -11800,7 +11975,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11808,6 +11984,42 @@ class KafkaApisTest extends Logging {
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[StreamsGroupDescribeResponse](requestChannelRequest)
     assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.groups.get(0).errorCode)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testStreamsGroupDescribeForwardsIncludeTopologyDescriptionFlag(includeTopologyDescription: Boolean): Unit = {
+    // The KafkaApis layer must thread IncludeTopologyDescription from the request schema
+    // through to the coordinator unchanged — the coordinator gates the plugin call on it,
+    // so a silent drop here would make the flag unobservable to operators.
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(util.Map.of(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
+      .setIncludeTopologyDescription(includeTopologyDescription)
+    streamsGroupDescribeRequestData.groupIds.add("group-id")
+    // IncludeTopologyDescription is v1+ and v1 is marked latestVersionUnstable; build at v1
+    // explicitly so the field reaches the wire.
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData).build(1.toShort))
+
+    val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.streamsGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]],
+      ArgumentMatchers.eq(includeTopologyDescription)
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    future.complete(util.List.of(new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId("group-id")))
+    verify(groupCoordinator).streamsGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]],
+      ArgumentMatchers.eq(includeTopologyDescription)
+    )
   }
 
   @ParameterizedTest
@@ -11850,7 +12062,8 @@ class KafkaApisTest extends Logging {
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.streamsGroupDescribe(
       any[RequestContext],
-      any[util.List[String]]
+      any[util.List[String]],
+      any[Boolean]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer)

@@ -583,10 +583,41 @@ public class StateDirectory implements AutoCloseable {
 
         try {
             if (hasPersistentStores && stateDir.exists() && !stateDir.delete()) {
-                log.warn(
-                    String.format("%s Failed to delete state store directory of %s for it is not empty",
-                        logPrefix(), stateDir.getAbsolutePath())
-                );
+                final File[] remainingFiles = stateDir.listFiles();
+                if (remainingFiles == null) {
+                    log.warn("{} Failed to delete state store directory {}. It is not a directory, or it is inaccessible.",
+                            logPrefix(), stateDir.getAbsolutePath());
+                    return;
+                }
+
+                boolean hasProcessOrLockFiles = false;
+                boolean hasUnexpectedFiles = false;
+
+                for (final File file : remainingFiles) {
+                    final String name = file.getName();
+                    if (PROCESS_FILE_NAME.equals(name) || LOCK_FILE_NAME.equals(name)) {
+                        hasProcessOrLockFiles = true;
+                    } else {
+                        hasUnexpectedFiles = true;
+                        break;
+                    }
+                }
+                
+                if (hasProcessOrLockFiles && !hasUnexpectedFiles) {
+                    // KAFKA-10716: The processId file is persisted in the state directory to keep the
+                    // processId stable across restarts. Removing it would cause a new processId to be
+                    // generated and may lead to unnecessary task movements during rebalances.
+                    log.debug(
+                            "{} State store directory {} was not deleted because it still contains expected metadata files ({} and/or {}).",
+                            logPrefix(), stateDir.getAbsolutePath(), PROCESS_FILE_NAME, LOCK_FILE_NAME
+                    );
+                } else {
+                    log.warn(
+                            "{} Failed to fully clean up state store directory {} because unexpected files remain.",
+                            logPrefix(),
+                            stateDir.getAbsolutePath()
+                    );
+                }
             }
         } catch (final SecurityException exception) {
             log.error(

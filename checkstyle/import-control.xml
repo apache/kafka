@@ -135,6 +135,7 @@
       </subpackage>
       <subpackage name="oauthbearer">
         <allow pkg="com.fasterxml.jackson.databind" />
+        <allow class="org.apache.logging.log4j.Level" />
         <allow pkg="org.jose4j" />
         <allow pkg="javax.crypto"/>
         <allow pkg="org.testcontainers" />
