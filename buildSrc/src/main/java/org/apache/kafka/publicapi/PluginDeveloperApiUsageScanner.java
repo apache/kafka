@@ -151,13 +151,16 @@ public class PluginDeveloperApiUsageScanner {
         if (binaryName == null) {
             return;
         }
-        // Inner/nested types inherit the outer's audience marker, so check the outer.
-        String outerName = outerNameOf(binaryName);
-        if (isPublicApi.test(outerName)) {
+        // Test the full nested name. The predicate (backed by ApiSurface#isEffectivelyPublic)
+        // walks the enclosing chain level-by-level, so an explicit @InterfaceAudience.Private
+        // on a nested class correctly overrides an inherited @Public from its outer — collapsing
+        // to the outer name here would silently allow exactly that override.
+        if (isPublicApi.test(binaryName)) {
             return;
         }
-        // Don't report classes flagging references to themselves.
-        if (outerName.equals(consumerClass) || binaryName.equals(consumerClass)) {
+        // Don't report a class flagging references to its own outermost compilation unit
+        // (covers self-references and references between siblings nested under the same outer).
+        if (outermostOf(binaryName).equals(outermostOf(consumerClass))) {
             return;
         }
         String location = formatLocation(consumerClass, memberName, line);
@@ -185,7 +188,8 @@ public class PluginDeveloperApiUsageScanner {
         return trimmed.replace('/', '.');
     }
 
-    private static String outerNameOf(String binaryName) {
+    /** Outermost enclosing class (leftmost segment before any {@code $}). */
+    private static String outermostOf(String binaryName) {
         int dollar = binaryName.indexOf('$');
         return dollar < 0 ? binaryName : binaryName.substring(0, dollar);
     }

@@ -114,12 +114,98 @@ class CascadeValidatorTest {
     }
 
     @Test
-    void nonPublicMethod_isIgnored() throws IOException {
-        // Cascade only checks ACC_PUBLIC methods. Private and protected leaks are tolerated
-        // (per current policy — only the broadest source-level access is in scope).
+    void privateMethod_isIgnored() throws IOException {
+        // Cascade only inspects externally-visible methods. Private leaks are tolerated
+        // because they're invisible to consumers.
         CheckResult r = run(owner()
-                .method(AsmClassFactory.method("priv").access(Opcodes.ACC_PRIVATE).returns(INTERNAL_DESC))
+                .method(AsmClassFactory.method("priv").access(Opcodes.ACC_PRIVATE).returns(INTERNAL_DESC)));
+
+        assertTrue(r.violations().isEmpty());
+    }
+
+    @Test
+    void protectedMethod_emitsViolation() throws IOException {
+        // KIP-1265: protected members on an extensible @Public class are reachable to
+        // subclasses, so they count toward the public API surface and must not leak
+        // non-public types.
+        CheckResult r = run(owner()
                 .method(AsmClassFactory.method("prot").access(Opcodes.ACC_PROTECTED).returns(INTERNAL_DESC)));
+
+        assertEquals(1, r.violations().size());
+        assertEquals("INVALID_RETURN_TYPE", r.violations().get(0).getViolationType());
+    }
+
+    @Test
+    void publicFieldOfInternalType_emitsInvalidFieldType() throws IOException {
+        // KIP-1265: field types are part of the cascade — a public field of an internal type
+        // leaks the internal type just like a method signature does.
+        CheckResult r = run(owner()
+                .field(AsmClassFactory.field("leakField").ofType(INTERNAL_DESC)));
+
+        assertEquals(1, r.violations().size());
+        PublicApiViolation v = r.violations().get(0);
+        assertEquals("INVALID_FIELD_TYPE", v.getViolationType());
+        assertEquals(OWNER_BIN, v.getClassName());
+        assertEquals("leakField", v.getMemberName());
+        assertTrue(v.getDescription().contains(INTERNAL_BIN),
+                "description should name the leaked type: " + v.getDescription());
+    }
+
+    @Test
+    void protectedFieldOfInternalType_emitsInvalidFieldType() throws IOException {
+        // protected fields on an extensible @Public class are also part of the API surface.
+        CheckResult r = run(owner()
+                .field(AsmClassFactory.field("protLeak").access(Opcodes.ACC_PROTECTED).ofType(INTERNAL_DESC)));
+
+        assertEquals(1, r.violations().size());
+        assertEquals("INVALID_FIELD_TYPE", r.violations().get(0).getViolationType());
+    }
+
+    @Test
+    void privateFieldOfInternalType_isIgnored() throws IOException {
+        CheckResult r = run(owner()
+                .field(AsmClassFactory.field("hidden").access(Opcodes.ACC_PRIVATE).ofType(INTERNAL_DESC)));
+
+        assertTrue(r.violations().isEmpty());
+    }
+
+    @Test
+    void arrayFieldOfInternalType_recursesAndFlags() throws IOException {
+        CheckResult r = run(owner()
+                .field(AsmClassFactory.field("buf").ofType("[" + INTERNAL_DESC)));
+
+        assertEquals(1, r.violations().size());
+        assertEquals("INVALID_FIELD_TYPE", r.violations().get(0).getViolationType());
+    }
+
+    @Test
+    void fieldLevelSuppress_movesFieldViolationToSuppressions() throws IOException {
+        CheckResult r = run(owner()
+                .field(AsmClassFactory.field("leak").ofType(INTERNAL_DESC).suppress("legacy-field")));
+
+        assertTrue(r.violations().isEmpty());
+        assertEquals(1, r.suppressions().size());
+        assertTrue(r.suppressions().get(0).getDescription().contains("reason: legacy-field"));
+    }
+
+    @Test
+    void classLevelSuppress_silencesFieldLeaks() throws IOException {
+        CheckResult r = run(owner()
+                .suppress("legacy-api")
+                .field(AsmClassFactory.field("leak").ofType(INTERNAL_DESC)));
+
+        assertTrue(r.violations().isEmpty());
+        assertEquals(1, r.suppressions().size());
+        assertTrue(r.suppressions().get(0).getDescription().contains("reason: legacy-api"));
+    }
+
+    @Test
+    void syntheticField_isIgnored() throws IOException {
+        // Compiler-generated synthetic fields (e.g. $assertionsDisabled) are not source-level API.
+        CheckResult r = run(owner()
+                .field(AsmClassFactory.field("synth")
+                        .access(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC)
+                        .ofType(INTERNAL_DESC)));
 
         assertTrue(r.violations().isEmpty());
     }

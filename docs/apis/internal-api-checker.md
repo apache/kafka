@@ -68,7 +68,7 @@ unsuppressed reference to an internal Kafka class.
   <executions>
     <execution>
       <phase>verify</phase>
-      <goals><goal>check</goal></goals>
+      <goals><goal>verify</goal></goals>
     </execution>
   </executions>
 </plugin>

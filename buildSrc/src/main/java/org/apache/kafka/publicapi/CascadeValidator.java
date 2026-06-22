@@ -19,6 +19,7 @@ package org.apache.kafka.publicapi;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -92,7 +93,10 @@ final class CascadeValidator {
                     @Override
                     public MethodVisitor visitMethod(int access, String name, String descriptor,
                                                      String signature, String[] exceptions) {
-                        if ((access & Opcodes.ACC_PUBLIC) == 0) return null;
+                        // KIP-1265: a Public class's externally-visible methods (public + protected,
+                        // since protected members are reachable to subclasses of an extensible Public
+                        // class) must not leak non-public types.
+                        if ((access & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) == 0) return null;
                         // Bridge/synthetic methods are compiler-generated and never source-level API.
                         if ((access & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) return null;
 
@@ -131,6 +135,48 @@ final class CascadeValidator {
                             @Override
                             public void visitEnd() {
                                 String reason = methodSuppressionReason != null ? methodSuppressionReason
+                                        : classSuppressionReason;
+                                if (reason != null) {
+                                    for (PublicApiViolation original : buffered) {
+                                        suppressions.add(asSuppression(original, reason));
+                                    }
+                                } else {
+                                    violations.addAll(buffered);
+                                }
+                            }
+                        };
+                    }
+
+                    @Override
+                    public FieldVisitor visitField(int access, String name, String descriptor,
+                                                   String signature, Object value) {
+                        // KIP-1265 names field types explicitly: a Public class's externally-visible
+                        // fields (public + protected) must not expose non-public types either.
+                        if ((access & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) == 0) return null;
+                        if ((access & Opcodes.ACC_SYNTHETIC) != 0) return null;
+
+                        // Buffer the would-be violation and route it in visitEnd, because the
+                        // field's own @SuppressKafkaInternalApiUsage is visited *after* visitField.
+                        List<PublicApiViolation> buffered = new ArrayList<>();
+                        checkAsmType(Type.getType(descriptor), "INVALID_FIELD_TYPE",
+                                "Public field exposes non-public API type",
+                                cls.binaryName(), name, surface, buffered);
+
+                        return new FieldVisitor(Opcodes.ASM9) {
+                            /** Reason from a field-level {@code @SuppressKafkaInternalApiUsage}, or null. */
+                            String fieldSuppressionReason;
+
+                            @Override
+                            public AnnotationVisitor visitAnnotation(String d, boolean v) {
+                                if (SUPPRESS_DESCRIPTOR.equals(d)) {
+                                    return new ReasonCaptureVisitor(r -> fieldSuppressionReason = r);
+                                }
+                                return null;
+                            }
+
+                            @Override
+                            public void visitEnd() {
+                                String reason = fieldSuppressionReason != null ? fieldSuppressionReason
                                         : classSuppressionReason;
                                 if (reason != null) {
                                     for (PublicApiViolation original : buffered) {

@@ -188,6 +188,25 @@ class PluginDeveloperApiUsageScannerTest {
                 "@SuppressKafkaInternalApiUsage with no reason must still suppress; got: " + violations);
     }
 
+    @Test
+    void scan_nestedPrivateOverride_isFlagged_evenWhenOuterIsPublic() throws IOException {
+        // KIP-1265: a nested class explicitly marked @InterfaceAudience.Private must override an
+        // inherited @Public from its outer. The predicate is given the full nested name; a Private
+        // override must propagate through it, so a reference to org/apache/kafka/Outer$Inner is a
+        // violation even though Outer alone is Public.
+        File classFile = writeClassFile("com/example/NestedConsumer",
+                generateConsumerReferencing("com/example/NestedConsumer", "org/apache/kafka/Outer$Inner"));
+
+        // Outer is public, but the nested Outer$Inner is explicitly Private.
+        Predicate<String> audience = name -> "org.apache.kafka.Outer".equals(name);
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(audience);
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+
+        assertFalse(violations.isEmpty(),
+                "Reference to a Private-nested type must be flagged even when its outer is Public; got: " + violations);
+        assertEquals("org.apache.kafka.Outer$Inner", violations.get(0).getClassName());
+    }
+
     /** Build a class with a default ctor and a method that loads a class constant of {@code internalNameOfReferenced}. */
     private static byte[] generateConsumerReferencing(String consumerInternalName, String internalNameOfReferenced) {
         ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);

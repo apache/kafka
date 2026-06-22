@@ -18,6 +18,7 @@ package org.apache.kafka.publicapi;
 
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
@@ -49,6 +50,10 @@ final class AsmClassFactory {
         return new MethodSpec(name);
     }
 
+    static FieldSpec field(String name) {
+        return new FieldSpec(name);
+    }
+
     /** Wrap an internal name ("org/apache/kafka/X") as an object type descriptor. */
     static String objDesc(String internalName) {
         return "L" + internalName + ";";
@@ -71,6 +76,7 @@ final class AsmClassFactory {
         private boolean hasSuppress;
         private String suppressReason;
         private final List<MethodSpec> methods = new ArrayList<>();
+        private final List<FieldSpec> fields = new ArrayList<>();
 
         private ClassBuilder(String binaryName) {
             this.binaryName = binaryName;
@@ -137,6 +143,11 @@ final class AsmClassFactory {
             return this;
         }
 
+        ClassBuilder field(FieldSpec field) {
+            this.fields.add(field);
+            return this;
+        }
+
         byte[] toBytes() {
             ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             String internalName = toInternal(binaryName);
@@ -147,6 +158,9 @@ final class AsmClassFactory {
             writeInnerClassEntry(cw, internalName);
             if (!isInterface) {
                 writeDefaultCtor(cw, superInternal);
+            }
+            for (FieldSpec f : fields) {
+                f.write(cw);
             }
             for (MethodSpec m : methods) {
                 m.write(cw);
@@ -245,6 +259,42 @@ final class AsmClassFactory {
             emitZeroReturn(mv, returnDesc);
             mv.visitMaxs(0, 0);
             mv.visitEnd();
+        }
+    }
+
+    static final class FieldSpec {
+        private final String name;
+        private int access = Opcodes.ACC_PUBLIC;
+        private String typeDesc = "I";
+        private boolean hasSuppress;
+        private String suppressReason;
+
+        private FieldSpec(String name) {
+            this.name = name;
+        }
+
+        FieldSpec access(int access) {
+            this.access = access;
+            return this;
+        }
+
+        FieldSpec ofType(String desc) {
+            this.typeDesc = desc;
+            return this;
+        }
+
+        FieldSpec suppress(String reason) {
+            this.hasSuppress = true;
+            this.suppressReason = reason;
+            return this;
+        }
+
+        void write(ClassWriter cw) {
+            FieldVisitor fv = cw.visitField(access, name, typeDesc, null, null);
+            if (hasSuppress) {
+                writeSuppress(fv.visitAnnotation(SUPPRESS_DESC, true), suppressReason);
+            }
+            fv.visitEnd();
         }
     }
 
