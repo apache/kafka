@@ -18,6 +18,7 @@ package org.apache.kafka.gradle;
 
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
@@ -72,6 +73,7 @@ public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
                 task.getCheckerEnabled().set(extension.getEnabled());
                 task.getFailOnViolation().set(extension.getFailOnViolation());
                 task.getClassDirs().set(extension.getClassDirs());
+                task.getKafkaDependencyJars().from(extension.getKafkaDependencyJars());
                 task.getReportFile().set(extension.getReportFile());
             });
 
@@ -86,6 +88,15 @@ public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
             // is resolved lazily — important for configuration cache compatibility.
             extension.getClassDirs().from(
                 sourceSets.named("main").map(s -> s.getOutput().getClassesDirs())
+            );
+
+            // Default kafkaDependencyJars: the org.apache.kafka-filtered artifact view of the
+            // project's compile classpaths. Wired through ArtifactView (not raw resolution) so
+            // (a) it's a declared task input — a Kafka version bump invalidates the task — and
+            // (b) resolution is deferred to execution time, which is configuration-cache safe.
+            extension.getKafkaDependencyJars().from(
+                kafkaArtifactsFromConfiguration(project, JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME),
+                kafkaArtifactsFromConfiguration(project, JavaPlugin.TEST_COMPILE_CLASSPATH_CONFIGURATION_NAME)
             );
 
             // Lifecycle wiring: make `check` depend on our task. The 'check' task itself comes
@@ -104,5 +115,14 @@ public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
         });
 
         project.getLogger().debug("Applied KafkaInternalApiChecker plugin to project: {}", project.getName());
+    }
+
+    private static org.gradle.api.file.FileCollection kafkaArtifactsFromConfiguration(Project project, String configurationName) {
+        return project.getConfigurations().getByName(configurationName)
+                .getIncoming()
+                .artifactView(view -> view.componentFilter(id ->
+                        id instanceof ModuleComponentIdentifier
+                                && "org.apache.kafka".equals(((ModuleComponentIdentifier) id).getGroup())))
+                .getFiles();
     }
 }

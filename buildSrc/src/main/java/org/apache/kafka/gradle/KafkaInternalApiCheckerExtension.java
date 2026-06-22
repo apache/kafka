@@ -31,6 +31,7 @@ public class KafkaInternalApiCheckerExtension {
     private final Property<Boolean> enabled;
     private final Property<Boolean> failOnViolation;
     private final ConfigurableFileCollection classDirs;
+    private final ConfigurableFileCollection kafkaDependencyJars;
     private final RegularFileProperty reportFile;
 
     public KafkaInternalApiCheckerExtension(Project project) {
@@ -52,6 +53,8 @@ public class KafkaInternalApiCheckerExtension {
         // Users can still extend or replace this default from their build script:
         //   kafkaInternalApiChecker { classDirs.from(file("extra-classes")) }   // extend
         //   kafkaInternalApiChecker { classDirs.setFrom(file("only-this")) }    // replace
+
+        this.kafkaDependencyJars = project.getObjects().fileCollection();
 
         this.reportFile = project.getObjects().fileProperty();
         this.reportFile.convention(project.getLayout().getBuildDirectory().file("reports/kafka-internal-api-usage.txt"));
@@ -79,6 +82,14 @@ public class KafkaInternalApiCheckerExtension {
 
     public void setClassDirs(Object... classDirs) {
         this.classDirs.setFrom(classDirs);
+    }
+
+    public ConfigurableFileCollection getKafkaDependencyJars() {
+        return kafkaDependencyJars;
+    }
+
+    public void setKafkaDependencyJars(Object... jars) {
+        this.kafkaDependencyJars.setFrom(jars);
     }
 
     public RegularFileProperty getReportFile() {

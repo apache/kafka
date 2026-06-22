@@ -23,8 +23,7 @@ import org.apache.kafka.publicapi.ViolationReporter;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
-import org.gradle.api.artifacts.Configuration;
-import org.gradle.api.artifacts.ResolvedArtifact;
+import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.Property;
@@ -48,12 +47,13 @@ import java.util.List;
  * works uniformly for Java, Scala, Kotlin and any other JVM-language consumer. The task
  * therefore runs after the project's {@code classes} task.
  */
-@DisableCachingByDefault(because = "Scans bytecode and resolves runtime configurations; cache key would miss transitive Kafka jars")
+@DisableCachingByDefault(because = "Reports are tiny; caching the bytecode scan adds little")
 public class KafkaInternalApiCheckerTask extends DefaultTask {
 
     private final Property<Boolean> enabled = getProject().getObjects().property(Boolean.class);
     private final Property<Boolean> failOnViolation = getProject().getObjects().property(Boolean.class);
     private final Property<FileCollection> classDirs = getProject().getObjects().property(FileCollection.class);
+    private final ConfigurableFileCollection kafkaDependencyJars = getProject().getObjects().fileCollection();
     private final RegularFileProperty reportFile = getProject().getObjects().fileProperty();
 
     public KafkaInternalApiCheckerTask() {
@@ -83,9 +83,7 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
         getLogger().info("Checking for internal Kafka API usage in compiled bytecode...");
 
         try {
-
-            // Get Kafka JARs from project dependencies
-            List<File> kafkaJars = getKafkaJarsFromDependencies();
+            List<File> kafkaJars = new ArrayList<>(kafkaDependencyJars.getFiles());
 
             if (kafkaJars.isEmpty()) {
                 getLogger().warn("No Kafka dependencies found in project. Skipping internal API check.");
@@ -145,30 +143,6 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
         }
     }
 
-    private List<File> getKafkaJarsFromDependencies() {
-        List<File> kafkaJars = new ArrayList<>();
-
-        // Check all configurations for Kafka dependencies
-        for (Configuration configuration : getProject().getConfigurations()) {
-            if (configuration.isCanBeResolved()) {
-                try {
-                    for (ResolvedArtifact artifact : configuration.getResolvedConfiguration().getResolvedArtifacts()) {
-                        String groupId = artifact.getModuleVersion().getId().getGroup();
-                        if ("org.apache.kafka".equals(groupId)) {
-                            kafkaJars.add(artifact.getFile());
-                            getLogger().debug("Found Kafka dependency: {}", artifact.getFile().getName());
-                        }
-                    }
-                } catch (Exception e) {
-                    // Configuration might not be resolvable, skip it
-                    getLogger().debug("Could not resolve configuration {}: {}", configuration.getName(), e.getMessage());
-                }
-            }
-        }
-
-        return kafkaJars;
-    }
-
     @Input
     public Property<Boolean> getCheckerEnabled() {
         return enabled;
@@ -183,6 +157,18 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
     @PathSensitive(PathSensitivity.RELATIVE)
     public Property<FileCollection> getClassDirs() {
         return classDirs;
+    }
+
+    /**
+     * The Kafka jars whose {@code @InterfaceAudience.Public} annotations define the legal API
+     * surface. Declared as an {@code @InputFiles} so a Kafka version bump (i.e. a different jar
+     * path or content) invalidates the task and re-runs the scan. The plugin wires the default
+     * from the project's compile classpath, filtered to {@code org.apache.kafka}.
+     */
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public ConfigurableFileCollection getKafkaDependencyJars() {
+        return kafkaDependencyJars;
     }
 
     @OutputFile

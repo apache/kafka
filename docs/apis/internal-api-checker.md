@@ -39,24 +39,33 @@ wildcard-imported types, and references introduced by code generators or compile
 
 ## Gradle
 
-Apply the plugin and point it at your project's compiled classes (any of: a `classes/`
-directory, a single `.class` file, or a `.jar`):
-
 ```groovy
 plugins {
     id 'org.apache.kafka.internal-api-checker' version '{{< param fullDotVersion >}}'
 }
-
-kafkaInternalApiChecker {
-    enabled         = true
-    failOnViolation = true
-    classDirs       = files('build/classes')   // default
-}
 ```
 
-The plugin registers a `kafkaInternalApiChecker` task in the `verification` group.
-It runs as part of `check` by default, so `./gradlew check` will fail the build on any
-unsuppressed reference to an internal Kafka class.
+The plugin registers a `kafkaInternalApiChecker` task in the `verification` group and hooks
+it onto `check`, so `./gradlew check` will fail the build on any unsuppressed reference to an
+internal Kafka class.
+
+Defaults are derived from the `java` plugin: the scan targets `sourceSets.main.output.classesDirs`
+(works for Java, Scala, and Kotlin projects uniformly), and the `@InterfaceAudience.Public`
+surface is built from the `org.apache.kafka:*` artifacts on `compileClasspath` and
+`testCompileClasspath`. A Kafka version bump invalidates the task, so the check re-runs against
+the new surface.
+
+Override only when the defaults don't fit:
+
+```groovy
+kafkaInternalApiChecker {
+    enabled         = true                  // default
+    failOnViolation = true                  // default
+    classDirs.from(files('extra-classes'))  // extend the bytecode roots
+    // Replace if you keep Kafka jars on a non-standard configuration:
+    // kafkaDependencyJars.setFrom(configurations.myKafkaBundle)
+}
+```
 
 ## Maven
 
