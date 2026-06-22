@@ -1545,7 +1545,7 @@ public class GroupCoordinatorShardTest {
 
         long committedOffset = 100L;
         // Six candidate ids, one for each filter branch.
-        when(groupMetadataManager.groupIds()).thenReturn(Set.of(
+        when(groupMetadataManager.groupIds(committedOffset)).thenReturn(Set.of(
             "missing", "not-streams", "non-empty", "default-stored", "unexpired-offsets", "eligible"));
 
         // missing: maybeGroup returns null
@@ -1559,20 +1559,20 @@ public class GroupCoordinatorShardTest {
         // non-empty: STREAMS but isEmpty == false
         StreamsGroup nonEmpty = mock(StreamsGroup.class);
         when(nonEmpty.type()).thenReturn(Group.GroupType.STREAMS);
-        when(nonEmpty.isEmpty()).thenReturn(false);
+        when(nonEmpty.isEmpty(committedOffset)).thenReturn(false);
         when(groupMetadataManager.maybeGroup("non-empty", committedOffset)).thenReturn(nonEmpty);
 
         // default-stored: STREAMS, empty, but storedEpoch == -1
         StreamsGroup defaultStored = mock(StreamsGroup.class);
         when(defaultStored.type()).thenReturn(Group.GroupType.STREAMS);
-        when(defaultStored.isEmpty()).thenReturn(true);
+        when(defaultStored.isEmpty(committedOffset)).thenReturn(true);
         when(defaultStored.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(-1);
         when(groupMetadataManager.maybeGroup("default-stored", committedOffset)).thenReturn(defaultStored);
 
         // unexpired-offsets: STREAMS, empty, storedEpoch=5, but offsets are not all expired
         StreamsGroup unexpired = mock(StreamsGroup.class);
         when(unexpired.type()).thenReturn(Group.GroupType.STREAMS);
-        when(unexpired.isEmpty()).thenReturn(true);
+        when(unexpired.isEmpty(committedOffset)).thenReturn(true);
         when(unexpired.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(5);
         when(groupMetadataManager.maybeGroup("unexpired-offsets", committedOffset)).thenReturn(unexpired);
         when(offsetMetadataManager.allOffsetsExpired(eq("unexpired-offsets"), anyLong(), anyLong())).thenReturn(false);
@@ -1580,7 +1580,7 @@ public class GroupCoordinatorShardTest {
         // eligible: passes every predicate; storedEpoch=7 must appear in the result map.
         StreamsGroup eligible = mock(StreamsGroup.class);
         when(eligible.type()).thenReturn(Group.GroupType.STREAMS);
-        when(eligible.isEmpty()).thenReturn(true);
+        when(eligible.isEmpty(committedOffset)).thenReturn(true);
         when(eligible.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(7);
         when(groupMetadataManager.maybeGroup("eligible", committedOffset)).thenReturn(eligible);
         when(offsetMetadataManager.allOffsetsExpired(eq("eligible"), anyLong(), anyLong())).thenReturn(true);
@@ -1613,7 +1613,7 @@ public class GroupCoordinatorShardTest {
         );
 
         long committedOffset = 0L;
-        when(groupMetadataManager.groupIds()).thenReturn(Set.of("bad", "good"));
+        when(groupMetadataManager.groupIds(committedOffset)).thenReturn(Set.of("bad", "good"));
 
         // bad: maybeGroup throws an unexpected RuntimeException mid-scan.
         when(groupMetadataManager.maybeGroup("bad", committedOffset))
@@ -1622,7 +1622,7 @@ public class GroupCoordinatorShardTest {
         // good: a fully eligible group.
         StreamsGroup good = mock(StreamsGroup.class);
         when(good.type()).thenReturn(Group.GroupType.STREAMS);
-        when(good.isEmpty()).thenReturn(true);
+        when(good.isEmpty(committedOffset)).thenReturn(true);
         when(good.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(3);
         when(groupMetadataManager.maybeGroup("good", committedOffset)).thenReturn(good);
         when(offsetMetadataManager.allOffsetsExpired(eq("good"), anyLong(), anyLong())).thenReturn(true);

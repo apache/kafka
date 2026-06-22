@@ -9326,6 +9326,16 @@ public class GroupMetadataManager {
         return Collections.unmodifiableSet(this.groups.keySet());
     }
 
+    /**
+     * Snapshot-aware counterpart to {@link #groupIds()}: returns the set of group ids
+     * present at {@code committedOffset}. Used by read operations whose entire eligibility
+     * decision must be reproducible from a single committed snapshot (e.g. the topology
+     * cleanup scan in {@link GroupCoordinatorShard}).
+     */
+    public Set<String> groupIds(long committedOffset) {
+        return Collections.unmodifiableSet(this.groups.keySet(committedOffset));
+    }
+
     // Visible for testing
     Map<String, Long> topicHashCache() {
         return Collections.unmodifiableMap(this.topicHashCache);

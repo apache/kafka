@@ -992,18 +992,26 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * concurrent {@code setTopology} that has since advanced the field cannot be silently undone
      * by a stale plugin delete.
      *
+     * <p>Every state lookup goes through the snapshot at {@code committedOffset}: the iterated
+     * group-id set, the per-group resolution, the {@code EMPTY}-state check, the stored
+     * topology epoch, and the per-offset retention check inside
+     * {@link OffsetMetadataManager#allOffsetsExpired}. The only non-snapshot input is
+     * {@code now} from the wall clock, which is unavoidable for "offset has aged past
+     * retention" and is captured once at the top of the scan so every group is compared
+     * against the same instant.
+     *
      * <p>Non-streams and missing groups are silently skipped. Per-group errors are logged and
      * the scan continues so one bad group cannot stall the cycle.
      */
     public Map<String, Integer> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
         long now = time.milliseconds();
         Map<String, Integer> eligible = new HashMap<>();
-        for (String groupId : groupMetadataManager.groupIds()) {
+        for (String groupId : groupMetadataManager.groupIds(committedOffset)) {
             try {
                 Group group = groupMetadataManager.maybeGroup(groupId, committedOffset);
                 if (group == null || group.type() != Group.GroupType.STREAMS) continue;
                 StreamsGroup streamsGroup = (StreamsGroup) group;
-                if (!streamsGroup.isEmpty()) continue;
+                if (!streamsGroup.isEmpty(committedOffset)) continue;
                 int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
                 if (storedEpoch == -1) continue;
                 if (!offsetMetadataManager.allOffsetsExpired(groupId, now, committedOffset)) continue;
