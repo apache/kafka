@@ -47,22 +47,22 @@ public class DelayedProduceTest {
 
         // Verify the partition metric exists in the registry
         Predicate<MetricName> isPartitionMetric = name ->
-            name.getMBeanName().contains("topic=test-topic")
-                && name.getMBeanName().contains("partition=0")
-                && name.getMBeanName().contains("name=ExpiresPerSec");
+                name.getMBeanName().contains("topic=test-topic")
+                        && name.getMBeanName().contains("partition=0")
+                        && name.getMBeanName().contains("name=ExpiresPerSec");
         assertTrue(
-            KafkaYammerMetrics.defaultRegistry()
-                .allMetrics()
-                .keySet()
-                .stream()
-                .anyMatch(isPartitionMetric),
-        "Partition metric should exist after recordExpiration"
+                KafkaYammerMetrics.defaultRegistry()
+                        .allMetrics()
+                        .keySet()
+                        .stream()
+                        .anyMatch(isPartitionMetric),
+                "Partition metric should exist after recordExpiration"
         );
 
         Predicate<MetricName> isAggregateMetric = name ->
-            name.getMBeanName().contains("name=ExpiresPerSec")
-                && name.getMBeanName().contains("DelayedProduceMetrics")
-                && !name.getMBeanName().contains("topic=");
+                name.getMBeanName().contains("name=ExpiresPerSec")
+                        && name.getMBeanName().contains("DelayedProduceMetrics")
+                        && !name.getMBeanName().contains("topic=");
         long aggregateCountBefore = KafkaYammerMetrics.defaultRegistry()
                 .allMetrics()
                 .keySet()
@@ -74,12 +74,12 @@ public class DelayedProduceTest {
 
         // Verify the partition metric is removed from the registry
         assertFalse(
-            KafkaYammerMetrics.defaultRegistry()
-                .allMetrics()
-                .keySet()
-                .stream()
-                .anyMatch(isPartitionMetric),
-            "Partition metric should be removed after removePartitionMetrics"
+                KafkaYammerMetrics.defaultRegistry()
+                        .allMetrics()
+                        .keySet()
+                        .stream()
+                        .anyMatch(isPartitionMetric),
+                "Partition metric should be removed after removePartitionMetrics"
         );
 
         // Verify the aggregate metric is unaffected
@@ -90,9 +90,9 @@ public class DelayedProduceTest {
                 .filter(isAggregateMetric)
                 .count();
         assertEquals(
-            aggregateCountBefore, 
-            aggregateCountAfter,
-        "Aggregate metric should be unaffected by removePartitionMetrics"
+                aggregateCountBefore,
+                aggregateCountAfter,
+                "Aggregate metric should be unaffected by removePartitionMetrics"
         );
     }
 
