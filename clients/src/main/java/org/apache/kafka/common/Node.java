@@ -50,6 +50,15 @@ public class Node {
 
     public Node(int id, String host, int port, String rack, boolean isFenced, boolean isCoordinator) {
         this.id = id;
+        // The contract here is that the node's id can be extracted from the node's idString by parsing as
+        // an integer. We want coordinator and non-coordinator nodes with the same id to have different
+        // idString values which parse to the same numeric id value. The Kafka network code depends upon having
+        // separate coordinator connections to brokers, and uses idString to differentiate.
+        //
+        // There are three cases:
+        // * Negative node ID - used for bootstrap, will not be a coordinator, idString will be a negative integer string
+        // * Non-negative node ID, not coordinator - idString will be a non-negative integer string with no sign
+        // * Non-negative node ID, coordinator - idString will be a non-negative integer string, with a leading '+'
         if (isCoordinator) {
             if (id < 0) {
                 throw new IllegalArgumentException("Node id for coordinator node cannot be negative");

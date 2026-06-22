@@ -916,21 +916,24 @@ public class KafkaAdminClientTest {
         // which prevents AdminClient from being able to send the initial metadata request
 
         Cluster cluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 8121)));
-        Map<Node, Long> unreachableNodes = Collections.singletonMap(cluster.nodes().get(0), 200L);
+        Node bootstrapNode = cluster.nodes().get(0);
+        Map<Node, Long> unreachableNodes = Collections.singletonMap(bootstrapNode, 200L);
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
-                AdminClientUnitTestEnv.clientConfigs(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, metadataRecoveryStrategy.name, AdminClientConfig.METADATA_CLUSTER_CHECK_ENABLE_CONFIG, "false"), unreachableNodes)) {
+                AdminClientUnitTestEnv.clientConfigs(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, metadataRecoveryStrategy.name), unreachableNodes)) {
             Cluster discoveredCluster = mockCluster(3, 0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
+            // Bind responses to specific destinations so MockClient delivery does not depend on
+            // the iteration order of AdminClient's callsToSend map (which is keyed by Node).
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
                     RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
-                            1, Collections.emptyList()));
+                            1, Collections.emptyList()), bootstrapNode);
             if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
-                env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
-                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(),
-                                discoveredCluster.clusterResource().clusterId(), 1, Collections.emptyList()));
+                env.kafkaClient().prepareResponseFrom(body -> body instanceof MetadataRequest,
+                        RequestTestUtils.metadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                                1, Collections.emptyList()), bootstrapNode);
             }
-            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
-                prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            env.kafkaClient().prepareResponseFrom(body -> body instanceof CreateTopicsRequest,
+                prepareCreateTopicsResponse("myTopic", Errors.NONE), discoveredCluster.nodeById(1));
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
