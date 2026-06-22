@@ -1690,6 +1690,14 @@ public class TaskManager {
         return tasks.allInitializedTasksPerId();
     }
 
+    long totalUncommittedBytes() {
+        long total = 0;
+        for (final Task task : allRunningTasks().values()) {
+            total += task.approximateNumUncommittedBytes();
+        }
+        return total;
+    }
+
     Set<Task> readOnlyAllTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
