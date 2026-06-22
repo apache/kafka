@@ -124,6 +124,11 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void close() {
         store.close();
     }
