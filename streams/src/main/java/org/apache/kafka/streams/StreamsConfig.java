@@ -914,7 +914,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG = "topology.description.push.enabled";
     private static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC = "Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. " +
-        "When set to false, the client ignores TopologyDescriptionRequired=true in heartbeat responses. " +
+        "When set to false, the client will not prepare or push topology descriptions. " +
         "Enabled by default.";
 
     static {

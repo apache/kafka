@@ -32,6 +32,11 @@ import static org.mockito.Mockito.when;
 
 public class TopologyDescriptionConverterTest {
 
+    /**
+     * Test the situation when the topology has multiple subtopologies, including one with two
+     * source nodes feeding the same processor: subtopologies should be sorted by id and each node
+     * should be emitted with its correct type, topics, and successors.
+     */
     @Test
     public void shouldConvertMultipleSubtopologiesWithMultiSourceProcessor() {
         final TopologyDescription.Source source0 = mock(TopologyDescription.Source.class);
@@ -77,7 +82,7 @@ public class TopologyDescriptionConverterTest {
         when(description.globalStores()).thenReturn(Set.of());
 
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
-                TopologyDescriptionConverter.toWire(description);
+            TopologyDescriptionConverter.toWire(description);
 
         assertTrue(wire.globalStores().isEmpty());
         assertEquals(2, wire.subtopologies().size());
@@ -120,9 +125,12 @@ public class TopologyDescriptionConverterTest {
         assertEquals(List.of("processor-1"), wireSource1b.successors());
     }
 
+    /**
+     * Test the situation when a single source node branches into multiple processors: the source's
+     * successors list should contain all branch processors sorted alphabetically.
+     */
     @Test
     public void shouldConvertBranchTopology() {
-        // Branching — one source, two processors as successors. Verifies multi-successor emission + sort order.
         final TopologyDescription.Source source = mock(TopologyDescription.Source.class);
         final TopologyDescription.Processor processor1 = mock(TopologyDescription.Processor.class);
         final TopologyDescription.Processor processor2 = mock(TopologyDescription.Processor.class);
@@ -162,7 +170,6 @@ public class TopologyDescriptionConverterTest {
         assertEquals("0", wireSub.subtopologyId());
         assertEquals(4, wireSub.nodes().size());
 
-        // Nodes are sorted alphabetically by name: processor, sink, source
         final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode> nodes = wireSub.nodes();
 
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode wireProcessor1 = nodes.get(0);
@@ -191,6 +198,11 @@ public class TopologyDescriptionConverterTest {
         assertNull(wireSource.sinkTopic());
     }
 
+    /**
+     * Test the situation when the topology contains a stateful processor and a global store: state
+     * store names should appear on the processor, and the global store should be emitted under
+     * globalStores rather than subtopologies.
+     */
     @Test
     public void shouldConvertTopologyWithStatefulProcessorAndGlobalStore() {
         final TopologyDescription.Source source = mock(TopologyDescription.Source.class);
@@ -273,6 +285,10 @@ public class TopologyDescriptionConverterTest {
         assertEquals(List.of(), wireGlobal.processor().successors());
     }
 
+    /**
+     * Test the situation when a sink uses a TopicNameExtractor (dynamic topic): the wire
+     * SinkTopic field should be null since the schema has no field for the extractor itself.
+     */
     @Test
     public void shouldConvertSinkWithDynamicTopic() {
         final TopologyDescription.Source source = mock(TopologyDescription.Source.class);
