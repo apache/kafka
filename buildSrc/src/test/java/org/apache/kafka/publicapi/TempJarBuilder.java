@@ -30,40 +30,40 @@ import java.util.jar.JarOutputStream;
  * Builds a temp {@code .jar} with class-bytes and/or HTML entries — covers both jar shapes the
  * checker consumes: project/reference jars (class bytes) and javadoc jars (HTML).
  */
-final class TempJarBuilder {
+public final class TempJarBuilder {
 
     private final List<Entry> entries = new ArrayList<>();
 
-    static TempJarBuilder jar() {
+    public static TempJarBuilder jar() {
         return new TempJarBuilder();
     }
 
     private TempJarBuilder() {}
 
     /** Add a class entry; jar path is derived from the binary name. */
-    TempJarBuilder addClass(String binaryName, byte[] bytes) {
+    public TempJarBuilder addClass(String binaryName, byte[] bytes) {
         entries.add(new Entry(binaryName.replace('.', '/') + ".class", bytes));
         return this;
     }
 
     /** Convenience: build the bytes from a {@link AsmClassFactory.ClassBuilder} and add them. */
-    TempJarBuilder addClass(AsmClassFactory.ClassBuilder builder) {
+    public TempJarBuilder addClass(AsmClassFactory.ClassBuilder builder) {
         return addClass(builder.binaryName(), builder.toBytes());
     }
 
     /** Add a javadoc HTML entry under the given jar-relative path; body may be empty. */
-    TempJarBuilder addHtml(String entryPath, String body) {
+    public TempJarBuilder addHtml(String entryPath, String body) {
         entries.add(new Entry(entryPath, body.getBytes(StandardCharsets.UTF_8)));
         return this;
     }
 
     /** Escape hatch for arbitrary entry paths (e.g. {@code module-info.class}, package-info, ...). */
-    TempJarBuilder addEntry(String entryPath, byte[] bytes) {
+    public TempJarBuilder addEntry(String entryPath, byte[] bytes) {
         entries.add(new Entry(entryPath, bytes));
         return this;
     }
 
-    File writeTo(File jarFile) throws IOException {
+    public File writeTo(File jarFile) throws IOException {
         try (JarOutputStream jos = new JarOutputStream(new FileOutputStream(jarFile))) {
             for (Entry e : entries) {
                 jos.putNextEntry(new JarEntry(e.path));
@@ -74,7 +74,7 @@ final class TempJarBuilder {
         return jarFile;
     }
 
-    File writeTo(Path tempDir, String fileName) throws IOException {
+    public File writeTo(Path tempDir, String fileName) throws IOException {
         return writeTo(tempDir.resolve(fileName).toFile());
     }
 

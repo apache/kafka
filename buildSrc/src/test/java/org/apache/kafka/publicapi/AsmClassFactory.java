@@ -30,40 +30,40 @@ import java.util.List;
  * classes on the classpath. Carries enough knobs to exercise the audience-annotation, nested-class
  * inner-access, and {@code @SuppressKafkaInternalApiUsage} paths the checker reads.
  */
-final class AsmClassFactory {
+public final class AsmClassFactory {
 
-    static final String PUBLIC_API_DESC =
+    public static final String PUBLIC_API_DESC =
             "Lorg/apache/kafka/common/annotation/InterfaceAudience$Public;";
-    static final String PRIVATE_API_DESC =
+    public static final String PRIVATE_API_DESC =
             "Lorg/apache/kafka/common/annotation/InterfaceAudience$Private;";
-    static final String SUPPRESS_DESC =
+    public static final String SUPPRESS_DESC =
             "Lorg/apache/kafka/common/annotation/SuppressKafkaInternalApiUsage;";
-    static final String DEPRECATED_DESC = "Ljava/lang/Deprecated;";
+    public static final String DEPRECATED_DESC = "Ljava/lang/Deprecated;";
 
     private AsmClassFactory() {}
 
-    static ClassBuilder klass(String binaryName) {
+    public static ClassBuilder klass(String binaryName) {
         return new ClassBuilder(binaryName);
     }
 
-    static MethodSpec method(String name) {
+    public static MethodSpec method(String name) {
         return new MethodSpec(name);
     }
 
-    static FieldSpec field(String name) {
+    public static FieldSpec field(String name) {
         return new FieldSpec(name);
     }
 
     /** Wrap an internal name ("org/apache/kafka/X") as an object type descriptor. */
-    static String objDesc(String internalName) {
+    public static String objDesc(String internalName) {
         return "L" + internalName + ";";
     }
 
-    static String toInternal(String binaryName) {
+    public static String toInternal(String binaryName) {
         return binaryName.replace('.', '/');
     }
 
-    static final class ClassBuilder {
+    public static final class ClassBuilder {
         private final String binaryName;
         private int headerAccess = Opcodes.ACC_PUBLIC;
         private Integer nestedAccess;
@@ -82,11 +82,11 @@ final class AsmClassFactory {
             this.binaryName = binaryName;
         }
 
-        String binaryName() {
+        public String binaryName() {
             return binaryName;
         }
 
-        ClassBuilder access(int access) {
+        public ClassBuilder access(int access) {
             this.headerAccess = access;
             return this;
         }
@@ -96,59 +96,59 @@ final class AsmClassFactory {
          * access — the scanner reads this in preference to the (compiler-synthesised) header access
          * for nested classes. Binary name must contain {@code $}.
          */
-        ClassBuilder nestedAccess(int access) {
+        public ClassBuilder nestedAccess(int access) {
             this.nestedAccess = access;
             return this;
         }
 
-        ClassBuilder superClass(String internalName) {
+        public ClassBuilder superClass(String internalName) {
             this.superInternal = internalName;
             return this;
         }
 
-        ClassBuilder interfaces(String... internalNames) {
+        public ClassBuilder interfaces(String... internalNames) {
             this.interfaceInternals = internalNames;
             return this;
         }
 
-        ClassBuilder asInterface() {
+        public ClassBuilder asInterface() {
             this.isInterface = true;
             return this;
         }
 
-        ClassBuilder publicApi() {
+        public ClassBuilder publicApi() {
             this.publicApi = true;
             return this;
         }
 
-        ClassBuilder privateApi() {
+        public ClassBuilder privateApi() {
             this.privateApi = true;
             return this;
         }
 
-        ClassBuilder deprecated() {
+        public ClassBuilder deprecated() {
             this.deprecated = true;
             return this;
         }
 
         /** {@code @SuppressKafkaInternalApiUsage("reason")}; pass {@code null} to omit {@code value()}. */
-        ClassBuilder suppress(String reason) {
+        public ClassBuilder suppress(String reason) {
             this.hasSuppress = true;
             this.suppressReason = reason;
             return this;
         }
 
-        ClassBuilder method(MethodSpec method) {
+        public ClassBuilder method(MethodSpec method) {
             this.methods.add(method);
             return this;
         }
 
-        ClassBuilder field(FieldSpec field) {
+        public ClassBuilder field(FieldSpec field) {
             this.fields.add(field);
             return this;
         }
 
-        byte[] toBytes() {
+        public byte[] toBytes() {
             ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             String internalName = toInternal(binaryName);
             int access = headerAccess | (isInterface ? Opcodes.ACC_INTERFACE | Opcodes.ACC_ABSTRACT : 0);
@@ -198,7 +198,7 @@ final class AsmClassFactory {
         }
     }
 
-    static final class MethodSpec {
+    public static final class MethodSpec {
         private final String name;
         private int access = Opcodes.ACC_PUBLIC;
         private String returnDesc = "V";
@@ -211,43 +211,43 @@ final class AsmClassFactory {
             this.name = name;
         }
 
-        MethodSpec access(int access) {
+        public MethodSpec access(int access) {
             this.access = access;
             return this;
         }
 
-        MethodSpec returns(String desc) {
+        public MethodSpec returns(String desc) {
             this.returnDesc = desc;
             return this;
         }
 
-        MethodSpec param(String desc) {
+        public MethodSpec param(String desc) {
             this.paramDescs.add(desc);
             return this;
         }
 
-        MethodSpec throwsExc(String internalName) {
+        public MethodSpec throwsExc(String internalName) {
             this.exceptionInternals.add(internalName);
             return this;
         }
 
-        MethodSpec bridge() {
+        public MethodSpec bridge() {
             this.access |= Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC;
             return this;
         }
 
-        MethodSpec synthetic() {
+        public MethodSpec synthetic() {
             this.access |= Opcodes.ACC_SYNTHETIC;
             return this;
         }
 
-        MethodSpec suppress(String reason) {
+        public MethodSpec suppress(String reason) {
             this.hasSuppress = true;
             this.suppressReason = reason;
             return this;
         }
 
-        void write(ClassWriter cw) {
+        public void write(ClassWriter cw) {
             String desc = "(" + String.join("", paramDescs) + ")" + returnDesc;
             String[] excs = exceptionInternals.isEmpty()
                     ? null : exceptionInternals.toArray(new String[0]);
@@ -262,7 +262,7 @@ final class AsmClassFactory {
         }
     }
 
-    static final class FieldSpec {
+    public static final class FieldSpec {
         private final String name;
         private int access = Opcodes.ACC_PUBLIC;
         private String typeDesc = "I";
@@ -273,23 +273,23 @@ final class AsmClassFactory {
             this.name = name;
         }
 
-        FieldSpec access(int access) {
+        public FieldSpec access(int access) {
             this.access = access;
             return this;
         }
 
-        FieldSpec ofType(String desc) {
+        public FieldSpec ofType(String desc) {
             this.typeDesc = desc;
             return this;
         }
 
-        FieldSpec suppress(String reason) {
+        public FieldSpec suppress(String reason) {
             this.hasSuppress = true;
             this.suppressReason = reason;
             return this;
         }
 
-        void write(ClassWriter cw) {
+        public void write(ClassWriter cw) {
             FieldVisitor fv = cw.visitField(access, name, typeDesc, null, null);
             if (hasSuppress) {
                 writeSuppress(fv.visitAnnotation(SUPPRESS_DESC, true), suppressReason);
