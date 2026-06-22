@@ -570,6 +570,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
         streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
         streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
+        streamsRebalanceData.setMemberId(membershipManager.memberId());
+
+        if (data.topologyDescriptionRequired()) {
+            streamsRebalanceData.setTopologyPushRequired(true);
+        }
 
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));

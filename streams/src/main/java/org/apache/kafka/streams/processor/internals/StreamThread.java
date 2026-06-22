@@ -697,7 +697,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         return Optional.of(rackId);
     }
 
-    private static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
+    // visible for testing
+    static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
                                                                  final StreamsConfig config,
                                                                  final Optional<StreamsRebalanceData.HostInfo> endpoint,
                                                                  final Optional<String> rackId,
