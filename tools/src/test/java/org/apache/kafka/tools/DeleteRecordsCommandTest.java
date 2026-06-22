@@ -218,13 +218,14 @@ public class DeleteRecordsCommandTest {
 
         String output = bout.toString();
         assertTrue(output.contains("partition: t-0\terror:"));
+        assertTrue(output.contains("Partition not found"));
     }
 
     @Test
     public void testExecuteDuplicatePartitionsWithoutCluster() {
         Admin mockAdmin = mock(Admin.class);
 
-        assertThrows(
+        AdminCommandFailedException exception = assertThrows(
             AdminCommandFailedException.class,
             () -> DeleteRecordsCommand.execute(
                 mockAdmin,
@@ -233,6 +234,11 @@ public class DeleteRecordsCommandTest {
                     "{\"topic\":\"t\",\"partition\":0,\"offset\":2}]}",
                 System.out
             )
+        );
+
+        assertEquals(
+            "Offset json file contains duplicate topic partitions: t-0",
+            exception.getMessage()
         );
     }
 
