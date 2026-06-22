@@ -27,9 +27,12 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
+
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,13 +64,16 @@ import static org.apache.kafka.common.requests.StreamsGroupDescribeResponse.TOPO
  * convergence after a restart.
  */
 public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
+    private final Logger log;
     private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
     private final StreamsGroupTopologyDescriptionBackoff backoff;
 
     public StreamsGroupTopologyDescriptionManager(
+        LogContext logContext,
         Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
         Time time
     ) {
+        this.log = logContext.logger(StreamsGroupTopologyDescriptionManager.class);
         this.plugin = plugin;
         this.backoff = new StreamsGroupTopologyDescriptionBackoff(time);
     }
@@ -399,12 +405,15 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
         });
     }
 
-    private static void applyGetTopologyOutcome(
+    private void applyGetTopologyOutcome(
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup,
         StreamsGroupTopologyDescription topology,
         Throwable throwable
     ) {
         if (throwable != null) {
+            Throwable cause = Errors.maybeUnwrapException(throwable);
+            log.warn("Topology description plugin getTopology failed for group {}.",
+                describedGroup.groupId(), cause != null ? cause : throwable);
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
             return;
         }
@@ -417,17 +426,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                 StreamsGroupTopologyDescriptionConverter.toDescribeResponse(topology));
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
         } catch (Exception conversionError) {
-            // Defense in depth. With the current contract this catch is unreachable: the
-            // StreamsGroupTopologyDescription record and its nested Subtopology / Source /
-            // Processor / Sink records enforce non-null collections through Objects.requireNonNull
-            // + List.copyOf in their canonical constructors, and the Node sealed interface
-            // (Source | Processor | Sink) makes the converter's "unknown node type" branch
-            // unreachable from any plugin response built via legal API. The catch survives so
-            // that a future relaxation of the sealed permits (or a contract-bypass via bytecode
-            // manipulation) folds into a per-group ERROR rather than poisoning the rest of the
-            // batch. No direct test: Mockito explicitly refuses to mock sealed interfaces, so
-            // the only way to drive this branch would be bytecode-level forgery we are
-            // unwilling to ship in tests.
+            // Defensive catch, should be unreachable in practice
             describedGroup.setTopologyDescription(null);
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
         }

@@ -418,6 +418,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .collect(Collectors.toSet());
         this.partitionMetadataClient = partitionMetadataClient;
         this.streamsGroupTopologyDescriptionManager = new StreamsGroupTopologyDescriptionManager(
+            logContext,
             streamsGroupTopologyDescriptionPlugin,
             time
         );

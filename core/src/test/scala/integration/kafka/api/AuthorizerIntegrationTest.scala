@@ -305,8 +305,6 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     ApiKeys.ALTER_SHARE_GROUP_OFFSETS -> (shareGroupReadAcl ++ topicReadAcl),
     ApiKeys.STREAMS_GROUP_HEARTBEAT -> (streamsGroupReadAcl ++ topicDescribeAcl),
     ApiKeys.STREAMS_GROUP_DESCRIBE -> (streamsGroupDescribeAcl ++ topicDescribeAcl),
-    // KIP-1331: like offset commit, topology push is treated as READ on the GROUP (not a
-    // modification), so apps deployed with READ-only group ACLs can still push.
     ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE -> streamsGroupReadAcl,
   )
 
