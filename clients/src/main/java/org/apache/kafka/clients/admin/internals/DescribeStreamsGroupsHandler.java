@@ -40,7 +40,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,11 +59,6 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
-    public DescribeStreamsGroupsHandler(
-          boolean includeAuthorizedOperations,
-          LogContext logContext) {
-        this(includeAuthorizedOperations, false, logContext);
-    }
 
     public DescribeStreamsGroupsHandler(
           boolean includeAuthorizedOperations,
@@ -265,7 +259,7 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
         final Map<String, Set<String>> predecessors = new HashMap<>();
         for (final StreamsGroupDescribeResponseData.TopologyDescriptionNode node : nodes) {
             for (final String successor : node.successors()) {
-                predecessors.computeIfAbsent(successor, ignored -> new LinkedHashSet<>()).add(node.name());
+                predecessors.computeIfAbsent(successor, ignored -> new HashSet<>()).add(node.name());
             }
         }
         return predecessors;
@@ -274,15 +268,15 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
     private StreamsGroupTopologyDescription.Node convertTopologyNode(
             final StreamsGroupDescribeResponseData.TopologyDescriptionNode node,
             final Map<String, Set<String>> predecessors) {
-        final Set<String> successors = new LinkedHashSet<>(node.successors());
+        final Set<String> successors = Set.copyOf(node.successors());
         final Set<String> nodePredecessors = predecessors.getOrDefault(node.name(), Set.of());
         switch (node.nodeType()) {
             case NODE_TYPE_SOURCE:
                 return new StreamsGroupTopologyDescription.Source(
-                    node.name(), new LinkedHashSet<>(node.sourceTopics()), successors, nodePredecessors);
+                    node.name(), Set.copyOf(node.sourceTopics()), successors, nodePredecessors);
             case NODE_TYPE_PROCESSOR:
                 return new StreamsGroupTopologyDescription.Processor(
-                    node.name(), new LinkedHashSet<>(node.stores()), successors, nodePredecessors);
+                    node.name(), Set.copyOf(node.stores()), successors, nodePredecessors);
             case NODE_TYPE_SINK:
                 return new StreamsGroupTopologyDescription.Sink(
                     node.name(), Optional.ofNullable(node.sinkTopic()), successors, nodePredecessors);
