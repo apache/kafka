@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 import java.util.Objects;
+
 /**
  * The partition assignment for a consumer group.
  */

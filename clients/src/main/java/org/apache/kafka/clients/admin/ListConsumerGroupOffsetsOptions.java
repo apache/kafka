@@ -17,8 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Options for {@link Admin#listConsumerGroupOffsets(java.util.Map)} and {@link Admin#listConsumerGroupOffsets(String)}.
  * <p>

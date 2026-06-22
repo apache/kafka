@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.net.InetAddress;
+
 /**
  * An object representing contextual information from the authentication session. See
  * {@link PlaintextAuthenticationContext}, {@link SaslAuthenticationContext}

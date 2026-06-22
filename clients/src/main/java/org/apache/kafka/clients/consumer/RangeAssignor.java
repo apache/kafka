@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
@@ -39,6 +40,7 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 /**
  * <p>The range assignor works on a per-topic basis. For each topic, we lay out the available partitions in numeric order
  * and the consumers in lexicographic order. We then divide the number of partitions by the total number of

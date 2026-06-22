@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -23,6 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 @InterfaceAudience.Public
 public enum GroupType {
     UNKNOWN("Unknown"),

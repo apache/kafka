@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state;
 
-
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Marker interface to indicate that a bytes store understands the value-with-headers format
  * and can convert legacy timestamped value entries (ValueAndTimestamp format) to the new format.

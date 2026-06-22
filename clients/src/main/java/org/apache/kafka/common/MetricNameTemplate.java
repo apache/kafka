@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -22,6 +23,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
+
 /**
  * A template for a MetricName. It contains a name, group, and description, as
  * well as all the tags that will be used to create the mBean name. Tag values

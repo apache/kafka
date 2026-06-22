@@ -14,14 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
 
+package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
+
 /**
  * A plugin interface that allows you to intercept (and possibly mutate) records received by the consumer. A primary use-case
  * is for third-party components to hook into the consumer applications for custom monitoring, logging, etc.

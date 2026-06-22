@@ -346,9 +346,18 @@ svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
 cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
-# Publishes the KIP-1265 plugin artifacts (kafka-internal-api-checker Gradle plugin marker and
-# kafka-internal-api-checker-maven-plugin) to the same Nexus staging repo. buildSrc is a separate
-# Gradle build so the root :publish task does not descend into it.
+# Publishes the KIP-1265 plugin artifacts to the same Nexus staging repo. buildSrc is a
+# separate Gradle build so the root :publish task does not descend into it. The four
+# coordinates uploaded here are:
+#   org.apache.kafka:kafka-internal-api-checker-gradle-plugin       (Gradle plugin impl jar)
+#   org.apache.kafka.internal-api-checker:org.apache.kafka.internal-api-checker.gradle.plugin
+#                                                                   (Gradle plugin marker)
+#   org.apache.kafka:kafka-internal-api-checker-maven-plugin        (Maven plugin)
+#   org.apache.kafka.public-api-checker:org.apache.kafka.public-api-checker.gradle.plugin
+#                                                                   (Kafka-internal plugin marker)
+# The version is read from gradle.properties — release.py has already bumped it via
+# `updateVersion` above — so no extra -P flags are needed beyond the publish credentials,
+# which buildSrc picks up from ~/.gradle/gradle.properties (mavenUrl/mavenUsername/mavenPassword).
 cmd("Building and uploading archives", "./gradlew :buildSrc:publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk25_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk25_env, shell=True)
 

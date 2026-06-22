@@ -17,8 +17,8 @@
 
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * This exception is raised by the broker if it could not locate the producer metadata associated with the producerId
  * in question. This could happen if, for instance, the producer's records were deleted because their retention time

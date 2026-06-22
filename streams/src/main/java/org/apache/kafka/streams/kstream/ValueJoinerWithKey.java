@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
-
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The {@code ValueJoinerWithKey} interface for joining two values into a new value of arbitrary type.
  * This interface provides access to a read-only key that the user should not modify as this would lead to

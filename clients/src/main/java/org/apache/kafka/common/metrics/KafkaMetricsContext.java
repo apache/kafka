@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
 /**
  * An implementation of MetricsContext, it encapsulates required metrics context properties for Kafka services and clients
  */

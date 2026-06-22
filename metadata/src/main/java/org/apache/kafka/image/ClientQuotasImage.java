@@ -42,7 +42,6 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_EXACT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_SPECIFIED;
 
-
 /**
  * Represents the client quotas in the metadata image.
  * <p>

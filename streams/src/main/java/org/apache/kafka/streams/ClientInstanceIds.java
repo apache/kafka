@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
+
 /**
  * Encapsulates the {@code client instance id} used for metrics collection by
  * producers, consumers, and the admin client used by Kafka Streams.

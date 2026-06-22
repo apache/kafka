@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.Configurable;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.net.ssl.SSLEngine;
+
 /**
  * Plugin interface for allowing creation of <code>SSLEngine</code> object in a custom way.
  * For example, you can use this to customize loading your key material and trust material needed for <code>SSLContext</code>.

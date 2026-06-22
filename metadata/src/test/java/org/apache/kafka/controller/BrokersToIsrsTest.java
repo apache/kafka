@@ -31,7 +31,6 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 @Timeout(40)
 public class BrokersToIsrsTest {
     private static final Uuid[] UUIDS = new Uuid[] {

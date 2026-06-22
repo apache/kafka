@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.Map;
+
 /**
  * In the event of an unclean leader election, the log will be truncated,
  * previously committed data will be lost, and new data will be written

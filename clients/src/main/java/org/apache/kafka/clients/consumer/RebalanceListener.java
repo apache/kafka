@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.time.Duration;
 import java.util.Collection;
+
 /**
  * A callback interface that the user can implement to trigger custom actions when the set of partitions assigned to the
  * consumer changes.

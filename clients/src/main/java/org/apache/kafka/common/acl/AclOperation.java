@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.HashMap;
 import java.util.Locale;
+
 /**
  * Represents an operation which an ACL grants or denies permission to perform.
  *

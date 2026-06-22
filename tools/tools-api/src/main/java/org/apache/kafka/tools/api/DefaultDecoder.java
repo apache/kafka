@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.tools.api;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The default implementation does nothing, just returns the same byte array it takes in.
  */

@@ -17,8 +17,8 @@
 
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Thrown when a regular expression received in a request is not valid.
  */

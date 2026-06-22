@@ -20,7 +20,6 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfigurable;
 
-
 /**
  * An instance of <code>JwtValidator</code> acts as a function object that, given an access
  * token in base-64 encoded JWT format, can parse the data, perform validation, and construct an

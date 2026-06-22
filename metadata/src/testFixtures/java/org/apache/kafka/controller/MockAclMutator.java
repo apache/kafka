@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 
-
 /**
  * The MockAclMutator is a class which connects a StandardAuthorizer up to an AclControlManager.
  * Normally, this connection goes through the QuorumController. However, this class just attaches

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+
 @InterfaceAudience.Public
 public class ProducerState {
     private final long producerId;

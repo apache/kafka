@@ -43,7 +43,6 @@ import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 /**
  * Utilities for testing classes that deal with metadata records.
  */

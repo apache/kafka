@@ -48,7 +48,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
-
 public class ClientQuotaControlManager {
     static class Builder {
         private LogContext logContext = null;

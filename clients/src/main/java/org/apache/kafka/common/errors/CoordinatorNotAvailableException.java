@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * In the context of the group coordinator, the broker returns this error code for metadata or offset commit
  * requests if the group metadata topic has not been created yet.

@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.Objects;
+
 /**
  * Describes a configuration alteration to be made to a client quota entity.
  */

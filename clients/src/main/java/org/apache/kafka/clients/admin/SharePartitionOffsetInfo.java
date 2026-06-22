@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
 import java.util.Optional;
+
 /**
  * This class is used to contain the offset and lag information for a share-partition.
  */

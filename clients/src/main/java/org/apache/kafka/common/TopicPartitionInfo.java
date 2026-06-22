@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
 /**
  * A class containing leadership, replicas and ISR information for a topic partition.
  */

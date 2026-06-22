@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import javax.security.sasl.SaslServer;
+
 /**
  * This exception indicates that SASL authentication has failed. The error message
  * in the exception indicates the actual cause of failure.

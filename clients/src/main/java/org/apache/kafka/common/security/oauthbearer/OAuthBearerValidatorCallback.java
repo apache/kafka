@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import java.util.Objects;
 
 import javax.security.auth.callback.Callback;
+
 /**
  * A {@code Callback} for use by the {@code SaslServer} implementation when it
  * needs to provide an OAuth 2 bearer token compact serialization for

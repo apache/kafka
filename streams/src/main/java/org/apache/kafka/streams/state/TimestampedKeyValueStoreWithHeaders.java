@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * A key-(value/timestamp/headers) store that supports put/get/delete.
  *

@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Indicates that {@code DeleteGroups} could not complete for the affected group. The
  * accompanying error message describes the underlying cause; the caller may retry once

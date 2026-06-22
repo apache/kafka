@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
 
+package org.apache.kafka.common;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
+
 /**
  * The <code>ClusterResource</code> class encapsulates metadata for a Kafka cluster.
  */

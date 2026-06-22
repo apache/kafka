@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.Map;
+
 /**
  * Provides the ability to lookup connector metadata, including status and configurations, as well
  * as immutable cluster information such as Kafka cluster ID. This is made available to

@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * This topic/partition doesn't exist.
  * This exception is used in contexts where a topic doesn't seem to exist based on possibly stale metadata.

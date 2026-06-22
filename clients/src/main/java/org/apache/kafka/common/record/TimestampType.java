@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.NoSuchElementException;
+
 /**
  * The timestamp type of the records.
  */

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.assignment.assignors;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -48,7 +49,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableMap;
-
 
 @InterfaceAudience.Public
 public class StickyTaskAssignor implements TaskAssignor {

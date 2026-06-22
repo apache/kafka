@@ -40,7 +40,6 @@ import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-
 @Timeout(60)
 public class BootstrapMetadataTest {
     static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = List.of(

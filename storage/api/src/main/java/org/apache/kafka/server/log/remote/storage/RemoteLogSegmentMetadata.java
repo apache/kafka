@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
@@ -26,6 +27,7 @@ import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
+
 /**
  * It describes the metadata about a topic partition's remote log segment in the remote storage. This is uniquely
  * represented with {@link RemoteLogSegmentId}.

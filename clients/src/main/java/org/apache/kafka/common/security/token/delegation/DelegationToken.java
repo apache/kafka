@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.token.delegation;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -22,6 +23,7 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
+
 /**
  * A class representing a delegation token.
  *

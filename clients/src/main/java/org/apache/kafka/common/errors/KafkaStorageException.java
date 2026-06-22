@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Miscellaneous disk-related IOException occurred when handling a request.
  * Client should request metadata update and retry if the response shows KafkaStorageException

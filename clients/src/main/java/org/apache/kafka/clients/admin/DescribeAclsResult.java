@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
+
 /**
  * The result of the {@link KafkaAdminClient#describeAcls(AclBindingFilter)} call.
  */

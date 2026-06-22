@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Arrays;
+
 /**
  * Representation of a SASL/SCRAM Mechanism.
  *

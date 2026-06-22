@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 /**
  * A class representing an alter configuration entry containing name, value and operation type.
  * <p>

@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
+
 /**
  * Mechanism and iterations for a SASL/SCRAM credential associated with a user.
  *

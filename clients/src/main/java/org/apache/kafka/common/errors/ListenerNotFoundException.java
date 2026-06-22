@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The leader does not have an endpoint corresponding to the listener on which metadata was requested.
  * This could indicate a broker configuration error or a transient error when listeners are updated

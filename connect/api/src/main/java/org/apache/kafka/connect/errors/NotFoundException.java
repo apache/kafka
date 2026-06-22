@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.connect.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Indicates that an operation attempted to modify or delete a connector or task that is not present on the worker.
  */

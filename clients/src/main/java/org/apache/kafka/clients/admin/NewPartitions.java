@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.List;
 import java.util.Map;
+
 /**
  * Describes new partitions for a particular topic in a call to {@link Admin#createPartitions(Map)}.
  */

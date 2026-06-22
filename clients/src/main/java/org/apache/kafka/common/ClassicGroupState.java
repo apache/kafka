@@ -24,6 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 /**
  * The classic group state.
  */

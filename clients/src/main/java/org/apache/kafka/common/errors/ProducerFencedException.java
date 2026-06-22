@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * This fatal exception indicates that another producer with the same <code>transactional.id</code> has been
  * started. It is only possible to have one producer instance with a <code>transactional.id</code> at any

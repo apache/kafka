@@ -33,7 +33,6 @@ import org.slf4j.Logger;
 
 import java.util.Optional;
 
-
 public class SnapshotEmitter implements SnapshotGenerator.Emitter {
     /**
      * The maximum number of records we will put in each snapshot batch by default.

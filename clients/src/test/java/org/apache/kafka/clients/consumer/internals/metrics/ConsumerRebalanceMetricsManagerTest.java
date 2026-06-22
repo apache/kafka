@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
@@ -37,7 +38,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-
 
 class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
 

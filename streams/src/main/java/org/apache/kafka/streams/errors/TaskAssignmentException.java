@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Indicates a run time error incurred while trying to assign
  * {@link org.apache.kafka.streams.processor.internals.StreamTask stream tasks} to

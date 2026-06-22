@@ -17,9 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /*
  * This class implements the common APIs that are shared by Options classes for various AdminClient commands
  */

@@ -17,8 +17,8 @@
 
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Thrown if a reassignment cannot be cancelled because none is in progress.
  */

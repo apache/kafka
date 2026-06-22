@@ -24,6 +24,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
 import java.util.Set;
+
 /**
  * The result of the {@link KafkaAdminClient#describeCluster()} call.
  */

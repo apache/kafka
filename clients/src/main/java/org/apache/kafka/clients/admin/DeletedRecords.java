@@ -17,8 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Represents information about deleted records
  */

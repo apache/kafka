@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
 import java.util.Map;
+
 /**
  * The interface for wrapping a serializer and deserializer for the given data type.
  *

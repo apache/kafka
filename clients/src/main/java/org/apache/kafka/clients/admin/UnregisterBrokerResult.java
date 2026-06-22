@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The result of the {@link Admin#unregisterBroker(int, UnregisterBrokerOptions)} call.
  *

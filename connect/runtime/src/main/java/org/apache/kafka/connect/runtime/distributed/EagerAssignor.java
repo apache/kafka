@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.common.utils.internals.CircularIterator;
@@ -34,7 +35,6 @@ import java.util.Map;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.LeaderState;
-
 
 /**
  * An assignor that computes a unweighted round-robin distribution of connectors and tasks. The

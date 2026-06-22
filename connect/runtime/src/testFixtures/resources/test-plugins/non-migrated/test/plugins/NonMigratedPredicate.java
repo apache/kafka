@@ -17,7 +17,6 @@
 
 package test.plugins;
 
-
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.predicates.Predicate;

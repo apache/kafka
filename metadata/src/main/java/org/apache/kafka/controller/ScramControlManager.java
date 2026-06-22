@@ -50,7 +50,6 @@ import static org.apache.kafka.common.protocol.Errors.UNACCEPTABLE_CREDENTIAL;
 import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_SASL_MECHANISM;
 import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
 
-
 /**
  * Manages SCRAM credentials.
  */

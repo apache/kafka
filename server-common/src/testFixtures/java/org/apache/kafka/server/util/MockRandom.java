@@ -19,7 +19,6 @@ package org.apache.kafka.server.util;
 
 import java.util.Random;
 
-
 /**
  * A subclass of Random with a fixed seed and generation algorithm.
  *

@@ -26,7 +26,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 @Timeout(value = 40)
 public class TimelineLongTest {
     @Test

@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.Cluster;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.io.Closeable;
+
 /**
  * Partitioner Interface
  * <br/>

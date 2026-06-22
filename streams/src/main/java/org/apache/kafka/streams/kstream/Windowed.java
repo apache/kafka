@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
-
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The result key type of a windowed stream aggregation.
  * <p>

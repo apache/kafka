@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.processor.api;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Marker interface for classes implementing {@link FixedKeyProcessorSupplier}
  * that have been wrapped via a {@link ProcessorWrapper}.

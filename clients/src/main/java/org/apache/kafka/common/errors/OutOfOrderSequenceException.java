@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * This exception indicates that the broker received an unexpected sequence number from the producer,
  * which means that data may have been lost. If the producer is configured for idempotence only (i.e.

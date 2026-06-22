@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * This exception is raised when an offset commit with {@link KafkaConsumer#commitSync()} fails
  * with an unrecoverable error. This exception is generated on the client side, typically when

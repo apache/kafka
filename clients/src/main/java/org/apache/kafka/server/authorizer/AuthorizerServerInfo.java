@@ -22,6 +22,7 @@ import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collection;
+
 /**
  * Runtime broker configuration metadata provided to authorizers during start up.
  */

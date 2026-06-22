@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+
 /**
  * Describes a client quota entity filter.
  */

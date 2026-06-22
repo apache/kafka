@@ -17,8 +17,8 @@
 
 package org.apache.kafka.streams.query;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 @InterfaceAudience.Public
 public enum ResultOrder {
     ANY,

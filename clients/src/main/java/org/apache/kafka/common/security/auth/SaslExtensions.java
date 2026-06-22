@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.auth;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -24,6 +25,7 @@ import java.util.Set;
 import java.util.StringJoiner;
 
 import javax.security.auth.Subject;
+
 /**
  * A simple immutable value object class holding customizable SASL extensions.
  *

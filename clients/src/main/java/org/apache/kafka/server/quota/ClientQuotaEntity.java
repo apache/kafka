@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.List;
+
 /**
  * The metadata for an entity for which quota is configured. Quotas may be defined at
  * different levels and `configEntities` gives the list of config entities that define

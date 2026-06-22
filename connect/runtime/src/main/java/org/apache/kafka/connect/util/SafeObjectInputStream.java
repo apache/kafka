@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.connect.util;
 
 import java.io.IOException;
@@ -23,7 +24,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectStreamClass;
 import java.util.Objects;
 import java.util.Set;
-
 
 /**
  * Security note: While it seems it possible to build a deserialization gadget to obtain RCE via

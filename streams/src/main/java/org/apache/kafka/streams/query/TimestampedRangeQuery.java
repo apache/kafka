@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-
 package org.apache.kafka.streams.query;
-
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;

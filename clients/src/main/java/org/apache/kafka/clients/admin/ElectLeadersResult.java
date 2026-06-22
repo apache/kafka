@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;

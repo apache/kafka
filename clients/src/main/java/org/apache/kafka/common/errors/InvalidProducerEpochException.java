@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * This exception indicates that the produce request sent to the partition leader
  * contains a non-matching producer epoch. When encountering this exception, user should abort the ongoing transaction

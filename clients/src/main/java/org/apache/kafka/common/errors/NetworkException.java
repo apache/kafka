@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * A misc. network-related IOException occurred when making a request. This could be because the client's metadata is
  * out of date and it is making a request to a node that is now dead.

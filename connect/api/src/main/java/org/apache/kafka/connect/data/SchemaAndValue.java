@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
+
 /**
  * A composite containing a {@link Schema} and associated value
  */

@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import javax.net.ssl.SSLException;
+
 /**
  * This exception indicates that SASL authentication has failed.
  * On authentication failure, clients abort the operation requested and raise one

@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Indicates that the streams group topology description plugin failed to process
  * a StreamsGroupTopologyDescriptionUpdate request. The accompanying error message

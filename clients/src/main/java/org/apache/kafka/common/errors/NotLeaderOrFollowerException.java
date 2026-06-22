@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Broker returns this error if a request could not be processed because the broker is not the leader
  * or follower for a topic partition. This could be a transient exception during leader elections and

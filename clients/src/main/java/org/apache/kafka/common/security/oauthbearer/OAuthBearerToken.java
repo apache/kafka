@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
+
 /**
  * The <code>b64token</code> value as defined in
  * <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section

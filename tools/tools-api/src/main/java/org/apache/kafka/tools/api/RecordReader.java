@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.tools.api;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -24,6 +25,7 @@ import java.io.Closeable;
 import java.io.InputStream;
 import java.util.Iterator;
 import java.util.Map;
+
 /**
  * Typical implementations of this interface convert data from an `InputStream` received via `readRecords` into a
  * iterator of `ProducerRecord` instance. Note that implementations must have a public nullary constructor.

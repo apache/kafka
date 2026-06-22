@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.assignment;
 
 import org.apache.kafka.common.TopicPartition;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Optional;
 import java.util.Set;
+
 /**
  * This is a simple container class used during the assignment process to distinguish
  * TopicPartitions type. Since the assignment logic can depend on the type of topic we're

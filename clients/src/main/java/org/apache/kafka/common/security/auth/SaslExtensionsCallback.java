@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import java.util.Objects;
 
 import javax.security.auth.callback.Callback;
+
 /**
  * Optional callback used for SASL mechanisms if any extensions need to be set
  * in the SASL exchange.

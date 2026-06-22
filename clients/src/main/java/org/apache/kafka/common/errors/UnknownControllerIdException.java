@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 @InterfaceAudience.Public
 public class UnknownControllerIdException extends ApiException {
     public UnknownControllerIdException(String message) {

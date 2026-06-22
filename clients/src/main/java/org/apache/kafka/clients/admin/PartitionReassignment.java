@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Collections;
 import java.util.List;
+
 /**
  * A partition reassignment, which has been listed via {@link AdminClient#listPartitionReassignments()}.
  */

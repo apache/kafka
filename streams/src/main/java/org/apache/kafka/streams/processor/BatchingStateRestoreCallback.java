@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.processor;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.KeyValue;
 

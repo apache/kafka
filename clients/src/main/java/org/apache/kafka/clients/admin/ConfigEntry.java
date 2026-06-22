@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+
 /**
  * A class representing a configuration entry containing name, value and additional metadata.
  */

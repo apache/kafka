@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.ArrayList;
 import java.util.List;
+
 /**
  * Utilities that connector implementations might find useful. Contains common building blocks
  * for writing connectors.

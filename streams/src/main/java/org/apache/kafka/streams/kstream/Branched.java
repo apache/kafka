@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
+
 /**
  * The {@code Branched} class is used to define the optional parameters when building branches with
  * {@link BranchedKStream}.

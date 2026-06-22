@@ -53,7 +53,6 @@ import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 
-
 /**
  * A class which encapsulates the configuration and the ACL data owned by StandardAuthorizer.
  *

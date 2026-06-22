@@ -29,7 +29,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 @Timeout(value = 40)
 public class AclsImageTest {
     public static final AclsImage IMAGE1 = AclsImageFixtures.IMAGE1;

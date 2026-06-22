@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * The replica is not available for the requested topic partition. This may be
  * a transient exception during reassignments. From version 2.6 onwards, Fetch requests

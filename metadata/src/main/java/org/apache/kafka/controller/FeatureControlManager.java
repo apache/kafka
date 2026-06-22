@@ -51,7 +51,6 @@ import java.util.function.Consumer;
 import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
-
 public class FeatureControlManager {
     public static class Builder {
         private LogContext logContext = null;

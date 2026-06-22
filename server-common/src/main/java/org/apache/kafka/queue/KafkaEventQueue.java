@@ -37,7 +37,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
-
 public final class KafkaEventQueue implements EventQueue {
 
     public static final String EVENT_HANDLER_THREAD_SUFFIX = "event-handler";

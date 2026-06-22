@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * A callback interface that users can implement when they wish to get notified about changes in the Cluster metadata.
  * <p>

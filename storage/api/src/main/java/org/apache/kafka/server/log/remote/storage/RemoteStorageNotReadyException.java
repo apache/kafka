@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * This exception is thrown when a remote storage operation cannot proceed because the remote storage is not ready.
  * This may occur in situations where the remote storage (or) metadata layer is initializing, unreachable,

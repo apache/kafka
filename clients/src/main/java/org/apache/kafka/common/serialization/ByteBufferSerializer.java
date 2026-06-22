@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.nio.ByteBuffer;
+
 /**
  * {@code ByteBufferSerializer} always {@link ByteBuffer#rewind() rewinds} the position of the input buffer to zero for
  * serialization. A manual rewind is not necessary.

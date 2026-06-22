@@ -32,7 +32,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 @Timeout(value = 40)
 public class MetadataImageTest {
     public static final MetadataImage IMAGE1 = MetadataImageFixtures.IMAGE1;

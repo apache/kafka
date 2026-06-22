@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
+
 /**
  * Indicates that a request API or version needed by the client is not supported by the broker. This is
  * typically a fatal error as Kafka clients will downgrade request versions as needed except in cases where

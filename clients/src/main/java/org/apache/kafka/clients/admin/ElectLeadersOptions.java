@@ -21,6 +21,7 @@ import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Set;
+
 /**
  * Options for {@link Admin#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *

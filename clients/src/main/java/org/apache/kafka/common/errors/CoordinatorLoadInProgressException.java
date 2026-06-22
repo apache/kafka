@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * In the context of the group coordinator, the broker returns this error code for any coordinator request if
  * it is still loading the group metadata (e.g. after a leader change for that group metadata topic partition).

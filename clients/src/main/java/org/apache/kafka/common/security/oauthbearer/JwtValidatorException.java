@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
+
 /**
  * A {@code JwtValidatorException} is thrown in cases where the validity of a JWT cannot be
  * determined. It is intended to be used when errors arise within the processing of a

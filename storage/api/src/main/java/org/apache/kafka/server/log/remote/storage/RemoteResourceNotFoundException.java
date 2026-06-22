@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Exception thrown when a resource is not found on the remote storage.
  * <p>

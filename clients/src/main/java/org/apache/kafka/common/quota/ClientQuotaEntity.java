@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Map;
 import java.util.Objects;
+
 /**
  * Describes a client quota entity, which is a mapping of entity types to their names.
  */

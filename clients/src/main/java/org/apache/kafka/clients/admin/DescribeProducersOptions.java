@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -21,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceAudience;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.OptionalInt;
+
 /**
  * Options for {@link Admin#describeProducers(Collection)}.
  */

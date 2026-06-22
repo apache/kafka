@@ -17,8 +17,8 @@
 
 package org.apache.kafka.common.config;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * <p>Keys that can be used to configure a topic. These keys are useful when creating or reconfiguring a
  * topic using the AdminClient.

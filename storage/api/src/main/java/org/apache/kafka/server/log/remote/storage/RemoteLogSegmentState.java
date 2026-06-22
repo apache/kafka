@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 /**
  * This enum indicates the state of the remote log segment. This will be based on the action executed on this
  * segment by the remote log service implementation.

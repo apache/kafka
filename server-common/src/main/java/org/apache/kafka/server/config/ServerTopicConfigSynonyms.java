@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.TopicConfig;
@@ -25,7 +26,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
-
 
 public final class ServerTopicConfigSynonyms {
     public static final String LOG_PREFIX = "log.";

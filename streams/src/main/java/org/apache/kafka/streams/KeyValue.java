@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
+
 /**
  * A key-value pair defined for a single Kafka Streams record.
  * If the record comes directly from a Kafka topic then its key/value are defined as the message key/value.

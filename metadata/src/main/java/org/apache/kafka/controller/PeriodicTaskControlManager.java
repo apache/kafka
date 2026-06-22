@@ -31,7 +31,6 @@ import java.util.function.Supplier;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
-
 class PeriodicTaskControlManager {
     static class Builder {
         private LogContext logContext = null;

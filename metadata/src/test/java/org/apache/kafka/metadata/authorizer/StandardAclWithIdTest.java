@@ -27,7 +27,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-
 @Timeout(value = 40)
 public class StandardAclWithIdTest {
     public static final List<StandardAclWithId> TEST_ACLS = StandardAclWithIdFixtures.TEST_ACLS;

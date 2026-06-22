@@ -20,6 +20,7 @@ package org.apache.kafka.common.resource;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 
 import java.util.Objects;
+
 /**
  * Represents a cluster resource with a tuple of (type, name).
  */

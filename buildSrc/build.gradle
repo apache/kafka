@@ -3,10 +3,22 @@ plugins {
     id 'maven-publish'
     id 'java-library'
     id 'checkstyle'
+    id 'signing'
 }
 
 group = 'org.apache.kafka'
-version = project.findProperty('kafkaPluginsVersion') ?: '1.0.0-SNAPSHOT'
+// Default the checker plugin version to the root project's version (read directly from the
+// repo-root gradle.properties because buildSrc is a separate Gradle build and does not
+// inherit the root project's `version` property). release.py bumps gradle.properties via
+// the `updateVersion` task, so the plugin artifacts ship under the same dotted version as
+// the rest of Kafka. `-PkafkaPluginsVersion=...` overrides for one-off out-of-band publishes.
+def rootGradleProps = new Properties()
+def rootGradlePropsFile = file('../gradle.properties')
+if (rootGradlePropsFile.exists()) {
+    rootGradlePropsFile.withInputStream { rootGradleProps.load(it) }
+}
+def projectVersion = rootGradleProps.getProperty('version')
+version = project.findProperty('kafkaPluginsVersion') ?: (projectVersion ?: '1.0.0-SNAPSHOT')
 
 repositories {
     gradlePluginPortal()
@@ -16,6 +28,9 @@ repositories {
 java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
+    // Maven Central requires sources and javadoc jars alongside the main artifact.
+    withSourcesJar()
+    withJavadocJar()
 }
 
 dependencies {
@@ -74,7 +89,7 @@ publishing {
         mavenPlugin(MavenPublication) {
             group  = 'org.apache.kafka'
             artifactId = 'kafka-internal-api-checker-maven-plugin'
-            version = project.findProperty('kafkaPluginsVersion') ?: '1.0.0-SNAPSHOT'
+            version = project.version
 
             from components.java
 
@@ -108,8 +123,14 @@ publishing {
         }
     }
 
-    // Configure the automatically generated plugin marker publications
+    // The `java-gradle-plugin` plugin auto-generates one Maven publication per declared
+    // plugin (the marker poms) plus a `pluginMaven` publication that holds the implementation
+    // jar both markers point to. Rename the implementation jar away from the buildSrc
+    // directory name so it has a sensible Maven coordinate.
     afterEvaluate {
+        publications.matching { it.name == 'pluginMaven' }.configureEach {
+            artifactId = 'kafka-internal-api-checker-gradle-plugin'
+        }
         publications.matching { it.name.endsWith('PluginMarkerMaven') }.configureEach {
             pom {
                 name = 'Apache Kafka Gradle Plugins'
@@ -168,6 +189,17 @@ publishing {
                 }
             }
         }
+    }
+}
+
+// GPG-sign the published artifacts on real releases (i.e. when the version is not a SNAPSHOT
+// and -PskipSigning is not set), matching the policy in the root build.gradle. ASF Nexus
+// rejects unsigned artifacts on the staging repo, so this is required for `release.py stage`.
+def skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
+def shouldSign = !skipSigning && !version.toString().endsWith('SNAPSHOT')
+if (shouldSign) {
+    signing {
+        sign publishing.publications
     }
 }
 

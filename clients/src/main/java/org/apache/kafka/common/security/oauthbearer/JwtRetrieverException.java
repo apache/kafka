@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * A {@code JwtRetrieverException} is thrown in cases where the JWT cannot be retrieved.
  *

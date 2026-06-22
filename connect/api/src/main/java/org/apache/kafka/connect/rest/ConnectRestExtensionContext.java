@@ -22,7 +22,6 @@ import org.apache.kafka.connect.health.ConnectClusterState;
 
 import jakarta.ws.rs.core.Configurable;
 
-
 /**
  * The interface provides the ability for {@link ConnectRestExtension} implementations to access the JAX-RS
  * {@link jakarta.ws.rs.core.Configurable} and cluster state {@link ConnectClusterState}. The implementation for the interface is provided

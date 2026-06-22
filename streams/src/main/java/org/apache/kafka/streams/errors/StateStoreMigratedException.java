@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.errors;
 
-
 import org.apache.kafka.common.annotation.InterfaceAudience;
+
 /**
  * Indicates that the state store being queried is closed although the Kafka Streams state is
  * {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} or

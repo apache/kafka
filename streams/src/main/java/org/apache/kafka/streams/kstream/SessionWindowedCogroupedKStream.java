@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
@@ -23,7 +24,6 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.SessionStore;
-
 
 /**
  * Same as a {@link SessionWindowedKStream}, however, for multiple co-grouped {@link KStream KStreams}.
