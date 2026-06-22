@@ -996,6 +996,36 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testCleanupCycleSingleFlightHoldsFlagUntilClearWriteSettles() {
+        // Locks the fix for the gap Copilot flagged: invokeDeleteTopologies's plugin call
+        // completes synchronously, but the conditional clear-stored-epoch write is parked
+        // on an unresolved future. Until that write settles, the in-flight flag must remain
+        // held — a fresh cycle scheduled by the timer would otherwise re-scan the same
+        // eligible group (storedEpoch still != -1 because the clear has not landed) and
+        // double-fire plugin.deleteTopology. After the parked write completes the flag is
+        // released and a subsequent cycle observes a fresh scheduleReadAllOperation.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+        CompletableFuture<Object> parkedClearWrite = new CompletableFuture<>();
+        when(runtime.scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(parkedClearWrite);
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.runStreamsGroupTopologyCleanupCycle();
+        // Plugin call resolved synchronously but clear-write is parked — second cycle skipped.
+        service.runStreamsGroupTopologyCleanupCycle();
+        verify(runtime, times(1)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
+
+        // Settle the clear-write: flag should now release, next cycle scans afresh.
+        parkedClearWrite.complete(null);
+        service.runStreamsGroupTopologyCleanupCycle();
+        verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
+    }
+
+    @Test
     public void testCleanupCycleSingleFlightReleasesFlagAfterCycleCompletes() {
         // The skip case alone does not prove the flag is ever released: a buggy whenComplete
         // (e.g., missing the partitionDone allOf join) would leave it set forever and silently

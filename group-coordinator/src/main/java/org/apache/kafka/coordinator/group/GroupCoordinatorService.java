@@ -894,8 +894,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 );
                 perGroupFutures.add(streamsGroupTopologyDescriptionManager
                     .invokeDeleteTopologies(eligible.keySet())
-                    .thenAccept(failures -> {
+                    .thenCompose(failures -> {
                         recordPluginDeleteOutcome(eligible.size(), failures.size());
+                        List<CompletableFuture<Void>> clearFutures = new ArrayList<>(eligible.size());
                         eligible.forEach((groupId, expectedStoredEpoch) -> {
                             // Eligibility required the group to be empty: no member is heartbeating
                             // anymore, so any push back-off entry is moot regardless of plugin
@@ -906,8 +907,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                 // Plugin failed: leave stored epoch in place; next cycle retries.
                                 return;
                             }
-                            clearStoredDescriptionTopologyEpochAsync(groupId, expectedStoredEpoch);
+                            clearFutures.add(clearStoredDescriptionTopologyEpochAsync(groupId, expectedStoredEpoch));
                         });
+                        return CompletableFuture.allOf(clearFutures.toArray(new CompletableFuture<?>[0]));
                     }));
                 return null;
             }));
@@ -944,21 +946,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Fire-and-forget conditional metadata write that clears {@code StoredDescriptionTopologyEpoch}
-     * for {@code groupId} only when the persisted value still equals {@code expectedStoredEpoch}.
-     * Mismatches and missing groups are silently ignored by the shard-side method; this layer
-     * just logs runtime write failures (NOT_COORDINATOR etc.) so the next cycle can retry.
+     * Conditional metadata write that clears {@code StoredDescriptionTopologyEpoch} for
+     * {@code groupId} only when the persisted value still equals {@code expectedStoredEpoch}.
+     * Mismatches and missing groups are silently ignored by the shard-side method. The
+     * returned future is what the cleanup cycle's single-flight guard awaits before releasing
+     * the in-flight flag; runtime write failures (NOT_COORDINATOR etc.) are logged here and
+     * swallowed so a single failed write does not poison the cycle's allOf — the next cycle
+     * will retry naturally because the persisted storedEpoch is still non-default.
      */
-    private void clearStoredDescriptionTopologyEpochAsync(String groupId, int expectedStoredEpoch) {
-        runtime.<Void>scheduleWriteOperation(
+    private CompletableFuture<Void> clearStoredDescriptionTopologyEpochAsync(String groupId, int expectedStoredEpoch) {
+        return runtime.<Void>scheduleWriteOperation(
             "clear-stored-topology-epoch",
             topicPartitionFor(groupId),
             coordinator -> coordinator.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch)
-        ).whenComplete((__, throwable) -> {
+        ).handle((__, throwable) -> {
             if (throwable != null) {
                 log.warn("Failed to clear StoredDescriptionTopologyEpoch for group {}; the next cleanup cycle will retry.",
                     groupId, throwable);
             }
+            return null;
         });
     }
 
