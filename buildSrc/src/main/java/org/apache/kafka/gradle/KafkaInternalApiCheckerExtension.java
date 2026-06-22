@@ -41,8 +41,17 @@ public class KafkaInternalApiCheckerExtension {
         this.failOnViolation.convention(true);
 
         this.classDirs = project.getObjects().fileCollection();
-        // Default to standard compiled-class output directory; covers java/scala/kotlin subdirs.
-        this.classDirs.from(project.file("build/classes"));
+        // Intentionally empty at construction. KafkaInternalApiCheckerPlugin reacts to the
+        // Java plugin being applied — see project.getPlugins().withType(JavaPlugin.class) — and
+        // adds sourceSets.main.output.classesDirs as a default contributor. That FileCollection
+        // carries the producer-task info for compileJava / compileScala / compileKotlin / …, so
+        // Gradle's @InputFiles validation can infer the compile-task dependency automatically.
+        // A raw project.file("build/classes") would scan the same bytecode but with no producer
+        // info attached, tripping "implicit dependency" validation errors on Gradle 9+.
+        //
+        // Users can still extend or replace this default from their build script:
+        //   kafkaInternalApiChecker { classDirs.from(file("extra-classes")) }   // extend
+        //   kafkaInternalApiChecker { classDirs.setFrom(file("only-this")) }    // replace
 
         this.reportFile = project.getObjects().fileProperty();
         this.reportFile.convention(project.getLayout().getBuildDirectory().file("reports/kafka-internal-api-usage.txt"));

@@ -18,11 +18,43 @@ package org.apache.kafka.gradle;
 
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.plugins.JavaPlugin;
+import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
 
 /**
  * Gradle plugin for checking that external projects don't use internal Kafka APIs.
  * This plugin is intended to be published and used by external Kafka plugin/application developers.
+ *
+ * <h2>Wiring strategy</h2>
+ *
+ * The plugin uses a reactive {@code Plugins.withType(JavaPlugin.class)} callback rather than
+ * {@code project.afterEvaluate(...)} for the source-set + lifecycle wiring. Two reasons:
+ *
+ * <ul>
+ *   <li><b>Order-insensitive</b>. {@code withType} fires whenever the Java plugin is applied,
+ *       regardless of whether the user listed {@code id 'java'} before or after this plugin.
+ *       Scala and Kotlin plugins apply JavaPlugin transitively, so the same callback also
+ *       handles those.</li>
+ *   <li><b>Configuration-cache friendly</b>. {@code afterEvaluate} forces eager evaluation
+ *       at configuration time, which is at odds with the configuration cache and with
+ *       Gradle's longer-term direction (isolated projects). The reactive form survives both.</li>
+ * </ul>
+ *
+ * <h2>How {@code classDirs} is fed</h2>
+ *
+ * The extension's {@code classDirs} starts empty. When the Java plugin is applied, this plugin
+ * <em>adds</em> {@code sourceSets.main.output.classesDirs} as a contributor. That FileCollection
+ * carries producer-task info for the compile tasks, so Gradle's {@code @InputFiles} validation
+ * can infer the {@code compileJava} / {@code compileScala} / {@code compileKotlin} ordering
+ * automatically — no manual {@code dependsOn} required. Users can still call {@code .from(…)}
+ * on the extension to extend, or {@code .setFrom(…)} to replace.
+ *
+ * <p>The task's {@code classDirs} is wired to the extension's {@code ConfigurableFileCollection}
+ * by reference at task-registration time. Because {@code Property<FileCollection>.set(FileCollection)}
+ * stores the same reference, later {@code .from(...)} calls on the extension (including the
+ * main-source-set contribution made by the {@code withType} callback) are visible at task
+ * execution time.
  */
 public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
 
@@ -32,7 +64,9 @@ public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
         KafkaInternalApiCheckerExtension extension = project.getExtensions()
             .create("kafkaInternalApiChecker", KafkaInternalApiCheckerExtension.class, project);
 
-        // Register the task
+        // Register the task. classDirs is wired directly to the extension's ConfigurableFileCollection
+        // by reference, so anything added to extension.classDirs later (either by the JavaPlugin
+        // hook below or by the user's build script) is visible to the task at execution time.
         TaskProvider<KafkaInternalApiCheckerTask> taskProvider = project.getTasks()
             .register("kafkaInternalApiChecker", KafkaInternalApiCheckerTask.class, task -> {
                 task.getCheckerEnabled().set(extension.getEnabled());
@@ -41,15 +75,22 @@ public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
                 task.getReportFile().set(extension.getReportFile());
             });
 
-        // Configure task to run as part of verification
-        project.afterEvaluate(p -> {
-            // Bytecode scan requires compiled output; ensure the project's classes task has run.
-            taskProvider.configure(task -> task.dependsOn(project.getTasks().named("classes")));
+        // Reactive hook: fires when the Java plugin (or any plugin that applies JavaPlugin
+        // transitively, e.g. Scala or Kotlin) becomes part of this project. See the class-level
+        // javadoc for why this is preferred over `project.afterEvaluate(...)`.
+        project.getPlugins().withType(JavaPlugin.class, plugin -> {
+            SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
 
-            // Integrate into the standard build lifecycle - add to 'check' task
-            project.getTasks().named("check").configure(checkTask -> {
-                checkTask.dependsOn(taskProvider);
-            });
+            // Contribute main source set output as the default scanning target. Wrapped in a
+            // Provider so the underlying FileCollection (and its producer-task dependencies)
+            // is resolved lazily — important for configuration cache compatibility.
+            extension.getClassDirs().from(
+                sourceSets.named("main").map(s -> s.getOutput().getClassesDirs())
+            );
+
+            // Lifecycle wiring: make `check` depend on our task. The 'check' task itself comes
+            // from LifecycleBasePlugin, which JavaPlugin pulls in.
+            project.getTasks().named("check").configure(checkTask -> checkTask.dependsOn(taskProvider));
         });
 
         // Add helpful task to skip checking
