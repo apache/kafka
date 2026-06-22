@@ -19,7 +19,6 @@ package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
@@ -28,9 +27,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
-import org.apache.kafka.storage.internals.log.FetchDataInfo;
-import org.apache.kafka.storage.internals.log.LogReadResult;
-import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,16 +35,16 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 /**
  * Reads the original source records for the offset range described by a {@link ShareGroupDLQRecordParameter}
- * so they can be copied into a DLQ record. Local reads are performed inline in a loop; when an offset has
- * been tiered off the local log the records are fetched asynchronously from the remote tier and the loop
- * resumes once the read completes (so the caller's thread is never blocked on remote storage IO).
+ * so they can be copied into a DLQ record. Reads are issued one batch at a time in a loop via
+ * {@link LogReader#readAsync}, which combines the local read with the follow-up remote read for any offset
+ * tiered off the local log. When a read is already complete the loop continues in place; when it is still
+ * pending (a remote read in flight) the loop returns and is resumed from the callback - so the calling
+ * thread is never blocked on remote storage IO and the synchronous path never recurses.
  *
  * <p>Best-effort: the returned future always completes normally with whatever records could be read.
  * Offsets that cannot be read - locally or remotely - are simply absent from the map, leaving the caller
@@ -119,131 +115,81 @@ public class ShareGroupDLQRecordFetcher {
     }
 
     /**
-     * Drives synchronous local reads in a loop. When an offset resides in the remote tier the records
-     * are read asynchronously: if the remote read is already complete the loop continues in place, and
-     * if it is still pending the loop returns and is resumed from the callback - so the synchronous path
-     * never recurses and the async path resumes on a fresh stack (the remote storage reader thread).
+     * Drives the reads in a loop via {@link LogReader#readAsync}. When the per-offset read is already
+     * complete (local data, or remote data already resolved) the loop continues in place; when it is still
+     * pending (remote read in flight) the loop returns and is resumed from the callback - so the synchronous
+     * path never recurses and the async path resumes on a fresh stack (the remote storage reader thread).
      */
     private void runFrom(long startFrom) {
         long nextOffset = startFrom;
         while (nextOffset <= endOffset) {
-            OptionalLong advanced = fetchLocal(nextOffset);
-            if (advanced.isEmpty()) {
-                // The loop stopped: the result has already been completed (read error, or no progress),
-                // or a remote read is pending and will resume the loop from its callback.
+            offsets.put(tp, nextOffset);
+
+            CompletableFuture<LogReader.AsyncReadResult> future =
+                logReader.readAsync(fetchParams, Set.of(tp), offsets, maxBytesMap, true).get(tp);
+            if (future == null) {
+                // No result was produced for the partition; nothing more we can do.
+                complete();
                 return;
             }
-            nextOffset = advanced.getAsLong();
+
+            if (!future.isDone()) {
+                // A remote read is in flight: resume from the callback so the calling thread is unblocked.
+                long readFrom = nextOffset;
+                future.whenComplete((asyncReadResult, exception) -> resume(readFrom, asyncReadResult, exception));
+                return;
+            }
+
+            // Safe (non-blocking) because the future is done. readAsync is partial-data tolerant, so it
+            // completes normally; any unexpected exceptional completion is caught by fetch().
+            long advanced = collect(nextOffset, future.getNow(null));
+            if (advanced <= nextOffset) {
+                complete();     // no progress, stop
+                return;
+            }
+            nextOffset = advanced;
         }
         complete();
     }
 
     /**
-     * Reads readFrom from the local log. If the offset has been tiered off the local log, delegates to
-     * the remote tier. Returns the next offset to read from so the loop can continue, or
-     * OptionalLong.empty() if the loop should stop now - either because the result has been completed
-     * (read error, or no progress) or because a remote read is pending and will resume from its callback.
+     * Resumes the read loop after an asynchronous (remote) read completes. Runs after runFrom() has already
+     * returned, so invoking runFrom() here does not grow the original call stack.
      */
-    // Visibility for testing
-    OptionalLong fetchLocal(long readFrom) {
-        offsets.put(tp, readFrom);
-
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResult =
-            logReader.read(fetchParams, Set.of(tp), offsets, maxBytesMap);
-
-        LogReadResult res = readResult.get(tp);
-        if (res == null) {
-            log.warn("Unable to fetch actual record at offset {} for {}.", readFrom, param);
-            result.complete(Map.of());
-            return OptionalLong.empty();
-        }
-
-        if (res.error().code() != Errors.NONE.code()) {
-            log.warn("Unable to fetch actual record at offset {} for {} due to error {}.",
-                readFrom, param, res.error());
-            result.complete(Map.of());
-            return OptionalLong.empty();
-        }
-
-        if (res.info().delayedRemoteStorageFetch.isPresent()) {
-            return fetchRemote(res.info().delayedRemoteStorageFetch.get(), readFrom);
-        }
-
-        long advanced = collectRecords(res.info().records, readFrom);
-        // If the read position did not advance this iteration we have made no progress (reached HWM/LEO
-        // or only stale records were returned). Bail out to guarantee termination rather than
-        // re-fetching the same offset forever.
-        if (advanced <= readFrom) {
-            complete();     // no progress, stop
-            return OptionalLong.empty();
-        }
-        return OptionalLong.of(advanced);
-    }
-
-    /**
-     * Reads a tiered offset from the remote tier. Returns the next offset to read from so the loop can
-     * continue, or OptionalLong.empty() if the loop should stop now - either because the read is still
-     * pending (it will resume from its callback on the remote storage reader thread, leaving the sender
-     * thread unblocked) or because the read made no progress and the result has already been completed.
-     */
-    // Visibility for testing
-    OptionalLong fetchRemote(RemoteStorageFetchInfo remoteStorageFetchInfo, long readFrom) {
-        CompletableFuture<FetchDataInfo> remote = logReader.readRemote(remoteStorageFetchInfo);
-
-        if (!remote.isDone()) {
-            remote.whenComplete((fetchDataInfo, exception) -> resumeRemote(readFrom, fetchDataInfo, exception));
-            return OptionalLong.empty();
-        }
-
-        // The read is already complete, so process it in place without blocking and keep looping.
-        FetchDataInfo fetchDataInfo = null;
-        Throwable exception = null;
+    private void resume(long readFrom, LogReader.AsyncReadResult asyncReadResult, Throwable exception) {
         try {
-            // Safe (non-blocking) because the future is done.
-            fetchDataInfo = remote.getNow(null);
-        } catch (CompletionException e) {
-            exception = e.getCause();
-        }
-
-        long advanced = processRemoteOutcome(readFrom, fetchDataInfo, exception);
-        if (advanced <= readFrom) {
-            complete();     // no progress, stop
-            return OptionalLong.empty();
-        }
-        return OptionalLong.of(advanced);
-    }
-
-    /**
-     * Resumes the read loop after an asynchronous remote read completes. Runs after runFrom() has
-     * already returned, so invoking runFrom() here does not grow the original call stack.
-     */
-    private void resumeRemote(long readFrom, FetchDataInfo fetchDataInfo, Throwable exception) {
-        try {
-            long advanced = processRemoteOutcome(readFrom, fetchDataInfo, exception);
+            if (exception != null) {
+                log.warn("Unable to read records at offset {} for {}. Skipping it.", readFrom, param, exception);
+                complete();
+                return;
+            }
+            long advanced = collect(readFrom, asyncReadResult);
             if (advanced <= readFrom) {
                 complete();         // no progress, stop
             } else {
                 runFrom(advanced);  // resume the loop
             }
         } catch (Exception e) {
-            log.warn("Unexpected error processing remote records for {}. Skipping record copy.", param, e);
+            log.warn("Unexpected error processing records for {}. Skipping record copy.", param, e);
             result.complete(Map.of());
         }
     }
 
     /**
-     * Turns the outcome of a remote read into records and collects them. A failed or empty read leaves
-     * the offsets unread (skipped), consistent with any other unavailable offset.
+     * Collects the records from a completed read into the map and returns the offset to read from next.
+     * A read that failed (carries an error) or returned no usable data leaves the offsets unread (skipped),
+     * which the loop treats as no progress.
      */
-    private long processRemoteOutcome(long readFrom, FetchDataInfo fetchDataInfo, Throwable exception) {
-        Records records;
-        if (exception != null || fetchDataInfo == null) {
-            log.warn("Offset {} for {} is in remote storage but could not be read. Skipping it.", readFrom, param, exception);
-            records = MemoryRecords.EMPTY;
-        } else {
-            records = fetchDataInfo.records;
+    private long collect(long readFrom, LogReader.AsyncReadResult asyncReadResult) {
+        if (asyncReadResult == null) {
+            return readFrom;
         }
-        return collectRecords(records, readFrom);
+        if (asyncReadResult.error() != Errors.NONE) {
+            log.warn("Unable to read records at offset {} for {} due to error {}. Skipping it.",
+                readFrom, param, asyncReadResult.error());
+            return readFrom;
+        }
+        return collectRecords(asyncReadResult.fetchDataInfo().records, readFrom);
     }
 
     /**

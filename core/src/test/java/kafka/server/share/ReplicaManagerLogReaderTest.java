@@ -20,9 +20,11 @@ import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
+import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
@@ -35,6 +37,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -67,6 +70,8 @@ public class ReplicaManagerLogReaderTest {
 
     private static final TopicIdPartition TOPIC_ID_PARTITION =
         new TopicIdPartition(Uuid.randomUuid(), 0, "topic");
+    private static final TopicIdPartition TOPIC_ID_PARTITION_2 =
+        new TopicIdPartition(Uuid.randomUuid(), 1, "topic");
 
     private static RemoteStorageFetchInfo remoteStorageFetchInfo() {
         return new RemoteStorageFetchInfo(
@@ -80,6 +85,43 @@ public class ReplicaManagerLogReaderTest {
     private static FetchParams fetchParams() {
         return new FetchParams(
             FetchRequest.CONSUMER_REPLICA_ID, -1, 0L, 1, 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty());
+    }
+
+    private static void stubReadFromLog(ReplicaManager replicaManager, List<Tuple2<TopicIdPartition, LogReadResult>> results) {
+        when(replicaManager.readFromLog(any(), any(), any(), anyBoolean()))
+            .thenReturn(CollectionConverters.asScala(results).toSeq());
+    }
+
+    private static LogReadResult localReadResult(FetchDataInfo info, Errors error) {
+        LogReadResult logReadResult = mock(LogReadResult.class);
+        when(logReadResult.info()).thenReturn(info);
+        when(logReadResult.error()).thenReturn(error);
+        return logReadResult;
+    }
+
+    private static FetchDataInfo localData() {
+        return new FetchDataInfo(new LogOffsetMetadata(0L), MemoryRecords.EMPTY);
+    }
+
+    private static FetchDataInfo tieredData(RemoteStorageFetchInfo remoteStorageFetchInfo) {
+        return new FetchDataInfo(new LogOffsetMetadata(0L), MemoryRecords.EMPTY, false,
+            Optional.empty(), Optional.of(remoteStorageFetchInfo));
+    }
+
+    private static LinkedHashMap<TopicIdPartition, Long> offsets(TopicIdPartition... partitions) {
+        LinkedHashMap<TopicIdPartition, Long> offsets = new LinkedHashMap<>();
+        for (TopicIdPartition partition : partitions) {
+            offsets.put(partition, 0L);
+        }
+        return offsets;
+    }
+
+    private static LinkedHashMap<TopicIdPartition, Integer> maxBytes(TopicIdPartition... partitions) {
+        LinkedHashMap<TopicIdPartition, Integer> maxBytes = new LinkedHashMap<>();
+        for (TopicIdPartition partition : partitions) {
+            maxBytes.put(partition, 1024);
+        }
+        return maxBytes;
     }
 
     @Test
@@ -204,5 +246,160 @@ public class ReplicaManagerLogReaderTest {
         assertTrue(future.isCompletedExceptionally());
         ExecutionException exception = assertThrows(ExecutionException.class, () -> future.get(10, TimeUnit.SECONDS));
         assertSame(rejected, exception.getCause());
+    }
+
+    @Test
+    public void testReadAsyncReturnsEmptyWhenNoPartitionsToFetch() {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> result =
+            logReader.readAsync(fetchParams(), Set.of(), new LinkedHashMap<>(), new LinkedHashMap<>(), true);
+
+        assertTrue(result.isEmpty());
+        verify(replicaManager, never()).readFromLog(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    public void testReadAsyncReturnsLocalDataWhenNotTiered() throws Exception {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        FetchDataInfo localData = localData();
+        stubReadFromLog(replicaManager,
+            List.of(new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(localData, Errors.NONE))));
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> result =
+            logReader.readAsync(fetchParams(), Set.of(TOPIC_ID_PARTITION),
+                offsets(TOPIC_ID_PARTITION), maxBytes(TOPIC_ID_PARTITION), true);
+
+        assertEquals(Set.of(TOPIC_ID_PARTITION), result.keySet());
+        LogReader.AsyncReadResult asyncReadResult = result.get(TOPIC_ID_PARTITION).get(10, TimeUnit.SECONDS);
+        assertSame(localData, asyncReadResult.fetchDataInfo());
+        assertEquals(Errors.NONE, asyncReadResult.error());
+        // Local data, so no remote read should have been attempted.
+        verify(replicaManager, never()).remoteLogManager();
+    }
+
+    @Test
+    public void testReadAsyncFollowsRemoteWhenTieredAndReadRemoteTrue() throws Exception {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
+        when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
+
+        RemoteStorageFetchInfo remoteStorageFetchInfo = remoteStorageFetchInfo();
+        stubReadFromLog(replicaManager,
+            List.of(new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(tieredData(remoteStorageFetchInfo), Errors.NONE))));
+
+        FetchDataInfo remoteData = new FetchDataInfo(new LogOffsetMetadata(0L), MemoryRecords.EMPTY);
+        doAnswer(invocation -> {
+            Consumer<RemoteLogReadResult> callback = invocation.getArgument(1);
+            callback.accept(new RemoteLogReadResult(Optional.of(remoteData), Optional.empty()));
+            return null;
+        }).when(remoteLogManager).asyncRead(eq(remoteStorageFetchInfo), any());
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> result =
+            logReader.readAsync(fetchParams(), Set.of(TOPIC_ID_PARTITION),
+                offsets(TOPIC_ID_PARTITION), maxBytes(TOPIC_ID_PARTITION), true);
+
+        LogReader.AsyncReadResult asyncReadResult = result.get(TOPIC_ID_PARTITION).get(10, TimeUnit.SECONDS);
+        assertSame(remoteData, asyncReadResult.fetchDataInfo());
+        assertEquals(Errors.NONE, asyncReadResult.error());
+        verify(remoteLogManager).asyncRead(eq(remoteStorageFetchInfo), any());
+    }
+
+    @Test
+    public void testReadAsyncSkipsRemoteWhenReadRemoteFalse() throws Exception {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        FetchDataInfo tieredData = tieredData(remoteStorageFetchInfo());
+        stubReadFromLog(replicaManager,
+            List.of(new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(tieredData, Errors.NONE))));
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> result =
+            logReader.readAsync(fetchParams(), Set.of(TOPIC_ID_PARTITION),
+                offsets(TOPIC_ID_PARTITION), maxBytes(TOPIC_ID_PARTITION), false);
+
+        LogReader.AsyncReadResult asyncReadResult = result.get(TOPIC_ID_PARTITION).get(10, TimeUnit.SECONDS);
+        // Tiered data is skipped (local read returned as-is), and the remote tier is never consulted.
+        assertSame(tieredData, asyncReadResult.fetchDataInfo());
+        assertEquals(Errors.NONE, asyncReadResult.error());
+        verify(replicaManager, never()).remoteLogManager();
+    }
+
+    @Test
+    public void testReadAsyncReturnsErrorFromLocalRead() throws Exception {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        FetchDataInfo localData = localData();
+        stubReadFromLog(replicaManager,
+            List.of(new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(localData, Errors.UNKNOWN_SERVER_ERROR))));
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> result =
+            logReader.readAsync(fetchParams(), Set.of(TOPIC_ID_PARTITION),
+                offsets(TOPIC_ID_PARTITION), maxBytes(TOPIC_ID_PARTITION), true);
+
+        LogReader.AsyncReadResult asyncReadResult = result.get(TOPIC_ID_PARTITION).get(10, TimeUnit.SECONDS);
+        assertSame(localData, asyncReadResult.fetchDataInfo());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR, asyncReadResult.error());
+        verify(replicaManager, never()).remoteLogManager();
+    }
+
+    @Test
+    public void testReadAsyncReturnsErrorWhenRemoteReadFails() throws Exception {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
+        when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
+
+        FetchDataInfo tieredData = tieredData(remoteStorageFetchInfo());
+        stubReadFromLog(replicaManager,
+            List.of(new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(tieredData, Errors.NONE))));
+
+        doAnswer(invocation -> {
+            Consumer<RemoteLogReadResult> callback = invocation.getArgument(1);
+            callback.accept(new RemoteLogReadResult(Optional.empty(), Optional.of(new RuntimeException("remote read failed"))));
+            return null;
+        }).when(remoteLogManager).asyncRead(any(), any());
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> result =
+            logReader.readAsync(fetchParams(), Set.of(TOPIC_ID_PARTITION),
+                offsets(TOPIC_ID_PARTITION), maxBytes(TOPIC_ID_PARTITION), true);
+
+        LogReader.AsyncReadResult asyncReadResult = result.get(TOPIC_ID_PARTITION).get(10, TimeUnit.SECONDS);
+        // Partial-data tolerant: the read completes (does not throw) with the local info and the error.
+        assertSame(tieredData, asyncReadResult.fetchDataInfo());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR, asyncReadResult.error());
+    }
+
+    @Test
+    public void testReadAsyncResolvesPartitionsIndependently() throws Exception {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        RemoteLogManager remoteLogManager = mock(RemoteLogManager.class);
+        when(replicaManager.remoteLogManager()).thenReturn(Option.apply(remoteLogManager));
+
+        // Partition 1 is tiered (resolved from remote), partition 2 is available locally.
+        RemoteStorageFetchInfo remoteStorageFetchInfo = remoteStorageFetchInfo();
+        FetchDataInfo localData = localData();
+        stubReadFromLog(replicaManager, List.of(
+            new Tuple2<>(TOPIC_ID_PARTITION, localReadResult(tieredData(remoteStorageFetchInfo), Errors.NONE)),
+            new Tuple2<>(TOPIC_ID_PARTITION_2, localReadResult(localData, Errors.NONE))));
+
+        FetchDataInfo remoteData = new FetchDataInfo(new LogOffsetMetadata(0L), MemoryRecords.EMPTY);
+        doAnswer(invocation -> {
+            Consumer<RemoteLogReadResult> callback = invocation.getArgument(1);
+            callback.accept(new RemoteLogReadResult(Optional.of(remoteData), Optional.empty()));
+            return null;
+        }).when(remoteLogManager).asyncRead(eq(remoteStorageFetchInfo), any());
+
+        ReplicaManagerLogReader logReader = new ReplicaManagerLogReader(replicaManager);
+        Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> result =
+            logReader.readAsync(fetchParams(), Set.of(TOPIC_ID_PARTITION, TOPIC_ID_PARTITION_2),
+                offsets(TOPIC_ID_PARTITION, TOPIC_ID_PARTITION_2),
+                maxBytes(TOPIC_ID_PARTITION, TOPIC_ID_PARTITION_2), true);
+
+        assertEquals(Set.of(TOPIC_ID_PARTITION, TOPIC_ID_PARTITION_2), result.keySet());
+        assertSame(remoteData, result.get(TOPIC_ID_PARTITION).get(10, TimeUnit.SECONDS).fetchDataInfo());
+        assertSame(localData, result.get(TOPIC_ID_PARTITION_2).get(10, TimeUnit.SECONDS).fetchDataInfo());
     }
 }

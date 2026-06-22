@@ -34,7 +34,6 @@ import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
-import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
@@ -42,15 +41,12 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper.TopicPartitionData;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
-import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
-import org.apache.kafka.storage.internals.log.LogReadResult;
-import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -92,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -1466,6 +1463,28 @@ class ShareGroupDLQStateManagerTest {
 
     // --- DLQ record with copy record enabled ---
 
+    private static FetchDataInfo recordsInfo(SimpleRecord... records) {
+        return new FetchDataInfo(null, MemoryRecords.withRecords(Compression.NONE, records));
+    }
+
+    private static Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> asyncReadMap(
+            TopicIdPartition topicIdPartition, LogReader.AsyncReadResult result) {
+        LinkedHashMap<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> map = new LinkedHashMap<>();
+        map.put(topicIdPartition, CompletableFuture.completedFuture(result));
+        return map;
+    }
+
+    // Stubs logReader.readAsync to return, in order, the given per-call results for the partition,
+    // each wrapped in an already-complete future.
+    private static void whenReadAsync(LogReader logReader, TopicIdPartition topicIdPartition,
+                                      LogReader.AsyncReadResult first, LogReader.AsyncReadResult... rest) {
+        var stub = when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean()))
+            .thenReturn(asyncReadMap(topicIdPartition, first));
+        for (LogReader.AsyncReadResult result : rest) {
+            stub = stub.thenReturn(asyncReadMap(topicIdPartition, result));
+        }
+    }
+
     @Test
     public void testDLQRecordCopyEnabled() throws Exception {
         MockClient client = new MockClient(MOCK_TIME);
@@ -1490,21 +1509,10 @@ class ShareGroupDLQStateManagerTest {
         byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
         byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
         LogReader logReader = mock(LogReader.class);
-        LogReadResult readResult = mock(LogReadResult.class);
-        when(readResult.error()).thenReturn(Errors.NONE);
-        when(readResult.info()).thenReturn(new FetchDataInfo(
-            null,
-            MemoryRecords.withRecords(
-                Compression.NONE,
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
-            )
-        ));
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
-        readResultMap.put(param.topicIdPartition(), readResult);
-        when(logReader.read(any(), anySet(), any(), any()))
-            .thenReturn(readResultMap);
+        whenReadAsync(logReader, param.topicIdPartition(), new LogReader.AsyncReadResult(recordsInfo(
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)), Errors.NONE));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1535,22 +1543,13 @@ class ShareGroupDLQStateManagerTest {
             new SystemTimer("shareGroupDLQTestTimer"));
         try {
             // param() spans offsets 0..2, so return all three records in a single read; one
-            // resolution then maps to exactly one logReader.read() call.
+            // resolution then maps to exactly one logReader.readAsync() call.
             ShareGroupDLQRecordParameter param = param();
             LogReader logReader = mock(LogReader.class);
-            LogReadResult readResult = mock(LogReadResult.class);
-            when(readResult.error()).thenReturn(Errors.NONE);
-            when(readResult.info()).thenReturn(new FetchDataInfo(
-                null,
-                MemoryRecords.withRecords(
-                    Compression.NONE,
-                    new SimpleRecord(MOCK_TIME.milliseconds(), "key0".getBytes(StandardCharsets.UTF_8), "value0".getBytes(StandardCharsets.UTF_8)),
-                    new SimpleRecord(MOCK_TIME.milliseconds(), "key1".getBytes(StandardCharsets.UTF_8), "value1".getBytes(StandardCharsets.UTF_8)),
-                    new SimpleRecord(MOCK_TIME.milliseconds(), "key2".getBytes(StandardCharsets.UTF_8), "value2".getBytes(StandardCharsets.UTF_8)))
-            ));
-            LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
-            readResultMap.put(param.topicIdPartition(), readResult);
-            when(logReader.read(any(), anySet(), any(), any())).thenReturn(readResultMap);
+            whenReadAsync(logReader, param.topicIdPartition(), new LogReader.AsyncReadResult(recordsInfo(
+                new SimpleRecord(MOCK_TIME.milliseconds(), "key0".getBytes(StandardCharsets.UTF_8), "value0".getBytes(StandardCharsets.UTF_8)),
+                new SimpleRecord(MOCK_TIME.milliseconds(), "key1".getBytes(StandardCharsets.UTF_8), "value1".getBytes(StandardCharsets.UTF_8)),
+                new SimpleRecord(MOCK_TIME.milliseconds(), "key2".getBytes(StandardCharsets.UTF_8), "value2".getBytes(StandardCharsets.UTF_8))), Errors.NONE));
 
             ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
             when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1572,7 +1571,7 @@ class ShareGroupDLQStateManagerTest {
 
             // Records are resolved once, before enqueue, and the memoized result is reused on every
             // (re)send. So despite three produce attempts the source log is read exactly once.
-            verify(logReader, times(1)).read(any(), anySet(), any(), any());
+            verify(logReader, times(1)).readAsync(any(), anySet(), any(), any(), anyBoolean());
             verify(mockMetrics, times(maxAttempts)).recordDLQProduce(GROUP_ID);
             verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
             verify(mockMetrics, never()).recordDLQProduceFailed(any());
@@ -1644,37 +1643,15 @@ class ShareGroupDLQStateManagerTest {
         byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
         byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
         LogReader logReader = mock(LogReader.class);
-        LogReadResult readResult1 = mock(LogReadResult.class);
-        when(readResult1.error()).thenReturn(Errors.NONE);
-        // Return 2 records only
-        when(readResult1.info()).thenReturn(new FetchDataInfo(
-            null,
-            MemoryRecords.withRecords(
-                Compression.NONE,
+        // First read returns 2 records; the next read contains the 3rd offset as well.
+        whenReadAsync(logReader, param.topicIdPartition(),
+            new LogReader.AsyncReadResult(recordsInfo(
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)
-            )
-        ));
-        LogReadResult readResult2 = mock(LogReadResult.class);
-        when(readResult2.error()).thenReturn(Errors.NONE);
-        // Next read contains the 3rd offset as well
-        when(readResult2.info()).thenReturn(new FetchDataInfo(
-            null,
-            MemoryRecords.withRecords(
-                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)), Errors.NONE),
+            new LogReader.AsyncReadResult(recordsInfo(
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
-            )
-        ));
-
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap1 = new LinkedHashMap<>();
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap2 = new LinkedHashMap<>();
-        readResultMap1.put(param.topicIdPartition(), readResult1);
-        readResultMap2.put(param.topicIdPartition(), readResult2);
-        when(logReader.read(any(), anySet(), any(), any()))
-            .thenReturn(readResultMap1)
-            .thenReturn(readResultMap2);
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)), Errors.NONE));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1719,21 +1696,11 @@ class ShareGroupDLQStateManagerTest {
         byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
         byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
         LogReader logReader = mock(LogReader.class);
-        LogReadResult readResult = mock(LogReadResult.class);
-        when(readResult.error()).thenReturn(Errors.NONE);
-        // Return 2 records only
-        when(readResult.info()).thenReturn(new FetchDataInfo(
-            null,
-            MemoryRecords.withRecords(
-                Compression.NONE,
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)
-            )
-        ));
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
-        readResultMap.put(param.topicIdPartition(), readResult);
-        when(logReader.read(any(), anySet(), any(), any()))
-            .thenReturn(readResultMap);
+        // Every read returns only 2 records (offsets 0 and 1); the 3rd offset is never read, so the
+        // loop makes no further progress and the record is produced with headers only.
+        whenReadAsync(logReader, param.topicIdPartition(), new LogReader.AsyncReadResult(recordsInfo(
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)), Errors.NONE));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1774,12 +1741,9 @@ class ShareGroupDLQStateManagerTest {
 
         ShareGroupDLQRecordParameter param = param();
         LogReader logReader = mock(LogReader.class);
-        LogReadResult readResult = mock(LogReadResult.class);
-        when(readResult.error()).thenReturn(Errors.UNKNOWN_SERVER_ERROR);
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
-        readResultMap.put(param.topicIdPartition(), readResult);
-        when(logReader.read(any(), anySet(), any(), any()))
-            .thenReturn(readResultMap);
+        // The read fails; record copy is skipped and the DLQ record is produced with headers only.
+        whenReadAsync(logReader, param.topicIdPartition(),
+            new LogReader.AsyncReadResult(recordsInfo(), Errors.UNKNOWN_SERVER_ERROR));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1821,24 +1785,11 @@ class ShareGroupDLQStateManagerTest {
         byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
 
         LogReader logReader = mock(LogReader.class);
-        // The local read indicates that the data has been tiered off to remote storage.
-        LogReadResult readResult = mock(LogReadResult.class);
-        when(readResult.error()).thenReturn(Errors.NONE);
-        when(readResult.info()).thenReturn(remoteFetchDataInfo(param.topicIdPartition()));
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
-        readResultMap.put(param.topicIdPartition(), readResult);
-        when(logReader.read(any(), anySet(), any(), any())).thenReturn(readResultMap);
-
-        // The remote read returns all the requested records.
-        when(logReader.readRemote(any())).thenReturn(CompletableFuture.completedFuture(new FetchDataInfo(
-            null,
-            MemoryRecords.withRecords(
-                Compression.NONE,
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
-            )
-        )));
+        // readAsync resolves the (possibly tiered) records and returns them in a single read.
+        whenReadAsync(logReader, param.topicIdPartition(), new LogReader.AsyncReadResult(recordsInfo(
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+            new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)), Errors.NONE));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1856,7 +1807,6 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
             ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
         ));
-        verify(logReader).readRemote(any());
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
@@ -1881,41 +1831,15 @@ class ShareGroupDLQStateManagerTest {
         byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
 
         LogReader logReader = mock(LogReader.class);
-        // First local read returns offset 0 locally; the next read (for offset 1) indicates the
-        // remaining data has been tiered off to remote storage.
-        LogReadResult localResult = mock(LogReadResult.class);
-        when(localResult.error()).thenReturn(Errors.NONE);
-        when(localResult.info()).thenReturn(new FetchDataInfo(
-            null,
-            MemoryRecords.withRecords(
-                Compression.NONE,
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1)
-            )
-        ));
-        LogReadResult remoteResult = mock(LogReadResult.class);
-        when(remoteResult.error()).thenReturn(Errors.NONE);
-        when(remoteResult.info()).thenReturn(remoteFetchDataInfo(param.topicIdPartition()));
-
-        LinkedHashMap<TopicIdPartition, LogReadResult> localMap = new LinkedHashMap<>();
-        localMap.put(param.topicIdPartition(), localResult);
-        LinkedHashMap<TopicIdPartition, LogReadResult> remoteMap = new LinkedHashMap<>();
-        remoteMap.put(param.topicIdPartition(), remoteResult);
-        when(logReader.read(any(), anySet(), any(), any()))
-            .thenReturn(localMap)
-            .thenReturn(remoteMap);
-
-        // The remote read returns the batch covering the requested offset; it starts at base offset 0
-        // so records at or before the already-read position (offset 0) are skipped by the caller, and
-        // only the tiered offsets (1 and 2) are collected.
-        when(logReader.readRemote(any())).thenReturn(CompletableFuture.completedFuture(new FetchDataInfo(
-            null,
-            MemoryRecords.withRecords(
-                Compression.NONE,
+        // First read returns offset 0; the next read returns the batch covering the remaining offsets
+        // (records at or before the already-read position are skipped by the fetcher).
+        whenReadAsync(logReader, param.topicIdPartition(),
+            new LogReader.AsyncReadResult(recordsInfo(
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1)), Errors.NONE),
+            new LogReader.AsyncReadResult(recordsInfo(
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
-                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
-            )
-        )));
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)), Errors.NONE));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1933,7 +1857,6 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
             ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
         ));
-        verify(logReader).readRemote(any());
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
@@ -1951,18 +1874,10 @@ class ShareGroupDLQStateManagerTest {
 
         ShareGroupDLQRecordParameter param = param();
         LogReader logReader = mock(LogReader.class);
-        // The local read indicates the data is in remote storage.
-        LogReadResult readResult = mock(LogReadResult.class);
-        when(readResult.error()).thenReturn(Errors.NONE);
-        when(readResult.info()).thenReturn(remoteFetchDataInfo(param.topicIdPartition()));
-        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
-        readResultMap.put(param.topicIdPartition(), readResult);
-        when(logReader.read(any(), anySet(), any(), any())).thenReturn(readResultMap);
-
-        // The remote read fails (e.g. remote storage not configured or segment unavailable). The
-        // offsets are gracefully skipped and the DLQ record is produced with headers only.
-        when(logReader.readRemote(any())).thenReturn(CompletableFuture.failedFuture(
-            new IllegalStateException("remote log manager not configured")));
+        // readAsync cannot read the (tiered) data; the offsets are gracefully skipped and the DLQ
+        // record is produced with headers only.
+        whenReadAsync(logReader, param.topicIdPartition(),
+            new LogReader.AsyncReadResult(recordsInfo(), Errors.UNKNOWN_SERVER_ERROR));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1980,24 +1895,9 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
             ), List.of(), List.of())
         ));
-        verify(logReader).readRemote(any());
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
         verify(mockMetrics, never()).recordDLQProduceFailed(any());
-    }
-
-    // Builds a FetchDataInfo that mimics a local read whose requested offset has been tiered off the
-    // local log: empty local records plus a remote fetch descriptor that triggers a remote read.
-    private static FetchDataInfo remoteFetchDataInfo(TopicIdPartition topicIdPartition) {
-        int maxBytes = 1024 * 1024;
-        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(
-            maxBytes,
-            true,
-            topicIdPartition,
-            new FetchRequest.PartitionData(topicIdPartition.topicId(), 0L, 0L, maxBytes, Optional.empty()),
-            FetchIsolation.HIGH_WATERMARK
-        );
-        return new FetchDataInfo(null, MemoryRecords.EMPTY, false, Optional.empty(), Optional.of(remoteStorageFetchInfo));
     }
 
     private static MockClient.RequestMatcher captureProduce(List<ProduceRequest> capturedProduces) {

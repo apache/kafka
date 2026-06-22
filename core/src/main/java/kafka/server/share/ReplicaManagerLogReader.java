@@ -20,6 +20,7 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.share.LogReader;
@@ -32,9 +33,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -98,8 +101,13 @@ public class ReplicaManagerLogReader implements LogReader {
         return responseData;
     }
 
-    @Override
-    public CompletableFuture<FetchDataInfo> readRemote(RemoteStorageFetchInfo remoteStorageFetchInfo) {
+    // Reads asynchronously from the remote tier for an offset tiered off the local log. The
+    // RemoteStorageFetchInfo is the descriptor surfaced by a prior local read as
+    // FetchDataInfo#delayedRemoteStorageFetch. The read runs on the remote storage reader pool so the
+    // caller's thread is not blocked; the future completes exceptionally when remote storage is not
+    // configured or the read could not be completed. Used internally by readAsync (package-private so
+    // it remains unit-testable).
+    CompletableFuture<FetchDataInfo> readRemote(RemoteStorageFetchInfo remoteStorageFetchInfo) {
         CompletableFuture<FetchDataInfo> future = new CompletableFuture<>();
 
         Optional<RemoteLogManager> remoteLogManager = OptionConverters.toJava(replicaManager.remoteLogManager());
@@ -129,5 +137,61 @@ public class ReplicaManagerLogReader implements LogReader {
         }
 
         return future;
+    }
+
+    @Override
+    public Map<TopicIdPartition, CompletableFuture<AsyncReadResult>> readAsync(
+            FetchParams fetchParams,
+            Set<TopicIdPartition> partitionsToFetch,
+            LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
+            LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
+            boolean readRemote) {
+
+        LinkedHashMap<TopicIdPartition, CompletableFuture<AsyncReadResult>> result = new LinkedHashMap<>();
+        if (partitionsToFetch.isEmpty()) {
+            return result;
+        }
+
+        // Perform the local read for all partitions once; remote follow-ups (if any) are issued per partition.
+        LinkedHashMap<TopicIdPartition, LogReadResult> localReadResults =
+            read(fetchParams, partitionsToFetch, topicPartitionFetchOffsets, partitionMaxBytes);
+
+        for (TopicIdPartition topicIdPartition : partitionsToFetch) {
+            LogReadResult logReadResult = localReadResults.get(topicIdPartition);
+            if (logReadResult == null) {
+                result.put(topicIdPartition, CompletableFuture.completedFuture(new AsyncReadResult(
+                    FetchDataInfo.empty(topicPartitionFetchOffsets.getOrDefault(topicIdPartition, 0L)),
+                    Errors.UNKNOWN_SERVER_ERROR)));
+                continue;
+            }
+
+            FetchDataInfo localFetchDataInfo = logReadResult.info();
+            Errors error = logReadResult.error();
+            Optional<RemoteStorageFetchInfo> remoteStorageFetchInfo = localFetchDataInfo.delayedRemoteStorageFetch;
+
+            // Return the local read directly when it carries data, when it failed, or when the data is tiered
+            // but the caller does not want remote reads (those offsets are simply skipped).
+            if (error != Errors.NONE || remoteStorageFetchInfo.isEmpty() || !readRemote) {
+                result.put(topicIdPartition, CompletableFuture.completedFuture(
+                    new AsyncReadResult(localFetchDataInfo, error)));
+                continue;
+            }
+
+            // Tiered data - follow it to the remote tier asynchronously.
+            result.put(topicIdPartition, readRemote(remoteStorageFetchInfo.get()).handle((remoteFetchDataInfo, exception) -> {
+                if (exception != null) {
+                    Throwable cause = exception instanceof CompletionException && exception.getCause() != null
+                        ? exception.getCause() : exception;
+                    log.warn("Unable to read partition {} from remote storage.", topicIdPartition, cause);
+                    return new AsyncReadResult(localFetchDataInfo, Errors.forException(cause));
+                }
+                if (remoteFetchDataInfo == null) {
+                    return new AsyncReadResult(localFetchDataInfo, Errors.UNKNOWN_SERVER_ERROR);
+                }
+                return new AsyncReadResult(remoteFetchDataInfo, Errors.NONE);
+            }));
+        }
+
+        return result;
     }
 }

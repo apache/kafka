@@ -17,12 +17,13 @@
 package org.apache.kafka.server.share;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogReadResult;
-import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -47,19 +48,42 @@ public interface LogReader {
         LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes);
 
     /**
-     * Read records asynchronously from the remote tier for an offset that has been tiered off the
-     * local log. The {@link RemoteStorageFetchInfo} is the descriptor surfaced by
-     * {@link LogReadResult#info()} as {@link FetchDataInfo#delayedRemoteStorageFetch} when a
-     * preceding {@link #read} determined that the requested data resides in remote storage.
+     * The outcome of an asynchronous read for a single partition. Partial-data tolerant: {@code fetchDataInfo}
+     * holds whatever data could be read (its {@link FetchDataInfo#records}), and {@code error} is
+     * {@link Errors#NONE} on success or the failure reason otherwise.
      *
-     * <p>The read is performed off-thread (on the remote storage reader pool) so that the caller's
-     * thread is not blocked on remote storage IO. It is intended for low volume, best-effort reads.
-     * The returned future completes exceptionally when remote storage is not configured on the broker
-     * or the read could not be completed, allowing callers to gracefully skip the data instead of failing.
-     *
-     * @param remoteStorageFetchInfo The remote fetch descriptor obtained from a prior local read.
-     * @return A future that completes with the fetched data, or completes exceptionally if it could
-     *         not be read remotely.
+     * @param fetchDataInfo The data read for the partition.
+     * @param error         {@link Errors#NONE} on success, otherwise the read failure.
      */
-    CompletableFuture<FetchDataInfo> readRemote(RemoteStorageFetchInfo remoteStorageFetchInfo);
+    record AsyncReadResult(FetchDataInfo fetchDataInfo, Errors error) {
+    }
+
+    /**
+     * Read records for the given partitions starting at the specified offsets, combining the local read
+     * and - when {@code readRemote} is true and the requested data has been tiered off the local log - the
+     * follow-up remote read into a single call.
+     *
+     * <p>This is the asynchronous, remote-aware counterpart to {@link #read}: it returns one future per
+     * requested partition. Partitions whose data is available locally (or whose local read failed) complete
+     * immediately; partitions whose data is in remote storage complete later, once the remote read finishes
+     * on the remote storage reader pool, so the caller's thread is never blocked on remote IO. When
+     * {@code readRemote} is false, tiered offsets are simply omitted from the result rather than fetched.
+     *
+     * <p>Each per-partition result is partial-data tolerant (see {@link AsyncReadResult}); the read never
+     * fails as a whole, allowing callers to use whatever records were retrieved and skip the rest.
+     *
+     * @param fetchParams                The fetch parameters (isolation level, maxBytes, etc.)
+     * @param partitionsToFetch          The set of partitions to fetch
+     * @param topicPartitionFetchOffsets The fetch offset per partition
+     * @param partitionMaxBytes          The max bytes per partition
+     * @param readRemote                 Whether to follow tiered offsets to the remote tier; when false,
+     *                                   tiered offsets are skipped.
+     * @return A map from partition to a future of that partition's {@link AsyncReadResult}.
+     */
+    Map<TopicIdPartition, CompletableFuture<AsyncReadResult>> readAsync(
+        FetchParams fetchParams,
+        Set<TopicIdPartition> partitionsToFetch,
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionFetchOffsets,
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
+        boolean readRemote);
 }
