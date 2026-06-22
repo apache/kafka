@@ -921,7 +921,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = buildService(runtime, Optional.empty(), true);
 
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         verify(runtime, never()).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
         verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
@@ -941,7 +941,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(null));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         verify(plugin, times(1)).deleteTopology("foo");
         verify(runtime, times(1)).scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any());
@@ -959,7 +959,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         verify(plugin, times(1)).deleteTopology("foo");
         verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
@@ -986,7 +986,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // the cycle wiped the entry the heartbeat would arm freshly and set the flag; if the
         // entry survived the heartbeat sees an active window and the flag stays unset.
         service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
             "failed cycle must not clear the back-off entry");
@@ -1008,7 +1008,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
             "successful cycle must clear the back-off so a fresh solicitation can arm");
@@ -1023,7 +1023,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(List.of(CompletableFuture.completedFuture(Map.of())));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         verify(plugin, never()).deleteTopology(anyString());
         verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
@@ -1039,8 +1039,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(List.of(new CompletableFuture<>()));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.runStreamsGroupTopologyCleanupCycle();
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         verify(runtime, times(1)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
@@ -1064,14 +1064,14 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(parkedClearWrite);
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
         // Plugin call resolved synchronously but clear-write is parked — second cycle skipped.
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
         verify(runtime, times(1)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
 
         // Settle the clear-write: flag should now release, next cycle scans afresh.
         parkedClearWrite.complete(null);
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
         verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
 
@@ -1085,9 +1085,10 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         // First tick throws — the cycle must still release the flag so a subsequent tick runs.
-        assertThrows(RuntimeException.class, service::runStreamsGroupTopologyCleanupCycle);
+        assertThrows(RuntimeException.class,
+            () -> service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime));
         // Second tick must reach the runtime read, confirming the flag was released.
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         verify(runtime, times(2)).scheduleReadAllOperation(
             eq("list-streams-groups-needing-topology-cleanup"), any());
@@ -1109,20 +1110,21 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(null));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
         // Same runtime, second invocation: must schedule another read (flag released).
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
 
     @Test
     public void testCleanupCycleSkipsFollowUpWorkOncePastShutdown() throws Exception {
-        // TimerTask.cancel() does not await an in-flight cycle, so a
-        // cycle that has already passed the CAS when shutdown fires would otherwise run
-        // plugin.deleteTopology and follow-up scheduleWriteOperation against a manager and
-        // runtime that are about to close. The per-partition handle now checks isActive
-        // before dispatching the plugin call; this locks that behavior.
+        // TimerTask.cancel() does not await an in-flight cycle, so a cycle that has already
+        // passed the CAS when shutdown fires would otherwise run plugin.deleteTopology and
+        // follow-up scheduleWriteOperation against a manager and runtime that are about to
+        // close. The per-partition handle inside the manager's cycle now checks the
+        // manager's running flag before dispatching the plugin call; this locks that
+        // behavior.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         CompletableFuture<Map<String, Integer>> parkedRead = new CompletableFuture<>();
@@ -1131,11 +1133,12 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         // Cycle dispatched, parked on the per-partition read.
-        service.runStreamsGroupTopologyCleanupCycle();
-        // Shutdown flips isActive false (and closes the mocked runtime / manager; mocks
-        // remain callable for verification).
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        // service.shutdown() closes the manager which flips its running flag false and
+        // cancels the scheduled task (and closes the mocked runtime; mocks remain callable
+        // for verification).
         service.shutdown();
-        // Now resolve the read: the handle runs under isActive==false and must skip the
+        // Now resolve the read: the handle runs under running==false and must skip the
         // plugin dispatch + the conditional clear writes that would have followed.
         parkedRead.complete(Map.of("foo", 4));
 
@@ -1145,12 +1148,13 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
     @Test
     public void testShutdownCancelsScheduledCleanupTask() throws Exception {
-        // startup() with a plugin configured schedules the periodic cleanup tick; shutdown()
-        // must cancel that snapshot so the timer queue does not retain a self-rescheduling
-        // task referencing a torn-down runtime. MockTimer.size() filters cancelled entries,
-        // so observing 1 → 0 confirms the cancel() landed; advancing the clock past the
-        // interval afterwards must not fire the task — both the queue-skip on cancellation
-        // and the TimerTask body's isActive==false defensive return guard against it.
+        // startup() with a plugin configured arms the manager's periodic cleanup tick;
+        // shutdown() must close the manager so the timer queue does not retain a
+        // self-rescheduling task referencing a torn-down runtime. MockTimer.size() filters
+        // cancelled entries, so observing 1 → 0 confirms manager.close()'s cancel() landed;
+        // advancing the clock past the interval afterwards must not fire the task — both
+        // the queue-skip on cancellation and the TimerTask body's running==false defensive
+        // return guard against it.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         MockTimer timer = new MockTimer();
@@ -1169,9 +1173,9 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
     @Test
     public void testShutdownSafeWhenNoCleanupTaskScheduled() {
-        // Plugin absent => startup() short-circuits before scheduling a tick, so the
-        // cleanupTask field stays null. shutdown() must tolerate the null snapshot without
-        // throwing — broker close paths must not propagate.
+        // Plugin absent => manager.startCleanupCycle short-circuits before scheduling a tick,
+        // so the scheduledTask field stays null. shutdown() must tolerate the null snapshot
+        // without throwing — broker close paths must not propagate.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         MockTimer timer = new MockTimer();
         GroupCoordinatorService service = buildService(runtime, Optional.empty(), true, timer);
@@ -1192,8 +1196,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(List.of());
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.runStreamsGroupTopologyCleanupCycle();
-        service.runStreamsGroupTopologyCleanupCycle();
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
 
         verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
