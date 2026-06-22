@@ -365,7 +365,7 @@ public class StreamsRebalanceData {
         this.rackId = Objects.requireNonNull(rackId, "Rack ID cannot be null");
         this.subtopologies = Map.copyOf(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null"));
         this.clientTags = Map.copyOf(Objects.requireNonNull(clientTags, "Client tags cannot be null"));
-        this.taskOffsetSum = Objects.requireNonNull(taskOffsetSum, "TaskOffsetSum cannot be null");
+        this.taskOffsetSum = Objects.requireNonNull(taskOffsetSum, "Task offset sum supplier cannot be null");
     }
 
     public UUID processId() {

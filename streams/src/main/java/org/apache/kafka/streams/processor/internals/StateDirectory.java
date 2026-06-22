@@ -311,7 +311,7 @@ public class StateDirectory implements AutoCloseable {
     }
 
     public Map<TaskId, Long> taskOffsetSums() {
-        return taskOffsetSums;
+        return Collections.unmodifiableMap(taskOffsetSums);
     }
 
     public void updateTaskOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
