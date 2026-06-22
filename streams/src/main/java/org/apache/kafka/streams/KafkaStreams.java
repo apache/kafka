@@ -1715,6 +1715,15 @@ public class KafkaStreams implements AutoCloseable {
      * instance is {@link #close() closed}.
      * <p>
      * Calling this method triggers a restore of local {@link StateStore}s on the next {@link #start() application start}.
+     * <p>
+     * As a final step, this method attempts to delete the application's state directory.
+     * If only expected metadata files remain, such as {@code kafka-streams-process-metadata}
+     * and/or {@code .lock}, the directory itself may be retained. This is not considered
+     * a cleanup failure.
+     * 
+     * <p>
+     * If a full local reset is required, including removal of persisted process metadata,
+     * manually delete the application's state directory after this instance has been closed.
      *
      * @throws IllegalStateException if this {@code KafkaStreams} instance has been started and hasn't fully shut down
      * @throws StreamsException if cleanup failed
