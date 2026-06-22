@@ -56,7 +56,6 @@ public class TxnMarkerQueue {
 
     public void addMarkers(int txnTopicPartition, PendingCompleteTxnAndMarkerEntry pendingCompleteTxnAndMarker) {
         BlockingQueue<PendingCompleteTxnAndMarkerEntry> queue = markersPerTxnTopicPartition.computeIfAbsent(txnTopicPartition, partition -> {
-            // Note that this may get called more than once if threads have a close race while adding new queue.
             LOG.info("Creating new marker queue for txn partition {} to destination broker {}", txnTopicPartition, destination.id());
             return new LinkedBlockingQueue<>();
         });
