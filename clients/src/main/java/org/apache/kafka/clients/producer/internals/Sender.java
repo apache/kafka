@@ -309,6 +309,14 @@ public class Sender implements Runnable {
      *
      */
     void runOnce() {
+        try {
+            runOnceInternal();
+        } catch (BootstrapResolutionException e) {
+            metadata.fatalErrorAndNotify(e);
+        }
+    }
+
+    private void runOnceInternal() {
         if (transactionManager != null) {
             try {
                 transactionManager.maybeResolveSequences();
@@ -343,11 +351,7 @@ public class Sender implements Runnable {
 
         long currentTimeMs = time.milliseconds();
         long pollTimeout = sendProducerData(currentTimeMs);
-        try {
-            client.poll(pollTimeout, currentTimeMs);
-        } catch (BootstrapResolutionException e) {
-            metadata.fatalError(e);
-        }
+        client.poll(pollTimeout, currentTimeMs);
     }
 
     // We handle {@code TransactionalIdAuthorizationException} and {@code ClusterAuthorizationException} by first

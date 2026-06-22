@@ -684,6 +684,11 @@ public class Metadata implements Closeable {
         this.fatalException = exception;
     }
 
+    public synchronized void fatalErrorAndNotify(KafkaException exception) {
+        this.fatalException = exception;
+        notifyAll();
+    }
+
     /**
      * @return The current metadata updateVersion
      */
