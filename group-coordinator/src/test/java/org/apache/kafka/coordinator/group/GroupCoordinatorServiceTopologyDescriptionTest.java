@@ -966,6 +966,55 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testCleanupCyclePreservesBackoffOnPluginFailure() throws Exception {
+        // Unconditionally clearing the broker-wide back-off entry on
+        // a failed plugin.deleteTopology bypasses push-path ratchet for any group
+        // the cycle touches. If a member rejoins between the failing scan and the next cycle,
+        // the push-path back-off check finds no entry and re-attacks the broken plugin at
+        // attempts=0 every join. The cycle must leave the entry in place so the existing
+        // exponential window still throttles concurrent set-topology pushes.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo"))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        // Arm a back-off entry at the same currentEpoch we will probe with the heartbeat helper,
+        // then run a failing cycle. The helper's gate calls armIfNotActive at that epoch — if
+        // the cycle wiped the entry the heartbeat would arm freshly and set the flag; if the
+        // entry survived the heartbeat sees an active window and the flag stays unset.
+        service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
+        service.runStreamsGroupTopologyCleanupCycle();
+
+        assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
+            "failed cycle must not clear the back-off entry");
+    }
+
+    @Test
+    public void testCleanupCycleClearsBackoffOnPluginSuccess() throws Exception {
+        // Symmetric counterpart: a successful plugin.deleteTopology means the group is on its
+        // way to tombstone — the back-off entry is no longer load-bearing for any future state
+        // of this groupId. The cycle clears it; a subsequent re-creation of the same id is a
+        // fresh lifecycle and arms a fresh chain.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));
+        when(runtime.scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
+        when(runtime.scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(null));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
+        service.runStreamsGroupTopologyCleanupCycle();
+
+        assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
+            "successful cycle must clear the back-off so a fresh solicitation can arm");
+    }
+
+    @Test
     public void testCleanupCycleEmptyEligibility() {
         // No groups eligible -> plugin is not called and no clear write is scheduled.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();

@@ -390,6 +390,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private final StreamsGroupTopologyDescriptionManager streamsGroupTopologyDescriptionManager;
 
+    // Visible for testing.
+    StreamsGroupTopologyDescriptionManager streamsGroupTopologyDescriptionManager() {
+        return streamsGroupTopologyDescriptionManager;
+    }
+
     /**
      * The number of partitions of the __consumer_offsets topics. This is provided
      * when the component is started.
@@ -904,15 +909,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
                             recordPluginDeleteOutcome(eligible.size(), failures.size());
                             List<CompletableFuture<Void>> clearFutures = new ArrayList<>(eligible.size());
                             eligible.forEach((groupId, expectedStoredEpoch) -> {
-                                // Eligibility required the group to be empty: no member is heartbeating
-                                // anymore, so any push back-off entry is moot regardless of plugin
-                                // outcome — dropping it now avoids carrying broker-wide state forward
-                                // for an id that no live member will solicit on.
-                                streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
                                 if (failures.containsKey(groupId)) {
-                                    // Plugin failed: leave stored epoch in place; next cycle retries.
+                                    // Plugin failed: leave both stored epoch and the push-path
+                                    // back-off in place. Eligibility's "group is empty" snapshot
+                                    // only held at scan time; a member can rejoin between scan
+                                    // and now, and the existing back-off correctly throttles their
+                                    // set-topology attempt against the still-broken plugin
+                                    // instead of letting it re-attack at attempts=0 every join.
                                     return;
                                 }
+                                // Plugin succeeded; the group will be tombstoned in the next sweep
+                                // once the stored epoch is cleared. Drop the broker-wide back-off
+                                // entry — it is no longer load-bearing for any future state of
+                                // this groupId. A member that re-creates the same id afterwards
+                                // is a fresh lifecycle and will arm a fresh back-off chain.
+                                streamsGroupTopologyDescriptionManager.clearBackoffGroup(groupId);
                                 clearFutures.add(clearStoredDescriptionTopologyEpochAsync(groupId, expectedStoredEpoch));
                             });
                             return CompletableFuture.allOf(clearFutures.toArray(new CompletableFuture<?>[0]));
