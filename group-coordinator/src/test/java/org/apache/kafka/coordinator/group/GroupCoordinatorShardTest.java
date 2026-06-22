@@ -1524,11 +1524,11 @@ public class GroupCoordinatorShardTest {
     @Test
     public void testListStreamsGroupsNeedingTopologyCleanupFiltersByAllPredicates() {
         // Covers the full filter chain inside the shard's eligibility scan:
-        //   - maybeGroup == null  -> skip
-        //   - type() != STREAMS   -> skip
-        //   - !isEmpty()          -> skip (live members still on the group)
-        //   - storedEpoch == -1   -> skip (no plugin state to clean)
-        //   - !allOffsetsExpired  -> skip (offsets still in retention)
+        //   - GroupIdNotFoundException -> skip
+        //   - type() != STREAMS        -> skip
+        //   - !isEmpty()               -> skip (live members still on the group)
+        //   - storedEpoch == -1        -> skip (no plugin state to clean)
+        //   - !allOffsetsExpired       -> skip (offsets still in retention)
         //   - empty + stored != -1 + all expired -> include, value = observed storedEpoch
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
@@ -1552,13 +1552,14 @@ public class GroupCoordinatorShardTest {
         when(groupMetadataManager.groupIds(committedOffset)).thenReturn(Set.of(
             "missing", "not-streams", "non-empty", "default-stored", "unexpired-offsets", "eligible"));
 
-        // missing: maybeGroup returns null
-        when(groupMetadataManager.maybeGroup("missing", committedOffset)).thenReturn(null);
+        // missing: group() throws GroupIdNotFoundException -> skip via continue
+        doThrow(new GroupIdNotFoundException("Group missing not found."))
+            .when(groupMetadataManager).group("missing", committedOffset);
 
         // not-streams: type returns CONSUMER (anything != STREAMS)
         Group notStreams = mock(Group.class);
         when(notStreams.type()).thenReturn(Group.GroupType.CONSUMER);
-        when(groupMetadataManager.maybeGroup("not-streams", committedOffset)).thenReturn(notStreams);
+        when(groupMetadataManager.group("not-streams", committedOffset)).thenReturn(notStreams);
 
         // non-empty: STREAMS but isEmpty == false
         StreamsGroup nonEmpty = mock(StreamsGroup.class);
@@ -1571,7 +1572,7 @@ public class GroupCoordinatorShardTest {
         when(defaultStored.type()).thenReturn(Group.GroupType.STREAMS);
         when(defaultStored.isEmpty(committedOffset)).thenReturn(true);
         when(defaultStored.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(-1);
-        when(groupMetadataManager.maybeGroup("default-stored", committedOffset)).thenReturn(defaultStored);
+        when(groupMetadataManager.group("default-stored", committedOffset)).thenReturn(defaultStored);
 
         // unexpired-offsets: STREAMS, empty, storedEpoch=5, but offsets are not all expired
         StreamsGroup unexpired = mock(StreamsGroup.class);
@@ -1619,9 +1620,9 @@ public class GroupCoordinatorShardTest {
         long committedOffset = 0L;
         when(groupMetadataManager.groupIds(committedOffset)).thenReturn(Set.of("bad", "good"));
 
-        // bad: maybeGroup throws an unexpected RuntimeException mid-scan.
-        when(groupMetadataManager.maybeGroup("bad", committedOffset))
-            .thenThrow(new RuntimeException("synthetic scan failure"));
+        // bad: maybeGroup() throws an unexpected RuntimeException mid-scan.
+        doThrow(new RuntimeException("synthetic scan failure"))
+            .when(groupMetadataManager).maybeGroup("bad", committedOffset);
 
         // good: a fully eligible group.
         StreamsGroup good = mock(StreamsGroup.class);

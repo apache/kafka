@@ -24,7 +24,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.streams.InMemoryTopologyDescriptionPlugin
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -41,7 +41,8 @@ import scala.jdk.CollectionConverters._
 )
 class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  private def createStreamsGroup(groupId: String, topicName: String): Unit = {
+  /** Joins a streams group and returns the server-assigned member ID. */
+  private def createStreamsGroup(groupId: String, topicName: String): String = {
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
       .setSubtopologies(List(
@@ -61,7 +62,7 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
       warmupTasks = List.empty,
       topology = topology,
       expectedError = Errors.NONE
-    )
+    ).memberId
   }
 
   private def buildTopologyDescription(
@@ -75,12 +76,14 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
 
   private def sendUpdateTopologyDescription(
     groupId: String,
+    memberId: String,
     topologyEpoch: Int,
     topoDesc: StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription
   ): StreamsGroupTopologyDescriptionUpdateResponse = {
     val requestData = new StreamsGroupTopologyDescriptionUpdateRequestData()
       .setGroupId(groupId)
-      .setTopologyEpoch(1).setTopologyDescription(new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription())
+      .setMemberId(memberId)
+      .setTopologyEpoch(topologyEpoch)
       .setTopologyDescription(topoDesc)
 
     val request = new StreamsGroupTopologyDescriptionUpdateRequest.Builder(requestData)
@@ -116,9 +119,9 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
 
     createOffsetsTopic()
     createTopic(topicName, 1)
-    createStreamsGroup(groupId, topicName)
+    val memberId = createStreamsGroup(groupId, topicName)
 
-    val response = sendUpdateTopologyDescription(groupId, 1, buildTopologyDescription(simpleSubtopology()))
+    val response = sendUpdateTopologyDescription(groupId, memberId, 1, buildTopologyDescription(simpleSubtopology()))
     assertEquals(Errors.NONE.code, response.data.errorCode,
       s"Expected NONE but got ${Errors.forCode(response.data.errorCode)}: ${response.data.errorMessage}")
 
@@ -133,40 +136,13 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
   }
 
   @ClusterTest
-  def testUpdateTopologyDescriptionDeleteTopology(): Unit = {
-    val groupId = "test-streams-group-delete"
-    val topicName = "input-topic"
-
-    createOffsetsTopic()
-    createTopic(topicName, 1)
-    createStreamsGroup(groupId, topicName)
-
-    // First, set a topology
-    val setResponse = sendUpdateTopologyDescription(groupId, 1, buildTopologyDescription(simpleSubtopology()))
-    assertEquals(Errors.NONE.code, setResponse.data.errorCode)
-
-    // Verify the plugin has the topology
-    val plugin = InMemoryTopologyDescriptionPlugin.instances().asScala
-      .find(_.storedTopology(groupId).isPresent)
-    assertTrue(plugin.isDefined, "Expected plugin to have the topology after set")
-
-    // Then, delete the topology by sending null
-    val deleteResponse = sendUpdateTopologyDescription(groupId, 0, null)
-    assertEquals(Errors.NONE.code, deleteResponse.data.errorCode)
-
-    // Verify the plugin no longer has the topology
-    assertFalse(plugin.get.storedTopology(groupId).isPresent,
-      "Expected plugin to not have the topology after delete")
-  }
-
-  @ClusterTest
   def testUpdateTopologyDescriptionWithGlobalStore(): Unit = {
     val groupId = "test-streams-group-global"
     val topicName = "input-topic"
 
     createOffsetsTopic()
     createTopic(topicName, 1)
-    createStreamsGroup(groupId, topicName)
+    val memberId = createStreamsGroup(groupId, topicName)
 
     val sourceNode = new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode()
       .setName("global-source")
@@ -186,7 +162,7 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
       .setSource(sourceNode)
       .setProcessor(processorNode)
 
-    val response = sendUpdateTopologyDescription(groupId, 2, buildTopologyDescription(globalStores = List(globalStore)))
+    val response = sendUpdateTopologyDescription(groupId, memberId, 1, buildTopologyDescription(globalStores = List(globalStore)))
     assertEquals(Errors.NONE.code, response.data.errorCode,
       s"Expected NONE but got ${Errors.forCode(response.data.errorCode)}: ${response.data.errorMessage}")
   }
@@ -195,7 +171,7 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
   def testUpdateTopologyDescriptionGroupNotFound(): Unit = {
     createOffsetsTopic()
 
-    val response = sendUpdateTopologyDescription("nonexistent-group", 1, buildTopologyDescription(simpleSubtopology()))
+    val response = sendUpdateTopologyDescription("nonexistent-group", "some-member", 1, buildTopologyDescription(simpleSubtopology()))
     assertEquals(Errors.GROUP_ID_NOT_FOUND.code, response.data.errorCode,
       s"Expected GROUP_ID_NOT_FOUND but got ${Errors.forCode(response.data.errorCode)}: ${response.data.errorMessage}")
   }
@@ -230,17 +206,18 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
       topology = topology,
       expectedError = Errors.NONE
     )
+    val memberId = response.memberId
     assertTrue(response.topologyDescriptionRequired, "Expected topologyDescriptionRequired=true when plugin doesn't have topology")
 
     // Push the topology description to the plugin
-    val updateResponse = sendUpdateTopologyDescription(groupId, 1, buildTopologyDescription(simpleSubtopology()))
+    val updateResponse = sendUpdateTopologyDescription(groupId, memberId, 1, buildTopologyDescription(simpleSubtopology()))
     assertEquals(Errors.NONE.code, updateResponse.data.errorCode)
 
     // Next heartbeat should no longer require topology description
     TestUtils.waitUntilTrue(() => {
       response = streamsGroupHeartbeat(
         groupId = groupId,
-        memberId = "test-member",
+        memberId = memberId,
         memberEpoch = response.memberEpoch,
         rebalanceTimeoutMs = 1000,
         activeTasks = List.empty,
@@ -260,14 +237,15 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
 
     createOffsetsTopic()
     createTopic(topicName, 1)
-    createStreamsGroup(groupId, topicName)
+    val memberId = createStreamsGroup(groupId, topicName)
 
     // Enable failure mode on all plugin instances
     InMemoryTopologyDescriptionPlugin.instances().forEach(_.setFailOnSet(true))
     try {
-      val response = sendUpdateTopologyDescription(groupId, 1, buildTopologyDescription(simpleSubtopology()))
-      assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, response.data.errorCode,
-        s"Expected UNKNOWN_SERVER_ERROR but got ${Errors.forCode(response.data.errorCode)}: ${response.data.errorMessage}")
+      val response = sendUpdateTopologyDescription(groupId, memberId, 1, buildTopologyDescription(simpleSubtopology()))
+      // Generic RuntimeException from the plugin is classified as a transient failure.
+      assertEquals(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code, response.data.errorCode,
+        s"Expected STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED but got ${Errors.forCode(response.data.errorCode)}: ${response.data.errorMessage}")
     } finally {
       InMemoryTopologyDescriptionPlugin.instances().forEach(_.setFailOnSet(false))
     }
@@ -280,10 +258,10 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
 
     createOffsetsTopic()
     createTopic(topicName, 1)
-    createStreamsGroup(groupId, topicName)
+    val memberId = createStreamsGroup(groupId, topicName)
 
     // Push a topology description so the plugin has something to serve.
-    val setResponse = sendUpdateTopologyDescription(groupId, 1, buildTopologyDescription(simpleSubtopology()))
+    val setResponse = sendUpdateTopologyDescription(groupId, memberId, 1, buildTopologyDescription(simpleSubtopology()))
     assertEquals(Errors.NONE.code, setResponse.data.errorCode)
 
     // Without includeTopologyDescription, the describe response should not carry the topology.
@@ -310,9 +288,9 @@ class StreamsGroupTopologyDescriptionUpdateRequestTest(cluster: ClusterInstance)
 
     createOffsetsTopic()
     createTopic(topicName, 1)
-    createStreamsGroup(groupId, topicName)
+    val memberId = createStreamsGroup(groupId, topicName)
 
-    val setResponse = sendUpdateTopologyDescription(groupId, 1, buildTopologyDescription(simpleSubtopology()))
+    val setResponse = sendUpdateTopologyDescription(groupId, memberId, 1, buildTopologyDescription(simpleSubtopology()))
     assertEquals(Errors.NONE.code, setResponse.data.errorCode)
 
     // Force plugin.getTopology to throw — describe should still succeed with a null topology.

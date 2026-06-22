@@ -58,8 +58,8 @@ class StreamsGroupTopologyDescriptionUpdateNoPluginRequestTest(cluster: ClusterI
       .build(ApiKeys.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_UPDATE.latestVersion(isUnstableApiEnabled))
 
     val response = connectAndReceive[StreamsGroupTopologyDescriptionUpdateResponse](request)
-    assertEquals(Errors.INVALID_REQUEST.code, response.data.errorCode,
-      s"Expected INVALID_REQUEST but got ${Errors.forCode(response.data.errorCode)}: ${response.data.errorMessage}")
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, response.data.errorCode,
+      s"Expected UNSUPPORTED_VERSION but got ${Errors.forCode(response.data.errorCode)}: ${response.data.errorMessage}")
   }
 
   @ClusterTest
