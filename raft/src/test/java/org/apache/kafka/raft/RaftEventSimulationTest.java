@@ -65,6 +65,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -139,13 +140,11 @@ public class RaftEventSimulationTest {
             int numVoters = random.nextInt(minVoters, maxVoters + 1);
             int numObservers = random.nextInt(minObservers, maxObservers + 1);
             boolean isGracefulShutdown = random.nextBoolean();
-            try {
-                svos.accept(seed, numVoters, numObservers, isGracefulShutdown);
-            } catch (Throwable e) {
-                fail("Failed with seed=" + seed +
+            assertDoesNotThrow(
+                    () -> svos.accept(seed, numVoters, numObservers, isGracefulShutdown),
+                    () -> "Failed with seed=" + seed +
                         ", numVoters=" + numVoters + ", numObservers=" + numObservers +
-                        ", isGracefulShutdown=" + isGracefulShutdown, e);
-            }
+                        ", isGracefulShutdown=" + isGracefulShutdown);
         }
     }
 

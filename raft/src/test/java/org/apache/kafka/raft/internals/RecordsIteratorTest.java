@@ -78,7 +78,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public final class RecordsIteratorTest {
     private static final RecordSerde<String> STRING_SERDE = new StringSerde();
@@ -104,11 +103,9 @@ public final class RecordsIteratorTest {
         for (CompressionType ct : CompressionType.values()) {
             for (int i = 0; i < 50; i++) {
                 long seed = new Random(System.nanoTime() + i).nextLong();
-                try {
-                    compressionTypeSeed.accept(ct, seed);
-                } catch (Throwable e) {
-                    fail("Failed with compressionType=" + ct + ", seed=" + seed, e);
-                }
+                assertDoesNotThrow(
+                        () -> compressionTypeSeed.accept(ct, seed),
+                        () -> "Failed with compressionType=" + ct + ", seed=" + seed);
             }
         }
     }

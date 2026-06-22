@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public final class ArbitraryMemoryRecords {
 
@@ -36,11 +36,9 @@ public final class ArbitraryMemoryRecords {
             byte[] bytes = new byte[size];
             random.nextBytes(bytes);
             MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
-            try {
-                test.accept(records);
-            } catch (Throwable e) {
-                fail("Failed with seed=" + seed + ", size=" + size + ", bytes=" + Arrays.toString(bytes), e);
-            }
+            assertDoesNotThrow(
+                    () -> test.accept(records),
+                    () -> "Failed with seed=" + seed + ", size=" + size + ", bytes=" + Arrays.toString(bytes));
         }
     }
 }
