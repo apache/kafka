@@ -1006,7 +1006,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 if (!streamsGroup.isEmpty()) continue;
                 int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
                 if (storedEpoch == -1) continue;
-                if (!offsetMetadataManager.allOffsetsExpired(groupId, now)) continue;
+                if (!offsetMetadataManager.allOffsetsExpired(groupId, now, committedOffset)) continue;
                 eligible.put(groupId, storedEpoch);
             } catch (Throwable t) {
                 // One bad group must not abort the whole scan; the next cycle retries.

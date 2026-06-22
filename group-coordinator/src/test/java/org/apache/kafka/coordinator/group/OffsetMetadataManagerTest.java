@@ -104,6 +104,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -339,7 +341,10 @@ public class OffsetMetadataManagerTest {
         }
 
         public boolean allOffsetsExpired(String groupId, long currentTimestampMs) {
-            return offsetMetadataManager.allOffsetsExpired(groupId, currentTimestampMs);
+            // Existing branch tests don't drive snapshot semantics — they replay records
+            // directly, so reading at Long.MAX_VALUE is equivalent to "latest" and exercises
+            // the same predicates the snapshot-aware path runs.
+            return offsetMetadataManager.allOffsetsExpired(groupId, currentTimestampMs, Long.MAX_VALUE);
         }
 
         public List<OffsetFetchResponseData.OffsetFetchResponseTopics> fetchOffsets(
@@ -3288,7 +3293,7 @@ public class OffsetMetadataManagerTest {
             .build();
 
         context.commitOffset("group-id", "foo", 0, 100L, 0);
-        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(groupMetadataManager.group(eq("group-id"), anyLong())).thenReturn(group);
         when(group.offsetExpirationCondition()).thenReturn(Optional.empty());
 
         assertFalse(context.allOffsetsExpired("group-id", context.time.milliseconds()));
@@ -3309,7 +3314,7 @@ public class OffsetMetadataManagerTest {
         context.commitOffset("group-id", "foo", 0, 100L, 0, context.time.milliseconds());
         context.time.sleep(Duration.ofMinutes(1).toMillis());
 
-        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(groupMetadataManager.group(eq("group-id"), anyLong())).thenReturn(group);
         when(group.offsetExpirationCondition()).thenReturn(Optional.of(
             new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
         when(group.isSubscribedToTopic("foo")).thenReturn(true);
@@ -3335,7 +3340,7 @@ public class OffsetMetadataManagerTest {
         context.commitOffset(10L, "group-id", "foo", 0, 101L, 0, commitTimestamp + 500);
         context.time.sleep(Duration.ofMinutes(1).toMillis());
 
-        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(groupMetadataManager.group(eq("group-id"), anyLong())).thenReturn(group);
         when(group.offsetExpirationCondition()).thenReturn(Optional.of(
             new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
         when(group.isSubscribedToTopic("foo")).thenReturn(false);
@@ -3358,7 +3363,7 @@ public class OffsetMetadataManagerTest {
         context.commitOffset("group-id", "foo", 0, 100L, 0, commitTimestamp);
         context.time.sleep(Duration.ofMinutes(1).toMillis());
 
-        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(groupMetadataManager.group(eq("group-id"), anyLong())).thenReturn(group);
         when(group.offsetExpirationCondition()).thenReturn(Optional.of(
             new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
         when(group.isSubscribedToTopic("foo")).thenReturn(false);
