@@ -18233,6 +18233,56 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testMissingClientTagsStatusReportsOnlyMissingTags() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster")
+            .build();
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member joins with only the "cluster" tag — only the missing "zone" tag should be reported.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setClientTags(List.of(
+                    new StreamsGroupHeartbeatRequestData.KeyValue().setKey("cluster").setValue("c1")))
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        StreamsGroupHeartbeatResponseData.Status status = result.response().data().status().stream()
+            .filter(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Expected a MISSING_CLIENT_TAGS status"));
+        assertTrue(status.statusDetail().contains("[zone]"));
+        assertFalse(status.statusDetail().contains("cluster"));
+    }
+
+    @Test
     public void testNoMissingClientTagsStatusWhenAllTagsPresent() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
