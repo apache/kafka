@@ -1113,13 +1113,20 @@ public class KafkaStreamsTest {
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
         prepareThreadState(streamThreadOne, state1);
         prepareThreadState(streamThreadTwo, state2);
+        final StreamPartitioner<String, Object> simplePartitioner = new StreamPartitioner<>() {
+            @SuppressWarnings("removal")
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                return Optional.of(Collections.singleton(0));
+            }
+        };
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(0))));
+            assertThrows(StreamsNotStartedException.class, () -> streams.queryMetadataForKey("store", "key", simplePartitioner));
             streams.start();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.RUNNING, DEFAULT_DURATION);
             streams.close();
             waitForApplicationState(Collections.singletonList(streams), KafkaStreams.State.NOT_RUNNING, DEFAULT_DURATION);
-            assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(0))));
+            assertThrows(IllegalStateException.class, () -> streams.queryMetadataForKey("store", "key", simplePartitioner));
         }
     }
 

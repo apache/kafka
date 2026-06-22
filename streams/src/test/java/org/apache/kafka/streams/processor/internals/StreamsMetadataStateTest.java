@@ -136,7 +136,13 @@ public class StreamsMetadataStateTest {
         topologyMetadata.buildAndRewriteTopology();
         metadataState = new StreamsMetadataState(topologyMetadata, hostOne, logContext);
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
-        partitioner = (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(1));
+        partitioner = new StreamPartitioner<>() {
+            @SuppressWarnings("removal")
+            @Override
+            public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                return Optional.of(Collections.singleton(1));
+            }
+        };
         storeNames = Set.of("table-one", "table-two", "merged-table", globalTable);
     }
 
@@ -308,7 +314,13 @@ public class StreamsMetadataStateTest {
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Set.of(hostOne), 2);
 
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("merged-table",  "the-key", new RecordHeaders(),
-            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(2)));
+                new StreamPartitioner<>() {
+                    @SuppressWarnings("removal")
+                    @Override
+                    public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+                        return Optional.of(Collections.singleton(2));
+                    }
+                });
 
         assertEquals(expected, actual);
     }
