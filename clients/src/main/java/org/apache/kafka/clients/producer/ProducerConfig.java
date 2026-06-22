@@ -234,12 +234,12 @@ public class ProducerConfig extends AbstractConfig {
     public static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL = "incremental";
     private static final String BUFFER_MEMORY_ALLOCATION_STRATEGY_DOC = "Controls how the producer allocates memory from <code>" + BUFFER_MEMORY_CONFIG + "</code> for record batches. The following values are supported: "
                                                     + "<ul>"
-                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL + "</code>: reserve <code>" + BATCH_SIZE_CONFIG + "</code> bytes up front for each in-progress batch, "
-                                                    + "regardless of the actual size of the records appended to it.</li>"
-                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL + "</code>: allocate memory on demand as records are appended, growing each batch "
-                                                    + "up to <code>" + BATCH_SIZE_CONFIG + "</code> bytes. This keeps memory usage proportional to the data actually buffered rather than to the number of "
-                                                    + "active partitions, which allows larger <code>" + BATCH_SIZE_CONFIG + "</code> values (e.g. for high-latency clusters) without reserving "
-                                                    + "<code>" + BATCH_SIZE_CONFIG + "</code> bytes for every active partition.</li>"
+                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_FULL + "</code>: reserves a full <code>" + BATCH_SIZE_CONFIG + "</code> up front when a batch is created, "
+                                                    + "regardless of how much data it ends up holding. Pool memory therefore scales with the number of active partitions.</li>"
+                                                    + "<li><code>" + BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL + "</code>: allocates memory on demand as records are appended, growing a batch "
+                                                    + "up to <code>" + BATCH_SIZE_CONFIG + "</code>. Pool memory therefore scales with the data actually buffered rather than the number of active "
+                                                    + "partitions, allowing larger <code>" + BATCH_SIZE_CONFIG + "</code> values (e.g. for high-latency clusters) without reserving "
+                                                    + "<code>" + BATCH_SIZE_CONFIG + "</code> for every active partition.</li>"
                                                     + "</ul>";
 
     /** <code>retry.backoff.ms</code> */
