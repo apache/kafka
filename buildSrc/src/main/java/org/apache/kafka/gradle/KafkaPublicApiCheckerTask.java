@@ -81,7 +81,9 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
 
         try {
             if (projectJarFiles.getFiles().isEmpty()) {
-                throw new GradleException("Project JAR file not found: " + jarFile.getAbsolutePath());
+                throw new GradleException(
+                        "No project JARs configured on kafkaPublicApiChecker.projectJarFiles — "
+                        + "the checker needs at least one classes/jar source to build the API surface.");
             }
             PublicApiChecker checker = new PublicApiChecker(
                 new ArrayList<>(projectJarFiles.getFiles()),
