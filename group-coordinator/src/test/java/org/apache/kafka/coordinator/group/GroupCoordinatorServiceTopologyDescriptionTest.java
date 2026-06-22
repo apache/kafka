@@ -1117,6 +1117,33 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     }
 
     @Test
+    public void testCleanupCycleSkipsFollowUpWorkOncePastShutdown() throws Exception {
+        // TimerTask.cancel() does not await an in-flight cycle, so a
+        // cycle that has already passed the CAS when shutdown fires would otherwise run
+        // plugin.deleteTopology and follow-up scheduleWriteOperation against a manager and
+        // runtime that are about to close. The per-partition handle now checks isActive
+        // before dispatching the plugin call; this locks that behavior.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        CompletableFuture<Map<String, Integer>> parkedRead = new CompletableFuture<>();
+        when(runtime.<Map<String, Integer>>scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any()))
+            .thenReturn(List.of(parkedRead));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        // Cycle dispatched, parked on the per-partition read.
+        service.runStreamsGroupTopologyCleanupCycle();
+        // Shutdown flips isActive false (and closes the mocked runtime / manager; mocks
+        // remain callable for verification).
+        service.shutdown();
+        // Now resolve the read: the handle runs under isActive==false and must skip the
+        // plugin dispatch + the conditional clear writes that would have followed.
+        parkedRead.complete(Map.of("foo", 4));
+
+        verify(plugin, never()).deleteTopology(anyString());
+        verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
+    }
+
+    @Test
     public void testShutdownCancelsScheduledCleanupTask() throws Exception {
         // startup() with a plugin configured schedules the periodic cleanup tick; shutdown()
         // must cancel that snapshot so the timer queue does not retain a self-rescheduling

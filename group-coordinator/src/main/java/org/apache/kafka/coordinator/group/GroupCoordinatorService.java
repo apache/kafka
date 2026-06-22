@@ -899,6 +899,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         return null;
                     }
                     if (eligible == null || eligible.isEmpty()) return null;
+                    // Shutdown started after the per-partition read was scheduled. Skip the
+                    // plugin dispatch so we do not issue plugin.deleteTopology calls into a
+                    // manager whose plugin is about to be closed; existing in-flight calls
+                    // continue to drain via their own futures.
+                    if (!isActive.get()) return null;
                     groupCoordinatorMetrics.recordSensor(
                         GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME,
                         eligible.size()
@@ -907,6 +912,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .invokeDeleteTopologies(eligible.keySet())
                         .thenCompose(failures -> {
                             recordPluginDeleteOutcome(eligible.size(), failures.size());
+                            // Shutdown can have started between the plugin call and the
+                            // follow-up writes. Skip the conditional clears so we do not
+                            // schedule writes against a runtime that is being closed; the
+                            // next cycle on a fresh broker incarnation will pick the state
+                            // up from the persisted storedDescriptionTopologyEpoch.
+                            if (!isActive.get()) return CompletableFuture.completedFuture(null);
                             List<CompletableFuture<Void>> clearFutures = new ArrayList<>(eligible.size());
                             eligible.forEach((groupId, expectedStoredEpoch) -> {
                                 if (failures.containsKey(groupId)) {
