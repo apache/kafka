@@ -74,6 +74,7 @@ org.apache.kafka.streams.TopologyTestDriverAtLeastOnceTest:
 - shouldInitProcessor
 - shouldNotCreateStateDirectoryForStatelessTopology
 - shouldNotRequireParameters
+- shouldNotResetRecordContextWhenAccessingStateStore
 - shouldNotUpdateStoreForLargerValue
 - shouldNotUpdateStoreForSmallerValue
 - shouldPassRecordHeadersIntoSerializersAndDeserializers
@@ -117,6 +118,7 @@ org.apache.kafka.streams.TopologyTestDriverEosTest:
 - shouldInitProcessor
 - shouldNotCreateStateDirectoryForStatelessTopology
 - shouldNotRequireParameters
+- shouldNotResetRecordContextWhenAccessingStateStore
 - shouldNotUpdateStoreForLargerValue
 - shouldNotUpdateStoreForSmallerValue
 - shouldPassRecordHeadersIntoSerializersAndDeserializers
