@@ -28,7 +28,7 @@ public final class CidrUtils {
 
     private CidrUtils() {}
 
-    public static InetAddress parseCidrAddress(String cidrPattern) {
+    private static InetAddress parseCidrAddress(String cidrPattern) {
         String ipPart = cidrPattern.contains("/")
             ? cidrPattern.substring(0, cidrPattern.indexOf('/'))
             : cidrPattern;
@@ -39,7 +39,7 @@ public final class CidrUtils {
         }
     }
 
-    public static boolean isIpv6(InetAddress address) {
+    private static boolean isIpv6(InetAddress address) {
         return address instanceof Inet6Address;
     }
 

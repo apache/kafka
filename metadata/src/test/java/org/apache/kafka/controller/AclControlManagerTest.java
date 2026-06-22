@@ -90,30 +90,30 @@ public class AclControlManagerTest {
     public void testValidateNewAcl() {
         AclControlManager.validateNewAcl(new AclBinding(
             new ResourcePattern(TOPIC, "*", LITERAL),
-            new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0);
+            new AccessControlEntry("User:*", "*", ALTER, ALLOW)), false);
         assertEquals("Invalid patternType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", PatternType.UNKNOWN),
-                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
+                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)), false)).
                 getMessage());
         assertEquals("Invalid resourceType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(ResourceType.UNKNOWN, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
+                    new AccessControlEntry("User:*", "*", ALTER, ALLOW)), false)).
                 getMessage());
         assertEquals("Invalid operation UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", AclOperation.UNKNOWN, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
+                    new AccessControlEntry("User:*", "*", AclOperation.UNKNOWN, ALLOW)), false)).
                 getMessage());
         assertEquals("Invalid permissionType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("User:*", "*", ALTER, AclPermissionType.UNKNOWN)), MetadataVersion.IBP_4_0_IV0)).
+                    new AccessControlEntry("User:*", "*", ALTER, AclPermissionType.UNKNOWN)), false)).
                 getMessage());
     }
 
@@ -127,7 +127,7 @@ public class AclControlManagerTest {
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("invalid", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
+                    new AccessControlEntry("invalid", "*", ALTER, ALLOW)), false)).
                 getMessage());
     }
 
@@ -141,7 +141,7 @@ public class AclControlManagerTest {
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
-                    new AccessControlEntry("", "*", ALTER, ALLOW)), MetadataVersion.IBP_4_0_IV0)).
+                    new AccessControlEntry("", "*", ALTER, ALLOW)), false)).
                         getMessage());
     }
 

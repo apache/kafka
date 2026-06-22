@@ -102,7 +102,7 @@ public class AclControlManager {
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (AclBinding acl : acls) {
             try {
-                validateNewAcl(acl, metadataVersion);
+                validateNewAcl(acl, metadataVersion.isCidrAclSupported());
             } catch (Throwable t) {
                 ApiException e = (t instanceof ApiException) ? (ApiException) t :
                     new UnknownServerException("Unknown error while trying to create ACL", t);
@@ -135,7 +135,7 @@ public class AclControlManager {
         return uuid;
     }
 
-    static void validateNewAcl(AclBinding binding, MetadataVersion metadataVersion) {
+    static void validateNewAcl(AclBinding binding, boolean isCidrAclSupported) {
         switch (binding.pattern().resourceType()) {
             case UNKNOWN:
             case ANY:
@@ -177,7 +177,7 @@ public class AclControlManager {
                 binding.entry().principal() + "` " + "(no colon is present separating the " +
                 "principal type from the principal name)");
         }
-        validateHostPattern(binding.entry().host(), metadataVersion.isCidrAclSupported());
+        validateHostPattern(binding.entry().host(), isCidrAclSupported);
     }
 
     /**
@@ -191,11 +191,11 @@ public class AclControlManager {
      * - Valid IPv6 CIDR notation (e.g., "2001:db8::/32"), which requires cidrSupported=true
      *
      * @param host The host pattern to validate
-     * @param cidrSupported Whether CIDR notation is supported by the current metadata version
+     * @param isCidrSupported Whether CIDR notation is supported by the current metadata version
      * @throws InvalidRequestException if the host pattern is invalid
      * @throws UnsupportedVersionException if CIDR notation is used but not supported
      */
-    static void validateHostPattern(String host, boolean cidrSupported) {
+    static void validateHostPattern(String host, boolean isCidrSupported) {
         if (host == null || host.isEmpty()) {
             throw new InvalidRequestException("Host pattern cannot be null or empty");
         }
@@ -205,7 +205,7 @@ public class AclControlManager {
         }
 
         if (host.contains("/")) {
-            if (!cidrSupported) {
+            if (!isCidrSupported) {
                 throw new UnsupportedVersionException(
                     "CIDR-based ACL host patterns require metadata version " +
                     MetadataVersion.IBP_4_4_IV1 + " or higher.");
