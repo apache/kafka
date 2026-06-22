@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
@@ -55,12 +57,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -76,21 +80,28 @@ public class TopologyDescriptionPluginIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
 
+    private static final String CLUSTER_ID = "plugin-integration";
+
     private static final Properties BROKER_CONFIG = new Properties();
     static {
         BROKER_CONFIG.put(
             GroupCoordinatorConfig.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS_CONFIG,
             InMemoryTopologyDescriptionPlugin.class.getName()
         );
+        BROKER_CONFIG.put(InMemoryTopologyDescriptionPlugin.TEST_CLUSTER_ID_CONFIG, CLUSTER_ID);
     }
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
+
+    private static InMemoryTopologyDescriptionPlugin clusterPlugin;
 
     private final List<KafkaStreams> streamsInstances = new ArrayList<>();
 
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
+        clusterPlugin = InMemoryTopologyDescriptionPlugin.instanceForClusterId(CLUSTER_ID);
+        assertNotNull(clusterPlugin, "No plugin instance found for cluster id " + CLUSTER_ID);
     }
 
     @AfterAll
@@ -125,9 +136,8 @@ public class TopologyDescriptionPluginIntegrationTest {
     }
 
     private InMemoryTopologyDescriptionPlugin getPlugin() {
-        assertFalse(InMemoryTopologyDescriptionPlugin.instances().isEmpty(),
-            "Plugin should have been instantiated during broker startup");
-        return InMemoryTopologyDescriptionPlugin.instances().get(0);
+        assertNotNull(clusterPlugin, "Plugin should have been captured during cluster startup");
+        return clusterPlugin;
     }
 
     private StreamsGroupTopologyDescription waitForTopology(final InMemoryTopologyDescriptionPlugin plugin,
@@ -334,6 +344,51 @@ public class TopologyDescriptionPluginIntegrationTest {
         LOG.info("Topology was pushed {} time(s) for group {}", pushCount, appId);
         assertEquals(1, pushCount,
             "Topology should be pushed exactly once even with two members, but was pushed " + pushCount + " times");
+    }
+
+    @Test
+    public void shouldDeleteTopologyFromPluginOnExplicitGroupDeletion(final TestInfo testInfo) throws Exception {
+        final String testId = safeUniqueTestName(testInfo);
+        final String appId = "appId-" + testId;
+        final String inputTopic = "input-" + testId;
+        CLUSTER.createTopic(inputTopic);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(inputTopic);
+        startStreams(builder.build(), appId);
+
+        final InMemoryTopologyDescriptionPlugin plugin = getPlugin();
+        waitForTopology(plugin, appId);
+
+        // Close streams so the group becomes empty.
+        // tearDown() will attempt close again; that is safe because close() is idempotent.
+        final KafkaStreams streams = streamsInstances.get(streamsInstances.size() - 1);
+        streams.close(Duration.ofSeconds(30));
+
+        // Delete the group, retrying while the broker still considers it non-empty.
+        try (final Admin admin = CLUSTER.createAdminClient()) {
+            TestUtils.waitForCondition(
+                () -> {
+                    try {
+                        admin.deleteConsumerGroups(List.of(appId)).all().get();
+                        return true;
+                    } catch (final ExecutionException e) {
+                        if (e.getCause() instanceof GroupNotEmptyException) {
+                            return false;
+                        }
+                        throw new RuntimeException(e);
+                    }
+                },
+                60_000,
+                "Failed to delete group " + appId + " — broker still reports it non-empty"
+            );
+        }
+
+        TestUtils.waitForCondition(
+            () -> plugin.storedTopology(appId).isEmpty(),
+            60_000,
+            "Plugin did not remove topology for group " + appId + " after explicit DeleteGroups"
+        );
     }
 
 }

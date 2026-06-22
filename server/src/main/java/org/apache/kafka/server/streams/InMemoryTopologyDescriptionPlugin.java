@@ -30,6 +30,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A simple in-memory implementation of {@link StreamsGroupTopologyDescriptionPlugin}
@@ -42,12 +44,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDescriptionPlugin {
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryTopologyDescriptionPlugin.class);
+    /** Config key tests can set on the broker to tag a cluster; used by {@link #instanceForClusterId}. */
+    public static final String TEST_CLUSTER_ID_CONFIG = "streams.topology.plugin.test.cluster.id";
+
     private static final List<InMemoryTopologyDescriptionPlugin> INSTANCES = new CopyOnWriteArrayList<>();
+    private static final ConcurrentHashMap<String, InMemoryTopologyDescriptionPlugin> INSTANCES_BY_CLUSTER_ID = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Integer, InMemoryTopologyDescriptionPlugin> INSTANCES_BY_PORT = new ConcurrentHashMap<>();
+    private static final Pattern PORT_PATTERN = Pattern.compile(":(\\d+)(?:,|$)");
 
     private final ConcurrentHashMap<String, TopologyEntry> topologies = new ConcurrentHashMap<>();
     private final AtomicInteger setTopologyAttemptCount = new AtomicInteger(0);
     private final AtomicInteger setTopologyCount = new AtomicInteger(0);
     private final AtomicInteger getTopologyCount = new AtomicInteger(0);
+    private final AtomicInteger deleteTopologyCount = new AtomicInteger(0);
     private volatile boolean failOnSet = false;
     private volatile boolean failOnSetPermanent = false;
     private volatile boolean failOnGet = false;
@@ -75,6 +84,29 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
      */
     public static void clearInstances() {
         INSTANCES.clear();
+        INSTANCES_BY_PORT.clear();
+        INSTANCES_BY_CLUSTER_ID.clear();
+    }
+
+    /**
+     * Returns the plugin instance tagged with the given cluster ID (set via
+     * {@link #TEST_CLUSTER_ID_CONFIG} in the broker config). Useful when multiple clusters
+     * run in the same JVM concurrently and tests need to distinguish their plugin instances.
+     */
+    public static InMemoryTopologyDescriptionPlugin instanceForClusterId(String clusterId) {
+        return INSTANCES_BY_CLUSTER_ID.get(clusterId);
+    }
+
+    /**
+     * Returns the plugin instance that was configured for the broker listening on the port
+     * extracted from the given bootstrap servers string (e.g. {@code "localhost:9092"}).
+     */
+    public static InMemoryTopologyDescriptionPlugin instanceForBootstrap(String bootstrapServers) {
+        Matcher m = PORT_PATTERN.matcher(bootstrapServers + ",");
+        if (m.find()) {
+            return INSTANCES_BY_PORT.get(Integer.parseInt(m.group(1)));
+        }
+        return null;
     }
 
     /**
@@ -137,6 +169,13 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
     }
 
     /**
+     * Returns the number of times {@link #deleteTopology} was called.
+     */
+    public int getDeleteTopologyCount() {
+        return deleteTopologyCount.get();
+    }
+
+    /**
      * Returns the stored topology epoch for the given group, or -1 if not present.
      */
     public int storedDescriptionTopologyEpoch(String groupId) {
@@ -147,6 +186,17 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
     @Override
     public void configure(Map<String, ?> configs) {
         INSTANCES.add(this);
+        Object clusterId = configs.get(TEST_CLUSTER_ID_CONFIG);
+        if (clusterId != null) {
+            INSTANCES_BY_CLUSTER_ID.put(clusterId.toString(), this);
+        }
+        Object listeners = configs.get("listeners");
+        if (listeners != null) {
+            Matcher m = PORT_PATTERN.matcher(listeners.toString() + ",");
+            if (m.find()) {
+                INSTANCES_BY_PORT.put(Integer.parseInt(m.group(1)), this);
+            }
+        }
         LOG.info("InMemoryTopologyDescriptionPlugin configured");
     }
 
@@ -169,6 +219,7 @@ public class InMemoryTopologyDescriptionPlugin implements StreamsGroupTopologyDe
 
     @Override
     public CompletableFuture<Void> deleteTopology(String groupId) {
+        deleteTopologyCount.incrementAndGet();
         topologies.remove(groupId);
         LOG.info("Deleted topology description for group {}", groupId);
         return CompletableFuture.completedFuture(null);
