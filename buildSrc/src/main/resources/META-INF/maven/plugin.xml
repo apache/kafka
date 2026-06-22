@@ -21,7 +21,7 @@
   <description>Maven plugin to check that external projects don't use internal Kafka APIs</description>
   <groupId>org.apache.kafka</groupId>
   <artifactId>kafka-internal-api-checker-maven-plugin</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>@version@</version>
   <goalPrefix>kafka-internal-api-checker</goalPrefix>
   <isolatedRealm>false</isolatedRealm>
   <inheritedByDefault>true</inheritedByDefault>
@@ -101,25 +101,25 @@
       <groupId>org.apache.maven</groupId>
       <artifactId>maven-plugin-api</artifactId>
       <type>jar</type>
-      <version>3.9.4</version>
+      <version>@mavenApiVersion@</version>
     </dependency>
     <dependency>
       <groupId>org.apache.maven</groupId>
       <artifactId>maven-core</artifactId>
       <type>jar</type>
-      <version>3.9.4</version>
+      <version>@mavenApiVersion@</version>
     </dependency>
     <dependency>
       <groupId>org.apache.maven</groupId>
       <artifactId>maven-artifact</artifactId>
       <type>jar</type>
-      <version>3.9.4</version>
+      <version>@mavenApiVersion@</version>
     </dependency>
     <dependency>
       <groupId>org.apache.maven.plugin-tools</groupId>
       <artifactId>maven-plugin-annotations</artifactId>
       <type>jar</type>
-      <version>3.9.0</version>
+      <version>@mavenPluginAnnotationsVersion@</version>
     </dependency>
   </dependencies>
 </plugin>

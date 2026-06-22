@@ -33,15 +33,21 @@ java {
     withJavadocJar()
 }
 
+// Single source of truth for the Maven dependency versions. Both the dependency block below
+// and the hand-maintained plugin.xml descriptor need to agree on these; processResources
+// templates the descriptor at build time so they can never drift.
+def mavenApiVersion = '3.9.4'
+def mavenPluginAnnotationsVersion = '3.9.0'
+
 dependencies {
     // For bytecode scanning (used by the internal-API-usage checker)
     implementation 'org.ow2.asm:asm:9.6'
 
     // For Maven plugin functionality
-    implementation 'org.apache.maven:maven-plugin-api:3.9.4'
-    implementation 'org.apache.maven:maven-core:3.9.4'
-    implementation 'org.apache.maven:maven-artifact:3.9.4'
-    implementation 'org.apache.maven.plugin-tools:maven-plugin-annotations:3.9.0'
+    implementation "org.apache.maven:maven-plugin-api:${mavenApiVersion}"
+    implementation "org.apache.maven:maven-core:${mavenApiVersion}"
+    implementation "org.apache.maven:maven-artifact:${mavenApiVersion}"
+    implementation "org.apache.maven.plugin-tools:maven-plugin-annotations:${mavenPluginAnnotationsVersion}"
 
     // For testing
     testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
@@ -49,6 +55,20 @@ dependencies {
     testImplementation 'org.junit.platform:junit-platform-launcher:1.9.2'
     testImplementation 'org.mockito:mockito-core:5.3.1'
     testImplementation gradleTestKit()
+}
+
+// Template plugin.xml from src/main/resources so its <version> and Maven dep versions are
+// computed from the same source as the published artifact / dependency block above. Using
+// Ant's @token@ delimiter rather than Groovy's `${...}` so Maven's runtime substitutions
+// (e.g. ${project.build.directory}) inside plugin.xml are left untouched.
+processResources {
+    filesMatching('META-INF/maven/plugin.xml') {
+        filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: [
+            version: project.version.toString(),
+            mavenApiVersion: mavenApiVersion,
+            mavenPluginAnnotationsVersion: mavenPluginAnnotationsVersion,
+        ])
+    }
 }
 
 gradlePlugin {
