@@ -55,11 +55,14 @@ public record StreamsGroupHeartbeatResult(
     }
 
     /**
-     * Convenience constructor for failure-fast paths that do not resolve a group: no
-     * internal topics to create, and all three epoch fields set to -1 so the service-layer
-     * gate sees nothing to do.
+     * Build a heartbeat result for an error response — a failure-fast path in
+     * {@code GroupCoordinatorService#streamsGroupHeartbeat} (broker not active, request
+     * validation rejected, or a runtime error translated by {@code handleOperationException}).
+     * No group is resolved, so there are no internal topics to create and no epoch context:
+     * all three epoch fields are -1, and {@code maybeSetTopologyDescriptionRequired}
+     * short-circuits on the error code anyway. Callers must pass a response carrying an error.
      */
-    public StreamsGroupHeartbeatResult(StreamsGroupHeartbeatResponseData data) {
-        this(data, Map.of(), -1, -1, -1);
+    public static StreamsGroupHeartbeatResult forError(StreamsGroupHeartbeatResponseData data) {
+        return new StreamsGroupHeartbeatResult(data, Map.of(), -1, -1, -1);
     }
 }

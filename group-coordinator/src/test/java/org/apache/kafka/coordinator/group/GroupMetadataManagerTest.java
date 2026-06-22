@@ -10820,19 +10820,19 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testValidateStreamsGroupMemberThrowsWhenGroupAbsent() {
-        // KIP-1331: validateStreamsGroupMember surfaces GROUP_ID_NOT_FOUND for the upcoming
-        // StreamsGroupTopologyDescriptionUpdate handler.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateThrowsWhenGroupAbsent() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate surfaces GROUP_ID_NOT_FOUND for
+        // the StreamsGroupTopologyDescriptionUpdate handler.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         assertThrows(GroupIdNotFoundException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(
-                "nonexistent", "m1", context.lastCommittedOffset));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                "nonexistent", "m1", 0, context.lastCommittedOffset));
     }
 
     @Test
-    public void testValidateStreamsGroupMemberThrowsWhenMemberAbsent() {
-        // KIP-1331: validateStreamsGroupMember surfaces UNKNOWN_MEMBER_ID for the upcoming
-        // StreamsGroupTopologyDescriptionUpdate handler.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateThrowsWhenMemberAbsent() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate surfaces UNKNOWN_MEMBER_ID for
+        // the StreamsGroupTopologyDescriptionUpdate handler.
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         // Replaying a metadata record materializes a streams group with no members; commit so the
@@ -10842,14 +10842,38 @@ public class GroupMetadataManagerTest {
         context.commit();
 
         assertThrows(UnknownMemberIdException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(
-                groupId, "stranger", context.lastCommittedOffset));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, "stranger", -1, context.lastCommittedOffset));
     }
 
     @Test
-    public void testValidateStreamsGroupMemberDoesNotSeeUncommittedFence() {
-        // KIP-1331: validateStreamsGroupMember reads at committedOffset, so an uncommitted fence
-        // (member tombstone) must not make a still-committed member appear unknown.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateRejectsStaleEpoch() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate must reject a pushedEpoch that
+        // does not match the group's current topology epoch with INVALID_REQUEST. Without this
+        // check, a stale push could regress storedDescriptionTopologyEpoch and the heartbeat
+        // gate would never converge.
+        String groupId = "streams-group";
+        String memberId = "m1";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId).build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
+        context.commit();
+
+        // No topology has been pushed via heartbeat, so currentTopologyEpoch() returns -1.
+        // A push claiming epoch 4 must be rejected.
+        assertThrows(InvalidRequestException.class,
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, memberId, 4, context.lastCommittedOffset));
+    }
+
+    @Test
+    public void testValidateStreamsGroupTopologyDescriptionUpdateDoesNotSeeUncommittedFence() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate reads at committedOffset, so an
+        // uncommitted fence (member tombstone) must not make a still-committed member appear unknown.
         String groupId = "streams-group";
         String memberId = "m1";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
@@ -10870,13 +10894,15 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId));
 
         // Validating at the still-committed offset must succeed; the uncommitted tombstone is invisible.
-        StreamsGroupMember resolved = context.groupMetadataManager.validateStreamsGroupMember(
-            groupId, memberId, committedWithMember);
+        // currentTopologyEpoch() is -1 since no topology has been pushed via heartbeat.
+        StreamsGroupMember resolved = context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+            groupId, memberId, -1, committedWithMember);
         assertEquals(memberId, resolved.memberId());
 
         // Latest in-memory state, by contrast, sees the tombstone — verify by querying with Long.MAX_VALUE.
         assertThrows(UnknownMemberIdException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(groupId, memberId, Long.MAX_VALUE));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, memberId, -1, Long.MAX_VALUE));
     }
 
     @Test

@@ -958,7 +958,7 @@ public class StreamsGroupCommand {
                 return partitions;
             } else {
                 if (!opts.options.has(opts.resetFromFileOpt))
-                    CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.");
+                    CommandLineUtils.printUsageAndExit(opts.parser, "One of the reset scopes should be defined: --all-input-topics, --input-topic.");
 
                 return List.of();
             }

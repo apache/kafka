@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: 
+description: Run Kafka locally, create a topic, produce and consume events, and explore Kafka Connect and Kafka Streams.
 weight: 3
 tags: ['kafka', 'docs']
 aliases: 

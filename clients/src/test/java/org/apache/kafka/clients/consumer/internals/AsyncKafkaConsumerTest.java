@@ -906,6 +906,66 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testCloseRunsRevocationCallbackAndSendsLeaveGroupEventOnInterrupt() {
+        final String topicName = "topic";
+        final Set<TopicPartition> partitions = singleton(new TopicPartition(topicName, 0));
+
+        final AtomicReference<Set<TopicPartition>> revokedPartitions = new AtomicReference<>();
+        final AtomicBoolean revocationCallbackCalled = new AtomicBoolean(false);
+        final AtomicReference<LeaveGroupOnCloseEvent> leaveGroupEvent = new AtomicReference<>();
+
+        final ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+                assertTrue(Thread.currentThread().isInterrupted());
+                revocationCallbackCalled.set(true);
+                revokedPartitions.set(Set.copyOf(partitions));
+            }
+
+            @Override
+            public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+                // no-op
+            }
+
+            @Override
+            public void onPartitionsLost(final Collection<TopicPartition> partitions) {
+                fail("Expected assigned partitions to be revoked on close");
+            }
+        };
+
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
+            completeTopicSubscriptionChangeEventSuccessfully();
+            consumer.subscribe(singletonList(topicName), listener);
+            consumer.subscriptions().assignFromSubscribed(partitions);
+            consumer.setGroupAssignmentSnapshot(partitions);
+
+            final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
+            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(1), "memberId");
+
+            doAnswer(invocation -> {
+                LeaveGroupOnCloseEvent event = invocation.getArgument(0);
+                leaveGroupEvent.set(event);
+                assertTrue(Thread.currentThread().isInterrupted());
+                throw new InterruptException("Thread was interrupted");
+            }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(LeaveGroupOnCloseEvent.class));
+
+            try {
+                Thread.currentThread().interrupt();
+                assertThrows(InterruptException.class, () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
+            } finally {
+                Thread.interrupted();
+            }
+        }
+
+        assertTrue(revocationCallbackCalled.get());
+        assertEquals(partitions, revokedPartitions.get());
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(LeaveGroupOnCloseEvent.class));
+        assertNotNull(leaveGroupEvent.get());
+        assertEquals(CloseOptions.GroupMembershipOperation.DEFAULT, leaveGroupEvent.get().membershipOperation());
+    }
+
+    @Test
     public void testCommitSyncAllConsumed() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(

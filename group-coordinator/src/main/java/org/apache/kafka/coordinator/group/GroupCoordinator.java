@@ -47,6 +47,8 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -97,6 +99,27 @@ public interface GroupCoordinator {
     CompletableFuture<StreamsGroupHeartbeatResult> streamsGroupHeartbeat(
         AuthorizableRequestContext context,
         StreamsGroupHeartbeatRequestData request
+    );
+
+    /**
+     * Persist the full topology description pushed by a Streams group member.
+     *
+     * <p>The broker forwards the description to the configured
+     * {@code StreamsGroupTopologyDescriptionPlugin}. On success the broker writes a
+     * metadata record advancing {@code StoredDescriptionTopologyEpoch}. On a permanent
+     * plugin failure it writes {@code FailedDescriptionTopologyEpoch} to stop re-soliciting
+     * at the same epoch. On a transient failure no record is written and the broker arms
+     * an in-memory back-off.
+     *
+     * @param context   The request context.
+     * @param request   The StreamsGroupTopologyDescriptionUpdateRequest data.
+     *
+     * @return A future yielding the response. The error code is set to indicate any error
+     *         encountered during the execution.
+     */
+    CompletableFuture<StreamsGroupTopologyDescriptionUpdateResponseData> streamsGroupTopologyDescriptionUpdate(
+        AuthorizableRequestContext context,
+        StreamsGroupTopologyDescriptionUpdateRequestData request
     );
 
     /**

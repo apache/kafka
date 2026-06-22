@@ -3634,6 +3634,72 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testHandleDeleteGroupsDowngradesGroupDeletionFailedForOldClients(): Unit = {
+    // GROUP_DELETION_FAILED was introduced for DeleteGroups v3 (KIP-1331). For v<3 clients
+    // KafkaApis must downgrade it to UNKNOWN_SERVER_ERROR so the client can interpret the
+    // code; the ErrorMessage field is "versions": "3+", "ignorable": true and is stripped
+    // by the serialization layer for v<3, so this layer does not need to clear it.
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(util.List.of("group-1"))
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build(2))
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(groupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      util.List.of("group-1"),
+      RequestLocal.noCaching.bufferSupplier
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.noCaching
+    )
+
+    future.complete(new DeleteGroupsResponseData.DeletableGroupResultCollection(util.List.of(
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-1")
+        .setErrorCode(Errors.GROUP_DELETION_FAILED.code)
+        .setErrorMessage("plugin offline")
+    ).iterator))
+
+    val response = verifyNoThrottling[DeleteGroupsResponse](requestChannelRequest)
+    val result = response.data.results.find("group-1")
+    assertNotNull(result)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR.code, result.errorCode)
+  }
+
+  @Test
+  def testHandleDeleteGroupsKeepsGroupDeletionFailedForV3Clients(): Unit = {
+    // v3+ clients understand GROUP_DELETION_FAILED, so no downgrade.
+    val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(util.List.of("group-1"))
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build(3))
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(groupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      util.List.of("group-1"),
+      RequestLocal.noCaching.bufferSupplier
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.noCaching
+    )
+
+    future.complete(new DeleteGroupsResponseData.DeletableGroupResultCollection(util.List.of(
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-1")
+        .setErrorCode(Errors.GROUP_DELETION_FAILED.code)
+        .setErrorMessage("plugin offline")
+    ).iterator))
+
+    val response = verifyNoThrottling[DeleteGroupsResponse](requestChannelRequest)
+    val result = response.data.results.find("group-1")
+    assertNotNull(result)
+    assertEquals(Errors.GROUP_DELETION_FAILED.code, result.errorCode)
+    assertEquals("plugin offline", result.errorMessage)
+  }
+
+  @Test
   def testHandleDeleteGroupsFutureFailed(): Unit = {
     val deleteGroupsRequest = new DeleteGroupsRequestData().setGroupsNames(util.List.of(
       "group-1",

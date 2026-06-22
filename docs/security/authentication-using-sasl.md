@@ -1,6 +1,6 @@
 ---
 title: Authentication using SASL
-description: Authentication using SASL
+description: Kafka SASL authentication configuration for brokers and clients.
 weight: 4
 tags: ['kafka', 'docs']
 aliases: 

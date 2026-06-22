@@ -34,6 +34,7 @@ import org.apache.kafka.test.TestUtils;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateDirectory.PROCESS_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.toTaskDirString;
@@ -600,7 +602,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotDeleteAppDirWhenCleanUpIfNotEmpty() throws IOException {
+    public void shouldWarnWhenUnexpectedFilesRemainDuringClean() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.getOrCreateDirectoryForTask(taskId);
         final File testFile = new File(taskDirectory, "testFile");
@@ -614,9 +616,10 @@ public class StateDirectoryTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
             // call StateDirectory#clean
             directory.clean();
+            assertTrue(appDir.exists());
             assertThat(
                 appender.getMessages(),
-                hasItem(endsWith(String.format("Failed to delete state store directory of %s for it is not empty", appDir.getAbsolutePath())))
+                hasItem(containsString("unexpected files remain"))
             );
         }
     }
@@ -953,6 +956,125 @@ public class StateDirectoryTest {
         assertEquals(Set.of(dir2), new HashSet<>(files));
         files = directory.listNonEmptyTaskDirectories();
         assertEquals(Set.of(dir2), new HashSet<>(files));
+    }
+
+    @Test
+    public void shouldRetainAppDirAndNotWarnWhenOnlyProcessFileRemainsDuringClean() throws IOException {
+        // GIVEN
+        final File stateDir = TestUtils.tempDirectory();
+        final StateDirectory stateDirectory = new StateDirectory(
+                new StreamsConfig(new Properties() {
+                    {
+                        put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                        put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                        put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                    }
+                }),
+                time,
+                true,
+                false);
+
+        final File appStateDir = new File(stateDir, applicationId);
+        final File processFile = new File(appStateDir, PROCESS_FILE_NAME);
+        processFile.createNewFile();
+        stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            appender.setClassLogger(StateDirectory.class, Level.DEBUG);
+
+            // WHEN
+            stateDirectory.clean();
+
+            // THEN
+            assertTrue(processFile.exists());
+            assertTrue(appStateDir.exists());
+
+            final List<String> messages = appender.getMessages();
+            final boolean hasWarnLog = messages.stream()
+                    .anyMatch(msg -> msg.contains("Failed to fully clean up state store directory")
+                                        || msg.contains("Failed to delete state store directory"));
+            assertFalse(hasWarnLog);
+        }
+    }
+
+    @Test
+    public void shouldRetainAppDirAndNotWarnWhenOnlyLockFileRemainsDuringClean() throws IOException {
+        // GIVEN
+        final File stateDir = TestUtils.tempDirectory();
+        final StateDirectory stateDirectory = new StateDirectory(
+                new StreamsConfig(new Properties() {
+                    {
+                        put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                        put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                        put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                    }
+                }),
+                time,
+                true,
+                false);
+
+        final File appStateDir = new File(stateDir, applicationId);
+        final File lockFile = new File(appStateDir, LOCK_FILE_NAME);
+        lockFile.createNewFile();
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            appender.setClassLogger(StateDirectory.class, Level.DEBUG);
+
+            // WHEN
+            stateDirectory.clean();
+
+            // THEN
+            assertTrue(lockFile.exists());
+            assertTrue(appStateDir.exists());
+
+            final List<String> messages = appender.getMessages();
+            final boolean hasWarnLog = messages.stream()
+                    .anyMatch(msg -> msg.contains("Failed to fully clean up state store directory")
+                                        || msg.contains("Failed to delete state store directory"));
+            assertFalse(hasWarnLog);
+        }
+    }
+
+    @Test
+    public void shouldRetainAppDirAndNotWarnWhenOnlyExpectedMetadataFilesRemainDuringClean() throws IOException {
+        // GIVEN
+        final File stateDir = TestUtils.tempDirectory();
+        final StateDirectory stateDirectory = new StateDirectory(
+                new StreamsConfig(new Properties() {
+                    {
+                        put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                        put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                        put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                    }
+                }),
+                time,
+                true,
+                false);
+
+        final File appStateDir = new File(stateDir, applicationId);
+        final File processFile = new File(appStateDir, PROCESS_FILE_NAME);
+        final File lockFile = new File(appStateDir, LOCK_FILE_NAME);
+        processFile.createNewFile();
+        lockFile.createNewFile();
+        stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            appender.setClassLogger(StateDirectory.class, Level.DEBUG);
+
+            // WHEN
+            stateDirectory.clean();
+
+            // THEN
+            assertTrue(processFile.exists());
+            assertTrue(lockFile.exists());
+            assertTrue(appStateDir.exists());
+
+            final List<String> messages = appender.getMessages();
+            final boolean hasWarnLog = messages.stream()
+                    .anyMatch(msg -> msg.contains("Failed to fully clean up state store directory")
+                                        || msg.contains("Failed to delete state store directory"));
+            assertFalse(hasWarnLog);
+        }
     }
 
     private StateStore initializeStartupStores(final TaskId taskId, final boolean createTaskDir) {
