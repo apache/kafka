@@ -70,7 +70,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ShareHeartbeatRequestManagerTest
-        extends AbstractHeartbeatRequestManagerTest {
+        extends AbstractHeartbeatRequestManagerTest<ShareGroupHeartbeatResponse> {
 
     private static final String SHARE_CONSUMER_COORDINATOR_METRICS = "consumer-share-coordinator-metrics";
 
@@ -451,6 +451,11 @@ public class ShareHeartbeatRequestManagerTest
     private void assertNoHeartbeat(AbstractHeartbeatRequestManager<ShareGroupHeartbeatResponse> hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(0, pollResult.unsentRequests.size());
+    }
+
+    @Override
+    protected Class<ShareGroupHeartbeatResponse> responseClass() {
+        return ShareGroupHeartbeatResponse.class;
     }
 
     @Override

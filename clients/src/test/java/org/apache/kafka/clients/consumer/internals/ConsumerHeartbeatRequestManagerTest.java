@@ -88,7 +88,7 @@ import static org.mockito.Mockito.when;
 
 
 public class ConsumerHeartbeatRequestManagerTest
-        extends AbstractHeartbeatRequestManagerTest {
+        extends AbstractHeartbeatRequestManagerTest<ConsumerGroupHeartbeatResponse> {
 
     private static final String DEFAULT_REMOTE_ASSIGNOR = "uniform";
     private static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
@@ -904,6 +904,11 @@ public class ConsumerHeartbeatRequestManagerTest
     protected ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
                                                      Errors error) {
         return createHeartbeatResponse(request, error, "stubbed error message");
+    }
+
+    @Override
+    protected Class<ConsumerGroupHeartbeatResponse> responseClass() {
+        return ConsumerGroupHeartbeatResponse.class;
     }
 
     private ClientResponse createHeartbeatResponse(
