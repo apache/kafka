@@ -59,7 +59,6 @@ public class BufferPool {
     private final Metrics metrics;
     protected final Time time;
     private final Sensor waitTime;
-    /** True once {@link #close()} has been invoked. */
     protected boolean closed;
 
     /**

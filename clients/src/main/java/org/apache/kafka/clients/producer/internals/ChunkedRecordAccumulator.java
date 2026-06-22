@@ -199,8 +199,18 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                 }
 
                 synchronized (dq) {
-                    if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
+                    if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster)) {
+                        // The partition switched while we allocated extension chunks off-lock. They
+                        // were sized against the previous partition's tail batch, so they must not be
+                        // attached to a different partition's tail — refund them and let the next
+                        // iteration re-probe the new partition from scratch.
+                        if (extensionChunks != null) {
+                            for (ByteBuffer chunk : extensionChunks)
+                                chunkedFree.deallocate(chunk);
+                            extensionChunks = null;
+                        }
                         continue;
+                    }
 
                     if (extensionChunks != null) {
                         ProducerBatch last = dq.peekLast();

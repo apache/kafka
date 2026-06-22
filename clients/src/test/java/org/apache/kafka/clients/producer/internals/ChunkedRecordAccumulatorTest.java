@@ -44,6 +44,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -239,6 +240,87 @@ public class ChunkedRecordAccumulatorTest {
                     "Thread A failed: " + (aError.get() == null ? "" : aError.get().toString()));
         } finally {
             // Drain any state regardless of outcome.
+            accum.close();
+        }
+    }
+
+    /**
+     * Regression: when the sticky partition switches while extension chunks are held off-lock,
+     * those chunks — sized against the <em>previous</em> partition's tail batch — must be refunded
+     * to the pool on the retry, not carried into the next iteration and attached to a different
+     * partition's tail (which would over-extend the wrong batch).
+     * <p>
+     * Deterministic reproduction without threads: the extension path is the only one that calls
+     * {@code allocateChunks} non-blocking ({@code maxTimeToBlockMs == 0}), so the pool flags when an
+     * extension allocation has happened; a {@code partitionChanged} override then fires exactly one
+     * spurious switch on the very next check — which is the second-sync-block check, with the
+     * extension chunks held. The fix refunds those chunks before the retry; without it they are
+     * carried and attached instead, so no refund is observed during the append.
+     */
+    @Test
+    public void testPartitionSwitchRefundsHeldExtensionChunks() throws Exception {
+        int chunkSize = 128;
+        long totalMemory = 32L * chunkSize;
+
+        AtomicBoolean extensionAllocated = new AtomicBoolean(false);
+        AtomicInteger chunkDeallocations = new AtomicInteger(0);
+
+        ChunkedBufferPool pool = new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, "producer-metrics") {
+            @Override
+            public List<ByteBuffer> allocateChunks(int totalSize, long maxTimeToBlockMs) throws InterruptedException {
+                List<ByteBuffer> chunks = super.allocateChunks(totalSize, maxTimeToBlockMs);
+                // The mid-batch extension path is the only non-blocking caller.
+                if (maxTimeToBlockMs == 0L)
+                    extensionAllocated.set(true);
+                return chunks;
+            }
+
+            @Override
+            public void deallocate(ByteBuffer buffer) {
+                chunkDeallocations.incrementAndGet();
+                super.deallocate(buffer);
+            }
+        };
+
+        AtomicBoolean switchFired = new AtomicBoolean(false);
+        ChunkedRecordAccumulator accum = new ChunkedRecordAccumulator(logContext, 8192, Compression.NONE,
+                /* lingerMs */ 0, /* retryBackoffMs */ 0L, /* retryBackoffMaxMs */ 0L,
+                /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
+                /* transactionManager */ null, pool) {
+            @Override
+            protected boolean partitionChanged(String topic, TopicInfo topicInfo,
+                                               BuiltInPartitioner.StickyPartitionInfo partitionInfo,
+                                               Deque<ProducerBatch> deque, long nowMs, Cluster cluster) {
+                // Inject one spurious switch, but only once an extension allocation has happened —
+                // i.e. on the second-sync-block check, while extension chunks are held.
+                if (extensionAllocated.get() && switchFired.compareAndSet(false, true))
+                    return true;
+                return super.partitionChanged(topic, topicInfo, partitionInfo, deque, nowMs, cluster);
+            }
+        };
+        try {
+            // Warmup: tiny first record establishes a chunked tail (first-record path, blocking
+            // allocate — does not flag extensionAllocated).
+            accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+            int deallocBeforeExtend = chunkDeallocations.get();
+
+            // Second record overflows the chunk → extension allocated off-lock → injected switch
+            // fires in the second sync block with those chunks held.
+            accum.append(topic, partition1, 0L, key, new byte[200], Record.EMPTY_HEADERS, null,
+                    maxBlockTimeMs, time.milliseconds(), cluster);
+
+            assertTrue(switchFired.get(), "the injected partition switch should have fired");
+            assertTrue(chunkDeallocations.get() > deallocBeforeExtend,
+                    "extension chunks held at the partition switch must be refunded to the pool; "
+                            + "without the fix they are carried and attached instead");
+
+            // The record still appends correctly after the switch-retry.
+            Deque<ProducerBatch> dq = batchesFor(accum, tp1);
+            assertEquals(1, dq.size());
+            assertEquals(2, dq.peekFirst().recordCount,
+                    "second record should still land in the batch after the switch-retry");
+        } finally {
             accum.close();
         }
     }

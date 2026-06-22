@@ -30,10 +30,7 @@ import java.util.concurrent.locks.Condition;
 /**
  * A {@link BufferPool} dedicated to chunk-sized buffer reuse (chunk size = {@link #poolableSize()}).
  * <p>
- * Adds {@link #allocateChunks(int, long)} to acquire multiple chunks atomically: one lock
- * acquisition and a single {@link Condition} on {@link #waiters} (FIFO-fair against single-chunk
- * acquirers), with any failure (timeout, close, OOM) refunding the whole reservation before the
- * exception propagates. No partial holds are visible during the wait.
+ * Adds {@link #allocateChunks(int, long)} to acquire multiple chunks atomically.
  */
 public class ChunkedBufferPool extends BufferPool {
 
@@ -44,9 +41,10 @@ public class ChunkedBufferPool extends BufferPool {
     /**
      * Allocate {@code ceil(totalSize / chunkSize)} chunk-sized buffers atomically, mirroring
      * {@link BufferPool#allocate}: satisfied immediately if memory is available, else blocks up to
-     * {@code maxTimeToBlockMs} for the whole request (FIFO on {@link #waiters}). The reservation is
-     * tracked as bytes against {@link #nonPooledAvailableMemory} plus chunks polled from
-     * {@link #free}; on any failure path every reserved byte is returned and the next waiter signaled.
+     * {@code maxTimeToBlockMs} for the whole request (FIFO on {@link #waiters}).
+     * The reservation is tracked as bytes against {@link #nonPooledAvailableMemory} plus chunks polled
+     * from {@link #free}. Any failure refunds the whole reservation and signals
+     * the next waiter before the exception propagates, so no partial holds are visible during the wait.
      *
      * @param totalSize        minimum total bytes of capacity required across the returned chunks
      * @param maxTimeToBlockMs maximum time in milliseconds to block waiting for memory
@@ -67,7 +65,7 @@ public class ChunkedBufferPool extends BufferPool {
         int numChunks = (int) (((long) totalSize + chunkSize - 1L) / chunkSize);
         long memoryRequired = (long) numChunks * chunkSize;
 
-        // Chunks pulled from the free list; the remaining bytes are reserved against
+        // Chunks taken from the free list. The remaining bytes are reserved against
         // nonPooledAvailableMemory and materialized as raw allocations after the lock is released.
         List<ByteBuffer> pooled = new ArrayList<>(numChunks);
 

@@ -49,6 +49,28 @@ public class ChunkedByteBufferOutputStreamTest {
         return pool.allocateChunks(chunkSize * count, 100);
     }
 
+    /**
+     * The constructor fails fast with {@link IllegalArgumentException} when its chunk contract is
+     * violated — a null or empty list, or a chunk whose capacity differs from {@code chunkSize} —
+     * rather than the bare NPE / IndexOutOfBoundsException that {@code initialChunks.get(0)} would
+     * otherwise throw from the {@code super(...)} call.
+     */
+    @Test
+    public void testConstructorRejectsInvalidChunks() throws Exception {
+        int chunkSize = 16;
+        ChunkedBufferPool p = pool(64, chunkSize);
+
+        assertThrows(IllegalArgumentException.class,
+            () -> new ChunkedByteBufferOutputStream(null, chunkSize, p));
+        assertThrows(IllegalArgumentException.class,
+            () -> new ChunkedByteBufferOutputStream(Collections.emptyList(), chunkSize, p));
+
+        // A chunk whose capacity doesn't match chunkSize violates the contract.
+        List<ByteBuffer> wrongSize = Collections.singletonList(ByteBuffer.allocate(chunkSize + 1));
+        assertThrows(IllegalArgumentException.class,
+            () -> new ChunkedByteBufferOutputStream(wrongSize, chunkSize, p));
+    }
+
     /** Writes that fit in the initial chunk: stream produces the bytes back via buffer(). */
     @Test
     public void testSingleChunkWriteRoundtrip() throws Exception {

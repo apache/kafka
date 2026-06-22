@@ -59,15 +59,29 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      * @param chunkSize     the size of each chunk in bytes
      * @param pool          the buffer pool used for deallocation
      */
-    @SuppressWarnings("this-escape")
     public ChunkedByteBufferOutputStream(List<ByteBuffer> initialChunks, int chunkSize, BufferPool pool) {
-        super(initialChunks.get(0));
+        super(validatedFirstChunk(initialChunks, chunkSize));
         this.chunkSize = chunkSize;
         this.pool = pool;
         this.chunks = new ArrayList<>(initialChunks);
         this.currentChunk = this.chunks.get(0);
         this.currentChunkIndex = 0;
         this.dirty = true;
+    }
+
+    /**
+     * Validates the chunk contract: {@code initialChunks} non-empty, each chunk's capacity equal to
+     * {@code chunkSize}. Returns the first chunk.
+     */
+    private static ByteBuffer validatedFirstChunk(List<ByteBuffer> initialChunks, int chunkSize) {
+        if (initialChunks == null || initialChunks.isEmpty())
+            throw new IllegalArgumentException("initialChunks must be non-empty");
+        for (ByteBuffer chunk : initialChunks) {
+            if (chunk.capacity() != chunkSize)
+                throw new IllegalArgumentException("each chunk must have capacity " + chunkSize
+                    + ", but found a chunk of capacity " + chunk.capacity());
+        }
+        return initialChunks.get(0);
     }
 
     @Override
@@ -223,7 +237,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public int initialCapacity() {
-        return chunks.isEmpty() ? chunkSize : chunks.get(0).capacity();
+        // Every chunk is chunkSize (enforced by the constructor), so this is constant.
+        return chunkSize;
     }
 
     @Override
