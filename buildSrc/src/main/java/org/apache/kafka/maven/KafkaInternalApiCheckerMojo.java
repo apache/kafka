@@ -68,12 +68,6 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
     private boolean failOnViolation;
 
     /**
-     * Kafka version to validate against.
-     */
-    @Parameter(property = "kafka.internal-api-checker.kafkaVersion")
-    private String kafkaVersion;
-
-    /**
      * Compiled-class directories to scan. Defaults to the project's main and test build output
      * directories. Each entry may be a directory of {@code .class} files, an individual
      * {@code .class} file, or a {@code .jar} archive.
@@ -190,12 +184,6 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
             if ("org.apache.kafka".equals(artifact.getGroupId())) {
                 kafkaJars.add(artifact.getFile());
                 getLog().debug("Found Kafka dependency: " + artifact.getFile().getName());
-
-                // Auto-detect Kafka version if not set
-                if (kafkaVersion == null) {
-                    kafkaVersion = artifact.getVersion();
-                    getLog().info("Auto-detected Kafka version: " + kafkaVersion);
-                }
             }
         }
 
@@ -213,10 +201,6 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
 
     public void setFailOnViolation(boolean failOnViolation) {
         this.failOnViolation = failOnViolation;
-    }
-
-    public void setKafkaVersion(String kafkaVersion) {
-        this.kafkaVersion = kafkaVersion;
     }
 
     public void setClassesDirectories(List<File> classesDirectories) {

@@ -70,14 +70,6 @@
         </parameter>
 
         <parameter>
-          <name>kafkaVersion</name>
-          <type>java.lang.String</type>
-          <required>false</required>
-          <editable>true</editable>
-          <description>Kafka version to validate against (auto-detected if not specified)</description>
-        </parameter>
-
-        <parameter>
           <name>classesDirectories</name>
           <type>java.util.List</type>
           <required>false</required>
@@ -98,7 +90,6 @@
         <project implementation="org.apache.maven.project.MavenProject" default-value="${project}" />
         <enabled implementation="boolean" default-value="true">${kafka.internal-api-checker.enabled}</enabled>
         <failOnViolation implementation="boolean" default-value="true">${kafka.internal-api-checker.failOnViolation}</failOnViolation>
-        <kafkaVersion implementation="java.lang.String">${kafka.internal-api-checker.kafkaVersion}</kafkaVersion>
         <classesDirectories implementation="java.util.List" />
         <reportFile implementation="java.io.File" default-value="${project.build.directory}/reports/kafka-internal-api-usage.txt" />
       </configuration>

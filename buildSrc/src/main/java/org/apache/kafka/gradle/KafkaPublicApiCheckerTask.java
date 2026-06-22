@@ -52,7 +52,6 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
     private final RegularFileProperty javadocJarPath = getProject().getObjects().fileProperty();
     private final ConfigurableFileCollection projectJarFiles = getProject().getObjects().fileCollection();
     private final ConfigurableFileCollection referenceJarFiles = getProject().getObjects().fileCollection();
-    private final Property<Boolean> enforceJavadocConsistency = getProject().getObjects().property(Boolean.class);
     private final RegularFileProperty reportFile = getProject().getObjects().fileProperty();
 
     public KafkaPublicApiCheckerTask() {
@@ -62,7 +61,6 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
         // Set default values
         enabled.convention(true);
         failOnViolation.convention(true);
-        enforceJavadocConsistency.convention(true);
         reportFile.convention(getProject().getLayout().getBuildDirectory().file("reports/kafka-public-api-checker.txt"));
     }
 
@@ -167,11 +165,6 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
     @PathSensitive(PathSensitivity.RELATIVE)
     public ConfigurableFileCollection getReferenceJarFiles() {
         return referenceJarFiles;
-    }
-
-    @Input
-    public Property<Boolean> getEnforceJavadocConsistency() {
-        return enforceJavadocConsistency;
     }
 
     @OutputFile

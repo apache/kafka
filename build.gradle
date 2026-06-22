@@ -758,7 +758,6 @@ kafkaPublicApiChecker {
         }.files
     )
 
-    enforceJavadocConsistency = true
     enabled = true
     failOnViolation = true
 }

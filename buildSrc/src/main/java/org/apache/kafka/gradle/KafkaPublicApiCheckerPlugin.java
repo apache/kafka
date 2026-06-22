@@ -46,7 +46,6 @@ public class KafkaPublicApiCheckerPlugin implements Plugin<Project> {
                 // afterEvaluate. The convention block below is the single source of truth.
                 task.getProjectJarFiles().from(extension.getProjectJarFiles());
                 task.getReferenceJarFiles().from(extension.getReferenceJarFiles());
-                task.getEnforceJavadocConsistency().set(extension.getEnforceJavadocConsistency());
                 task.getReportFile().set(extension.getReportFile());
             });
 

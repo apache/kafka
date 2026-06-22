@@ -58,18 +58,15 @@ public class KafkaPublicApiCheckerTaskTest {
     void testTaskConfiguration_DefaultValues() {
         assertTrue(task.getCheckerEnabled().get());
         assertTrue(task.getFailOnViolation().get());
-        assertTrue(task.getEnforceJavadocConsistency().get());
     }
 
     @Test
     void testTaskConfiguration_CustomValues() {
         task.getCheckerEnabled().set(false);
         task.getFailOnViolation().set(false);
-        task.getEnforceJavadocConsistency().set(false);
 
         assertFalse(task.getCheckerEnabled().get());
         assertFalse(task.getFailOnViolation().get());
-        assertFalse(task.getEnforceJavadocConsistency().get());
     }
 
     @Test
