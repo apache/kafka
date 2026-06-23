@@ -26,12 +26,10 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterFeature;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import com.yammer.metrics.core.Meter;
@@ -63,9 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
-        @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-        // share.version 2 (which enables the share group DLQ) is not yet a production feature version.
-        @ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true")
+        @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1")
     }
 )
 public class ShareConsumerDLQTest extends ShareConsumerTestBase {
@@ -91,9 +87,7 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
      * carry only the context headers (no key/value). Finally asserts the DLQ metrics for records written and
      * produce requests enqueued.
      */
-    @ClusterTest(
-        features = {@ClusterFeature(feature = Feature.SHARE_VERSION, version = 2)}
-    )
+    @ClusterTest
     public void testRejectedRecordsWrittenToDlqWithCopyRecordDisabled() throws Exception {
         String groupId = "dlq-group";
         // The broker's default share-group DLQ topic prefix is "dlq.", so the topic name must start with it.
@@ -126,8 +120,7 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
     @ClusterTest(
         serverProperties = {
             @ClusterConfigProperty(key = "errors.deadletterqueue.auto.create.topics.enable", value = "true")
-        },
-        features = {@ClusterFeature(feature = Feature.SHARE_VERSION, version = 2)}
+        }
     )
     public void testRejectedRecordsWrittenToAutoCreatedDlq() throws Exception {
         String groupId = "dlq-autocreate-group";
@@ -154,9 +147,7 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
      * is exceeded the broker archives them and writes them to the DLQ (cause: delivery count exceeded). The
      * DLQ topic is created manually up front. Verifies the records reached the DLQ and the DLQ metrics fired.
      */
-    @ClusterTest(
-        features = {@ClusterFeature(feature = Feature.SHARE_VERSION, version = 2)}
-    )
+    @ClusterTest
     public void testReleasedRecordsExceedingDeliveryCountWrittenToDlq() throws Exception {
         String groupId = "dlq-release-group";
         // The broker's default share-group DLQ topic prefix is "dlq.", so the topic name must start with it.
