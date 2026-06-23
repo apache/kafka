@@ -12097,7 +12097,7 @@ public class GroupMetadataManagerTest {
             .setSessionTimeoutMs(5000)
             .setRebalanceTimeoutMs(45000);
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class,
+        InconsistentGroupProtocolException ex = assertThrows(InconsistentGroupProtocolException.class,
             () -> context.sendClassicGroupJoin(joinRequest));
         assertEquals("Malformed embedded consumer protocol in subscription deserialization.", ex.getMessage());
     }
