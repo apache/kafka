@@ -938,7 +938,12 @@ public class TopologyTestDriver implements Closeable {
     private StateStore getStateStore(final String name,
                                      final boolean throwForBuiltInStores) {
         if (task != null) {
-            task.processorContext().setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+            // Accessing a store must not corrupt the task's record context. Only set a dummy
+            // context when none exists yet (i.e. before any record has been processed) so that
+            // direct store operations have a context to work with; never overwrite a live one.
+            if (task.processorContext().recordContext() == null) {
+                task.processorContext().setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+            }
             final StateStore stateStore = ((ProcessorContextImpl) task.processorContext()).stateManager().store(name);
             if (stateStore != null) {
                 if (throwForBuiltInStores) {

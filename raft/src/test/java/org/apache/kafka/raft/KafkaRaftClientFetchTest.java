@@ -28,10 +28,6 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.server.common.KRaftVersion;
 
-import net.jqwik.api.AfterFailureMode;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
@@ -49,11 +45,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class KafkaRaftClientFetchTest {
-    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void testRandomRecords(
-        @ForAll(supplier = ArbitraryMemoryRecords.class) MemoryRecords memoryRecords
-    ) throws Exception {
-        testFetchResponseWithInvalidRecord(memoryRecords, Integer.MAX_VALUE);
+
+    @Test
+    void testRandomRecords() {
+        ArbitraryMemoryRecords.forRandomRecords(100, memoryRecords ->
+            testFetchResponseWithInvalidRecord(memoryRecords, Integer.MAX_VALUE)
+        );
     }
 
     @ParameterizedTest

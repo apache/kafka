@@ -334,8 +334,19 @@ public class BuiltInPartitioner {
         // Invert and fold the queue size, so that they become separator values in the CFT.
         invertAndFoldQueueSizeArray(queueSizes, maxSizePlus1, length);
 
-        log.trace("Partition load stats for topic {}: CFT={}, IDs={}, length={}",
-                topic, queueSizes, partitionIds, length);
+        if (log.isTraceEnabled()) {
+            if (rackAware) {
+                assert partitionLoadStatsInThisRack != null;
+                log.trace(
+                    "Partition load stats for topic {}: CFT={}, IDs={}, length={}; in producer rack: CFT={}, IDs={}, length={}",
+                    topic,
+                    queueSizes, partitionIds, length,
+                    partitionLoadStatsInThisRack.cumulativeFrequencyTable, partitionLoadStatsInThisRack.partitionIds, partitionLoadStatsInThisRack.length);
+            } else {
+                log.trace("Partition load stats for topic {}: CFT={}, IDs={}, length={}",
+                    topic, queueSizes, partitionIds, length);
+            }
+        }
         partitionLoadStatsHolder = new PartitionLoadStatsHolder(
             new PartitionLoadStats(queueSizes, partitionIds, length),
             partitionLoadStatsInThisRack

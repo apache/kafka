@@ -31,51 +31,51 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     private static final String NL = System.lineSeparator();
 
     private static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
-    private static final String GROUP_DOC = "The streams group we wish to act on.";
+    private static final String GROUP_DOC = "The streams group id.";
     private static final String ALL_GROUPS_DOC = "Apply to all streams groups.";
     private static final String INPUT_TOPIC_DOC = "The input topic whose committed offset should be deleted or reset. " +
-        "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
+        "In --reset-offsets case, partitions can be specified using this format: `topic:0,1,2`, where 0,1,2 are the partitions to be included. " +
         "Multiple input topics can be specified. Supported operations: delete-offsets, reset-offsets.";
-    private static final String ALL_INPUT_TOPICS_DOC = "Consider all source topics used in the topology of the group. Supported operations: delete-offsets, reset-offsets.";
+    private static final String ALL_INPUT_TOPICS_DOC = "Consider all input topics used in the topology of the group. Supported operations: delete-offsets, reset-offsets.";
     private static final String LIST_DOC = "List all streams groups.";
     private static final String DESCRIBE_DOC = "Describe streams group and list offset lag related to given group.";
-    private static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
-        "over the entire streams group. For instance --group g1 --group g2";
-    private static final String DELETE_OFFSETS_DOC = "Delete offsets of streams group. Supports one streams group at the time, and multiple topics.";
+    private static final String DELETE_DOC = "Delete topic partition offsets and ownership information for one or more streams groups.";
+    private static final String DELETE_OFFSETS_DOC = "Delete offsets of streams group. Supports one streams group at a time, and multiple topics.";
     private static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
         "to specify the maximum amount of time in milliseconds to wait before the group stabilizes.";
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
-    private static final String STATE_DOC = "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states. " +
+    private static final String STATE_DOC = "When specified with --list, it displays the state of all groups. It can also be used to list groups with specific states. " +
         "Valid values are Empty, NotReady, Stable, Assigning, Reconciling, and Dead.";
-    private static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the '--describe' option only.";
+    private static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the --describe option only.";
     private static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information." +
-        "This is the default sub-action and may be used with the '--describe' option only.";
+        "This is the default sub-action and may be used with the --describe option only.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of streams group. The instances should be inactive." + NL +
         "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to update the offsets." + NL +
         "If you use --execute, all internal topics linked to the group will also be deleted." + NL +
+        "Additionally, the --export option can be used to generate the offsets in CSV format for export to a file." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
         "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + NL +
-        "To define the scope use --all-input-topics or --input-topic. One scope must be specified unless you use '--from-file'." + NL +
-        "Fails if neither '--dry-run' nor '--execute' is specified.";
-    private static final String DRY_RUN_DOC = "Only show results without executing changes on streams group. Supported operations: reset-offsets.";
-    private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
-    private static final String EXPORT_DOC = "Export operation execution to a CSV file. Supported operations: reset-offsets.";
+        "To define the scope, use --all-input-topics or --input-topic. The scope must be specified unless you use --from-file." + NL +
+        "Fails if neither --dry-run nor --execute is specified.";
+    private static final String DRY_RUN_DOC = "Only show results without executing changes on streams group. Supported operation: reset-offsets.";
+    private static final String EXECUTE_DOC = "Execute the offset reset operation. Supported operation: reset-offsets.";
+    private static final String EXPORT_DOC = "Generate offset reset information in CSV format for export to a file. Supported operation: reset-offsets.";
     private static final String RESET_TO_OFFSET_DOC = "Reset offsets to a specific offset.";
     private static final String RESET_FROM_FILE_DOC = "Reset offsets to values defined in CSV file.";
     private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'";
-    private static final String RESET_BY_DURATION_DOC = "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'";
+    private static final String RESET_BY_DURATION_DOC = "Reset offsets by duration from current timestamp. Format: 'PnDTnHnMnS'";
     private static final String RESET_TO_EARLIEST_DOC = "Reset offsets to earliest offset.";
     private static final String RESET_TO_LATEST_DOC = "Reset offsets to latest offset.";
     private static final String RESET_TO_CURRENT_DOC = "Reset offsets to current offset.";
     private static final String RESET_SHIFT_BY_DOC = "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative.";
-    private static final String DELETE_INTERNAL_TOPIC_DOC = "Delete specified internal topic of the streams group. Supported operations: reset-offsets." +
+    private static final String DELETE_INTERNAL_TOPIC_DOC = "Delete specified internal topic of the streams group. Supported operation: reset-offsets." +
         "This option is applicable only when --execute is used.";
     private static final String DELETE_ALL_INTERNAL_TOPICS_DOC = "Delete all internal topics linked to the streams group. Supported operations: reset-offsets, delete." +
         "With reset-offsets, this option is applicable only when --execute is used.";
     private static final String VERBOSE_DOC = """
-        Use with --describe --state  to show group epoch and target assignment epoch.
+        Use with --describe --state to show group epoch and target assignment epoch.
         Use with --describe --members to show for each member the member epoch, target assignment epoch, current assignment, target assignment, and whether member is still using the classic rebalance protocol.
-        Use with --describe --offsets  and --describe  to show leader epochs for each partition.""";
+        Use with --describe --offsets and --describe to show leader epochs for each partition.""";
 
     final OptionSpec<String> bootstrapServerOpt;
     final OptionSpec<String> groupOpt;
@@ -128,7 +128,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
             .ofType(String.class);
         groupOpt = parser.accepts("group", GROUP_DOC)
             .withRequiredArg()
-            .describedAs("streams group")
+            .describedAs("group id")
             .ofType(String.class);
         inputTopicOpt = parser.accepts("input-topic", INPUT_TOPIC_DOC)
             .withRequiredArg()
@@ -204,7 +204,7 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
 
     @SuppressWarnings("NPathComplexity")
     void checkArgs() {
-        CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list, or describe streams groups.");
+        CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to list, describe, delete and manage the offsets of streams groups.");
 
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
