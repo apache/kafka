@@ -3219,6 +3219,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldPropagateSuspendExceptionWhenRevokingStandbyTask
 - shouldPropagateTaskMigratedExceptionsInProcessActiveTasks
 - shouldPropagateTaskMigratedExceptionsInPunctuateActiveTasks
+- shouldPublishTaskOffsetSumSnapshotFromStateDirectoryExcludingRunningActiveTasks
 - shouldPunctuateActiveTasks
 - shouldReAddRevivedTasksToStateUpdater
 - shouldReInitializeStreamsProducerOnHandleLostAllIfEosV2Enabled
@@ -3240,6 +3241,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldRetryInitializationWhenTimeoutExceptionInStateUpdater
 - shouldRetryInitializationWithBackoffWhenInitializationFails
 - shouldReturnCorrectBooleanWhenTryingToCompleteRestoration
+- shouldReturnEmptyTaskOffsetSumSnapshotBeforeRefresh
 - shouldReturnFalseFromCheckStateUpdaterIfActiveTasksAreNotRestoringAndNoPendingTaskToRecycleButPendingTasksToInit
 - shouldReturnFalseFromCheckStateUpdaterIfActiveTasksAreRestoring
 - shouldReturnFalseWhenThereAreStillNonRunningTasks
@@ -4767,6 +4769,20 @@ org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer
 - bufferShouldAllowCacheEnablement
 - bufferShouldAllowLoggingDisablement
 - bufferShouldAllowLoggingEnablement
+org.apache.kafka.streams.state.internals.InMemoryTransactionBufferTest:
+- shouldCommitStagedWritesToBase
+- shouldMergeStagedWritesInAllScan
+- shouldMergeStagedWritesInOwnerAllScan
+- shouldMergeStagedWritesInRangeScan
+- shouldNotShowStagedWritesInBaseAfterRollback
+- shouldReportIsEmpty
+- shouldReturnEmptyOptionalForStagedTombstone
+- shouldReturnNullForUnstagedKey
+- shouldReturnStagedValue
+- shouldReturnStagedValueForNewKey
+- shouldRollbackWithoutAffectingBase
+- shouldScanFromAnotherThread
+- shouldSeeStagedWritesFromAnotherThread
 org.apache.kafka.streams.state.internals.InMemoryWindowStoreTest:
 - shouldBackwardFetchAllInTimeRange
 - shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext
