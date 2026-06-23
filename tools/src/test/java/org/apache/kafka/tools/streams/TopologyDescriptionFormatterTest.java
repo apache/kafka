@@ -77,6 +77,34 @@ public class TopologyDescriptionFormatterTest {
     }
 
     @Test
+    public void testFormatMultipleSubtopologiesAreIndentedConsistently() {
+        Source source0 = new Source("source-0", Set.of("input-0"), Set.of(), Set.of());
+        Source source1 = new Source("source-1", Set.of("input-1"), Set.of(), Set.of());
+        StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(
+            List.of(
+                new Subtopology("0", List.<Node>of(source0)),
+                new Subtopology("1", List.<Node>of(source1))),
+            List.of());
+
+        // Both subtopologies are prefixed with the same three-space indentation.
+        assertEquals("Topologies:\n" +
+            "   Sub-topology: 0\n" +
+            "    Source: source-0 (topics: [input-0])\n" +
+            "      --> \n" +
+            "\n" +
+            "   Sub-topology: 1\n" +
+            "    Source: source-1 (topics: [input-1])\n" +
+            "      --> \n" +
+            "\n", TopologyDescriptionFormatter.format(topology));
+    }
+
+    @Test
+    public void testFormatEmptyTopologyHasNoTrailingSpace() {
+        StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(List.of(), List.of());
+        assertEquals("Topologies:\n", TopologyDescriptionFormatter.format(topology));
+    }
+
+    @Test
     public void testFormatSinkWithoutTopicAndMultipleSuccessors() {
         Source source = new Source("source", Set.of("t2", "t1"), Set.of("p2", "p1"), Set.of());
         Sink sink = new Sink("sink", Optional.empty(), Set.of(), Set.of("source"));

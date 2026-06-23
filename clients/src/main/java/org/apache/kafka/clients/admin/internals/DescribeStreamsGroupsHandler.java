@@ -131,10 +131,27 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
 
             final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
 
-            final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus =
-                StreamsGroupTopologyDescriptionStatus.forId(describedGroup.topologyDescriptionStatus());
-            final Optional<StreamsGroupTopologyDescription> topologyDescription =
-                convertTopologyDescription(topologyDescriptionStatus, describedGroup.topologyDescription());
+            final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus;
+            try {
+                topologyDescriptionStatus =
+                    StreamsGroupTopologyDescriptionStatus.forId(describedGroup.topologyDescriptionStatus());
+            } catch (IllegalArgumentException e) {
+                log.error("`DescribeStreamsGroups` response for group id {} contains an unknown topology description status {}",
+                    groupIdKey.idValue, describedGroup.topologyDescriptionStatus());
+                failed.put(groupIdKey, new IllegalStateException(
+                    "Unknown topology description status " + describedGroup.topologyDescriptionStatus(), e));
+                continue;
+            }
+            final Optional<StreamsGroupTopologyDescription> topologyDescription;
+            try {
+                topologyDescription =
+                    convertTopologyDescription(topologyDescriptionStatus, describedGroup.topologyDescription());
+            } catch (IllegalStateException e) {
+                log.error("`DescribeStreamsGroups` response for group id {} contains a topology description that could not be parsed",
+                    groupIdKey.idValue, e);
+                failed.put(groupIdKey, e);
+                continue;
+            }
 
             final StreamsGroupDescription streamsGroupDescription = new StreamsGroupDescription(
                     describedGroup.groupId(),

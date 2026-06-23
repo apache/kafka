@@ -184,6 +184,92 @@ public class DescribeStreamsGroupsHandlerTest {
         assertFalse(description.topologyDescription().isPresent());
     }
 
+    @Test
+    public void testUnknownTopologyDescriptionStatusFailsOnlyAffectedGroup() {
+        // A future broker version may add a topology description status id that this client does not know about.
+        byte unknownStatusId = (byte) 99;
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = newDescribedGroup()
+            .setTopologyDescriptionStatus(unknownStatusId)
+            .setTopologyDescription(null);
+
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(false, true, logContext);
+        CoordinatorKey key = CoordinatorKey.byGroupId(groupId);
+        AdminApiHandler.ApiResult<CoordinatorKey, StreamsGroupDescription> result = handler.handleResponse(
+            coordinator,
+            Set.of(key),
+            new StreamsGroupDescribeResponse(new StreamsGroupDescribeResponseData()
+                .setGroups(List.of(describedGroup))));
+
+        // The unknown status must surface as a per-group failure rather than propagating an exception.
+        assertTrue(result.completedKeys.isEmpty());
+        assertEquals(Set.of(key), result.failedKeys.keySet());
+        assertInstanceOf(IllegalStateException.class, result.failedKeys.get(key));
+    }
+
+    @Test
+    public void testUnknownTopologyNodeTypeFailsOnlyAffectedGroup() {
+        // A future broker version may add a topology node type that this client does not know about.
+        StreamsGroupDescribeResponseData.TopologyDescriptionNode unknownNode =
+            new StreamsGroupDescribeResponseData.TopologyDescriptionNode()
+                .setName("mystery")
+                .setNodeType((byte) 99)
+                .setSuccessors(List.of());
+        StreamsGroupDescribeResponseData.TopologyDescription wire =
+            new StreamsGroupDescribeResponseData.TopologyDescription()
+                .setSubtopologies(List.of(
+                    new StreamsGroupDescribeResponseData.TopologyDescriptionSubtopology()
+                        .setSubtopologyId("0")
+                        .setNodes(List.of(unknownNode))))
+                .setGlobalStores(List.of());
+
+        assertGroupFailed(wire);
+    }
+
+    @Test
+    public void testMalformedGlobalStoreFailsOnlyAffectedGroup() {
+        // A global store must be a source/processor pair; here the "source" is itself a sink node.
+        StreamsGroupDescribeResponseData.TopologyDescriptionNode notASource =
+            new StreamsGroupDescribeResponseData.TopologyDescriptionNode()
+                .setName("global-sink")
+                .setNodeType(DescribeStreamsGroupsHandler.NODE_TYPE_SINK)
+                .setSinkTopic("output")
+                .setSuccessors(List.of());
+        StreamsGroupDescribeResponseData.TopologyDescriptionNode processor =
+            new StreamsGroupDescribeResponseData.TopologyDescriptionNode()
+                .setName("global-processor")
+                .setNodeType(DescribeStreamsGroupsHandler.NODE_TYPE_PROCESSOR)
+                .setStores(List.of("global-store"))
+                .setSuccessors(List.of());
+        StreamsGroupDescribeResponseData.TopologyDescription wire =
+            new StreamsGroupDescribeResponseData.TopologyDescription()
+                .setSubtopologies(List.of())
+                .setGlobalStores(List.of(
+                    new StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore()
+                        .setSource(notASource)
+                        .setProcessor(processor)));
+
+        assertGroupFailed(wire);
+    }
+
+    private void assertGroupFailed(StreamsGroupDescribeResponseData.TopologyDescription wire) {
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = newDescribedGroup()
+            .setTopologyDescriptionStatus(StreamsGroupTopologyDescriptionStatus.AVAILABLE.id())
+            .setTopologyDescription(wire);
+
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(false, true, logContext);
+        CoordinatorKey key = CoordinatorKey.byGroupId(groupId);
+        AdminApiHandler.ApiResult<CoordinatorKey, StreamsGroupDescription> result = handler.handleResponse(
+            coordinator,
+            Set.of(key),
+            new StreamsGroupDescribeResponse(new StreamsGroupDescribeResponseData()
+                .setGroups(List.of(describedGroup))));
+
+        // The parsing failure must surface as a per-group failure rather than propagating an exception.
+        assertTrue(result.completedKeys.isEmpty());
+        assertEquals(Set.of(key), result.failedKeys.keySet());
+        assertInstanceOf(IllegalStateException.class, result.failedKeys.get(key));
+    }
+
     private StreamsGroupDescribeResponseData.DescribedGroup newDescribedGroup() {
         return new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)

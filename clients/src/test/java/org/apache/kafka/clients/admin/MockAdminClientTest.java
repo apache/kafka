@@ -52,6 +52,45 @@ public class MockAdminClientTest {
     }
 
     @Test
+    public void testDescribeStreamsGroupsReturnsTopologyDescriptionWhenRequested() throws Exception {
+        String groupId = "stream-group";
+        StreamsGroupDescription description = newStreamsGroupDescriptionWithTopology(groupId);
+
+        try (MockAdminClient admin = new MockAdminClient()) {
+            admin.addStreamsGroupDescription(description);
+
+            StreamsGroupDescription result = admin
+                .describeStreamsGroups(List.of(groupId), new DescribeStreamsGroupsOptions().includeTopologyDescription(true))
+                .all()
+                .get()
+                .get(groupId);
+
+            assertEquals(StreamsGroupTopologyDescriptionStatus.AVAILABLE, result.topologyDescriptionStatus());
+            assertEquals(description.topologyDescription(), result.topologyDescription());
+        }
+    }
+
+    @Test
+    public void testDescribeStreamsGroupsOmitsTopologyDescriptionWhenNotRequested() throws Exception {
+        String groupId = "stream-group";
+        StreamsGroupDescription description = newStreamsGroupDescriptionWithTopology(groupId);
+
+        try (MockAdminClient admin = new MockAdminClient()) {
+            admin.addStreamsGroupDescription(description);
+
+            // No includeTopologyDescription(true): a real broker returns NOT_REQUESTED, so the mock must too.
+            StreamsGroupDescription result = admin
+                .describeStreamsGroups(List.of(groupId))
+                .all()
+                .get()
+                .get(groupId);
+
+            assertEquals(StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED, result.topologyDescriptionStatus());
+            assertEquals(Optional.empty(), result.topologyDescription());
+        }
+    }
+
+    @Test
     public void testDescribeStreamsGroupsUnknownGroupFails() {
         try (MockAdminClient admin = new MockAdminClient()) {
             ExecutionException exception = assertThrows(
@@ -74,5 +113,21 @@ public class MockAdminClientTest {
             Set.of(),
             Optional.empty(),
             StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED);
+    }
+
+    private StreamsGroupDescription newStreamsGroupDescriptionWithTopology(String groupId) {
+        StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(List.of(), List.of());
+        return new StreamsGroupDescription(
+            groupId,
+            0,
+            0,
+            0,
+            List.of(),
+            List.of(),
+            GroupState.STABLE,
+            new Node(0, "host", 0),
+            Set.of(),
+            Optional.of(topology),
+            StreamsGroupTopologyDescriptionStatus.AVAILABLE);
     }
 }

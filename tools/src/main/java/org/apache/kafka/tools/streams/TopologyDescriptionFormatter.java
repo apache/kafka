@@ -39,15 +39,15 @@ public final class TopologyDescriptionFormatter {
 
     public static String format(final StreamsGroupTopologyDescription topology) {
         final StringBuilder sb = new StringBuilder();
-        sb.append("Topologies:\n ");
+        sb.append("Topologies:\n");
         for (final Subtopology subtopology : topology.subtopologies()) {
-            sb.append("  ");
+            sb.append("   ");
             appendSubtopology(sb, subtopology);
         }
         // The wire format does not carry global store ids, so number them sequentially after the subtopologies.
         int globalStoreId = topology.subtopologies().size();
         for (final GlobalStore globalStore : topology.globalStores()) {
-            sb.append("  ");
+            sb.append("   ");
             appendGlobalStore(sb, globalStore, globalStoreId++);
         }
         return sb.toString();

@@ -1486,6 +1486,10 @@ public class MockAdminClient extends AdminClient {
             KafkaFutureImpl<StreamsGroupDescription> future = new KafkaFutureImpl<>();
             StreamsGroupDescription description = streamsGroupDescriptions.get(groupId);
             if (description != null) {
+                // Mirror the broker: the topology description is only returned when explicitly requested.
+                if (!options.includeTopologyDescription()) {
+                    description = withoutTopologyDescription(description);
+                }
                 future.complete(description);
             } else {
                 future.completeExceptionally(new GroupIdNotFoundException("Group " + groupId + " not found."));
@@ -1494,7 +1498,23 @@ public class MockAdminClient extends AdminClient {
         }
         return new DescribeStreamsGroupsResult(futures);
     }
-    
+
+    private static StreamsGroupDescription withoutTopologyDescription(StreamsGroupDescription description) {
+        return new StreamsGroupDescription(
+            description.groupId(),
+            description.groupEpoch(),
+            description.targetAssignmentEpoch(),
+            description.topologyEpoch(),
+            description.subtopologies(),
+            description.members(),
+            description.groupState(),
+            description.coordinator(),
+            description.authorizedOperations(),
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED
+        );
+    }
+
     @Override
     public synchronized DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds, DescribeClassicGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
