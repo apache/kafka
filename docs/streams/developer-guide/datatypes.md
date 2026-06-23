@@ -1,6 +1,6 @@
 ---
 title: Data Types and Serialization
-description: 
+description: Kafka Streams data types, serialization, and SerDes.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 

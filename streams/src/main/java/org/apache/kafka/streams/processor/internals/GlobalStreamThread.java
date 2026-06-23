@@ -75,6 +75,7 @@ public class GlobalStreamThread extends Thread {
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture = new KafkaFutureImpl<>();
     private final CountDownLatch initializationLatch = new CountDownLatch(1);
+    private volatile long maxUncommittedBytes;
 
     /**
      * The states that the global stream thread can be in
@@ -202,6 +203,7 @@ public class GlobalStreamThread extends Thread {
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
                               final long cacheSizeBytes,
+                              final long maxUncommittedBytes,
                               final StreamsMetricsImpl streamsMetrics,
                               final Time time,
                               final String threadClientId,
@@ -221,6 +223,7 @@ public class GlobalStreamThread extends Thread {
         this.stateRestoreListener = stateRestoreListener;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheSize = new AtomicLong(-1L);
+        this.maxUncommittedBytes = maxUncommittedBytes;
     }
 
     static class StateConsumer {
@@ -257,6 +260,14 @@ public class GlobalStreamThread extends Thread {
                 stateMaintainer.update(record);
             }
             stateMaintainer.maybeCheckpoint();
+        }
+
+        void flushState() {
+            stateMaintainer.flushState();
+        }
+
+        long approximateNumUncommittedBytes() {
+            return stateMaintainer.approximateNumUncommittedBytes();
         }
 
         public void close(final boolean wipeStateStore) throws IOException {
@@ -300,6 +311,13 @@ public class GlobalStreamThread extends Thread {
                     cache.resize(size);
                 }
                 stateConsumer.pollAndUpdate();
+
+                final long uncommittedLimit = maxUncommittedBytes;
+                if (uncommittedLimit > 0
+                        && stateConsumer.approximateNumUncommittedBytes() > uncommittedLimit) {
+                    log.debug("Committing global state: uncommitted bytes exceeded {}", uncommittedLimit);
+                    stateConsumer.flushState();
+                }
 
                 if (fetchDeadlineClientInstanceId != -1) {
                     if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
@@ -370,6 +388,10 @@ public class GlobalStreamThread extends Thread {
 
     public void resize(final long cacheSize) {
         this.cacheSize.set(cacheSize);
+    }
+
+    public void resizeMaxUncommittedBytes(final long maxUncommittedBytes) {
+        this.maxUncommittedBytes = maxUncommittedBytes;
     }
 
     private StateConsumer initialize() {

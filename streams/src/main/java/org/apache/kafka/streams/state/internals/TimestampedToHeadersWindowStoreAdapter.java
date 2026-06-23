@@ -180,6 +180,11 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void close() {
         store.close();
     }

@@ -238,6 +238,10 @@ public interface Task {
 
     boolean commitNeeded();
 
+    default long approximateNumUncommittedBytes() {
+        return 0;
+    }
+
     default boolean commitRequested() {
         return false;
     }

@@ -1,6 +1,6 @@
 ---
 title: Memory Management
-description: 
+description: Kafka Streams memory management for caches, state stores, and record buffers.
 weight: 9
 tags: ['kafka', 'docs']
 aliases: 
