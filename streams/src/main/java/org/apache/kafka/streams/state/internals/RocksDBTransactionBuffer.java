@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
@@ -58,6 +60,11 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     private final String storeName;
     private WriteBatch writeBatch;
     private volatile NavigableMap<Bytes, List<Bytes>> rangeTombstones = Collections.emptyNavigableMap();
+    // Position deltas for writes staged in the current (uncommitted) transaction. Merged into the
+    // store's committed Position and cleared on commit; discarded on rollback. Guarded by
+    // snapshotLock (the same lock that guards the staging map), so reads from IQ threads and
+    // owner mutations stay consistent with the staged writes they correspond to.
+    private Position pendingPosition = Position.emptyPosition();
 
     RocksDBTransactionBuffer(final RocksDB db,
                              final ColumnFamilyHandle cfHandle,
@@ -272,8 +279,42 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
 
     @Override
     void discardPendingBatch() {
+        // Called from rollback() under the snapshotLock write lock: discard the staged position
+        // alongside the staged writes and range tombstones.
         writeBatch.clear();
         rangeTombstones = Collections.emptyNavigableMap();
+        pendingPosition = Position.emptyPosition();
+    }
+
+    /** Stage the current record's position into the uncommitted transaction (owner write path). */
+    void updatePosition(final StateStoreContext stateStoreContext) {
+        snapshotLock.writeLock().lock();
+        try {
+            StoreQueryUtils.updatePosition(pendingPosition, stateStoreContext);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
+    }
+
+    /** A point-in-time copy of the uncommitted position deltas, for isolation-aware (IQ) reads. */
+    Position pendingPosition() {
+        snapshotLock.readLock().lock();
+        try {
+            return pendingPosition.copy();
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
+    }
+
+    /** Merge the uncommitted position deltas into {@code committed} and clear them (commit path). */
+    void mergePendingPositionInto(final Position committed) {
+        snapshotLock.writeLock().lock();
+        try {
+            committed.merge(pendingPosition);
+            pendingPosition = Position.emptyPosition();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
     }
 
     @Override

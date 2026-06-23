@@ -497,7 +497,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         synchronized (position) {
             cfAccessor.put(dbAccessor, key.get(), value);
-            StoreQueryUtils.updatePosition(position, context);
+            dbAccessor.updatePosition(position, context);
         }
     }
 
@@ -518,7 +518,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             try (final WriteBatch batch = new WriteBatch()) {
                 cfAccessor.prepareBatch(entries, batch);
                 write(batch);
-                StoreQueryUtils.updatePosition(position, context);
+                dbAccessor.updatePosition(position, context);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while batch writing to store " + name, e);
             }
@@ -531,12 +531,20 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final PositionBound positionBound,
         final QueryConfig config) {
 
+        final Position queryPosition;
+        synchronized (position) {
+            if (config.getIsolationLevel() == IsolationLevel.READ_COMMITTED) {
+                queryPosition = position.copy();
+            } else {
+                queryPosition = position.copy().merge(dbAccessor.uncommittedPositionDeltas());
+            }
+        }
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
             config,
             this,
-            position,
+            queryPosition,
             context
         );
     }
@@ -893,6 +901,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
         try {
             cfAccessor.commit(dbAccessor, changelogOffsets);
+            synchronized (position) {
+                dbAccessor.mergeUncommittedPositionInto(position);
+            }
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while executing commit from store " + name, e);
         }
@@ -1081,6 +1092,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         default void rollbackStagedWrites() {
             // no-op for non-transactional accessors
         }
+
+        // Position tracking. A non-transactional accessor writes straight to the store's committed
+        // position and has no uncommitted deltas; the transactional accessor stages them in its
+        // buffer until commit. (committedPosition is unused by the transactional override.)
+        default void updatePosition(final Position committedPosition, final StateStoreContext context) {
+            StoreQueryUtils.updatePosition(committedPosition, context);
+        }
+
+        default Position uncommittedPositionDeltas() {
+            return Position.emptyPosition();
+        }
+
+        default void mergeUncommittedPositionInto(final Position committedPosition) {
+            // no-op for non-transactional accessors
+        }
     }
 
     static class DirectDBAccessor implements DBAccessor {
@@ -1257,6 +1283,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void rollbackStagedWrites() {
             buffer.rollback();
+        }
+
+        @Override
+        public void updatePosition(final Position committedPosition, final StateStoreContext context) {
+            buffer.updatePosition(context);
+        }
+
+        @Override
+        public Position uncommittedPositionDeltas() {
+            return buffer.pendingPosition();
+        }
+
+        @Override
+        public void mergeUncommittedPositionInto(final Position committedPosition) {
+            buffer.mergePendingPositionInto(committedPosition);
         }
 
     }
@@ -1457,6 +1498,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         synchronized (position) {
             try (final WriteBatch batch = new WriteBatch()) {
                 for (final ConsumerRecord<byte[], byte[]> record : records) {
+                    // Restore writes go straight to the base store (write(batch) below bypasses the
+                    // transaction buffer), so the restored data is already committed — its position
+                    // updates `position` directly, never the buffer's pending deltas.
                     ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                         record,
                         consistencyEnabled,
@@ -1479,7 +1523,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public Position getPosition() {
-        return position;
+        synchronized (position) {
+            return position.copy().merge(dbAccessor.uncommittedPositionDeltas());
+        }
+    }
+
+    // Visible for testing. Returns a snapshot of the committed Position only (no pending writes).
+    Position committedPositionForTest() {
+        synchronized (position) {
+            return position.copy();
+        }
+    }
+
+    // Visible for testing. Returns a snapshot of the pending-only Position deltas.
+    Position pendingPositionForTest() {
+        return dbAccessor.uncommittedPositionDeltas();
     }
 
     /**

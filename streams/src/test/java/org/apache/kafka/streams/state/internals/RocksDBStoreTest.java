@@ -1519,6 +1519,55 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED).get(key)));
     }
 
+    @Test
+    public void committedPositionShouldExcludeStagedWritesUntilCommit() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        eosContext.setRecordContext(new ProcessorRecordContext(0, 1L, 0, "input", new RecordHeaders()));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "k1")), stringSerializer.serialize(null, "v1"));
+        rocksDBStore.commit(Map.of());
+
+        eosContext.setRecordContext(new ProcessorRecordContext(0, 5L, 0, "input", new RecordHeaders()));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "k2")), stringSerializer.serialize(null, "v2"));
+
+        assertEquals(Map.of(0, 1L), rocksDBStore.committedPositionForTest().getPartitionPositions("input"));
+        assertEquals(Map.of(0, 5L), rocksDBStore.pendingPositionForTest().getPartitionPositions("input"));
+        assertEquals(Map.of(0, 5L), rocksDBStore.getPosition().getPartitionPositions("input"));
+    }
+
+    @Test
+    public void commitShouldMergePendingIntoCommittedPosition() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        eosContext.setRecordContext(new ProcessorRecordContext(0, 1L, 0, "input", new RecordHeaders()));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "k1")), stringSerializer.serialize(null, "v1"));
+        rocksDBStore.commit(Map.of());
+
+        eosContext.setRecordContext(new ProcessorRecordContext(0, 9L, 0, "input", new RecordHeaders()));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "k2")), stringSerializer.serialize(null, "v2"));
+        rocksDBStore.commit(Map.of());
+
+        assertEquals(Map.of(0, 9L), rocksDBStore.committedPositionForTest().getPartitionPositions("input"));
+        assertTrue(rocksDBStore.pendingPositionForTest().getTopics().isEmpty());
+    }
+
+    @Test
+    public void nonTransactionalStoreShouldUpdateCommittedPositionDirectly() {
+        rocksDBStore.init(context, rocksDBStore);
+
+        context.setRecordContext(new ProcessorRecordContext(0, 7L, 0, "input", new RecordHeaders()));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "k")), stringSerializer.serialize(null, "v"));
+
+        assertEquals(Map.of(0, 7L), rocksDBStore.committedPositionForTest().getPartitionPositions("input"));
+        assertTrue(rocksDBStore.pendingPositionForTest().getTopics().isEmpty());
+    }
+
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
 
         static boolean bloomFiltersSet;
