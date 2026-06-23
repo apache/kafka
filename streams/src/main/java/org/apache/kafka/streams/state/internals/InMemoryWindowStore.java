@@ -49,6 +49,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -81,6 +82,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
     private volatile boolean open = false;
 
     private final Position position;
+    private InMemoryWindowTransactionBuffer transactionBuffer;
 
     public InMemoryWindowStore(final String name,
                                final long retentionPeriod,
@@ -146,6 +148,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             );
         }
         open = true;
+
+        final boolean transactional = StreamsConfig.InternalConfig.getBoolean(
+            stateStoreContext.appConfigs(),
+            StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG,
+            false);
+        if (transactional) {
+            this.transactionBuffer = new InMemoryWindowTransactionBuffer(segmentMap);
+        }
     }
 
     @Override
@@ -166,17 +176,25 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                 if (value != null) {
                     maybeUpdateSeqnumForDups();
                     final Bytes keyBytes = retainDuplicates ? wrapForDups(key, seqnum) : key;
-                    segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
-                    segmentMap.get(windowStartTimestamp).put(keyBytes, value);
+                    if (transactionBuffer != null) {
+                        transactionBuffer.stage(windowStartTimestamp, keyBytes, value);
+                    } else {
+                        segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
+                        segmentMap.get(windowStartTimestamp).put(keyBytes, value);
+                    }
                 } else if (!retainDuplicates) {
                     // Skip if value is null and duplicates are allowed since this delete is a no-op
-                    segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
-                        kvMap.remove(key);
-                        if (kvMap.isEmpty()) {
-                            segmentMap.remove(windowStartTimestamp);
-                        }
-                        return kvMap;
-                    });
+                    if (transactionBuffer != null) {
+                        transactionBuffer.stage(windowStartTimestamp, key, null);
+                    } else {
+                        segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
+                            kvMap.remove(key);
+                            if (kvMap.isEmpty()) {
+                                segmentMap.remove(windowStartTimestamp);
+                            }
+                            return kvMap;
+                        });
+                    }
                 }
             }
 
@@ -192,6 +210,13 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
             return null;
+        }
+
+        if (transactionBuffer != null) {
+            final Optional<byte[]> staged = transactionBuffer.get(windowStartTimestamp, key);
+            if (staged != null) {
+                return staged.orElse(null);
+            }
         }
 
         final ConcurrentNavigableMap<Bytes, byte[]> kvMap = segmentMap.get(windowStartTimestamp);
@@ -222,6 +247,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         if (timeTo < minTime) {
             return WrappedInMemoryWindowStoreIterator.emptyIterator();
+        }
+
+        if (transactionBuffer != null) {
+            final Bytes keyFrom = retainDuplicates ? wrapForDups(key, 0) : key;
+            final Bytes keyTo = retainDuplicates ? wrapForDups(key, Integer.MAX_VALUE) : key;
+            return new TransactionalWindowStoreIterator(
+                transactionBuffer, keyFrom, keyTo, minTime, timeTo, forward, retainDuplicates
+            );
         }
 
         if (forward) {
@@ -279,6 +312,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             return KeyValueIterators.emptyIterator();
         }
 
+        if (transactionBuffer != null) {
+            final Bytes keyFrom = (retainDuplicates && from != null) ? wrapForDups(from, 0) : from;
+            final Bytes keyTo = (retainDuplicates && to != null) ? wrapForDups(to, Integer.MAX_VALUE) : to;
+            return new TransactionalWindowedKeyValueIterator(
+                transactionBuffer, keyFrom, keyTo, minTime, timeTo, forward, retainDuplicates, windowSize
+            );
+        }
+
         if (forward) {
             return registerNewWindowedKeyValueIterator(
                 from,
@@ -318,6 +359,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             return KeyValueIterators.emptyIterator();
         }
 
+        if (transactionBuffer != null) {
+            return new TransactionalWindowedKeyValueIterator(
+                transactionBuffer, null, null, minTime, timeTo, forward, retainDuplicates, windowSize
+            );
+        }
+
         if (forward) {
             return registerNewWindowedKeyValueIterator(
                 null,
@@ -343,6 +390,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
         final long minTime = observedStreamTime - retentionPeriod;
 
+        if (transactionBuffer != null) {
+            return new TransactionalWindowedKeyValueIterator(
+                transactionBuffer, null, null, minTime + 1, Long.MAX_VALUE, true, retainDuplicates, windowSize
+            );
+        }
+
         return registerNewWindowedKeyValueIterator(
             null,
             null,
@@ -356,6 +409,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         removeExpiredSegments();
 
         final long minTime = observedStreamTime - retentionPeriod;
+
+        if (transactionBuffer != null) {
+            return new TransactionalWindowedKeyValueIterator(
+                transactionBuffer, null, null, minTime + 1, Long.MAX_VALUE, false, retainDuplicates, windowSize
+            );
+        }
 
         return registerNewWindowedKeyValueIterator(
             null,
@@ -391,12 +450,26 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        if (transactionBuffer != null) {
+            return transactionBuffer.approximateNumUncommittedBytes();
+        }
+        return 0;
+    }
+
+    @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        // do-nothing since it is in-memory
+        if (transactionBuffer != null) {
+            transactionBuffer.commit();
+        }
     }
 
     @Override
     public void close() {
+        if (transactionBuffer != null) {
+            transactionBuffer.rollback();
+        }
+
         if (openIterators.size() != 0) {
             LOG.warn("Closing {} open iterators for store {}", openIterators.size(), name);
             for (final InMemoryWindowStoreIteratorWrapper it : openIterators) {
@@ -473,6 +546,120 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                 forward);
         openIterators.add(iterator);
         return iterator;
+    }
+
+    /**
+     * A WindowStoreIterator backed by a transactional buffer's merge scan.
+     * Converts WindowEntryKey/byte[] pairs into Long/byte[] pairs (timestamp/value).
+     */
+    private static class TransactionalWindowStoreIterator implements WindowStoreIterator<byte[]> {
+        private final KeyValueIterator<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> delegate;
+        private final boolean retainDuplicates;
+
+        TransactionalWindowStoreIterator(
+                final InMemoryWindowTransactionBuffer buffer,
+                final Bytes keyFrom,
+                final Bytes keyTo,
+                final long timeFrom,
+                final long timeTo,
+                final boolean forward,
+                final boolean retainDuplicates) {
+            this.retainDuplicates = retainDuplicates;
+            final InMemoryWindowTransactionBuffer.WindowEntryKey from =
+                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeFrom, keyFrom != null ? keyFrom : Bytes.wrap(new byte[0]));
+            final InMemoryWindowTransactionBuffer.WindowEntryKey to =
+                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeTo, keyTo != null ? keyTo : Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF}));
+
+            this.delegate = buffer.range(from, to, forward, true);
+        }
+
+        @Override
+        public Long peekNextKey() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return delegate.peekNextKey().timestamp();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return delegate.hasNext();
+        }
+
+        @Override
+        public KeyValue<Long, byte[]> next() {
+            final KeyValue<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> entry = delegate.next();
+            return new KeyValue<>(entry.key.timestamp(), entry.value);
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
+    }
+
+    /**
+     * A Windowed KeyValueIterator backed by a transactional buffer's merge scan.
+     * Converts WindowEntryKey/byte[] pairs into Windowed<Bytes>/byte[] pairs.
+     */
+    private static class TransactionalWindowedKeyValueIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
+        private final KeyValueIterator<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> delegate;
+        private final boolean retainDuplicates;
+        private final long windowSize;
+
+        TransactionalWindowedKeyValueIterator(
+                final InMemoryWindowTransactionBuffer buffer,
+                final Bytes keyFrom,
+                final Bytes keyTo,
+                final long timeFrom,
+                final long timeTo,
+                final boolean forward,
+                final boolean retainDuplicates,
+                final long windowSize) {
+            this.retainDuplicates = retainDuplicates;
+            this.windowSize = windowSize;
+            final InMemoryWindowTransactionBuffer.WindowEntryKey from =
+                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeFrom, keyFrom != null ? keyFrom : Bytes.wrap(new byte[0]));
+            final InMemoryWindowTransactionBuffer.WindowEntryKey to =
+                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeTo, keyTo != null ? keyTo : Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF}));
+
+            this.delegate = buffer.range(from, to, forward, true);
+        }
+
+        @Override
+        public Windowed<Bytes> peekNextKey() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return toWindowed(delegate.peekNextKey());
+        }
+
+        @Override
+        public boolean hasNext() {
+            return delegate.hasNext();
+        }
+
+        @Override
+        public KeyValue<Windowed<Bytes>, byte[]> next() {
+            final KeyValue<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> entry = delegate.next();
+            return new KeyValue<>(toWindowed(entry.key), entry.value);
+        }
+
+        @Override
+        public void close() {
+            delegate.close();
+        }
+
+        private Windowed<Bytes> toWindowed(final InMemoryWindowTransactionBuffer.WindowEntryKey entryKey) {
+            final Bytes key = retainDuplicates ? getKey(entryKey.key()) : entryKey.key();
+            long endTime = entryKey.timestamp() + windowSize;
+            if (endTime < 0) {
+                LOG.warn("Warning: window end time was truncated to Long.MAX");
+                endTime = Long.MAX_VALUE;
+            }
+            final TimeWindow timeWindow = new TimeWindow(entryKey.timestamp(), endTime);
+            return new Windowed<>(key, timeWindow);
+        }
     }
 
 
