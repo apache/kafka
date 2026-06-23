@@ -56,7 +56,7 @@ import java.util.Set;
 @InterfaceAudience.Public
 public interface StreamPartitioner<K, V> {
 
-    @Deprecated(since = "4.3", forRemoval = true)
+    @Deprecated(since = "4.4", forRemoval = true)
     Optional<Set<Integer>> partitions(String topic, K key, V value, int numPartitions);
 
     /**

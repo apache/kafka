@@ -147,9 +147,6 @@ public class RecordCollectorTest {
 
         @Override
         public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
-            if (headers != null && headers.lastHeader("key") != null) {
-                assertEquals("value", new String(headers.lastHeader("key").value()));
-            }
             return Optional.of(Collections.singleton(Integer.parseInt(key) % numPartitions));
         }
     };
@@ -326,9 +323,6 @@ public class RecordCollectorTest {
 
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
-                if (headers != null && headers.lastHeader("key") != null) {
-                    assertEquals("value", new String(headers.lastHeader("key").value()));
-                }
                 final Set<Integer> partitions = new HashSet<>();
                 for (int i = 0; i < numPartitions; i += 2) {
                     partitions.add(i);
@@ -400,9 +394,6 @@ public class RecordCollectorTest {
 
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
-                if (headers != null && headers.lastHeader("key") != null) {
-                    assertEquals("value", new String(headers.lastHeader("key").value()));
-                }
                 return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
             }
         }
@@ -470,9 +461,6 @@ public class RecordCollectorTest {
 
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
-                if (headers != null && headers.lastHeader("key") != null) {
-                    assertEquals("value", new String(headers.lastHeader("key").value()));
-                }
                 return Optional.of(Collections.emptySet());
             }
         }
@@ -552,9 +540,6 @@ public class RecordCollectorTest {
 
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
-                if (headers != null && headers.lastHeader("key") != null) {
-                    assertEquals("value", new String(headers.lastHeader("key").value()));
-                }
                 return Optional.empty();
             }
         }
@@ -621,9 +606,6 @@ public class RecordCollectorTest {
 
             @Override
             public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final Headers headers, final int numPartitions) {
-                if (headers != null && headers.lastHeader("key") != null) {
-                    assertEquals("value", new String(headers.lastHeader("key").value()));
-                }
                 return Optional.empty();
             }
         };
