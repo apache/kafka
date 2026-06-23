@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -218,6 +219,9 @@ public class StickyAssignor extends AbstractStickyAssignor {
     }
 
     @Override
+    @SuppressKafkaInternalApiUsage("KIP-1265: forced override of AbstractStickyAssignor#memberData (internal) — "
+            + "the abstract parent declares the MemberData return type. Pending refactor to either promote MemberData "
+            + "or replace the hook with a public-typed equivalent.")
     protected MemberData memberData(Subscription subscription) {
         // Always deserialize ownedPartitions and generation id from user data
         // since StickyAssignor is an eager rebalance protocol that will revoke all existing partitions before joining group

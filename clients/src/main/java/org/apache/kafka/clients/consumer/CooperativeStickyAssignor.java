@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -87,6 +88,9 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
     }
 
     @Override
+    @SuppressKafkaInternalApiUsage("KIP-1265: forced override of AbstractStickyAssignor#memberData (internal) — "
+            + "the abstract parent declares the MemberData return type. Pending refactor to either promote MemberData "
+            + "or replace the hook with a public-typed equivalent.")
     protected MemberData memberData(Subscription subscription) {
         // In ConsumerProtocolSubscription v2 or higher, we can take member data from fields directly
         if (subscription.generationId().isPresent()) {
