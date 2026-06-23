@@ -718,11 +718,11 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         if (config.getBoolean(StreamsConfig.TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG)) {
             final TopologyDescription description = internalTopologyBuilder.describe();
-            if (description != null) {
-                streamsRebalanceData.setWireTopologyDescription(
-                    TopologyDescriptionConverter.toWire(description)
-                );
-            }
+            streamsRebalanceData.setWireTopologyDescription(
+                TopologyDescriptionConverter.toWire(
+                    description,
+                    internalTopologyBuilder::maybeDecorateInternalTopic)
+            );
         }
 
         return streamsRebalanceData;

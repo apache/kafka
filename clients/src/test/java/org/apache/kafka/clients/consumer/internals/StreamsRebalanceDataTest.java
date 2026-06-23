@@ -547,17 +547,14 @@ public class StreamsRebalanceDataTest {
         );
 
         assertNull(streamsRebalanceData.wireTopologyDescription());
-        assertNull(streamsRebalanceData.memberId());
         assertFalse(streamsRebalanceData.topologyPushRequired());
 
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
                 new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription();
         streamsRebalanceData.setWireTopologyDescription(wire);
-        streamsRebalanceData.setMemberId("member-1");
         streamsRebalanceData.setTopologyPushRequired(true);
 
         assertSame(wire, streamsRebalanceData.wireTopologyDescription());
-        assertEquals("member-1", streamsRebalanceData.memberId());
         assertTrue(streamsRebalanceData.topologyPushRequired());
     }
 

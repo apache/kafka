@@ -21,7 +21,7 @@ import org.apache.kafka.streams.TopologyDescription;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public final class TopologyDescriptionConverter {
@@ -32,41 +32,40 @@ public final class TopologyDescriptionConverter {
 
     private TopologyDescriptionConverter() {}
 
-    public static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription toWire(final TopologyDescription description) {
-        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wiredDescription =
-                new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription();
+    public static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription toWire(final TopologyDescription description,
+                                                                                              final Function<String, String> topicNameDecorator) {
+        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
+            new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription();
 
-        final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology> wireSubtopologies =
-                description.subtopologies().stream()
-                        .sorted(Comparator.comparingInt(TopologyDescription.Subtopology::id))
-                        .map(TopologyDescriptionConverter::toWireSubtopology)
-                        .collect(Collectors.toList());
-        wiredDescription.setSubtopologies(wireSubtopologies);
+        wire.setSubtopologies(description.subtopologies().stream()
+            .sorted(Comparator.comparingInt(TopologyDescription.Subtopology::id))
+            .map(s -> toWireSubtopology(s, topicNameDecorator))
+            .collect(Collectors.toList()));
 
-        final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore> wireGlobalStores =
-                description.globalStores().stream()
-                        .sorted(Comparator.comparingInt(TopologyDescription.GlobalStore::id))
-                        .map(TopologyDescriptionConverter::toWireGlobalStore)
-                        .collect(Collectors.toList());
-        wiredDescription.setGlobalStores(wireGlobalStores);
+        wire.setGlobalStores(description.globalStores().stream()
+            .sorted(Comparator.comparingInt(TopologyDescription.GlobalStore::id))
+            .map(g -> toWireGlobalStore(g, topicNameDecorator))
+            .collect(Collectors.toList()));
 
-        return wiredDescription;
+        return wire;
     }
 
     private static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology toWireSubtopology(
-            final TopologyDescription.Subtopology subtopology) {
+            final TopologyDescription.Subtopology subtopology,
+            final Function<String, String> topicNameDecorator) {
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology wire =
                 new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology();
         wire.setSubtopologyId(String.valueOf(subtopology.id()));
         wire.setNodes(subtopology.nodes().stream()
                 .sorted(Comparator.comparing(TopologyDescription.Node::name))
-                .map(TopologyDescriptionConverter::toWireNode)
+                .map(n -> toWireNode(n, topicNameDecorator))
                 .collect(Collectors.toList()));
         return wire;
     }
 
     private static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode toWireNode(
-            final TopologyDescription.Node node) {
+            final TopologyDescription.Node node,
+            final Function<String, String> topicNameDecorator) {
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode wire =
                 new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode();
         wire.setName(node.name());
@@ -80,11 +79,14 @@ public final class TopologyDescriptionConverter {
             wire.setNodeType(NODE_TYPE_SOURCE);
             wire.setSourceTopics(source.topicSet() == null
                     ? new ArrayList<>()
-                    : source.topicSet().stream().sorted().collect(Collectors.toList()));
+                    : source.topicSet().stream()
+                        .map(topicNameDecorator)
+                        .sorted()
+                        .collect(Collectors.toList()));
         } else if (node instanceof TopologyDescription.Sink) {
             final TopologyDescription.Sink sink = (TopologyDescription.Sink) node;
             wire.setNodeType(NODE_TYPE_SINK);
-            wire.setSinkTopic(sink.topic());
+            wire.setSinkTopic(topicNameDecorator.apply(sink.topic()));
         } else if (node instanceof TopologyDescription.Processor) {
             final TopologyDescription.Processor processor = (TopologyDescription.Processor) node;
             wire.setNodeType(NODE_TYPE_PROCESSOR);
@@ -96,11 +98,12 @@ public final class TopologyDescriptionConverter {
     }
 
     private static StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore toWireGlobalStore(
-            final TopologyDescription.GlobalStore globalStore) {
+            final TopologyDescription.GlobalStore globalStore,
+            final Function<String, String> topicNameDecorator) {
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore wire =
                 new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionGlobalStore();
-        wire.setSource(toWireNode(globalStore.source()));
-        wire.setProcessor(toWireNode(globalStore.processor()));
+        wire.setSource(toWireNode(globalStore.source(), topicNameDecorator));
+        wire.setProcessor(toWireNode(globalStore.processor(), topicNameDecorator));
         return wire;
     }
 }

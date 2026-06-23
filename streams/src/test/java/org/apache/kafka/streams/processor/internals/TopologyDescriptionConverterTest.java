@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -82,7 +83,7 @@ public class TopologyDescriptionConverterTest {
         when(description.globalStores()).thenReturn(Set.of());
 
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
-            TopologyDescriptionConverter.toWire(description);
+            TopologyDescriptionConverter.toWire(description, Function.identity());
 
         assertTrue(wire.globalStores().isEmpty());
         assertEquals(2, wire.subtopologies().size());
@@ -161,7 +162,7 @@ public class TopologyDescriptionConverterTest {
         when(description.globalStores()).thenReturn(Set.of());
 
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
-            TopologyDescriptionConverter.toWire(description);
+            TopologyDescriptionConverter.toWire(description, Function.identity());
 
         assertTrue(wire.globalStores().isEmpty());
         assertEquals(1, wire.subtopologies().size());
@@ -245,7 +246,7 @@ public class TopologyDescriptionConverterTest {
         when(description.globalStores()).thenReturn(Set.of(globalStore));
 
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
-            TopologyDescriptionConverter.toWire(description);
+            TopologyDescriptionConverter.toWire(description, Function.identity());
 
         assertEquals(1, wire.subtopologies().size());
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionSubtopology wireSub = wire.subtopologies().get(0);
@@ -311,7 +312,7 @@ public class TopologyDescriptionConverterTest {
         when(description.globalStores()).thenReturn(Set.of());
 
         final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
-            TopologyDescriptionConverter.toWire(description);
+            TopologyDescriptionConverter.toWire(description, Function.identity());
 
         final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode> nodes =
             wire.subtopologies().get(0).nodes();
@@ -320,5 +321,46 @@ public class TopologyDescriptionConverterTest {
         assertEquals("sink", wireSink.name());
         assertEquals((byte) 3, wireSink.nodeType());
         assertNull(wireSink.sinkTopic());
+    }
+
+    /**
+     * Test the situation when a topic-name decorator is supplied: internal topic names should be
+     * decorated with the applicationId prefix on the wire output, while external (user-provided)
+     * topic names should pass through unchanged.
+     */
+    @Test
+    public void shouldApplyTopicNameDecorator() {
+        final TopologyDescription.Source source = mock(TopologyDescription.Source.class);
+        final TopologyDescription.Sink sink = mock(TopologyDescription.Sink.class);
+        when(source.name()).thenReturn("source");
+        when(source.topicSet()).thenReturn(Set.of("external-input-topic", "repartition-topic"));
+        when(source.successors()).thenReturn(Set.of(sink));
+        when(sink.name()).thenReturn("sink");
+        when(sink.topic()).thenReturn("changelog-topic");
+        when(sink.successors()).thenReturn(Set.of());
+
+        final TopologyDescription.Subtopology subtopology = mock(TopologyDescription.Subtopology.class);
+        when(subtopology.id()).thenReturn(0);
+        when(subtopology.nodes()).thenReturn(Set.of(source, sink));
+
+        final TopologyDescription description = mock(TopologyDescription.class);
+        when(description.subtopologies()).thenReturn(Set.of(subtopology));
+        when(description.globalStores()).thenReturn(Set.of());
+
+        final Set<String> internalTopics = Set.of("repartition-topic", "changelog-topic");
+        final Function<String, String> topicNameDecorator = name ->
+            internalTopics.contains(name) ? "my-app-" + name : name;
+
+        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wire =
+            TopologyDescriptionConverter.toWire(description, topicNameDecorator);
+
+        final List<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode> nodes =
+            wire.subtopologies().get(0).nodes();
+
+        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode wireSink = nodes.get(0);
+        assertEquals("my-app-changelog-topic", wireSink.sinkTopic());
+
+        final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescriptionNode wireSource = nodes.get(1);
+        assertEquals(List.of("external-input-topic", "my-app-repartition-topic"), wireSource.sourceTopics());
     }
 }

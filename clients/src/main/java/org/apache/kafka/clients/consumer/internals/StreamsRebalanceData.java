@@ -357,8 +357,6 @@ public class StreamsRebalanceData {
 
     private final AtomicReference<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription> wireTopologyDescription = new AtomicReference<>(null);
 
-    private final AtomicReference<String> memberId = new AtomicReference<>();
-
     private final AtomicBoolean topologyPushRequired = new AtomicBoolean(false);
 
     public StreamsRebalanceData(final UUID processId,
@@ -487,14 +485,6 @@ public class StreamsRebalanceData {
 
     public StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wireTopologyDescription() {
         return wireTopologyDescription.get();
-    }
-
-    public void setMemberId(final String memberId) {
-        this.memberId.set(memberId);
-    }
-
-    public String memberId() {
-        return memberId.get();
     }
 
     public void setTopologyPushRequired(final boolean topologyPushRequired) {

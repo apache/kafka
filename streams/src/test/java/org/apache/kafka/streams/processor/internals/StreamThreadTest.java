@@ -3854,6 +3854,10 @@ public class StreamThreadTest {
             )
         ));
         when(topologyBuilder.copartitionGroups()).thenReturn(Set.of(Set.of("source1")));
+        final InternalTopologyBuilder.TopologyDescription mockDescription = mock(InternalTopologyBuilder.TopologyDescription.class);
+        when(mockDescription.subtopologies()).thenReturn(Collections.emptySet());
+        when(mockDescription.globalStores()).thenReturn(Collections.emptySet());
+        when(topologyBuilder.describe()).thenReturn(mockDescription);
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
