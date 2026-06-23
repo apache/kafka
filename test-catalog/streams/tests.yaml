@@ -4511,6 +4511,20 @@ org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
 - shouldThrowProcessorStateExceptionWhenPutFailsOnDeleteColumnFamily
 - shouldThrowProcessorStateExceptionWhenPutFailsOnNewColumnFamily
 - shouldWipeCommittedOffsetsOnEmptyCommit
+org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTransactionalTest:
+- shouldHideStagedDeleteOfUnmigratedKey
+- shouldHideStagedDeleteOfUnmigratedKeyViaGet
+- shouldPreferStagedNewValueOverCommittedOldValue
+- shouldPreferStagedNewValueOverCommittedOldValueViaGet
+- shouldReturnNullForAbsentKeyViaGet
+- shouldSeeCommittedValuesAfterCommit
+- shouldSeeStagedDeleteInRange
+- shouldSeeStagedDeleteRangeInRange
+- shouldSeeStagedDeleteViaGet
+- shouldSeeStagedPutInAll
+- shouldSeeStagedPutInPrefixScan
+- shouldSeeStagedPutInRange
+- shouldSeeStagedPutViaGet
 org.apache.kafka.streams.state.internals.FilteredCacheIteratorTest:
 - shouldAllowEntryMatchingHasNextCondition
 - shouldFilterEntriesNotMatchingHasNextCondition
@@ -6103,6 +6117,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldPutAll
 - shouldPutOnlyIfAbsentValue
 - shouldPutReverseAll
+- shouldReadYourWritesViaGetWhenTransactionalTimestampedStoreOpenedUnderEOS
 - shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose
 - shouldRequireOpenIteratorsWhenUsingCustomManagedIterators
 - shouldRestoreAll
@@ -6244,6 +6259,32 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedWindowStoreWithHeader
 - shouldNotCollectExecutionInfoWhenNotRequested
 - shouldReturnUnknownQueryTypeForWindowKeyQuery
 - shouldReturnUnknownQueryTypeForWindowRangeQuery
+org.apache.kafka.streams.state.internals.RocksDBTransactionBufferTest:
+- shouldAllowStageAfterDeleteRangeToOverride
+- shouldCommitRangeDeleteToRocksDB
+- shouldCommitRangeDeleteWithOverridingPut
+- shouldCommitStagedWritesToRocksDB
+- shouldCommitWritesAcrossCFsAtomically
+- shouldHideDeletedRangeFromPointReads
+- shouldHideDeletedRangeFromScans
+- shouldMergeStagedWritesInAllScan
+- shouldMergeStagedWritesInOwnerAllScan
+- shouldMergeStagedWritesInRangeScan
+- shouldNotShowStagedWritesInBaseAfterRollback
+- shouldReportIsEmpty
+- shouldReportNotEmptyWithRangeTombstones
+- shouldReturnEmptyOptionalForStagedTombstone
+- shouldReturnNullForUnstagedKey
+- shouldReturnStagedValue
+- shouldReturnStagedValueForNewKey
+- shouldRollbackRangeDelete
+- shouldRollbackWithoutAffectingBase
+- shouldScanFromAnotherThread
+- shouldSeeStagedWritesFromAnotherThread
+- shouldStageDeleteRangeToOtherCF
+- shouldStageDeleteToOtherCF
+- shouldStageWriteToOtherCF
+- shouldSupportMultipleCommitRollbackCycles
 org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatterTest:
 - shouldBuildWithInsertEarliest
 - shouldBuildWithInsertLatest
