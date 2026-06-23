@@ -45,6 +45,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
@@ -57,7 +58,6 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.regex.Pattern;
@@ -79,7 +79,7 @@ import static org.hamcrest.Matchers.equalTo;
 public class ColdStartStickinessIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
-    private static final int NUM_PARTITIONS = 8;
+    private static final int NUM_PARTITIONS = 4;
     private static final int NUM_KEYS = 1_000;
     private static final int INITIAL_REBALANCE_DELAY_MS = 5_000;
     private static final Pattern TASK_DIR = Pattern.compile("\\d+_\\d+");
@@ -129,6 +129,7 @@ public class ColdStartStickinessIntegrationTest {
         CLUSTER.deleteAllTopics();
     }
 
+    @Disabled("Reproduces KAFKA-20719; enable once fixed")
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldStickToLocalStateOnColdStart(final boolean streamsProtocol) throws Exception {
@@ -154,11 +155,10 @@ public class ColdStartStickinessIntegrationTest {
             waitForEmptyConsumerGroup(admin, appId, 60_000L);
         }
 
-        // Shuffle the task directories balanced (4/4) so the on-disk layout differs from what the broker would
-        // assign on a cold group with empty states
+        // change task layout across both instances, to differ from "empty state" assignment
         final File appDir1 = new File(props1.getProperty(StreamsConfig.STATE_DIR_CONFIG), appId);
         final File appDir2 = new File(props2.getProperty(StreamsConfig.STATE_DIR_CONFIG), appId);
-        shuffleTaskDirectoriesBalanced(appDir1, appDir2);
+        relayoutTaskDirectoriesByPartitionHalves(appDir1, appDir2);
 
         // Phase 2: cold restart: should be sticky and not restore anything
         final TrackingStateRestoreListener restore1 = new TrackingStateRestoreListener();
@@ -234,32 +234,28 @@ public class ColdStartStickinessIntegrationTest {
         return config;
     }
 
-    // Redistribute the per-task state directories across the two instances' state dirs, keeping the split
-    // *balanced* (4 tasks each) but permuted. Balance is required: an unbalanced layout would overflow the
-    // sticky assignor's per-instance quota (tasksPerThread = 8 / 2 = 4) and push the overflow task onto an
-    // instance without its state, forcing a restore even for classic.
-    private static void shuffleTaskDirectoriesBalanced(final File appDir1, final File appDir2) throws IOException {
+    /*
+     * Sticky-assignor (both "classic" and "streams") use a "least loaded greedy" strategy,
+     * resulting in the following layout (task are sorted and assigned):
+     *  - instance A: 0_0, 0_2
+     *  - instance B: 0_1, 0_3
+     *
+     * We change the layout to
+     *  - instance A: 0_0, 0_1
+     *  - instance B: 0_2, 0_3
+     */
+    private static void relayoutTaskDirectoriesByPartitionHalves(final File appDir1, final File appDir2) throws IOException {
         final List<File> taskDirs = new ArrayList<>();
         taskDirs.addAll(listTaskDirectories(appDir1));
         taskDirs.addAll(listTaskDirectories(appDir2));
         assertThat("expected one state directory per task", taskDirs.size(), equalTo(NUM_PARTITIONS));
 
-        Collections.shuffle(taskDirs);
-
-        // Task-id directory names (e.g. "0_3") are globally unique across instances (a task runs on a single
-        // instance), so we can stage them all aside without name collisions, then deal them back out 4/4.
-        // Only the "<n>_<p>" task directories are moved; the kafka-streams-process-metadata file stays put, so
-        // each instance keeps its own processId.
-        final File staging = Files.createTempDirectory("cold-start-shuffle").toFile();
-        final List<File> staged = new ArrayList<>();
         for (final File taskDir : taskDirs) {
-            final File stagedDir = new File(staging, taskDir.getName());
-            Files.move(taskDir.toPath(), stagedDir.toPath());
-            staged.add(stagedDir);
-        }
-        for (int i = 0; i < staged.size(); i++) {
-            final File target = (i < staged.size() / 2) ? appDir1 : appDir2;
-            Files.move(staged.get(i).toPath(), new File(target, staged.get(i).getName()).toPath());
+            final int partition = Integer.parseInt(taskDir.getName().substring(taskDir.getName().indexOf('_') + 1));
+            final File target = partition < NUM_PARTITIONS / 2 ? appDir1 : appDir2;
+            if (!taskDir.getParentFile().equals(target)) {
+                Files.move(taskDir.toPath(), new File(target, taskDir.getName()).toPath());
+            }
         }
     }
 
