@@ -16,24 +16,29 @@
  */
 package org.apache.kafka.common.record.internal;
 
-import net.jqwik.api.Arbitraries;
-import net.jqwik.api.Arbitrary;
-import net.jqwik.api.ArbitrarySupplier;
+import org.junit.jupiter.api.function.ThrowingConsumer;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Random;
 
-public final class ArbitraryMemoryRecords implements ArbitrarySupplier<MemoryRecords> {
-    @Override
-    public Arbitrary<MemoryRecords> get() {
-        return Arbitraries.randomValue(ArbitraryMemoryRecords::buildRandomRecords);
-    }
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
-    private static MemoryRecords buildRandomRecords(Random random) {
-        int size = random.nextInt(128) + 1;
-        byte[] bytes = new byte[size];
-        random.nextBytes(bytes);
+public final class ArbitraryMemoryRecords {
 
-        return MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
+    private ArbitraryMemoryRecords() {}
+
+    public static void forRandomRecords(int tries, ThrowingConsumer<MemoryRecords> test) {
+        for (int i = 0; i < tries; i++) {
+            long seed = System.nanoTime() + i;
+            Random random = new Random(seed);
+            int size = random.nextInt(128) + 1;
+            byte[] bytes = new byte[size];
+            random.nextBytes(bytes);
+            MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
+            assertDoesNotThrow(
+                    () -> test.accept(records),
+                    () -> "Failed with seed=" + seed + ", size=" + size + ", bytes=" + Arrays.toString(bytes));
+        }
     }
 }

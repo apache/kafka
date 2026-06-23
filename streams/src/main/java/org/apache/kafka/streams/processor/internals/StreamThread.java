@@ -98,6 +98,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
@@ -513,7 +514,14 @@ public class StreamThread extends Thread implements ProcessingThread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, consumerConfigs);
+        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(
+            topologyMetadata,
+            config,
+            clientSupplier,
+            processId,
+            consumerConfigs,
+            taskManager::taskOffsetSumSnapshot
+        );
 
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
         referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
@@ -555,7 +563,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final StreamsConfig config,
                                                        final KafkaClientSupplier clientSupplier,
                                                        final UUID processId,
-                                                       final Map<String, Object> consumerConfigs) {
+                                                       final Map<String, Object> consumerConfigs,
+                                                       final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSum) {
         if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
@@ -566,7 +575,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                     config,
                     parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
                     parseRackId((String) config.originals().get(CommonClientConfigs.CLIENT_RACK_CONFIG)),
-                    topologyMetadata
+                    topologyMetadata,
+                    taskOffsetSum
                 )
             );
             final ByteArrayDeserializer keyDeserializer = new ByteArrayDeserializer();
@@ -690,7 +700,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                                  final StreamsConfig config,
                                                                  final Optional<StreamsRebalanceData.HostInfo> endpoint,
                                                                  final Optional<String> rackId,
-                                                                 final TopologyMetadata topologyMetadata) {
+                                                                 final TopologyMetadata topologyMetadata,
+                                                                 final Supplier<Map<StreamsRebalanceData.TaskId, Long>> taskOffsetSum) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
         final Map<String, StreamsRebalanceData.Subtopology> subtopologies = initBrokerTopology(config, internalTopologyBuilder);
@@ -700,7 +711,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             endpoint,
             rackId,
             subtopologies,
-            config.getClientTags()
+            config.getClientTags(),
+            taskOffsetSum
         );
     }
 
@@ -1239,6 +1251,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (isStartingRunningOrPartitionAssigned()) {
 
             taskManager.updateLags();
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
@@ -1386,6 +1399,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (isRunning()) {
 
             taskManager.updateLags();
+            taskManager.maybeUpdateTaskOffsetSumSnapshot();
 
             checkStateUpdater();
 

@@ -241,6 +241,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- null means "not staged, fall back to base store"; Optional.empty() means staged tombstone -->
+        <Class name="org.apache.kafka.streams.state.internals.RocksDBTransactionBuffer"/>
+        <Method name="get"/>
+        <Bug pattern="NP_OPTIONAL_RETURN_NULL"/>
+    </Match>
+
+    <Match>
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->
