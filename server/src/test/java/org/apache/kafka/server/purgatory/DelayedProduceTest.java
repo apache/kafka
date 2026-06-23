@@ -22,8 +22,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
-import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus;
 import org.apache.kafka.server.purgatory.DelayedProduce.PartitionStatusValidator;
+import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus;
 import org.apache.kafka.server.util.ServerTestUtils;
 
 import com.yammer.metrics.core.MetricName;
