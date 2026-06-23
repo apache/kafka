@@ -929,9 +929,16 @@ class BrokerServer(
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
       Utils.closeQuietly(sharePartitionManager, "share partition manager")
 
+      // The order of closing sharePartitionManager, groupCoordinator and persister matters.
+      // groupCoordinator, sharePartitionManager must be closed before the persister so that
+      // new requests from sharePartitionManager, groupCoordinator do not encounter a stopped
+      // persister.
       if (persister != null)
         Utils.swallow(this.logger.underlying, () => persister.stop())
 
+      // The order of closing sharePartitionManager and shareGroupDLQManager matters.
+      // sharePartitionManager must be closed before the shareGroupDLQManager so any new
+      // requests from sharePartitionManager do not encounter a stopped shareGroupDLQManager.
       if (shareGroupDLQManager != null)
         Utils.swallow(this.logger.underlying, () => shareGroupDLQManager.stop())
 
