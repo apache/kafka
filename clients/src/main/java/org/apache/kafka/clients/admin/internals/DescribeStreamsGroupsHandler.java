@@ -228,8 +228,13 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
             final StreamsGroupTopologyDescriptionStatus status,
             final StreamsGroupDescribeResponseData.TopologyDescription topologyDescription) {
         // The description is present if and only if the status is AVAILABLE.
-        if (status != StreamsGroupTopologyDescriptionStatus.AVAILABLE || topologyDescription == null) {
+        if (status != StreamsGroupTopologyDescriptionStatus.AVAILABLE) {
             return Optional.empty();
+        }
+        // A broker reporting AVAILABLE must include the description; otherwise the response is malformed and would
+        // produce a StreamsGroupDescription that violates the "present iff AVAILABLE" contract.
+        if (topologyDescription == null) {
+            throw new IllegalStateException("Topology description is missing despite status AVAILABLE");
         }
         final List<StreamsGroupTopologyDescription.Subtopology> subtopologies = topologyDescription.subtopologies().stream()
             .map(this::convertTopologySubtopology)

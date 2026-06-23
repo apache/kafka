@@ -207,6 +207,27 @@ public class DescribeStreamsGroupsHandlerTest {
     }
 
     @Test
+    public void testAvailableStatusWithMissingTopologyDescriptionFailsOnlyAffectedGroup() {
+        // The broker reports AVAILABLE but omits the topology description, which violates the
+        // "present iff AVAILABLE" contract and must be treated as a malformed response.
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = newDescribedGroup()
+            .setTopologyDescriptionStatus(StreamsGroupTopologyDescriptionStatus.AVAILABLE.id())
+            .setTopologyDescription(null);
+
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(false, true, logContext);
+        CoordinatorKey key = CoordinatorKey.byGroupId(groupId);
+        AdminApiHandler.ApiResult<CoordinatorKey, StreamsGroupDescription> result = handler.handleResponse(
+            coordinator,
+            Set.of(key),
+            new StreamsGroupDescribeResponse(new StreamsGroupDescribeResponseData()
+                .setGroups(List.of(describedGroup))));
+
+        assertTrue(result.completedKeys.isEmpty());
+        assertEquals(Set.of(key), result.failedKeys.keySet());
+        assertInstanceOf(IllegalStateException.class, result.failedKeys.get(key));
+    }
+
+    @Test
     public void testUnknownTopologyNodeTypeFailsOnlyAffectedGroup() {
         // A future broker version may add a topology node type that this client does not know about.
         StreamsGroupDescribeResponseData.TopologyDescriptionNode unknownNode =

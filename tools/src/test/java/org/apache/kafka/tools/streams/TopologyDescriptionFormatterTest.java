@@ -70,10 +70,39 @@ public class TopologyDescriptionFormatterTest {
             "    Source: global-source (topics: [global-topic])\n" +
             "      --> global-processor\n" +
             "    Processor: global-processor (stores: [global-store])\n" +
-            "      --> \n" +
-            "      <-- global-source\n";
+            "      --> none\n" +
+            "      <-- global-source\n" +
+            "\n";
 
         assertEquals(expected, TopologyDescriptionFormatter.format(topology));
+    }
+
+    @Test
+    public void testFormatMultipleGlobalStoresAreSeparatedByBlankLine() {
+        Source source0 = new Source("global-source-0", Set.of("topic-0"), Set.of("global-processor-0"), Set.of());
+        Processor processor0 = new Processor("global-processor-0", Set.of("store-0"), Set.of(), Set.of("global-source-0"));
+        Source source1 = new Source("global-source-1", Set.of("topic-1"), Set.of("global-processor-1"), Set.of());
+        Processor processor1 = new Processor("global-processor-1", Set.of("store-1"), Set.of(), Set.of("global-source-1"));
+        StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(
+            List.of(),
+            List.of(new GlobalStore(source0, processor0), new GlobalStore(source1, processor1)));
+
+        // Consecutive global stores are separated by a blank line, matching Topology#describe().
+        assertEquals("Topologies:\n" +
+            "   Sub-topology: 0 for global store (will not generate tasks)\n" +
+            "    Source: global-source-0 (topics: [topic-0])\n" +
+            "      --> global-processor-0\n" +
+            "    Processor: global-processor-0 (stores: [store-0])\n" +
+            "      --> none\n" +
+            "      <-- global-source-0\n" +
+            "\n" +
+            "   Sub-topology: 1 for global store (will not generate tasks)\n" +
+            "    Source: global-source-1 (topics: [topic-1])\n" +
+            "      --> global-processor-1\n" +
+            "    Processor: global-processor-1 (stores: [store-1])\n" +
+            "      --> none\n" +
+            "      <-- global-source-1\n" +
+            "\n", TopologyDescriptionFormatter.format(topology));
     }
 
     @Test
@@ -90,11 +119,28 @@ public class TopologyDescriptionFormatterTest {
         assertEquals("Topologies:\n" +
             "   Sub-topology: 0\n" +
             "    Source: source-0 (topics: [input-0])\n" +
-            "      --> \n" +
+            "      --> none\n" +
             "\n" +
             "   Sub-topology: 1\n" +
             "    Source: source-1 (topics: [input-1])\n" +
-            "      --> \n" +
+            "      --> none\n" +
+            "\n", TopologyDescriptionFormatter.format(topology));
+    }
+
+    @Test
+    public void testFormatRendersEmptySuccessorsAndPredecessorsAsNone() {
+        // A lone processor with no successors and no predecessors; both relations must render as "none"
+        // (mirroring Topology#describe()) rather than leaving a trailing "--> " / "<-- ".
+        Processor processor = new Processor("processor", Set.of("store"), Set.of(), Set.of());
+        StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(
+            List.of(new Subtopology("0", List.<Node>of(processor))),
+            List.of());
+
+        assertEquals("Topologies:\n" +
+            "   Sub-topology: 0\n" +
+            "    Processor: processor (stores: [store])\n" +
+            "      --> none\n" +
+            "      <-- none\n" +
             "\n", TopologyDescriptionFormatter.format(topology));
     }
 

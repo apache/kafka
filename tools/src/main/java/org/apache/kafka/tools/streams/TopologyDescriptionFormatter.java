@@ -71,6 +71,7 @@ public final class TopologyDescriptionFormatter {
         sb.append("    ");
         appendNode(sb, globalStore.processor());
         sb.append('\n');
+        sb.append('\n');
     }
 
     private static void appendNode(final StringBuilder sb, final Node node) {
@@ -100,6 +101,11 @@ public final class TopologyDescriptionFormatter {
     }
 
     private static String nodeNames(final Collection<String> names) {
+        // Mirror Kafka Streams' Topology#describe(): empty successor/predecessor sets render as "none"
+        // (see InternalTopologyBuilder#nodeNames), avoiding a trailing "--> " / "<-- " with no names.
+        if (names.isEmpty()) {
+            return "none";
+        }
         return String.join(", ", sorted(names));
     }
 }

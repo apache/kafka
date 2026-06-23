@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -122,12 +123,14 @@ public class StreamsGroupTopologyDescription {
                 return false;
             }
             final Subtopology that = (Subtopology) o;
-            return Objects.equals(id, that.id) && Objects.equals(nodes, that.nodes);
+            // Nodes within a subtopology are unordered, so compare them set-wise rather than by wire order.
+            return Objects.equals(id, that.id) && Objects.equals(new HashSet<>(nodes), new HashSet<>(that.nodes));
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(id, nodes);
+            // Mirror the order-insensitive equality above; HashSet.hashCode() is independent of iteration order.
+            return Objects.hash(id, new HashSet<>(nodes));
         }
 
         @Override
