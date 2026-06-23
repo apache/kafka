@@ -103,7 +103,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
-import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionConverter;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupTopologyDescriptionManager;
@@ -419,6 +418,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .collect(Collectors.toSet());
         this.partitionMetadataClient = partitionMetadataClient;
         this.streamsGroupTopologyDescriptionManager = new StreamsGroupTopologyDescriptionManager(
+            logContext,
             streamsGroupTopologyDescriptionPlugin,
             time
         );
@@ -1330,12 +1330,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List)}.
+     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List, boolean)}.
      */
     @Override
     public CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        boolean includeTopologyDescription
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(StreamsGroupDescribeRequest.getErrorDescribedGroupList(
@@ -1367,7 +1368,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "streams-group-describe",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupList, lastCommittedOffset)
-                ).thenApply(StreamsGroupDescribeResult::describedGroups)
+                ).thenCompose(result -> includeTopologyDescription
+                    ? streamsGroupTopologyDescriptionManager.attachTopologyDescriptions(result)
+                    : CompletableFuture.completedFuture(result.describedGroups()))
                 .exceptionally(exception -> handleOperationException(
                     "streams-group-describe",
                     groupList,

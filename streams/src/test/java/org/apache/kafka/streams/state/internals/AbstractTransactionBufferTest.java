@@ -385,6 +385,13 @@ public class AbstractTransactionBufferTest {
         }
 
         @Override
+        ManagedKeyValueIterator<Integer, byte[]> newBaseSnapshotIterator(
+            final Integer from, final Integer to, final boolean forward, final boolean toInclusive) {
+            final NavigableMap<Integer, byte[]> copy = new TreeMap<>(boundedBaseView(from, to, toInclusive));
+            return new TestIterator(forward ? copy : copy.descendingMap());
+        }
+
+        @Override
         void flushToBase() {
             for (final Map.Entry<Integer, Optional<byte[]>> entry : pendingBatch.entrySet()) {
                 if (entry.getValue().isPresent()) {

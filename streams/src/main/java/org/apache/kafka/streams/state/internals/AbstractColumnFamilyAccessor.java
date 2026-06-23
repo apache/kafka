@@ -121,6 +121,11 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     }
 
 
+    @Override
+    public final ColumnFamilyHandle offsetsColumnFamily() {
+        return offsetColumnFamilyHandle;
+    }
+
     // Visible for testing
     ColumnFamilyHandle offsetColumnFamilyHandle() {
         return offsetColumnFamilyHandle;
