@@ -87,8 +87,8 @@ The mojo binds to the `verify` phase and reads `${project.build.outputDirectory}
 
 ## Reports
 
-Each run writes both text and JSON reports under `build/reports/kafka-internal-api-usage.{txt,json}`
-(`target/` for Maven). The reports group violations by type and by class, and list any
+Each run writes a text report to `build/reports/kafka-internal-api-usage.txt`
+(`target/` for Maven). The report groups violations by type and by class, and lists any
 suppressions separately so they can be audited.
 
 ## Suppressing known references

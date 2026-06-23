@@ -8,7 +8,7 @@ This module builds the KIP-1265 API-checker plugins from a single source tree:
 | `KafkaInternalApiCheckerPlugin` | `org.apache.kafka.internal-api-checker` (Gradle) | External — published for plugin/connector/Streams-app developers to detect references from their bytecode to non-`@Public` Kafka classes. |
 | `KafkaInternalApiCheckerMojo` | `org.apache.kafka:kafka-internal-api-checker-maven-plugin` | External — Maven equivalent of the Gradle internal-API checker. |
 
-All three share the bytecode scanner and reporting code under `org.apache.kafka.publicapi`. ASM (9.6) does the scanning; nothing in the checker classloads scanned bytecode.
+All three share the bytecode scanner and reporting code under `org.apache.kafka.apicheck`. ASM (9.6) does the scanning; nothing in the checker classloads scanned bytecode.
 
 End-user documentation (Gradle/Maven snippets, `@SuppressKafkaInternalApiUsage`, audience-inheritance rules) lives at [`docs/apis/internal-api-checker.md`](../docs/apis/internal-api-checker.md). The notes below cover building, testing, and publishing the plugins themselves.
 
@@ -67,7 +67,7 @@ buildSrc/
 │   │   └── KafkaPublicApiCheckerExtension.java
 │   ├── maven/
 │   │   └── KafkaInternalApiCheckerMojo.java         # External Maven mojo
-│   └── publicapi/                                   # Shared scanner / validator / reporter
+│   └── apicheck/                                    # Shared scanner / validator / reporter
 │       ├── ApiSurface.java
 │       ├── ApiSurfaceScanner.java
 │       ├── CascadeValidator.java

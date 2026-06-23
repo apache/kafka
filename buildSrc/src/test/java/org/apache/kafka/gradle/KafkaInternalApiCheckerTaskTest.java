@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.gradle;
 
-import org.apache.kafka.publicapi.AsmClassFactory;
-import org.apache.kafka.publicapi.TempJarBuilder;
+import org.apache.kafka.apicheck.AsmClassFactory;
+import org.apache.kafka.apicheck.TempJarBuilder;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;

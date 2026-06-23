@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.maven;
 
-import org.apache.kafka.publicapi.PublicApiChecker;
-import org.apache.kafka.publicapi.PublicApiViolation;
-import org.apache.kafka.publicapi.CheckResult;
-import org.apache.kafka.publicapi.ViolationReporter;
+import org.apache.kafka.apicheck.PublicApiChecker;
+import org.apache.kafka.apicheck.PublicApiViolation;
+import org.apache.kafka.apicheck.CheckResult;
+import org.apache.kafka.apicheck.ViolationReporter;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
@@ -130,10 +130,6 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
             // Generate report
             ViolationReporter reporter = new ViolationReporter();
             reporter.writeTextReport(violations, suppressions, reportFile);
-
-            // Also write JSON report
-            File jsonReport = ViolationReporter.jsonReportFor(reportFile);
-            reporter.writeJsonReport(violations, suppressions, jsonReport);
 
             // Print summary to console
             reporter.printToConsole(violations, suppressions, true);

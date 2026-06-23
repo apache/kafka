@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.gradle;
 
-import org.apache.kafka.publicapi.CheckResult;
-import org.apache.kafka.publicapi.PublicApiChecker;
-import org.apache.kafka.publicapi.PublicApiViolation;
-import org.apache.kafka.publicapi.ViolationReporter;
+import org.apache.kafka.apicheck.CheckResult;
+import org.apache.kafka.apicheck.PublicApiChecker;
+import org.apache.kafka.apicheck.PublicApiViolation;
+import org.apache.kafka.apicheck.ViolationReporter;
 
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -96,10 +96,6 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
             ViolationReporter reporter = new ViolationReporter();
             File report = reportFile.get().getAsFile();
             reporter.writeTextReport(violations, suppressions, report);
-
-            // Also write JSON report
-            File jsonReport = ViolationReporter.jsonReportFor(report);
-            reporter.writeJsonReport(violations, suppressions, jsonReport);
 
             // Print summary to console
             reporter.printToConsole(violations, suppressions, true);
