@@ -190,10 +190,6 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         final RocksIterator rocksIterator = db.newIterator(cf);
         final ManagedKeyValueIterator<Bytes, byte[]> iter =
             buildBaseIterator(rocksIterator, from, to, forward, toInclusive);
-        // RocksDbIterator requires onClose to be set before close() is called.
-        // Since this iterator is used internally by StagedMergeIterator (not
-        // tracked by RocksDBStore's open-iterator set), use a no-op callback.
-        iter.onClose(() -> { });
         return maybeWrapRangeTombstones(iter);
     }
 
@@ -208,7 +204,6 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
             final RocksIterator rocksIterator = db.newIterator(cf, readOptions);
             final ManagedKeyValueIterator<Bytes, byte[]> iter =
                 buildBaseIterator(rocksIterator, from, to, forward, toInclusive);
-            iter.onClose(() -> { });
             final ManagedKeyValueIterator<Bytes, byte[]> result =
                 maybeWrapRangeTombstones(new SnapshotReleasingIterator(iter, db, snapshot, readOptions));
             released = true;
@@ -224,22 +219,28 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
     private ManagedKeyValueIterator<Bytes, byte[]> buildBaseIterator(final RocksIterator rocksIterator,
                                                                      final Bytes from, final Bytes to,
                                                                      final boolean forward, final boolean toInclusive) {
+        final ManagedKeyValueIterator<Bytes, byte[]> iter;
         if (from != null && to != null) {
-            return new RocksDBRangeIterator(storeName, rocksIterator, from, to, forward, toInclusive);
+            iter = new RocksDBRangeIterator(storeName, rocksIterator, from, to, forward, toInclusive);
         } else if (from != null && forward) {
             rocksIterator.seek(from.get());
-            return new RocksDbIterator(storeName, rocksIterator, true);
+            iter = new RocksDbIterator(storeName, rocksIterator, true);
         } else if (!forward) {
             if (to != null) {
                 rocksIterator.seekForPrev(to.get());
             } else {
                 rocksIterator.seekToLast();
             }
-            return new RocksDbIterator(storeName, rocksIterator, false);
+            iter = new RocksDbIterator(storeName, rocksIterator, false);
         } else {
             rocksIterator.seekToFirst();
-            return new RocksDbIterator(storeName, rocksIterator, true);
+            iter = new RocksDbIterator(storeName, rocksIterator, true);
         }
+        // RocksDbIterator requires onClose to be set before close() is called.
+        // Since this iterator is used internally by StagedMergeIterator (not
+        // tracked by RocksDBStore's open-iterator set), use a no-op callback.
+        iter.onClose(() -> { });
+        return iter;
     }
 
     private ManagedKeyValueIterator<Bytes, byte[]> maybeWrapRangeTombstones(
