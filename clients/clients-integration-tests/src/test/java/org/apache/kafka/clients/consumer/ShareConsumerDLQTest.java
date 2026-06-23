@@ -257,8 +257,8 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
      * Reads the DLQ topic and asserts it received exactly one record per expected source offset. Record copy
      * is disabled, so each DLQ record carries only the context headers (no key/value).
      *
-     * @param dlqTopic             the DLQ topic to read from (single partition)
-     * @param groupId              the share group the rejected records belonged to
+     * @param dlqTopic              the DLQ topic to read from (single partition)
+     * @param groupId               the share group the rejected records belonged to
      * @param expectedSourceOffsets the source offsets expected to have been written to the DLQ
      */
     private void verifyDlqTopicRecords(String dlqTopic, String groupId, Set<Long> expectedSourceOffsets) throws InterruptedException {
@@ -268,10 +268,9 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             consumer.assign(List.of(dlqTp));
             consumer.seekToBeginning(List.of(dlqTp));
             waitForCondition(() -> {
-                    dlqRecords.addAll(consumer.poll(Duration.ofMillis(1000)).records(dlqTp));
+                dlqRecords.addAll(consumer.poll(Duration.ofMillis(1000)).records(dlqTp));
                 return dlqRecords.size() >= expectedSourceOffsets.size();
-            }, DEFAULT_MAX_WAIT_MS, 500L,
-                () -> "DLQ topic did not receive " + expectedSourceOffsets.size() + " records, got " + dlqRecords.size());
+            }, DEFAULT_MAX_WAIT_MS, 500L, () -> "DLQ topic did not receive " + expectedSourceOffsets.size() + " records, got " + dlqRecords.size());
         }
 
         assertEquals(expectedSourceOffsets.size(), dlqRecords.size(), "Unexpected number of records on the DLQ topic");
