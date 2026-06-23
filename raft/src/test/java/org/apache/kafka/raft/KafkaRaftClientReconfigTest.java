@@ -365,6 +365,170 @@ public class KafkaRaftClientReconfigTest {
     }
 
     @Test
+    public void testAddVoterDerivesDirectoryIdAndEndpoints() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_1141_PROTOCOL)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Map.of(context.channel.listenerName(), newAddress)
+        );
+        context.client.setNodeEndpointProvider(nodeId ->
+            nodeId == newVoter.id() ? newListeners : Endpoints.empty()
+        );
+
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
+
+        context.deliverRequest(
+            context.addVoterRequest(
+                Integer.MAX_VALUE,
+                ReplicaKey.of(newVoter.id(), Uuid.ZERO_UUID),
+                Endpoints.empty()
+            )
+        );
+
+        completeApiVersionsForAddVoter(context, newVoter, newAddress);
+
+        // Handle the API_VERSIONS response
+        context.client.poll();
+        // Append new VotersRecord to log
+        context.client.poll();
+
+        commitNewVoterSetForAddVoter(context, local, follower, newVoter, epoch);
+
+        // Expect reply for AddVoter request
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.NONE);
+    }
+
+    @Test
+    public void testAddVoterFailsToDeriveDefaultListenerEndpoint() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_1141_PROTOCOL)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
+
+        context.deliverRequest(
+            context.addVoterRequest(
+                Integer.MAX_VALUE,
+                ReplicaKey.of(newVoter.id(), Uuid.ZERO_UUID),
+                Endpoints.empty()
+            )
+        );
+
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.INVALID_REQUEST);
+    }
+
+    @Test
+    public void testAddVoterDoesNotReplaceExplicitDirectoryId() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_1141_PROTOCOL)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+        ReplicaKey observer = replicaKey(local.id() + 2, true);
+        ReplicaKey requestedVoter = replicaKey(observer.id(), true);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + observer.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Map.of(context.channel.listenerName(), newAddress)
+        );
+
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, observer);
+        context.deliverRequest(
+            context.addVoterRequest(Integer.MAX_VALUE, requestedVoter, newListeners)
+        );
+        completeApiVersionsForAddVoter(context, requestedVoter, newAddress);
+
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.REQUEST_TIMED_OUT);
+    }
+
+    @Test
+    public void testAddVoterRejectsDuplicateObserverIdWhenDerivingDirectoryId() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_1141_PROTOCOL)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        ReplicaKey newVoter = replicaKey(local.id() + 2, true);
+        ReplicaKey duplicateObserver = replicaKey(newVoter.id(), true);
+        InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
+            "localhost",
+            9990 + newVoter.id()
+        );
+        Endpoints newListeners = Endpoints.fromInetSocketAddresses(
+            Map.of(context.channel.listenerName(), newAddress)
+        );
+        context.client.setNodeEndpointProvider(nodeId ->
+            nodeId == newVoter.id() ? newListeners : Endpoints.empty()
+        );
+
+        prepareLeaderToReceiveAddVoter(context, epoch, local, follower, newVoter);
+
+        context.deliverRequest(
+            context.fetchRequest(epoch, duplicateObserver, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        context.deliverRequest(
+            context.addVoterRequest(
+                Integer.MAX_VALUE,
+                ReplicaKey.of(newVoter.id(), Uuid.ZERO_UUID),
+                Endpoints.empty()
+            )
+        );
+
+        context.pollUntilResponse();
+        context.assertSentAddVoterResponse(Errors.INVALID_REQUEST);
+    }
+
+    @Test
     void testAddVoterCompletesEarlyWithAckWhenCommittedFalse() throws Exception {
         ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
@@ -1157,6 +1321,87 @@ public class KafkaRaftClientReconfigTest {
         // Expect reply for RemoveVoter request
         context.pollUntilResponse();
         context.assertSentRemoveVoterResponse(Errors.NONE);
+    }
+
+    @Test
+    public void testRemoveVoterDerivesDirectoryId() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower1 = replicaKey(local.id() + 1, true);
+        ReplicaKey follower2 = replicaKey(local.id() + 2, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_1141_PROTOCOL)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        // Establish a HWM and fence previous leaders
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower1, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        // Attempt to remove follower2
+        context.deliverRequest(context.removeVoterRequest(ReplicaKey.of(follower2.id(), Uuid.ZERO_UUID)));
+
+        // Handle the remove voter request
+        context.client.poll();
+        // Append the VotersRecord to the log
+        context.client.poll();
+
+        // follower2 should not be a voter in the latest voter set
+        assertFalse(context.client.quorum().isVoter(follower2));
+
+        // Send a FETCH to increase the HWM and commit the new voter set
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower1, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        // Expect reply for RemoveVoter request
+        context.pollUntilResponse();
+        context.assertSentRemoveVoterResponse(Errors.NONE);
+    }
+
+    @Test
+    public void testRemoveVoterFailsToDeriveDirectoryId() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower1 = replicaKey(local.id() + 1, true);
+        ReplicaKey follower2 = replicaKey(local.id() + 2, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower1, follower2));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_1141_PROTOCOL)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        // Establish a HWM and fence previous leaders
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower1, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+
+        int unknownVoterId = follower2.id() + 1;
+        context.deliverRequest(
+            context.removeVoterRequest(ReplicaKey.of(unknownVoterId, Uuid.ZERO_UUID))
+        );
+
+        context.pollUntilResponse();
+        context.assertSentRemoveVoterResponse(Errors.INVALID_REQUEST);
+        assertTrue(context.client.quorum().isVoter(follower2));
     }
 
     @Test

@@ -40,7 +40,7 @@ import org.apache.kafka.metadata.{KafkaConfigSchema, KRaftMetadataCache, Listene
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, FeaturesPublisher, ScramPublisher}
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{Endpoints, QuorumConfig}
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -56,6 +56,7 @@ import org.apache.kafka.server.util.{Deadline, FutureUtils}
 import org.apache.kafka.server.NodeToControllerChannelManagerImpl
 import org.apache.kafka.server.RaftControllerNodeProvider
 
+import java.net.InetSocketAddress
 import java.util
 import java.util.{Optional, OptionalLong}
 import java.util.concurrent.locks.ReentrantLock
@@ -205,6 +206,16 @@ class ControllerServer(
       }
 
       sharedServer.startForController(listenerInfo)
+
+      raftManager.client.setNodeEndpointProvider { nodeId =>
+        Option(registrationsPublisher.controllers().get(nodeId)).map { registration =>
+          val endpoints = registration.listeners().asScala.map { case (listenerName, endpoint) =>
+            ListenerName.normalised(listenerName) ->
+              InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+          }.asJava
+          Endpoints.fromInetSocketAddresses(endpoints)
+        }.getOrElse(Endpoints.empty())
+      }
 
       createTopicPolicy = Option(config.
         getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))

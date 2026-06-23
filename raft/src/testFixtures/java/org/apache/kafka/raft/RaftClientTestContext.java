@@ -2367,7 +2367,9 @@ public final class RaftClientTestContext {
         // HWM in FETCH request support
         KIP_1166_PROTOCOL,
         // autoJoin support
-        KIP_1186_PROTOCOL;
+        KIP_1186_PROTOCOL,
+        // add/remove voter convenience support
+        KIP_1141_PROTOCOL;
 
         boolean isReconfigSupported() {
             return isAtLeast(KIP_853_PROTOCOL);
@@ -2430,7 +2432,9 @@ public final class RaftClientTestContext {
         }
 
         short addVoterRpcVersion() {
-            if (isAtLeast(KIP_1186_PROTOCOL)) {
+            if (isAtLeast(KIP_1141_PROTOCOL)) {
+                return 2;
+            } else if (isAtLeast(KIP_1186_PROTOCOL)) {
                 return 1;
             } else if (isAtLeast(KIP_853_PROTOCOL)) {
                 return 0;
@@ -2440,7 +2444,9 @@ public final class RaftClientTestContext {
         }
 
         short removeVoterRpcVersion() {
-            if (isAtLeast(KIP_853_PROTOCOL)) {
+            if (isAtLeast(KIP_1141_PROTOCOL)) {
+                return 1;
+            } else if (isAtLeast(KIP_853_PROTOCOL)) {
                 return 0;
             } else {
                 throw new IllegalStateException("Reconfiguration must be enabled by calling withRaftProtocol(KIP_853_PROTOCOL)");

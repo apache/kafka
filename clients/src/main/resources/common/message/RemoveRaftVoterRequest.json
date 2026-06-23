@@ -18,7 +18,9 @@
   "type": "request",
   "listeners": ["controller", "broker"],
   "name": "RemoveRaftVoterRequest",
-  "validVersions": "0",
+  // Version 1 allows VoterDirectoryId to be ZERO_UUID, in which case the server will
+  // derive the directory id from its in-memory LeaderState.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+",

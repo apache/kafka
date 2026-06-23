@@ -31,6 +31,7 @@ import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.Node;
@@ -67,12 +68,14 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG;
@@ -203,6 +206,51 @@ public class BootstrapControllersIntegrationTest {
             assertTrue(clusterInstance.controllerIds().contains(
                     result.quorumInfo().get(1, TimeUnit.MINUTES).leaderId()));
         }
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testAddRemoveRaftVoterByControllers(ClusterInstance clusterInstance) throws Exception {
+        testAddRemoveRaftVoter(clusterInstance, true);
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testAddRemoveRaftVoter(ClusterInstance clusterInstance) throws Exception {
+        testAddRemoveRaftVoter(clusterInstance, false);
+    }
+
+    private void testAddRemoveRaftVoter(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            Set<Integer> initialVoters = voterIds(admin.describeMetadataQuorum().quorumInfo().get());
+            AtomicInteger voterId = new AtomicInteger();
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                voterId.set(quorumInfo.observers().stream()
+                    .map(QuorumInfo.ReplicaState::replicaId)
+                    .filter(clusterInstance.controllerIds()::contains)
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("Expected at least one controller observer in quorum info " + quorumInfo)));
+            });
+
+            Set<Integer> votersAfterAdd = new HashSet<>(initialVoters);
+            votersAfterAdd.add(voterId.get());
+            admin.addRaftVoter(voterId.get()).all().get();
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> assertEquals(votersAfterAdd,
+                voterIds(admin.describeMetadataQuorum().quorumInfo().get())));
+
+            admin.removeRaftVoter(voterId.get()).all().get();
+            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                assertEquals(initialVoters, voterIds(quorumInfo));
+                assertTrue(quorumInfo.observers().stream().anyMatch(o -> o.replicaId() == voterId.get()),
+                    "Controller " + voterId.get() + " has not yet transitioned back to observer state");
+            });
+        }
+    }
+
+    private static Set<Integer> voterIds(QuorumInfo quorumInfo) {
+        return quorumInfo.voters().stream()
+            .map(QuorumInfo.ReplicaState::replicaId)
+            .collect(Collectors.toSet());
     }
 
     @ClusterTest
