@@ -16,21 +16,27 @@
  */
 package org.apache.kafka.publicapi;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
- * Outcome of a public-API check. Violations are real failures that should fail the build;
- * suppressions are would-be cascade violations that were silenced because the containing
- * method or class carries {@code @SuppressKafkaInternalApiUsage}. Every suppression carries
- * the reason from the annotation so reviewers can audit every escape hatch on every build.
+ * Outcome of any of the KIP-1265 checks: the Kafka-internal cascade and javadoc validators
+ * (returning would-be public-API leaks against Kafka's own surface) and the consumer-side
+ * internal-usage scanner (returning references from a downstream project's bytecode to a
+ * non-{@code @Public} Kafka type).
+ *
+ * <p>Violations are real failures that should fail the build. Suppressions are would-be
+ * violations that were silenced by a class-, method-, or field-level
+ * {@code @SuppressKafkaInternalApiUsage}; each carries the reason supplied to the annotation
+ * so reviewers can audit every escape hatch on every build.
  */
 public final class CheckResult {
     private final List<PublicApiViolation> violations;
     private final List<PublicApiViolation> suppressions;
 
     public CheckResult(List<PublicApiViolation> violations, List<PublicApiViolation> suppressions) {
-        this.violations = violations;
-        this.suppressions = suppressions;
+        this.violations = violations == null ? Collections.emptyList() : violations;
+        this.suppressions = suppressions == null ? Collections.emptyList() : suppressions;
     }
 
     public List<PublicApiViolation> violations() {
@@ -39,5 +45,9 @@ public final class CheckResult {
 
     public List<PublicApiViolation> suppressions() {
         return suppressions;
+    }
+
+    public boolean hasViolations() {
+        return !violations.isEmpty();
     }
 }

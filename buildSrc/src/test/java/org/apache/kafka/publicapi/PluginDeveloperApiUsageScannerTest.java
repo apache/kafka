@@ -46,9 +46,9 @@ class PluginDeveloperApiUsageScannerTest {
     @Test
     void scan_noRoots_returnsEmpty() throws IOException {
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(true));
-        ScanResult result = scanner.scan(Collections.emptyList());
-        assertTrue(result.getViolations().isEmpty());
-        assertTrue(result.getSuppressions().isEmpty());
+        CheckResult result = scanner.scan(Collections.emptyList());
+        assertTrue(result.violations().isEmpty());
+        assertTrue(result.suppressions().isEmpty());
     }
 
     @Test
@@ -58,7 +58,7 @@ class PluginDeveloperApiUsageScannerTest {
 
         Predicate<String> isPublic = name -> "org.apache.kafka.clients.producer.KafkaProducer".equals(name);
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(isPublic);
-        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
         assertTrue(violations.isEmpty(),
                 "Reference to an @InterfaceAudience.Public class must not be reported, but got: " + violations);
@@ -70,7 +70,7 @@ class PluginDeveloperApiUsageScannerTest {
                 generateConsumerReferencing("com/example/InternalConsumer", "org/apache/kafka/internals/SecretCabal"));
 
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
-        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
         assertFalse(violations.isEmpty(), "Reference to an internal Kafka class must be reported");
         PublicApiViolation v = violations.get(0);
@@ -86,7 +86,7 @@ class PluginDeveloperApiUsageScannerTest {
                 generateConsumerReferencing("com/example/JdkConsumer", "java/util/HashMap"));
 
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
-        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
         assertTrue(violations.isEmpty(),
                 "References to non-Kafka classes (e.g. JDK) must not be reported, got: " + violations);
@@ -104,7 +104,7 @@ class PluginDeveloperApiUsageScannerTest {
         }
 
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
-        List<PublicApiViolation> violations = scanner.scan(List.of(jar)).getViolations();
+        List<PublicApiViolation> violations = scanner.scan(List.of(jar)).violations();
 
         assertFalse(violations.isEmpty(), "scan of jar should find the internal reference");
         assertEquals("org.apache.kafka.internals.Hidden", violations.get(0).getClassName());
@@ -128,7 +128,7 @@ class PluginDeveloperApiUsageScannerTest {
         File classFile = writeClassFile("com/example/FieldHolder", cw.toByteArray());
 
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
-        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
         assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Hidden".equals(v.getClassName())),
                 "field-type reference must be reported, got: " + violations);
@@ -143,13 +143,13 @@ class PluginDeveloperApiUsageScannerTest {
         File classFile = writeClassFile("com/example/SuppressedClass", bytes);
 
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
-        ScanResult result = scanner.scan(List.of(classFile.getParentFile()));
+        CheckResult result = scanner.scan(List.of(classFile.getParentFile()));
 
-        assertTrue(result.getViolations().isEmpty(),
-                "Class-level @SuppressKafkaInternalApiUsage must suppress all violations; got: " + result.getViolations());
-        assertFalse(result.getSuppressions().isEmpty(),
+        assertTrue(result.violations().isEmpty(),
+                "Class-level @SuppressKafkaInternalApiUsage must suppress all violations; got: " + result.violations());
+        assertFalse(result.suppressions().isEmpty(),
                 "suppressions list must record the skipped reference so it shows in the report");
-        PublicApiViolation s = result.getSuppressions().get(0);
+        PublicApiViolation s = result.suppressions().get(0);
         assertEquals("SUPPRESSED_INTERNAL_API_USAGE", s.getViolationType());
         assertTrue(s.getDescription().contains("ports legacy adapter; tracked in JIRA-1234"),
                 "suppression description must carry the annotation's reason; got: " + s.getDescription());
@@ -164,7 +164,7 @@ class PluginDeveloperApiUsageScannerTest {
         File classFile = writeClassFile("com/example/PartiallySuppressed", bytes);
 
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
-        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
         // The other method ("alsoUseIt") is not suppressed -- it must still report.
         assertEquals(1, violations.size(),
@@ -182,7 +182,7 @@ class PluginDeveloperApiUsageScannerTest {
         File classFile = writeClassFile("com/example/SuppressedNoReason", bytes);
 
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
-        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
         assertTrue(violations.isEmpty(),
                 "@SuppressKafkaInternalApiUsage with no reason must still suppress; got: " + violations);
@@ -200,7 +200,7 @@ class PluginDeveloperApiUsageScannerTest {
         // Outer is public, but the nested Outer$Inner is explicitly Private.
         Predicate<String> audience = name -> "org.apache.kafka.Outer".equals(name);
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(audience);
-        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).getViolations();
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
 
         assertFalse(violations.isEmpty(),
                 "Reference to a Private-nested type must be flagged even when its outer is Public; got: " + violations);

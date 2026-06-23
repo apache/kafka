@@ -160,12 +160,12 @@ class PublicApiCheckerTest {
                         .method(AsmClassFactory.method("hold").returns("Lorg/apache/kafka/internals/Hidden;")))
                 .writeTo(tempDir, "consumer.jar");
 
-        ScanResult result = new PublicApiChecker(List.of(projectJar)).checkBytecode(List.of(consumerJar));
+        CheckResult result = new PublicApiChecker(List.of(projectJar)).checkBytecode(List.of(consumerJar));
 
-        assertFalse(result.getViolations().isEmpty(),
-                "unannotated Kafka class reference must be flagged: " + result.getViolations());
-        assertEquals("INTERNAL_API_USAGE", result.getViolations().get(0).getViolationType());
-        assertEquals("org.apache.kafka.internals.Hidden", result.getViolations().get(0).getClassName());
+        assertFalse(result.violations().isEmpty(),
+                "unannotated Kafka class reference must be flagged: " + result.violations());
+        assertEquals("INTERNAL_API_USAGE", result.violations().get(0).getViolationType());
+        assertEquals("org.apache.kafka.internals.Hidden", result.violations().get(0).getClassName());
     }
 
     @Test
@@ -179,10 +179,10 @@ class PublicApiCheckerTest {
                         .method(AsmClassFactory.method("use").returns("Lorg/apache/kafka/api/Pub;")))
                 .writeTo(tempDir, "consumer.jar");
 
-        ScanResult result = new PublicApiChecker(List.of(projectJar)).checkBytecode(List.of(consumerJar));
+        CheckResult result = new PublicApiChecker(List.of(projectJar)).checkBytecode(List.of(consumerJar));
 
-        assertTrue(result.getViolations().isEmpty(),
-                "reference to a @Public class must pass: " + result.getViolations());
+        assertTrue(result.violations().isEmpty(),
+                "reference to a @Public class must pass: " + result.violations());
     }
 
     // ----- constructor overload -----

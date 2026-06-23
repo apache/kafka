@@ -18,7 +18,7 @@ package org.apache.kafka.maven;
 
 import org.apache.kafka.publicapi.PublicApiChecker;
 import org.apache.kafka.publicapi.PublicApiViolation;
-import org.apache.kafka.publicapi.ScanResult;
+import org.apache.kafka.publicapi.CheckResult;
 import org.apache.kafka.publicapi.ViolationReporter;
 
 import org.apache.maven.artifact.Artifact;
@@ -123,9 +123,9 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
             }
 
             getLog().info("Scanning " + classRoots.size() + " class file root(s) for internal API usage");
-            ScanResult result = checker.checkBytecode(classRoots);
-            List<PublicApiViolation> violations = result.getViolations();
-            List<PublicApiViolation> suppressions = result.getSuppressions();
+            CheckResult result = checker.checkBytecode(classRoots);
+            List<PublicApiViolation> violations = result.violations();
+            List<PublicApiViolation> suppressions = result.suppressions();
 
             // Generate report
             ViolationReporter reporter = new ViolationReporter();

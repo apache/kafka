@@ -96,8 +96,28 @@ final class ClassFacts {
      *         Lets chain walks avoid manipulating the {@code $} separator directly.
      */
     String enclosingName() {
+        String parent = parentBinaryName(binaryName);
+        return parent == null ? null : parent.replace('$', '.');
+    }
+
+    /**
+     * @return the immediate-parent binary name of a nested class (strip the trailing
+     *         {@code $segment}), or {@code null} for top-level classes. The single canonical
+     *         way to step one level outward in the enclosing-class chain.
+     */
+    static String parentBinaryName(String binaryName) {
         int dollar = binaryName.lastIndexOf('$');
-        return dollar < 0 ? null : binaryName.substring(0, dollar).replace('$', '.');
+        return dollar < 0 ? null : binaryName.substring(0, dollar);
+    }
+
+    /**
+     * @return the outermost compilation-unit binary name — strip everything from the first
+     *         {@code $} onward. Used for self-reference detection (two binary names share the
+     *         same outermost iff they're nested under the same top-level class).
+     */
+    static String outermostBinaryName(String binaryName) {
+        int dollar = binaryName.indexOf('$');
+        return dollar < 0 ? binaryName : binaryName.substring(0, dollar);
     }
 
     @Override

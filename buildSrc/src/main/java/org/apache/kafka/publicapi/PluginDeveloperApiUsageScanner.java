@@ -75,7 +75,7 @@ public class PluginDeveloperApiUsageScanner {
      * Scan every {@code .class} entry reachable from the supplied roots. Each root may be a
      * directory of class files, an individual .class file, or a .jar archive.
      */
-    public ScanResult scan(List<File> roots) throws IOException {
+    public CheckResult scan(List<File> roots) throws IOException {
         // Use maps keyed by (consumer class, referenced internal class, member, line) so we
         // don't double-record the same call site reachable through multiple visitor callbacks.
         Map<String, PublicApiViolation> violations = new LinkedHashMap<>();
@@ -94,7 +94,7 @@ public class PluginDeveloperApiUsageScanner {
                 }
             }
         }
-        return new ScanResult(new ArrayList<>(violations.values()),
+        return new CheckResult(new ArrayList<>(violations.values()),
                 new ArrayList<>(suppressions.values()));
     }
 
@@ -160,7 +160,7 @@ public class PluginDeveloperApiUsageScanner {
         }
         // Don't report a class flagging references to its own outermost compilation unit
         // (covers self-references and references between siblings nested under the same outer).
-        if (outermostOf(binaryName).equals(outermostOf(consumerClass))) {
+        if (ClassFacts.outermostBinaryName(binaryName).equals(ClassFacts.outermostBinaryName(consumerClass))) {
             return;
         }
         String location = formatLocation(consumerClass, memberName, line);
@@ -186,12 +186,6 @@ public class PluginDeveloperApiUsageScanner {
             return null;
         }
         return trimmed.replace('/', '.');
-    }
-
-    /** Outermost enclosing class (leftmost segment before any {@code $}). */
-    private static String outermostOf(String binaryName) {
-        int dollar = binaryName.indexOf('$');
-        return dollar < 0 ? binaryName : binaryName.substring(0, dollar);
     }
 
     /** Render the consumer-side location as {@code Class#member (line N)}, omitting absent parts. */

@@ -18,7 +18,7 @@ package org.apache.kafka.gradle;
 
 import org.apache.kafka.publicapi.PublicApiChecker;
 import org.apache.kafka.publicapi.PublicApiViolation;
-import org.apache.kafka.publicapi.ScanResult;
+import org.apache.kafka.publicapi.CheckResult;
 import org.apache.kafka.publicapi.ViolationReporter;
 
 import org.gradle.api.DefaultTask;
@@ -106,9 +106,9 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
             }
 
             getLogger().info("Scanning {} class file root(s) for internal API usage", classRoots.size());
-            ScanResult result = checker.checkBytecode(classRoots);
-            List<PublicApiViolation> violations = result.getViolations();
-            List<PublicApiViolation> suppressions = result.getSuppressions();
+            CheckResult result = checker.checkBytecode(classRoots);
+            List<PublicApiViolation> violations = result.violations();
+            List<PublicApiViolation> suppressions = result.suppressions();
 
             // Generate report
             ViolationReporter reporter = new ViolationReporter();

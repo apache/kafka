@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * The Kafka public-API surface, resolved from one project-jars scan. Immutable; consumed by the
@@ -78,15 +79,8 @@ final class ApiSurface {
      * overrides an inherited {@code @Public}.
      */
     boolean isEffectivelyPublic(String name) {
-        ClassFacts current = factsOf(name);
-        while (current != null) {
-            if (current.isPrivate()) return false;
-            if (current.isPublic()) return true;
-            String enclosing = current.enclosingName();
-            if (enclosing == null) return false;
-            current = factsOf(enclosing);
-        }
-        return false;
+        ClassFacts hit = findInChain(name, f -> f.isPrivate() || f.isPublic());
+        return hit != null && hit.isPublic();
     }
 
     /**
@@ -95,14 +89,25 @@ final class ApiSurface {
      * out of scope on both validation sides (mirrors the {@code @Public} inheritance model).
      */
     boolean isDeprecated(String name) {
+        return findInChain(name, ClassFacts::isDeprecated) != null;
+    }
+
+    /**
+     * Walk the enclosing chain (starting at {@code name}, then each enclosing class) and return
+     * the first {@link ClassFacts} for which {@code stopAt} is true, or {@code null} if no class
+     * in the chain (or no class outside the surface at all) matches. The chain ends at the
+     * top-level class or the first link not recorded in this surface — consistent with the
+     * existing per-walk semantics.
+     */
+    private ClassFacts findInChain(String name, Predicate<ClassFacts> stopAt) {
         ClassFacts current = factsOf(name);
         while (current != null) {
-            if (current.isDeprecated()) return true;
+            if (stopAt.test(current)) return current;
             String enclosing = current.enclosingName();
-            if (enclosing == null) return false;
+            if (enclosing == null) return null;
             current = factsOf(enclosing);
         }
-        return false;
+        return null;
     }
 
     /**

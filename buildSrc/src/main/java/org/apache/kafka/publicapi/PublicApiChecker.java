@@ -77,7 +77,7 @@ public class PublicApiChecker {
      * {@code org.apache.kafka.*} class that isn't effectively {@code @InterfaceAudience.Public}.
      * Roots may be class directories or jar archives.
      */
-    public ScanResult checkBytecode(List<File> classFileRoots) throws IOException {
+    public CheckResult checkBytecode(List<File> classFileRoots) throws IOException {
         PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(this::isPublicApi);
         return scanner.scan(classFileRoots);
     }
