@@ -785,6 +785,7 @@ org.apache.kafka.metadata.PartitionRegistrationTest:
 - testBuilderThrowsIllegalStateExceptionWhenMissingLeaderRecoveryState
 - testBuilderThrowsIllegalStateExceptionWhenMissingPartitionEpoch
 - testBuilderThrowsIllegalStateExceptionWhenMissingReplicas
+- testConsistentEqualsAndHashCode
 - testDirectories
 - testElectionWasUnclean
 - testMergePartitionChangeRecordWithReassignmentData
@@ -832,6 +833,11 @@ org.apache.kafka.metadata.authorizer.StandardAclTest:
 org.apache.kafka.metadata.authorizer.StandardAclWithIdTest:
 - testEquals
 - testToRecordRoundTrips
+org.apache.kafka.metadata.authorizer.StandardAuthorizerPropertyTest:
+- matchingLiteralAllowWithNoMatchingDenyRules
+- matchingLiteralDenyOverridesAllAllowRules
+- matchingPrefixAllowWithNoMatchingDenyRules
+- matchingPrefixDenyOverridesAllAllowRules
 org.apache.kafka.metadata.authorizer.StandardAuthorizerTest:
 - testAllowAuditLogging
 - testAllowEveryoneIfNoAclFoundConfigDisabled
