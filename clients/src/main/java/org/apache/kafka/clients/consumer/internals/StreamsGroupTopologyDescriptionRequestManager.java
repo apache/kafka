@@ -122,7 +122,7 @@ public class StreamsGroupTopologyDescriptionRequestManager implements RequestMan
                 // Non-retriable exceptions should clear the flag and give up.
                 pushRequestState.onSuccessfulAttempt(responseTimeMs);
                 streamsRebalanceData.setTopologyPushRequired(false);
-                logger.warn("Topology description push failed with non-retriable exception; clearing flag", exception);
+                logger.warn("Topology description push failed with non-retriable exception.", exception);
             }
             return;
         }
