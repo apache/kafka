@@ -481,7 +481,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 );
             }
 
-            taskEndOffsetSumSnapshot.set(endOffsetSnapshot);
+            taskEndOffsetSumSnapshot.set(Collections.unmodifiableMap(endOffsetSnapshot));
         }
 
         private void waitIfAllChangelogsCompletelyRead() {

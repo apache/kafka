@@ -432,9 +432,9 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
-    // report a conservative value (higher as real value) as fallback
-    // only "source topic optimized" changelogs have a logical offset from `ChangelogMetadata` (the committed offset on the source topic)
-    // -> if not known (not set yet, or no "source topic optimization"), fall back to physical endOffset
+    // Report a conservative value (higher than the real value) as fallback.
+    // Only "source topic optimized" changelogs have a logical end offset from `ChangelogMetadata` (the committed offset on the source topic).
+    // If not known (not set yet, or no "source topic optimization"), fall back to physical end offset.
     @Override
     public Map<TopicPartition, Long> logicalChangelogEndOffsets() {
         final Map<TopicPartition, Long> endOffsets = new HashMap<>(changelogs.size());
