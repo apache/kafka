@@ -797,26 +797,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Record per-call outcomes from a batched {@code plugin.deleteTopology} invocation
-     * triggered by an explicit {@code DeleteGroups}. The periodic cleanup cycle has its
-     * own recorder inside {@link StreamsGroupTopologyDescriptionManager}; both write to
-     * the same {@code delete-success} / {@code delete-error} sensors so a single pair of
-     * meters tracks every {@code plugin.deleteTopology} the broker drives, regardless of
-     * trigger.
-     */
-    private void recordPluginDeleteOutcome(int attempted, int errors) {
-        int successes = attempted - errors;
-        if (successes > 0) {
-            groupCoordinatorMetrics.recordSensor(
-                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME, successes);
-        }
-        if (errors > 0) {
-            groupCoordinatorMetrics.recordSensor(
-                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME, errors);
-        }
-    }
-
-    /**
      * Validates the ShareGroupHeartbeat request.
      *
      * @param request The request to validate.
@@ -1730,7 +1710,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .thenCompose(groupsWithStored ->
                 streamsGroupTopologyDescriptionManager.invokeDeleteTopologies(groupsWithStored)
                     .thenApply(failures -> {
-                        recordPluginDeleteOutcome(groupsWithStored.size(), failures.size());
                         // Clear back-off entries for every group whose plugin state we
                         // attempted to delete (regardless of plugin outcome): the group is
                         // about to be tombstoned on success and re-evaluated by the next
@@ -2659,8 +2638,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         numPartitions = groupMetadataTopicPartitionCount.getAsInt();
         isActive.set(true);
         // Arm the periodic topology-description cleanup cycle on the manager; no-op when no
-        // plugin is configured. The manager captures the runtime via the timer task's lambda
-        // rather than holding it as a field, so its lifecycle stays decoupled from the runtime.
+        // plugin is configured. The manager does not retain a runtime reference past close().
         streamsGroupTopologyDescriptionManager.startCleanupCycle(runtime);
         log.info("Startup complete.");
     }

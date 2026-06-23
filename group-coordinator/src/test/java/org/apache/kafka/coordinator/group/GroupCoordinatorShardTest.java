@@ -127,6 +127,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_SIZ
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1630,6 +1631,36 @@ public class GroupCoordinatorShardTest {
         Map<String, Integer> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
 
         assertEquals(Map.of("good", 3), result);
+    }
+
+    @Test
+    public void testClearStoredDescriptionTopologyEpochDelegatesToGroupMetadataManager() {
+        // The shard method is a pure delegation, but the cycle's correctness depends on the
+        // exact (groupId, expectedStoredEpoch) tuple flowing through unchanged and the GMM's
+        // CoordinatorResult being returned verbatim — the per-group conditional write reads
+        // its records to decide whether the clear actually persisted.
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.offsetsRetentionCheckIntervalMs()).thenReturn(60 * 60 * 1000L);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        CoordinatorResult<Void, CoordinatorRecord> expected = new CoordinatorResult<>(List.of());
+        when(groupMetadataManager.clearStoredDescriptionTopologyEpoch("group-id", 7)).thenReturn(expected);
+
+        assertSame(expected, coordinator.clearStoredDescriptionTopologyEpoch("group-id", 7));
+        verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("group-id", 7);
     }
 
     @Test

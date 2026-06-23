@@ -134,9 +134,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
      * no plugin is configured. Must be called before {@link #close}; a second call while
      * already running logs and is otherwise a no-op.
      *
-     * <p>The runtime is captured by the self-rescheduling timer task's lambda rather
-     * than stored as a field, so the manager does not retain a runtime reference past
-     * {@link #close}.
+     * <p>The manager does not retain a runtime reference past {@link #close}.
      */
     public void startCleanupCycle(CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime) {
         if (plugin.isEmpty()) return;
@@ -259,7 +257,6 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                     );
                     perGroupFutures.add(invokeDeleteTopologies(eligible.keySet())
                         .thenCompose(failures -> {
-                            recordPluginDeleteOutcome(eligible.size(), failures.size());
                             // Shutdown can have started between the plugin call and the
                             // follow-up writes. Skip the conditional clears so we do not
                             // schedule writes against a runtime that is being closed; the
@@ -305,18 +302,6 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             // result as the async failure path, just on the construction side of the chain.
             cycleInFlight.set(false);
             throw t;
-        }
-    }
-
-    private void recordPluginDeleteOutcome(int attempted, int errors) {
-        int successes = attempted - errors;
-        if (successes > 0) {
-            groupCoordinatorMetrics.recordSensor(
-                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME, successes);
-        }
-        if (errors > 0) {
-            groupCoordinatorMetrics.recordSensor(
-                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME, errors);
         }
     }
 
@@ -515,7 +500,10 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     }
 
     /**
-     * Call {@code plugin.deleteTopology} for every supplied group id. Returns a per-group
+     * Call {@code plugin.deleteTopology} for every supplied group id, recording per-call
+     * outcomes against the {@code delete-success} / {@code delete-error} sensors so a single
+     * pair of meters tracks every {@code plugin.deleteTopology} the broker drives,
+     * regardless of trigger (cleanup cycle vs explicit DeleteGroups). Returns a per-group
      * map of failures keyed by group id; groups absent from the map either had no plugin
      * configured or the plugin call succeeded. The returned future never completes
      * exceptionally — failures are folded into the map so the service-level
@@ -534,7 +522,8 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             return CompletableFuture.completedFuture(Map.of());
         }
         final StreamsGroupTopologyDescriptionPlugin p = plugin.get();
-        List<CompletableFuture<Map.Entry<String, ApiError>>> outcomes = new ArrayList<>(groupIds.size());
+        final int attempted = groupIds.size();
+        List<CompletableFuture<Map.Entry<String, ApiError>>> outcomes = new ArrayList<>(attempted);
         for (String groupId : groupIds) {
             CompletableFuture<Map.Entry<String, ApiError>> outcome;
             try {
@@ -555,6 +544,16 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
                 if (entry != null) {
                     failures.put(entry.getKey(), entry.getValue());
                 }
+            }
+            int errors = failures.size();
+            int successes = attempted - errors;
+            if (successes > 0) {
+                groupCoordinatorMetrics.recordSensor(
+                    GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME, successes);
+            }
+            if (errors > 0) {
+                groupCoordinatorMetrics.recordSensor(
+                    GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME, errors);
             }
             return failures;
         });

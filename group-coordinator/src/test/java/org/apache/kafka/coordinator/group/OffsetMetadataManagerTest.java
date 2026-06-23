@@ -3349,6 +3349,36 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
+    public void testAllOffsetsExpiredReturnsFalseWhenOpenTxnOnPartitionWithoutCommittedOffset() {
+        // Trailing group-level !openTransactions.contains check when offsetsByTopic is non-null:
+        // foo/0 has an expired committed offset and no pending txn on the same partition (the
+        // per-partition loop sees it as expirable), but a transactional commit is in flight on
+        // bar/0 with no durable committed offset there. The per-partition loop never visits
+        // bar/0 because offsetsByGroup has no entry for bar, so only the trailing group-level
+        // check catches the open transaction and keeps the group ineligible.
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        Group group = mock(Group.class);
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .withOffsetsRetentionMinutes(1)
+            .build();
+
+        long commitTimestamp = context.time.milliseconds();
+        context.commitOffset("group-id", "foo", 0, 100L, 0, commitTimestamp);
+        // Transactional commit on a different topic-partition; never visited by the per-partition
+        // loop in allOffsetsExpired because offsetsByGroup has no entry for bar.
+        context.commitOffset(10L, "group-id", "bar", 0, 200L, 0, commitTimestamp + 500);
+        context.time.sleep(Duration.ofMinutes(1).toMillis());
+
+        when(groupMetadataManager.group(eq("group-id"), anyLong())).thenReturn(group);
+        when(group.offsetExpirationCondition()).thenReturn(Optional.of(
+            new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
+        when(group.isSubscribedToTopic("foo")).thenReturn(false);
+
+        assertFalse(context.allOffsetsExpired("group-id", context.time.milliseconds()));
+    }
+
+    @Test
     public void testAllOffsetsExpiredReturnsTrueWhenAllOffsetsPastRetentionAndUnsubscribed() {
         // Happy path: an unsubscribed topic whose offset has aged past retention, no pending
         // transactional offsets. The group is fully eligible for the downstream cleanup pass.

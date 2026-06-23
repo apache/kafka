@@ -1061,26 +1061,6 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Whether the offset committed for {@code (groupId, topic, partition)} is currently
-     * eligible for expiration: its age exceeds {@code offsets.retention.ms} per the group's
-     * {@link OffsetExpirationCondition}, and there is no pending transactional offset on the
-     * partition. Shared between {@link #cleanupExpiredOffsets} (the write path that tombstones
-     * eligible offsets) and {@link #allOffsetsExpired} (the read-only check used by the
-     * topology-description cleanup cycle) so the two cannot drift.
-     */
-    private boolean isOffsetExpirable(
-        String groupId,
-        String topic,
-        int partition,
-        OffsetAndMetadata offsetAndMetadata,
-        OffsetExpirationCondition condition,
-        long currentTimestampMs
-    ) {
-        return condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
-            && !hasPendingTransactionalOffsets(groupId, topic, partition);
-    }
-
-    /**
      * Read-only counterpart to {@link #cleanupExpiredOffsets(String, List)}: returns whether
      * every committed offset for the group is currently eligible for expiration and no pending
      * transactional offsets remain. Used by the topology-description plugin cleanup cycle on
@@ -1163,7 +1143,8 @@ public class OffsetMetadataManager {
         offsetsByTopic.forEach((topic, partitions) -> {
             if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
-                    if (isOffsetExpirable(groupId, topic, partition, offsetAndMetadata, condition, currentTimestampMs)) {
+                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
+                        && !hasPendingTransactionalOffsets(groupId, topic, partition)) {
                         appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {
