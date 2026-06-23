@@ -43,6 +43,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Headers;
@@ -158,8 +159,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -2507,6 +2510,157 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
     }
 
+    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
+    //       in the CONSUMER group protocol (see KAFKA-20187).
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void testCurrentLagPreventsMultipleInFlightRequests(GroupProtocol groupProtocol) throws InterruptedException {
+        final ConsumerMetadata metadata = createMetadata(subscription);
+        final MockClient client = new MockClient(time, metadata);
+        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata, subscription);
+
+        // Validate the state of the endOffsetRequested flag. It should be unset before the call to currentLag(),
+        // then set immediately afterward.
+        assertFalse(subscription.partitionEndOffsetRequested(tp0));
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+
+        if (groupProtocol == GroupProtocol.CLASSIC) {
+            // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
+            // different from the new async consumer, that will send the LIST_OFFSETS request in the background
+            // thread on the next background thread poll.
+            consumer.poll(Duration.ofMillis(0));
+        }
+
+        long count = client.requests().stream()
+            .filter(request -> request.requestBuilder().apiKey().equals(ApiKeys.LIST_OFFSETS))
+            .count();
+        assertEquals(
+            1L,
+            count,
+            "Expected only one in-flight LIST_OFFSETS request for consumerLag(), but consumer submitted " + count + " requests"
+        );
+    }
+
+    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
+    //       in the CONSUMER group protocol (see KAFKA-20187).
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void testCurrentLagClearsFlagOnFatalPartitionError(GroupProtocol groupProtocol) throws InterruptedException {
+        final SubscriptionState subscriptionSpy = spy(new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST));
+        final ConsumerMetadata metadata = createMetadata(subscriptionSpy);
+        final MockClient client = new MockClient(time, metadata);
+        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata, subscriptionSpy);
+
+        // Validate the state of the endOffsetRequested flag. It should be unset before the call to currentLag(),
+        // then set immediately afterward.
+        assertFalse(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        verify(subscriptionSpy).requestPartitionEndOffset(tp0);
+
+        if (groupProtocol == GroupProtocol.CLASSIC) {
+            // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
+            // different from the new async consumer, that will send the LIST_OFFSETS request in the background
+            // thread on the next background thread poll.
+            consumer.poll(Duration.ofMillis(0));
+        }
+
+        TestUtils.waitForCondition(
+            () -> requestGenerated(client, ApiKeys.LIST_OFFSETS),
+            "No LIST_OFFSETS request sent within allotted timeout"
+        );
+
+        clearInvocations(subscriptionSpy);
+
+        // Validate the state of the endOffsetRequested flag. It should still be set before the call to
+        // currentLag(), because the previous LIST_OFFSETS call has not received a response. In this case,
+        // the SubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        verify(subscriptionSpy, never()).requestPartitionEndOffset(tp0);
+
+        // Now respond to the LIST_OFFSETS request with an error in the partition.
+        ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
+        client.respondToRequest(listOffsetRequest, listOffsetsResponse(Collections.emptyMap(), Collections.singletonMap(tp0, Errors.TOPIC_AUTHORIZATION_FAILED)));
+
+        if (groupProtocol == GroupProtocol.CLASSIC) {
+            // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
+            // different from the new async consumer, that will send the LIST_OFFSETS request in the background
+            // thread on the next background thread poll.
+            assertThrows(TopicAuthorizationException.class, () -> consumer.poll(Duration.ofMillis(0)));
+        }
+
+        // AsyncKafkaConsumer may take a moment to poll and process the LIST_OFFSETS response, so a repeated
+        // wait is appropriate here.
+        TestUtils.waitForCondition(
+            () -> !subscriptionSpy.partitionEndOffsetRequested(tp0),
+            "endOffsetRequested flag was not cleared within allotted timeout"
+        );
+    }
+
+    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
+    //       in the CONSUMER group protocol (see KAFKA-20187).
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    public void testCurrentLagClearsFlagOnRetriablePartitionError(GroupProtocol groupProtocol) throws InterruptedException {
+        final SubscriptionState subscriptionSpy = spy(new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST));
+        final ConsumerMetadata metadata = createMetadata(subscriptionSpy);
+        final MockClient client = new MockClient(time, metadata);
+        consumer = setUpConsumerForCurrentLag(groupProtocol, client, metadata, subscriptionSpy);
+
+        // Validate the state of the endOffsetRequested flag. It should be unset before the call to currentLag(),
+        // then set immediately afterward.
+        assertFalse(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        verify(subscriptionSpy).requestPartitionEndOffset(tp0);
+
+        if (groupProtocol == GroupProtocol.CLASSIC) {
+            // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
+            // different from the new async consumer, that will send the LIST_OFFSETS request in the background
+            // thread on the next background thread poll.
+            consumer.poll(Duration.ofMillis(0));
+        }
+
+        TestUtils.waitForCondition(
+            () -> requestGenerated(client, ApiKeys.LIST_OFFSETS),
+            "No LIST_OFFSETS request sent within allotted timeout"
+        );
+
+        clearInvocations(subscriptionSpy);
+
+        // Validate the state of the endOffsetRequested flag. It should still be set before the call to
+        // currentLag(), because the previous LIST_OFFSETS call has not received a response. In this case,
+        // the SubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+        assertTrue(subscriptionSpy.partitionEndOffsetRequested(tp0));
+        verify(subscriptionSpy, never()).requestPartitionEndOffset(tp0);
+
+        // Now respond to the LIST_OFFSETS request with an error in the partition.
+        ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
+        client.respondToRequest(listOffsetRequest, listOffsetsResponse(Collections.emptyMap(), Collections.singletonMap(tp0, Errors.OFFSET_NOT_AVAILABLE)));
+
+        if (groupProtocol == GroupProtocol.CLASSIC) {
+            // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
+            // different from the new async consumer, that will send the LIST_OFFSETS request in the background
+            // thread on the next background thread poll.
+            consumer.poll(Duration.ofMillis(0));
+        }
+
+        // AsyncKafkaConsumer may take a moment to poll and process the LIST_OFFSETS response, so a repeated
+        // wait is appropriate here.
+        TestUtils.waitForCondition(
+            () -> !subscriptionSpy.partitionEndOffsetRequested(tp0),
+            "endOffsetRequested flag was not cleared within allotted timeout"
+        );
+    }
+
     // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
     //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
@@ -2531,6 +2685,37 @@ public class KafkaConsumerTest {
         assertEquals(singletonMap(tp0, 90L), consumer.endOffsets(Collections.singleton(tp0)));
         // correct lag result should be returned as well
         assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
+    }
+
+    private KafkaConsumer<String, String> setUpConsumerForCurrentLag(GroupProtocol groupProtocol,
+                                                                     MockClient client,
+                                                                     ConsumerMetadata metadata,
+                                                                     SubscriptionState subscriptionState) throws InterruptedException {
+        initMetadata(client, Collections.singletonMap(topic, 1));
+
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscriptionState, metadata, assignor, false,
+            groupId, groupInstanceId, false);
+
+        // throws for unassigned partition
+        assertThrows(IllegalStateException.class, () -> consumer.currentLag(tp0));
+
+        consumer.assign(Collections.singleton(tp0));
+
+        // poll once to update with the current metadata
+        consumer.poll(Duration.ofMillis(0));
+        TestUtils.waitForCondition(
+            () -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
+            "No FIND_COORDINATOR request sent within allotted timeout"
+        );
+        client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
+
+        return consumer;
+    }
+
+    private ClientRequest findRequest(MockClient client, ApiKeys apiKey) {
+        Optional<ClientRequest> request = client.requests().stream().filter(r -> r.requestBuilder().apiKey().equals(apiKey)).findFirst();
+        assertTrue(request.isPresent(), "No " + apiKey + " request was submitted to the client");
+        return request.get();
     }
 
     private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(GroupProtocol groupProtocol,
@@ -3382,7 +3567,11 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         assertEquals("Timeout of 1000ms expired before the last committed offset for partitions [test-0] could be determined. " +
             "Try tuning default.api.timeout.ms larger to relax the threshold.", timeoutException.getMessage());
     }
-    
+
+    private boolean requestGenerated(MockClient client, ApiKeys apiKey) {
+        return client.requests().stream().anyMatch(request -> request.requestBuilder().apiKey().equals(apiKey));
+    }
+
     private static final List<String> CLIENT_IDS = new ArrayList<>();
     public static class DeserializerForClientId implements Deserializer<byte[]> {
         @Override
