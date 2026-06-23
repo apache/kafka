@@ -236,6 +236,7 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldAcceptValidDslStoreFormatDefault
 - shouldAcceptValidDslStoreFormatHeaders
 - shouldAcceptValidInteractiveQueryIsolationLevels
+- shouldAcceptWithValidApplicationServerConfigValue
 - shouldAllowConfiguringProcessorWrapperWithClass
 - shouldAllowConfiguringProcessorWrapperWithClassName
 - shouldAllowMultipleOptimizations
@@ -352,6 +353,7 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange
 - shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange
 - shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership
+- shouldThrowConfigExceptionWithInvalidApplicationServerConfigValue
 - shouldThrowExceptionIfApplicationIdIsNotSet
 - shouldThrowExceptionIfBootstrapServersIsNotSet
 - shouldThrowExceptionIfCommitIntervalMsIsNegative
@@ -3860,6 +3862,7 @@ org.apache.kafka.streams.state.HostInfoTest:
 - shouldReturnNullHostInfoForEmptyEndPoint
 - shouldReturnNullHostInfoForNullEndPoint
 - shouldThrowConfigExceptionForNonsenseEndPoint
+- shouldThrowConfigExceptionWithInvalidEndpoint
 org.apache.kafka.streams.state.QueryableStoreTypesWithHeadersTest:
 - shouldAcceptRegularKeyValueStoreForKeyValueStoreType
 - shouldAcceptRegularSessionStoreForSessionStoreType

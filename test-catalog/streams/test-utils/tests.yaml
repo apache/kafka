@@ -174,13 +174,24 @@ org.apache.kafka.streams.test.MockProcessorContextStateStoreTest:
 - shouldWorkForAllStoreTypeAndSetups
 org.apache.kafka.streams.test.TestRecordTest:
 - testConsumerRecord
+- testConsumerRecordWithNegativePartition
+- testConsumerRecordWithNoTimestamp
 - testEqualsAndHashCode
+- testEqualsConsidersPartition
+- testEqualsIgnorePartition
+- testExplicitNoPartitionConstructor
+- testExplicitPartitionConstructor
 - testFields
+- testInvalidNegativePartitionConstructor
 - testInvalidRecords
 - testMultiFieldMatcher
 - testPartialConstructorEquals
+- testPartitionDefaultsToUnset
 - testProducerRecord
+- testProducerRecordWithNullTimestamp
+- testProducerRecordWithoutPartition
 - testToString
+- testToStringIncludesPartitionWhenSet
 org.apache.kafka.streams.test.wordcount.WindowedWordCountProcessorTest:
 - shouldWorkWithInMemoryStore
 - shouldWorkWithPersistentStore
