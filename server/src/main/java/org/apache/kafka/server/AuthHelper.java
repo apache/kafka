@@ -100,7 +100,9 @@ public class AuthHelper {
                 .toList();
             List<AuthorizationResult> results = authorizer.get().get().authorize(request.context(), actions);
             authorizedOps = new HashSet<>();
-            // Pair up each result with its action, ignoring any extra entries if the sizes differ.
+            // Authorizer.authorize returns one result per action in the same order, so the i-th
+            // result corresponds to the i-th supported operation. Iterate up to the smaller size to
+            // stay within bounds.
             int count = Math.min(results.size(), supportedOps.size());
             for (int i = 0; i < count; i++) {
                 if (results.get(i) == AuthorizationResult.ALLOWED) {
@@ -162,7 +164,9 @@ public class AuthHelper {
             .toList();
         List<AuthorizationResult> results = authorizer.get().get().authorize(requestContext, actions);
         Set<String> authorized = new HashSet<>();
-        // Pair up each result with its resource name, ignoring any extra entries if the sizes differ.
+        // Authorizer.authorize returns one result per action in the same order, so the i-th
+        // result corresponds to the i-th resource name. Iterate up to the smaller size to
+        // stay within bounds.
         int count = Math.min(results.size(), names.size());
         for (int i = 0; i < count; i++) {
             if (results.get(i) == AuthorizationResult.ALLOWED) {
