@@ -175,6 +175,16 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         return newBaseIterator(cfHandle, from, to, forward, toInclusive);
     }
 
+    @Override
+    ManagedKeyValueIterator<Bytes, byte[]> newBaseSnapshotIterator(
+        final Bytes from,
+        final Bytes to,
+        final boolean forward,
+        final boolean toInclusive
+    ) {
+        return newBaseIterator(cfHandle, from, to, forward, toInclusive);
+    }
+
     private ManagedKeyValueIterator<Bytes, byte[]> newBaseIterator(final ColumnFamilyHandle cf,
                                                                    final Bytes from, final Bytes to,
                                                                    final boolean forward, final boolean toInclusive) {
