@@ -63,7 +63,7 @@ class StreamsTopologyDescriptionPluginTest(Test):
         self.kafka.start()
         self.kafka.run_features_command("upgrade", "streams.version", 1)
 
-    @cluster(num_nodes=3)
+    @cluster(num_nodes=2)
     @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_pretty_print_via_cli(self, metadata_quorum):
         """A running Streams application pushes its topology and an operator can
@@ -86,7 +86,7 @@ class StreamsTopologyDescriptionPluginTest(Test):
         finally:
             streams.stop_nodes(clean_shutdown=True)
 
-    @cluster(num_nodes=3)
+    @cluster(num_nodes=2)
     @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_disable_feature_on_client(self, metadata_quorum):
         """When the client sets topology.description.push.enabled=false, the broker
@@ -134,7 +134,7 @@ class StreamsTopologyDescriptionPluginNoPluginTest(Test):
         self.kafka.start()
         self.kafka.run_features_command("upgrade", "streams.version", 1)
 
-    @cluster(num_nodes=3)
+    @cluster(num_nodes=2)
     @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_no_plugin_broker_returns_not_stored(self, metadata_quorum):
         """A broker without the plugin configured cleanly reports NOT_STORED on
