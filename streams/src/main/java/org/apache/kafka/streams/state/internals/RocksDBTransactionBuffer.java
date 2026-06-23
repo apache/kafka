@@ -21,9 +21,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 
 import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Snapshot;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
@@ -157,7 +159,8 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         try {
             final NavigableMap<Bytes, Optional<byte[]>> stagingSnapshot =
                 new TreeMap<>(boundStaging(from, to, toInclusive));
-            final ManagedKeyValueIterator<Bytes, byte[]> baseIter = newBaseIterator(cf, from, to, forward, toInclusive);
+            final ManagedKeyValueIterator<Bytes, byte[]> baseIter =
+                newBaseSnapshotIterator(cf, from, to, forward, toInclusive);
             return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         } finally {
             snapshotLock.readLock().unlock();
@@ -175,31 +178,72 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         return newBaseIterator(cfHandle, from, to, forward, toInclusive);
     }
 
+    @Override
+    ManagedKeyValueIterator<Bytes, byte[]> newBaseSnapshotIterator(final Bytes from, final Bytes to,
+                                                                   final boolean forward, final boolean toInclusive) {
+        return newBaseSnapshotIterator(cfHandle, from, to, forward, toInclusive);
+    }
+
     private ManagedKeyValueIterator<Bytes, byte[]> newBaseIterator(final ColumnFamilyHandle cf,
                                                                    final Bytes from, final Bytes to,
                                                                    final boolean forward, final boolean toInclusive) {
         final RocksIterator rocksIterator = db.newIterator(cf);
-        final ManagedKeyValueIterator<Bytes, byte[]> iter;
+        final ManagedKeyValueIterator<Bytes, byte[]> iter =
+            buildBaseIterator(rocksIterator, from, to, forward, toInclusive);
+        // RocksDbIterator requires onClose to be set before close() is called.
+        // Since this iterator is used internally by StagedMergeIterator (not
+        // tracked by RocksDBStore's open-iterator set), use a no-op callback.
+        iter.onClose(() -> { });
+        return maybeWrapRangeTombstones(iter);
+    }
+
+    private ManagedKeyValueIterator<Bytes, byte[]> newBaseSnapshotIterator(final ColumnFamilyHandle cf,
+                                                                             final Bytes from, final Bytes to,
+                                                                             final boolean forward, final boolean toInclusive) {
+        final Snapshot snapshot = db.getSnapshot();
+        final ReadOptions readOptions = new ReadOptions();
+        readOptions.setSnapshot(snapshot);
+        boolean released = false;
+        try {
+            final RocksIterator rocksIterator = db.newIterator(cf, readOptions);
+            final ManagedKeyValueIterator<Bytes, byte[]> iter =
+                buildBaseIterator(rocksIterator, from, to, forward, toInclusive);
+            iter.onClose(() -> { });
+            final ManagedKeyValueIterator<Bytes, byte[]> result =
+                maybeWrapRangeTombstones(new SnapshotReleasingIterator(iter, db, snapshot, readOptions));
+            released = true;
+            return result;
+        } finally {
+            if (!released) {
+                db.releaseSnapshot(snapshot);
+                readOptions.close();
+            }
+        }
+    }
+
+    private ManagedKeyValueIterator<Bytes, byte[]> buildBaseIterator(final RocksIterator rocksIterator,
+                                                                     final Bytes from, final Bytes to,
+                                                                     final boolean forward, final boolean toInclusive) {
         if (from != null && to != null) {
-            iter = new RocksDBRangeIterator(storeName, rocksIterator, from, to, forward, toInclusive);
+            return new RocksDBRangeIterator(storeName, rocksIterator, from, to, forward, toInclusive);
         } else if (from != null && forward) {
             rocksIterator.seek(from.get());
-            iter = new RocksDbIterator(storeName, rocksIterator, true);
+            return new RocksDbIterator(storeName, rocksIterator, true);
         } else if (!forward) {
             if (to != null) {
                 rocksIterator.seekForPrev(to.get());
             } else {
                 rocksIterator.seekToLast();
             }
-            iter = new RocksDbIterator(storeName, rocksIterator, false);
+            return new RocksDbIterator(storeName, rocksIterator, false);
         } else {
             rocksIterator.seekToFirst();
-            iter = new RocksDbIterator(storeName, rocksIterator, true);
+            return new RocksDbIterator(storeName, rocksIterator, true);
         }
-        // RocksDbIterator requires onClose to be set before close() is called.
-        // Since this iterator is used internally by StagedMergeIterator (not
-        // tracked by RocksDBStore's open-iterator set), use a no-op callback.
-        iter.onClose(() -> { });
+    }
+
+    private ManagedKeyValueIterator<Bytes, byte[]> maybeWrapRangeTombstones(
+            final ManagedKeyValueIterator<Bytes, byte[]> iter) {
         if (rangeTombstones.isEmpty()) {
             return iter;
         }
@@ -247,6 +291,58 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
             }
         }
         return false;
+    }
+
+    private static final class SnapshotReleasingIterator implements ManagedKeyValueIterator<Bytes, byte[]> {
+
+        private final ManagedKeyValueIterator<Bytes, byte[]> delegate;
+        private final RocksDB db;
+        private final Snapshot snapshot;
+        private final ReadOptions readOptions;
+        private Runnable closeCallback;
+
+        SnapshotReleasingIterator(final ManagedKeyValueIterator<Bytes, byte[]> delegate,
+                                  final RocksDB db,
+                                  final Snapshot snapshot,
+                                  final ReadOptions readOptions) {
+            this.delegate = delegate;
+            this.db = db;
+            this.snapshot = snapshot;
+            this.readOptions = readOptions;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return delegate.hasNext();
+        }
+
+        @Override
+        public KeyValue<Bytes, byte[]> next() {
+            return delegate.next();
+        }
+
+        @Override
+        public Bytes peekNextKey() {
+            return delegate.peekNextKey();
+        }
+
+        @Override
+        public void onClose(final Runnable closeCallback) {
+            this.closeCallback = closeCallback;
+        }
+
+        @Override
+        public void close() {
+            try {
+                delegate.close();
+            } finally {
+                db.releaseSnapshot(snapshot);
+                readOptions.close();
+                if (closeCallback != null) {
+                    closeCallback.run();
+                }
+            }
+        }
     }
 
     private static class RangeTombstoneFilterIterator implements ManagedKeyValueIterator<Bytes, byte[]> {
