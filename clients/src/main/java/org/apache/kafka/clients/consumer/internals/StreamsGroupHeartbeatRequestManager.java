@@ -153,6 +153,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 data.setWarmupTasks(fromStreamsToHeartbeatRequest(Set.of()));
                 data.setTaskOffsets(convertToList(streamsRebalanceData.taskOffsetSum()));
                 data.setTaskEndOffsets(convertToList(streamsRebalanceData.taskEndOffsetSum()));
+                lastTaskOffsetIntervalTs = time.milliseconds();
             } else {
                 final StreamsRebalanceData.Assignment reconciledAssignment = streamsRebalanceData.reconciledAssignment();
                 final boolean assignmentChanged = !reconciledAssignment.equals(lastSentFields.assignment);
@@ -168,7 +169,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum = streamsRebalanceData.taskOffsetSum();
                 final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum = streamsRebalanceData.taskEndOffsetSum();
 
-                if (assignmentChanged || taskOffsetIntervalPassed() || hasAtLeastOneHotWarmupTask(taskOffsetSum, taskEndOffsetSum)) {
+                if (assignmentChanged
+                    || taskOffsetIntervalPassed()
+                    || hasAtLeastOneHotWarmupTask(reconciledAssignment.warmupTasks(), taskOffsetSum, taskEndOffsetSum)
+                ) {
 
                     // TODO: send only if changed this last time
                     data.setTaskOffsets(convertToList(taskOffsetSum));
@@ -195,26 +199,15 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         private boolean hasAtLeastOneHotWarmupTask(
+            final Set<StreamsRebalanceData.TaskId> warmupTasks,
             final Map<StreamsRebalanceData.TaskId, Long> taskOffsetSum,
             final Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSum
         ) {
-            final long acceptableRecoveryLag = streamsRebalanceData.acceptableRecoveryLag();
-
-            // -1 means "unknown" (can happen when talking to older brokers)
-            // we must be conservative and assume that no warmup might be hot already
-            //
-            // technically, we should never get warmup tasks assigned when talking to older brokers,
-            // so this is just another safeguard, which should actually be redundant:
-            // the code futher below should automatically return false if there are no warmup tasks;
-            // checking `acceptableRecoveryLag` is cheaper though, so it's also a small micro optimization
-            if (acceptableRecoveryLag < 0) {
-                return false;
-            }
-
-            final Set<StreamsRebalanceData.TaskId> warmupTasks = streamsRebalanceData.reconciledAssignment().warmupTasks();
             if (warmupTasks.isEmpty()) {
                 return false;
             }
+
+            final long acceptableRecoveryLag = streamsRebalanceData.acceptableRecoveryLag();
 
             return warmupTasks.stream()
                 .anyMatch(taskId -> {
