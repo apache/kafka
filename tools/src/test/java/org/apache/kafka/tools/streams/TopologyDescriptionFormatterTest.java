@@ -87,7 +87,6 @@ public class TopologyDescriptionFormatterTest {
             List.of(),
             List.of(new GlobalStore(source0, processor0), new GlobalStore(source1, processor1)));
 
-        // Consecutive global stores are separated by a blank line, matching Topology#describe().
         assertEquals("Topologies:\n" +
             "   Sub-topology: 0 for global store (will not generate tasks)\n" +
             "    Source: global-source-0 (topics: [topic-0])\n" +
@@ -115,7 +114,6 @@ public class TopologyDescriptionFormatterTest {
                 new Subtopology("1", List.<Node>of(source1))),
             List.of());
 
-        // Both subtopologies are prefixed with the same three-space indentation.
         assertEquals("Topologies:\n" +
             "   Sub-topology: 0\n" +
             "    Source: source-0 (topics: [input-0])\n" +
@@ -129,8 +127,6 @@ public class TopologyDescriptionFormatterTest {
 
     @Test
     public void testFormatRendersEmptySuccessorsAndPredecessorsAsNone() {
-        // A lone processor with no successors and no predecessors; both relations must render as "none"
-        // (mirroring Topology#describe()) rather than leaving a trailing "--> " / "<-- ".
         Processor processor = new Processor("processor", Set.of("store"), Set.of(), Set.of());
         StreamsGroupTopologyDescription topology = new StreamsGroupTopologyDescription(
             List.of(new Subtopology("0", List.<Node>of(processor))),
@@ -160,7 +156,6 @@ public class TopologyDescriptionFormatterTest {
 
         String formatted = TopologyDescriptionFormatter.format(topology);
 
-        // Topics and successors are sorted for stable output.
         assertEquals("Topologies:\n" +
             "   Sub-topology: 0\n" +
             "    Source: source (topics: [t1, t2])\n" +

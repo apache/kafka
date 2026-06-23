@@ -227,12 +227,10 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
     private Optional<StreamsGroupTopologyDescription> convertTopologyDescription(
             final StreamsGroupTopologyDescriptionStatus status,
             final StreamsGroupDescribeResponseData.TopologyDescription topologyDescription) {
-        // The description is present if and only if the status is AVAILABLE.
+
         if (status != StreamsGroupTopologyDescriptionStatus.AVAILABLE) {
             return Optional.empty();
         }
-        // A broker reporting AVAILABLE must include the description; otherwise the response is malformed and would
-        // produce a StreamsGroupDescription that violates the "present iff AVAILABLE" contract.
         if (topologyDescription == null) {
             throw new IllegalStateException("Topology description is missing despite status AVAILABLE");
         }
@@ -256,7 +254,6 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
 
     private StreamsGroupTopologyDescription.GlobalStore convertGlobalStore(
             final StreamsGroupDescribeResponseData.TopologyDescriptionGlobalStore globalStore) {
-        // The source and processor of a global store form a single unit; reconstruct predecessors across the pair.
         final List<StreamsGroupDescribeResponseData.TopologyDescriptionNode> pair =
             List.of(globalStore.source(), globalStore.processor());
         final Map<String, Set<String>> predecessors = reconstructPredecessors(pair);

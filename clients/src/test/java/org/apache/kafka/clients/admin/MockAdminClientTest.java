@@ -78,7 +78,6 @@ public class MockAdminClientTest {
         try (MockAdminClient admin = new MockAdminClient()) {
             admin.addStreamsGroupDescription(description);
 
-            // No includeTopologyDescription(true): a real broker returns NOT_REQUESTED, so the mock must too.
             StreamsGroupDescription result = admin
                 .describeStreamsGroups(List.of(groupId))
                 .all()

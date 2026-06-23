@@ -1486,7 +1486,6 @@ public class MockAdminClient extends AdminClient {
             KafkaFutureImpl<StreamsGroupDescription> future = new KafkaFutureImpl<>();
             StreamsGroupDescription description = streamsGroupDescriptions.get(groupId);
             if (description != null) {
-                // Mirror the broker: the topology description is only returned when explicitly requested.
                 if (!options.includeTopologyDescription()) {
                     description = withoutTopologyDescription(description);
                 }

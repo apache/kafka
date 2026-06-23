@@ -208,8 +208,6 @@ public class DescribeStreamsGroupsHandlerTest {
 
     @Test
     public void testAvailableStatusWithMissingTopologyDescriptionFailsOnlyAffectedGroup() {
-        // The broker reports AVAILABLE but omits the topology description, which violates the
-        // "present iff AVAILABLE" contract and must be treated as a malformed response.
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = newDescribedGroup()
             .setTopologyDescriptionStatus(StreamsGroupTopologyDescriptionStatus.AVAILABLE.id())
             .setTopologyDescription(null);
@@ -285,7 +283,6 @@ public class DescribeStreamsGroupsHandlerTest {
             new StreamsGroupDescribeResponse(new StreamsGroupDescribeResponseData()
                 .setGroups(List.of(describedGroup))));
 
-        // The parsing failure must surface as a per-group failure rather than propagating an exception.
         assertTrue(result.completedKeys.isEmpty());
         assertEquals(Set.of(key), result.failedKeys.keySet());
         assertInstanceOf(IllegalStateException.class, result.failedKeys.get(key));

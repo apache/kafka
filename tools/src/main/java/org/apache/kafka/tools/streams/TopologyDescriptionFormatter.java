@@ -44,7 +44,6 @@ public final class TopologyDescriptionFormatter {
             sb.append("   ");
             appendSubtopology(sb, subtopology);
         }
-        // The wire format does not carry global store ids, so number them sequentially after the subtopologies.
         int globalStoreId = topology.subtopologies().size();
         for (final GlobalStore globalStore : topology.globalStores()) {
             sb.append("   ");
@@ -101,8 +100,6 @@ public final class TopologyDescriptionFormatter {
     }
 
     private static String nodeNames(final Collection<String> names) {
-        // Mirror Kafka Streams' Topology#describe(): empty successor/predecessor sets render as "none"
-        // (see InternalTopologyBuilder#nodeNames), avoiding a trailing "--> " / "<-- " with no names.
         if (names.isEmpty()) {
             return "none";
         }
