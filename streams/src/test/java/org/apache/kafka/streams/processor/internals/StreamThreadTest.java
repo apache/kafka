@@ -4519,7 +4519,8 @@ public class StreamThreadTest {
             config,
             Optional.empty(),
             Optional.empty(),
-            topologyMetadata
+            topologyMetadata,
+            Map::of
         );
 
         assertNotNull(rebalanceData.wireTopologyDescription());
@@ -4541,7 +4542,8 @@ public class StreamThreadTest {
             config,
             Optional.empty(),
             Optional.empty(),
-            topologyMetadata
+            topologyMetadata,
+            Map::of
         );
 
         assertNull(rebalanceData.wireTopologyDescription());

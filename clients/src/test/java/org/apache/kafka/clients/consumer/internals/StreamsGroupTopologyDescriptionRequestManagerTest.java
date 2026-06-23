@@ -57,18 +57,22 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
     private final Node coordinatorNode = new Node(1, "host", 9092);
 
     private CoordinatorRequestManager coordinatorRequestManager;
+    private StreamsMembershipManager membershipManager;
     private StreamsRebalanceData streamsRebalanceData;
     private StreamsGroupTopologyDescriptionRequestManager manager;
 
     @BeforeEach
     public void setUp() {
         coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        membershipManager = mock(StreamsMembershipManager.class);
+        when(membershipManager.groupId()).thenReturn(GROUP_ID);
+        when(membershipManager.memberId()).thenReturn(MEMBER_ID);
         streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of()
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of
         );
         manager = new StreamsGroupTopologyDescriptionRequestManager(
             logContext, time, RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS,
-            GROUP_ID, streamsRebalanceData, coordinatorRequestManager
+            membershipManager, streamsRebalanceData, coordinatorRequestManager
         );
     }
 
@@ -78,7 +82,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testCoordinatorUnknown() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);
@@ -93,7 +96,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testWireTopologyDescriptionNull() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setTopologyPushRequired(true);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
 
@@ -110,6 +112,7 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+        when(membershipManager.memberId()).thenReturn(null);
 
         assertEquals(0, manager.poll(time.milliseconds()).unsentRequests.size());
     }
@@ -120,7 +123,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testTopologyDescriptionWhenPushFlagNotSet() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
@@ -136,7 +138,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testSendRequestWhenAllPreconditionsMet() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);
@@ -161,7 +162,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testNoSecondRequestWhileInflight() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);
@@ -177,7 +177,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testFlagClearedOnSuccess() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);
@@ -196,7 +195,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testFlagClearedOnUnknownMemberId() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);
@@ -216,7 +214,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
     @Test
     public void testCoordinatorErrorTriggersRediscovery() {
         for (final Errors error : new Errors[]{Errors.NOT_COORDINATOR, Errors.COORDINATOR_NOT_AVAILABLE}) {
-            streamsRebalanceData.setMemberId(MEMBER_ID);
             streamsRebalanceData.setWireTopologyDescription(
                 new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
             streamsRebalanceData.setTopologyPushRequired(true);
@@ -240,7 +237,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testCoordinatorLoadInProgressDoesNotTriggerRediscovery() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);
@@ -266,7 +262,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
             Errors.UNSUPPORTED_VERSION,
             Errors.GROUP_ID_NOT_FOUND,
             Errors.GROUP_AUTHORIZATION_FAILED}) {
-            streamsRebalanceData.setMemberId(MEMBER_ID);
             streamsRebalanceData.setWireTopologyDescription(
                 new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
             streamsRebalanceData.setTopologyPushRequired(true);
@@ -289,7 +284,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testNetworkExceptionLeavesFlagSetWithBackoff() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);
@@ -312,7 +306,6 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
      */
     @Test
     public void testThrottleDelayBlocksSubsequentRequest() {
-        streamsRebalanceData.setMemberId(MEMBER_ID);
         streamsRebalanceData.setWireTopologyDescription(
             new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
         streamsRebalanceData.setTopologyPushRequired(true);

@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -1657,7 +1658,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
             when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
             when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
 
-            // By default, topologyPushRequired flag is false
+            // Push is enabled (wire description present) so the broker's required=true flips the flag.
+            streamsRebalanceData.setWireTopologyDescription(
+                new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
             assertFalse(streamsRebalanceData.topologyPushRequired());
 
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
@@ -1667,7 +1670,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
             networkRequest.handler().onComplete(buildClientResponseWithTopologyRequired(true));
 
             assertTrue(streamsRebalanceData.topologyPushRequired());
-            assertEquals(MEMBER_ID, streamsRebalanceData.memberId());
         }
     }
 
@@ -1695,7 +1697,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
             networkRequest.handler().onComplete(buildClientResponseWithTopologyRequired(false));
 
             assertTrue(streamsRebalanceData.topologyPushRequired());
-            assertEquals(MEMBER_ID, streamsRebalanceData.memberId());
         }
     }
 

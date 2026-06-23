@@ -570,9 +570,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
         streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
         streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
-        streamsRebalanceData.setMemberId(membershipManager.memberId());
 
-        if (data.topologyDescriptionRequired()) {
+        if (data.topologyDescriptionRequired() && streamsRebalanceData.wireTopologyDescription() != null) {
             streamsRebalanceData.setTopologyPushRequired(true);
         }
 
@@ -670,6 +669,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 membershipManager.onFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
+                streamsRebalanceData.setTopologyPushRequired(false);
                 break;
 
             case UNKNOWN_MEMBER_ID:
@@ -682,6 +682,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 membershipManager.onFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
+                streamsRebalanceData.setTopologyPushRequired(false);
                 break;
 
             case UNSUPPORTED_VERSION:

@@ -259,7 +259,7 @@ public class RequestManagers implements Closeable {
                             time,
                             retryBackoffMs,
                             retryBackoffMaxMs,
-                            groupRebalanceConfig.groupId,
+                            streamsMembershipManager,
                             streamsRebalanceData.get(),
                             coordinator
                         );
