@@ -551,12 +551,13 @@ public class StreamsRebalanceDataTest {
     @Test
     public void streamsRebalanceDataShouldDefaultAndUpdateTopologyPushFields() {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-                UUID.randomUUID(),
-                Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090)),
-                Optional.empty(),
-                Map.of(),
-                Map.of("clientTag1", "clientTagValue1"),
-                Map::of
+            UUID.randomUUID(),
+            Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090)),
+            Optional.empty(),
+            Map.of(),
+            Map.of("clientTag1", "clientTagValue1"),
+            Map::of,
+            Map::of
         );
 
         assertNull(streamsRebalanceData.wireTopologyDescription());
