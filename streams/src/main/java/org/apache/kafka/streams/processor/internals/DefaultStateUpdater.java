@@ -634,8 +634,14 @@ public class DefaultStateUpdater implements StateUpdater {
             // do not need to unregister changelog partitions for paused tasks
             try {
                 measureCheckpointLatency(() -> task.maybeCheckpoint());
-                pausedTasks.put(taskId, task);
-                updatingTasks.remove(taskId);
+                // take the lock tasks() holds so a reader never sees the task in both maps
+                restoredActiveTasksLock.lock();
+                try {
+                    pausedTasks.put(taskId, task);
+                    updatingTasks.remove(taskId);
+                } finally {
+                    restoredActiveTasksLock.unlock();
+                }
                 if (task.isActive()) {
                     transitToUpdateStandbysIfOnlyStandbysLeft();
                 }
@@ -649,8 +655,13 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void resumeTask(final Task task) {
             final TaskId taskId = task.id();
-            updatingTasks.put(taskId, task);
-            pausedTasks.remove(taskId);
+            restoredActiveTasksLock.lock();
+            try {
+                updatingTasks.put(taskId, task);
+                pausedTasks.remove(taskId);
+            } finally {
+                restoredActiveTasksLock.unlock();
+            }
 
             if (task.isActive()) {
                 log.info("Stateful active task " + task.id() + " was resumed to the updating tasks of the state updater");
@@ -808,7 +819,8 @@ public class DefaultStateUpdater implements StateUpdater {
     private final Lock tasksAndActionsLock = new ReentrantLock();
     private final Condition tasksAndActionsCondition = tasksAndActionsLock.newCondition();
     private final Queue<StreamTask> restoredActiveTasks = new LinkedList<>();
-    private final Lock restoredActiveTasksLock = new ReentrantLock();
+    // visible for testing
+    final Lock restoredActiveTasksLock = new ReentrantLock();
     private final Condition restoredActiveTasksCondition = restoredActiveTasksLock.newCondition();
     private final Lock exceptionsAndFailedTasksLock = new ReentrantLock();
     private final Queue<ExceptionAndTask> exceptionsAndFailedTasks = new LinkedList<>();

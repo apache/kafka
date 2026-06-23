@@ -51,6 +51,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -1194,6 +1195,64 @@ class DefaultStateUpdaterTest {
 
         when(topologyMetadata.isPaused(null)).thenReturn(false);
         stateUpdater.signalResume();
+
+        verifyPausedTasks();
+        verifyUpdatingTasks(task);
+    }
+
+    @Test
+    public void shouldHoldRestoredActiveTasksLockWhilePausingTask() throws Exception {
+        final ReentrantLock lock = (ReentrantLock) stateUpdater.restoredActiveTasksLock;
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        // while the test holds the lock, the pause must block instead of moving the task (KAFKA-20724)
+        lock.lock();
+        try {
+            when(topologyMetadata.isPaused(null)).thenReturn(true);
+            waitForCondition(
+                lock::hasQueuedThreads,
+                VERIFICATION_TIMEOUT,
+                "State updater thread did not block on the lock while pausing the task!"
+            );
+            assertTrue(stateUpdater.updatingTasks().contains(task));
+            assertTrue(stateUpdater.pausedTasks().isEmpty());
+        } finally {
+            lock.unlock();
+        }
+
+        verifyPausedTasks(task);
+        verifyUpdatingTasks();
+    }
+
+    @Test
+    public void shouldHoldRestoredActiveTasksLockWhileResumingTask() throws Exception {
+        final ReentrantLock lock = (ReentrantLock) stateUpdater.restoredActiveTasksLock;
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+        verifyPausedTasks(task);
+        verifyUpdatingTasks();
+
+        // the move back must block on the same lock
+        lock.lock();
+        try {
+            when(topologyMetadata.isPaused(null)).thenReturn(false);
+            stateUpdater.signalResume();
+            waitForCondition(
+                lock::hasQueuedThreads,
+                VERIFICATION_TIMEOUT,
+                "State updater thread did not block on the lock while resuming the task!"
+            );
+            assertTrue(stateUpdater.pausedTasks().contains(task));
+            assertTrue(stateUpdater.updatingTasks().isEmpty());
+        } finally {
+            lock.unlock();
+        }
 
         verifyPausedTasks();
         verifyUpdatingTasks(task);
