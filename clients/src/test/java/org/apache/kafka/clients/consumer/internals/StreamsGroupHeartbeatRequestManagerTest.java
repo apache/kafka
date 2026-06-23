@@ -166,7 +166,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
         Optional.of(ENDPOINT),
         Optional.of(RACK_ID),
         SUBTOPOLOGIES,
-        CLIENT_TAGS
+        CLIENT_TAGS,
+        Map::of
     );
 
     private final Time time = new MockTime();

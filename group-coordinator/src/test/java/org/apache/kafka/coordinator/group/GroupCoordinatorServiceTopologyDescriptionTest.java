@@ -23,20 +23,24 @@ import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
+import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.util.timer.MockTimer;
@@ -911,6 +915,228 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         assertNotNull(badResult);
         assertEquals(Errors.GROUP_DELETION_FAILED.code(), badResult.errorCode());
         assertEquals("Topology description plugin failed to delete the topology.", badResult.errorMessage());
+    }
+
+    @Test
+    public void testDescribeWithIncludeFlagDisabledLeavesStatusDefault() throws Exception {
+        // includeTopologyDescription=false -> plugin is not consulted regardless of whether
+        // the group would otherwise be eligible. TopologyDescriptionStatus stays at the
+        // default 0 (NOT_REQUESTED) and the response carries no topologyDescription.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = describedGroupWithTopology("foo", 5);
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroup), Map.of("foo", 5))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), false
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(1, result.size());
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_REQUESTED, result.get(0).topologyDescriptionStatus());
+        assertNull(result.get(0).topologyDescription());
+        verify(plugin, never()).getTopology(anyString(), anyInt());
+    }
+
+    @Test
+    public void testDescribeSetsNotStoredWhenNoPluginConfigured() throws Exception {
+        // includeTopologyDescription=true but no plugin on this broker: every successful group
+        // becomes NOT_STORED (the broker has nothing to serve). The errored group keeps its
+        // default 0 status because the client should consult the group's errorCode first.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+
+        StreamsGroupDescribeResponseData.DescribedGroup goodGroup = describedGroupWithTopology("good", 5);
+        StreamsGroupDescribeResponseData.DescribedGroup errorGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("error")
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(goodGroup, errorGroup), Map.of("good", 5))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.empty(), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("good", "error"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        StreamsGroupDescribeResponseData.DescribedGroup good = findByGroupId(result, "good");
+        StreamsGroupDescribeResponseData.DescribedGroup err = findByGroupId(result, "error");
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED, good.topologyDescriptionStatus());
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_REQUESTED, err.topologyDescriptionStatus());
+    }
+
+    @Test
+    public void testDescribeFiltersNonEligibleGroupsToNotStored() throws Exception {
+        // One test covers the three synchronous "no plugin call" branches: topology() == null,
+        // storedEpoch missing from the result map, storedEpoch mismatched. All three must
+        // resolve to NOT_STORED without invoking the plugin.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        StreamsGroupDescribeResponseData.DescribedGroup noTopology = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("no-topology"); // topology field is null
+        StreamsGroupDescribeResponseData.DescribedGroup epochMissing = describedGroupWithTopology("epoch-missing", 4);
+        StreamsGroupDescribeResponseData.DescribedGroup epochMismatch = describedGroupWithTopology("epoch-mismatch", 4);
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(
+                    List.of(noTopology, epochMissing, epochMismatch),
+                    // "epoch-missing" absent from map; "epoch-mismatch" stored at 7 vs current 4.
+                    Map.of("epoch-mismatch", 7))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE),
+            List.of("no-topology", "epoch-missing", "epoch-mismatch"),
+            true
+        ).get(5, TimeUnit.SECONDS);
+
+        for (StreamsGroupDescribeResponseData.DescribedGroup g : result) {
+            assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED,
+                g.topologyDescriptionStatus(), "group " + g.groupId());
+        }
+        verify(plugin, never()).getTopology(anyString(), anyInt());
+    }
+
+    @Test
+    public void testDescribeAttachesAvailableWhenPluginReturnsTopology() throws Exception {
+        // Happy path: storedEpoch == currentEpoch, plugin returns a non-null topology, the
+        // wire-schema topology is attached and the status becomes AVAILABLE.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        StreamsGroupTopologyDescription pojo = new StreamsGroupTopologyDescription(
+            List.of(new StreamsGroupTopologyDescription.Subtopology("sub-0", List.of(
+                new StreamsGroupTopologyDescription.Source("src", Set.of("input"), Set.of())))),
+            List.of()
+        );
+        when(plugin.getTopology("foo", 5)).thenReturn(CompletableFuture.completedFuture(pojo));
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = describedGroupWithTopology("foo", 5);
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroup), Map.of("foo", 5))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        StreamsGroupDescribeResponseData.DescribedGroup g = result.get(0);
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE, g.topologyDescriptionStatus());
+        assertNotNull(g.topologyDescription());
+        assertEquals(1, g.topologyDescription().subtopologies().size());
+        assertEquals("sub-0", g.topologyDescription().subtopologies().get(0).subtopologyId());
+    }
+
+    @Test
+    public void testDescribeMarksErrorWhenPluginFails() throws Exception {
+        // Plugin future completes exceptionally -> ERROR; the converted topology is not set.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5))
+            .thenReturn(CompletableFuture.failedFuture(new RuntimeException("plugin offline")));
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = describedGroupWithTopology("foo", 5);
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroup), Map.of("foo", 5))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        StreamsGroupDescribeResponseData.DescribedGroup g = result.get(0);
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_ERROR, g.topologyDescriptionStatus());
+        assertNull(g.topologyDescription());
+    }
+
+    @Test
+    public void testDescribeMarksErrorWhenPluginThrowsSynchronously() throws Exception {
+        // SPI contract violation: synchronous throw is treated the same as an exceptional
+        // future -> ERROR. The exception must not propagate out of the describe response.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5)).thenThrow(new RuntimeException("synthetic sync throw"));
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = describedGroupWithTopology("foo", 5);
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroup), Map.of("foo", 5))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_ERROR,
+            result.get(0).topologyDescriptionStatus());
+    }
+
+    @Test
+    public void testDescribeMarksNotStoredWhenPluginReturnsNullDescription() throws Exception {
+        // Plugin's future completes with null -> the plugin no longer holds the data
+        // (e.g. backend wipe). Treat as NOT_STORED, not ERROR — the broker successfully
+        // queried the plugin and learned there is nothing to return.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+        when(plugin.getTopology("foo", 5)).thenReturn(CompletableFuture.completedFuture(null));
+
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = describedGroupWithTopology("foo", 5);
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(describedGroup), Map.of("foo", 5))));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("foo"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED,
+            result.get(0).topologyDescriptionStatus());
+        assertNull(result.get(0).topologyDescription());
+    }
+
+    @Test
+    public void testDescribeLeavesErroredGroupsAlone() throws Exception {
+        // Groups with non-NONE errorCode are not eligible for topology attach; status stays
+        // at the default 0 (NOT_REQUESTED). The plugin must not be called for them.
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
+
+        StreamsGroupDescribeResponseData.DescribedGroup errorGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("err")
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+        when(runtime.scheduleReadOperation(eq("streams-group-describe"), eq(GROUP_TP), any()))
+            .thenReturn(CompletableFuture.completedFuture(
+                new StreamsGroupDescribeResult(List.of(errorGroup), Map.of())));
+
+        GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> result = service.streamsGroupDescribe(
+            requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("err"), true
+        ).get(5, TimeUnit.SECONDS);
+
+        assertEquals(StreamsGroupDescribeResponse.TOPOLOGY_DESCRIPTION_STATUS_NOT_REQUESTED,
+            result.get(0).topologyDescriptionStatus());
+        verify(plugin, never()).getTopology(anyString(), anyInt());
+    }
+
+    private static StreamsGroupDescribeResponseData.DescribedGroup describedGroupWithTopology(
+        String groupId, int topologyEpoch
+    ) {
+        return new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setErrorCode(Errors.NONE.code())
+            .setTopology(new StreamsGroupDescribeResponseData.Topology().setEpoch(topologyEpoch));
+    }
+
+    private static StreamsGroupDescribeResponseData.DescribedGroup findByGroupId(
+        List<StreamsGroupDescribeResponseData.DescribedGroup> groups, String groupId
+    ) {
+        return groups.stream().filter(g -> g.groupId().equals(groupId)).findFirst().orElseThrow();
     }
 
     private static StreamsGroupTopologyDescriptionUpdateRequestData validUpdateRequest() {

@@ -240,14 +240,21 @@ public interface GroupCoordinator {
     /**
      * Describe streams groups.
      *
-     * @param context           The coordinator request context.
-     * @param groupIds          The group ids.
+     * @param context                       The coordinator request context.
+     * @param groupIds                      The group ids.
+     * @param includeTopologyDescription    Whether the client requested the full topology
+     *                                      description from the topology description plugin.
+     *                                      When {@code false}, the
+     *                                      {@code TopologyDescription} / {@code TopologyDescriptionStatus}
+     *                                      fields are left at their defaults and the plugin
+     *                                      is not consulted.
      *
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
         AuthorizableRequestContext context,
-        List<String> groupIds
+        List<String> groupIds,
+        boolean includeTopologyDescription
     );
 
     /**
