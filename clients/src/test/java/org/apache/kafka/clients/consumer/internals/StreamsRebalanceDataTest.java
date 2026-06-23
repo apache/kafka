@@ -543,7 +543,8 @@ public class StreamsRebalanceDataTest {
                 Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090)),
                 Optional.empty(),
                 Map.of(),
-                Map.of("clientTag1", "clientTagValue1")
+                Map.of("clientTag1", "clientTagValue1"),
+                Map::of
         );
 
         assertNull(streamsRebalanceData.wireTopologyDescription());
