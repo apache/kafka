@@ -216,6 +216,8 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
      */
     @Override
     public int remaining() {
+        if (currentChunk == null)  // after deallocate no chunks attached, no free capacity
+            return 0;
         int total = currentChunk.remaining();
         for (int i = currentChunkIndex + 1; i < chunks.size(); i++)
             total += chunks.get(i).remaining();

@@ -462,16 +462,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             String allocationStrategy = config.getString(ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG)
                     .toLowerCase(Locale.ROOT);
             boolean incremental = ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL.equals(allocationStrategy);
-            if (incremental && compression.type() != CompressionType.NONE) {
+            // Use the chunked path only when a batch is at least one full chunk
+            // (batch.size >= CHUNK_SIZE). Below that, a batch can't fill even one chunk, so chunking
+            // would over-reserve and the producer falls back to the full strategy instead.
+            boolean useIncremental = incremental && batchSize >= ChunkedRecordAccumulator.CHUNK_SIZE;
+            // The chunked path does not support compression yet (TODO: KAFKA-20579)
+            if (useIncremental && compression.type() != CompressionType.NONE) {
                 throw new ConfigException("The " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_INCREMENTAL
                         + " " + ProducerConfig.BUFFER_MEMORY_ALLOCATION_STRATEGY_CONFIG
                         + " does not support compression yet. " + ProducerConfig.COMPRESSION_TYPE_CONFIG
                         + " must be set to none.");
             }
-            // Use the chunked path only when a batch is at least one full chunk
-            // (batch.size >= CHUNK_SIZE). Below that, a batch can't fill even one chunk, so chunking
-            // would over-reserve.
-            if (incremental && batchSize >= ChunkedRecordAccumulator.CHUNK_SIZE) {
+            if (useIncremental) {
                 this.accumulator = new ChunkedRecordAccumulator(logContext,
                         batchSize,
                         compression,
