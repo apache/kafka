@@ -1499,6 +1499,66 @@ public abstract class TopologyTestDriverTest {
         assertTrue(testDriver.isEmpty("result-topic"));
     }
 
+    @Test
+    public void shouldNotResetRecordContextWhenAccessingStateStore() {
+        final String storeName = "recordContextStore";
+        final Topology topology = new Topology();
+        topology.addSource("source", "input-topic");
+        topology.addProcessor("writer", () -> new StoreWriter(storeName), "source");
+        topology.addStateStore(
+                Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.Long()),
+                "writer");
+
+        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
+        testDriver = new TopologyTestDriver(topology, config);
+
+        final TestInputTopic<String, Long> input =
+                testDriver.createInputTopic("input-topic", new StringSerializer(), new LongSerializer());
+        final TestOutputTopic<String, Long> changelog = testDriver.createOutputTopic(
+                config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + storeName + "-changelog",
+                stringDeserializer, longDeserializer);
+
+        // a record processed at stream-time 5000 anchors the task's record context there
+        input.pipeInput("processed", 1L, 5000L);
+        changelog.readRecordsToList();
+
+        // grabbing the store handle and writing to it must not reset the live record context:
+        // the direct write should be logged at the live stream-time (5000), not epoch 0
+        final KeyValueStore<String, Long> handle = testDriver.getKeyValueStore(storeName);
+        handle.put("seeded", 2L);
+        // Force a commit + output capture so the change-logged put() above is flushed to the
+        // changelog topic for readRecordsToList(). ZERO is deliberate: we only need the flush,
+        // not to advance time or disturb the live record context.
+        testDriver.advanceWallClockTime(Duration.ZERO);
+
+        final TestRecord<String, Long> seeded = changelog.readRecordsToList().stream()
+                .filter(record -> record.key().equals("seeded"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("seeded entry was not logged to the changelog"));
+        assertEquals(5000L, seeded.timestamp(),
+                "getStateStore reset the live record context, so the direct write was logged at epoch 0");
+    }
+
+    private static final class StoreWriter implements Processor<String, Long, Void, Void> {
+        private final String storeName;
+        private KeyValueStore<String, Long> store;
+
+        StoreWriter(final String storeName) {
+            this.storeName = storeName;
+        }
+
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {
+            this.store = context.getStateStore(storeName);
+        }
+
+        @Override
+        public void process(final Record<String, Long> record) {
+            store.put(record.key(), record.value());
+        }
+    }
+
     private static class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long, String, Long> {
         @Override
         public Processor<String, Long, String, Long> get() {

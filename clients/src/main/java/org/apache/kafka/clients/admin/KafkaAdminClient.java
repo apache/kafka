@@ -3856,7 +3856,7 @@ public class KafkaAdminClient extends AdminClient {
                                                              final DescribeStreamsGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
             DescribeStreamsGroupsHandler.newFuture(groupIds);
-        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), logContext);
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), options.includeTopologyDescription(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeStreamsGroupsResult(future.all().entrySet().stream()
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));

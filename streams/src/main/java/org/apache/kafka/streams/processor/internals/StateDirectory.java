@@ -310,6 +310,10 @@ public class StateDirectory implements AutoCloseable {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
+    public Map<TaskId, Long> taskOffsetSums() {
+        return Collections.unmodifiableMap(taskOffsetSums);
+    }
+
     public void updateTaskOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
         if (!changelogOffsets.isEmpty()) {
             taskOffsetSums.put(taskId, sumOfChangelogOffsets(taskId, changelogOffsets));

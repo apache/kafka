@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.ApplicationServerConfigValidator;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
@@ -1114,6 +1115,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(APPLICATION_SERVER_CONFIG,
                     Type.STRING,
                     "",
+                    new ApplicationServerConfigValidator(),
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
