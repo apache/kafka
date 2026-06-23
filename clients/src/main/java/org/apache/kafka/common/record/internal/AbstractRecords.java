@@ -144,11 +144,8 @@ public abstract class AbstractRecords implements Records {
     }
 
     /**
-     * Upper-bound size of one record's contribution to a batch, <em>excluding</em> the batch header.
-     * For magic v2 it's {@link #estimateSizeInBytesUpperBound} minus
-     * {@link #recordBatchHeaderSizeInBytes}; for older magic it equals
-     * {@link #estimateSizeInBytesUpperBound}. Used by the incremental strategy's cumulative sizing,
-     * where the header is counted once via {@link MemoryRecordsBuilder#estimatedBytesWritten}.
+     * Upper-bound on the bytes a single record contributes to a batch, excluding the batch header.
+     * Used by the incremental strategy, which counts the header once, separately.
      */
     public static int recordSizeUpperBound(byte magic, CompressionType compressionType, byte[] key,
                                            byte[] value, Header[] headers) {

@@ -23,21 +23,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A {@link ByteBufferOutputStream} backed by a linked list of fixed-size chunks instead of a
- * single re-allocated buffer.
+ * A {@link ByteBufferOutputStream} backed by a linked list of fixed-size chunks instead of a single
+ * re-allocated buffer. Chunks are supplied by the caller (initial chunks via the constructor,
+ * additional chunks via {@link #addBuffers(List)}).
  * <p>
- * <b>This stream does not grow on its own.</b> Chunks are supplied by the caller — initial
- * chunks via the constructor, additional chunks via {@link #addBuffers(List)}. When a write's
- * size exceeds the stream's {@link #remaining()} (sum of free bytes across all attached
- * chunks), {@link IllegalStateException} is thrown. The caller is responsible for attaching
- * additional chunks before any such write.
- * <p>
- * Automatic mid-write growth (allocating from inside {@code write()}) is a follow-up tied to
- * compression support, where compressor buffering can make a write exceed its reservation; until
- * then the write path stays allocation-free and deterministic.
- * <p>
- * When {@link #buffer()} is called (typically at batch close), all chunks are flattened into a
- * single contiguous ByteBuffer — exactly one copy operation.
+ * Current/temporary behavior:
+ * <ul>
+ * <li>The stream does not grow on its own: a write whose size exceeds the remaining free bytes
+ *     across all attached chunks throws {@link IllegalStateException}, so the caller must attach
+ *     enough chunks before any such write.
+ *     TODO: KAFKA-20579 (automatic mid-write growth for compression support).</li>
+ * <li>{@link #buffer()} returns the written bytes as a single contiguous {@link ByteBuffer},
+ *     flattening all chunks into a new buffer with an extra copy.
+ *     TODO: KAFKA-20580 (remove the extra copy on send, scatter-gather send).</li>
+ * </ul>
  */
 public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
@@ -51,10 +50,10 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     /**
      * Constructs a chunked output stream backed by the given pre-allocated chunks. Ownership of
-     * {@code initialChunks} transfers to this stream — they will be returned to the pool via
-     * {@link #deallocate()}.
+     * {@code initialChunks} transfers to this stream (they will be returned to the pool via
+     * {@link #deallocate()}).
      *
-     * @param initialChunks pre-allocated chunks; must be non-empty; each chunk's capacity must
+     * @param initialChunks pre-allocated chunks. Must be non-empty and each chunk's capacity must
      *                      equal {@code chunkSize}
      * @param chunkSize     the size of each chunk in bytes
      * @param pool          the buffer pool used for deallocation
@@ -123,17 +122,12 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
     }
 
     /**
-     * Advances {@code currentChunk} to the next pre-supplied chunk; throws if none is left. The
-     * caller must attach additional chunks via {@link #addBuffers(List)} before any write that
-     * exceeds {@link #remaining()}. (Mid-record growth — non-blocking pool then heap — is a
-     * follow-up that lands with compression support.)
+     * Advances {@code currentChunk} to the next pre-supplied chunk.
      */
     private void advanceToNextChunk() {
         if (currentChunkIndex + 1 >= chunks.size()) {
-            throw new IllegalStateException(
-                "No more chunks available; the write exceeded the stream's remaining capacity. "
-                    + "Caller must obtain additional chunks (e.g. from ChunkedBufferPool) and attach them "
-                    + "via addBuffers before any write whose size exceeds remaining()");
+            // TODO: KAFKA-20579. With compression support, grow here instead of throwing.
+            throw new IllegalStateException("write exceeded the stream's remaining chunk capacity");
         }
         currentChunkIndex++;
         currentChunk = chunks.get(currentChunkIndex);
@@ -154,9 +148,7 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
         }
         // TODO: KAFKA-20687. This flatten runs at batch close, when the chunk set is final.
         //  Today all chunks (used and unused) are returned to the pool only when the batch
-        //  completes (via deallocate(pool)). Consider releasing the fully-unused chunks
-        //  early, at close, rather than holding them until completion — removing them from
-        //  `chunks` here so the completion-time deallocate(pool) does not double-return them.
+        //  completes (via deallocate(pool)). Consider releasing the fully-unused chunks early, here.
         int totalSize = 0;
         for (ByteBuffer chunk : chunks) {
             totalSize += chunk.position();
@@ -237,14 +229,13 @@ public class ChunkedByteBufferOutputStream extends ByteBufferOutputStream {
 
     @Override
     public int initialCapacity() {
-        // Every chunk is chunkSize (enforced by the constructor), so this is constant.
         return chunkSize;
     }
 
     @Override
     public void ensureRemaining(int remainingBytesRequired) {
         // A single call can guarantee at most `chunkSize` of space (the stream advances one chunk
-        // at a time); callers needing more attach chunks via addBuffers first. write(byte[]) loops
+        // at a time). Callers needing more attach chunks via addBuffers first. write(byte[]) loops
         // across chunks, so contiguous capacity isn't required.
         ensureChunkCapacity(Math.min(remainingBytesRequired, chunkSize));
     }

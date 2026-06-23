@@ -379,9 +379,9 @@ public class RecordAccumulator {
      * @param headers the Headers for the record
      * @param callbacks The callbacks to execute
      * @param recordsBuilderSupplier Supplies the {@link MemoryRecordsBuilder} for the new
-     *        batch. Invoked lazily, only when this method is committed to creating a new
-     *        batch (i.e. after the in-lock concurrent-append race check has lost). The
-     *        chunked subclass passes a supplier that produces a stream-backed builder.
+     *        batch. Invoked lazily, only when a new batch is actually created. The chunked
+     *        subclass passes a supplier that produces a builder backed by a
+     *        {@link ChunkedByteBufferOutputStream}.
      * @param nowMs The current time, in milliseconds
      */
     protected RecordAppendResult appendNewBatch(String topic,
@@ -399,7 +399,7 @@ public class RecordAccumulator {
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
         if (appendResult != null) {
             // Propagate without creating a new batch: either another thread already made us a batch
-            // (success), or — incremental strategy — a concurrent appender created an extendable tail
+            // (success), or — incremental strategy — a concurrent appender created an extendable open batch
             // (needsBufferExtension), so the caller releases its pre-allocated buffer and retries via
             // the extension path.
             return appendResult;
@@ -1272,8 +1272,8 @@ public class RecordAccumulator {
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
         /**
-         * Signal (incremental strategy) that the tail batch has logical room (writeLimit-wise) but
-         * its chunks lack physical capacity. The append was NOT attempted; the caller allocates
+         * Signal (incremental strategy) that the open batch is within its batch-size limit but its
+         * chunks lack capacity. The append was NOT attempted; the caller allocates
          * {@link #extensionBytesNeeded} bytes of chunk capacity, attaches them via
          * {@link ChunkedProducerBatch#addBuffers}, and retries. When {@code true}, {@code future} is null.
          */

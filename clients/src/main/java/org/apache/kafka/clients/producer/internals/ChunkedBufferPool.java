@@ -125,8 +125,6 @@ public class ChunkedBufferPool extends BufferPool {
                         remainingTimeToBlockNs -= timeNs;
 
                         // Take pool chunks first, then reserve non-pool bytes for the remainder.
-                        // Pool chunks don't bump `accumulated` because their refund path is
-                        // `free.addFirst` in the outer catch, not nonPool.
                         while (pooled.size() < numChunks
                                 && (long) (pooled.size() + 1) * chunkSize + accumulated <= memoryRequired
                                 && !free.isEmpty()) {
@@ -140,7 +138,7 @@ public class ChunkedBufferPool extends BufferPool {
                             accumulated += got;
                         }
                     }
-                    // Loop terminated normally — clear the rollback marker (mirrors BufferPool.allocate).
+                    // Clear the rollback tracker.
                     accumulated = 0;
                 } finally {
                     // On failure (timeout / close / interrupt), refund the non-pool bytes taken.
@@ -163,7 +161,7 @@ public class ChunkedBufferPool extends BufferPool {
             }
         }
 
-        // Allocate raw chunks for the reserved non-pooled portion outside the lock. On OOM,
+        // Allocate raw chunks for the reserved non-pooled portion outside the lock. On error,
         // refund all reserved bytes (memoryRequired) and let the next waiter try.
         int chunksStillNeeded = numChunks - pooled.size();
         List<ByteBuffer> result = new ArrayList<>(numChunks);

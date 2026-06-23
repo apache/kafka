@@ -35,7 +35,6 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
@@ -65,7 +64,7 @@ public class ChunkedRecordAccumulatorTest {
 
     private final PartitionMetadata partMetadata1 =
             new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()), Optional.empty(), null, null, null);
-    private final List<PartitionMetadata> partMetadatas = new ArrayList<>(Arrays.asList(partMetadata1));
+    private final List<PartitionMetadata> partMetadatas = new ArrayList<>(List.of(partMetadata1));
     private final Map<Integer, Node> nodes =
             Stream.of(node1).collect(Collectors.toMap(Node::id, java.util.function.Function.identity()));
     private final MetadataSnapshot metadataCache = new MetadataSnapshot(null, nodes, partMetadatas,
@@ -91,7 +90,6 @@ public class ChunkedRecordAccumulatorTest {
                 /* transactionManager */ null, pool);
     }
 
-    /** First record creates a batch backed by chunked allocation. */
     @Test
     public void testFirstRecordCreatesChunkedBatch() throws Exception {
         int chunkSize = 256;
@@ -109,12 +107,8 @@ public class ChunkedRecordAccumulatorTest {
         accum.close();
     }
 
-    /**
-     * A small follow-up record fits in the existing batch's pre-allocated chunks — no extension
-     * needed.
-     */
     @Test
-    public void testFollowupRecordFitsWithoutExtension() throws Exception {
+    public void testSmallFollowupRecordFitsWithoutExtension() throws Exception {
         int chunkSize = 256;
         ChunkedRecordAccumulator accum = newAccumulator(1024, chunkSize, 16L * chunkSize, Compression.NONE);
 
@@ -125,6 +119,7 @@ public class ChunkedRecordAccumulatorTest {
 
         Deque<ProducerBatch> dq = batchesFor(accum, tp1);
         assertEquals(1, dq.size(), "Both records should land in the same batch");
+        assertNotNull(dq.peekFirst());
         assertEquals(2, dq.peekFirst().recordCount);
         accum.close();
     }
@@ -144,6 +139,7 @@ public class ChunkedRecordAccumulatorTest {
 
         Deque<ProducerBatch> dq = batchesFor(accum, tp1);
         assertEquals(1, dq.size());
+        assertNotNull(dq.peekFirst());
         int initialRecordCount = dq.peekFirst().recordCount;
         assertEquals(1, initialRecordCount);
 
@@ -153,26 +149,17 @@ public class ChunkedRecordAccumulatorTest {
 
         // Same batch, now with the second record.
         assertEquals(1, dq.size(), "Should still be the same batch — extension should not roll");
+        assertNotNull(dq.peekFirst());
         assertEquals(2, dq.peekFirst().recordCount,
                 "Second record should land in the extended batch");
         accum.close();
     }
 
     /**
-     * Race between two concurrent appenders on the same chunked tail. Both threads probe
-     * {@code extensionBytesNeeded} under the deque lock against the same physical remaining
-     * capacity, drop the lock, and allocate gap-sized chunks off-lock. When the first appender
-     * re-takes the lock and consumes most of the original remaining, the second appender's
-     * allocation — sized against the pre-race remaining — is short by the bytes the first
-     * appender consumed. Without a re-probe in the second-lock block, the second appender
-     * proceeds to write past the stream's physical capacity and {@code advanceToNextChunk}
-     * throws {@link IllegalStateException}.
-     * <p>
-     * Coordination: a {@link ChunkedBufferPool} subclass blocks the FIRST {@code allocateChunks}
-     * call after the test arms a latch (i.e. thread A's). Thread B's allocate is the second call
-     * and proceeds normally — B re-takes the lock, attaches its chunks, appends its record, and
-     * returns. Only then is thread A released, so A attaches its chunks and tries to append
-     * against a tail whose remaining has already shrunk.
+     * Two concurrent appenders race to extend the same open batch, each sizing its extension
+     * against the same remaining capacity off-lock; once one attaches its chunks, the other's is
+     * short. Verifies the second-lock re-check makes the short appender re-check rather than write
+     * past the stream's capacity, which would fail.
      */
     @Test
     public void testConcurrentExtensionRaceDoesNotOverflowChunkedStream() throws Exception {
@@ -202,7 +189,7 @@ public class ChunkedRecordAccumulatorTest {
                 /* deliveryTimeoutMs */ 3200, metrics, "producer-metrics", time,
                 /* transactionManager */ null, pool);
         try {
-            // Warmup: tiny first record establishes a chunked tail with a known remainingInStream.
+            // Warmup: tiny first record establishes an open batch with a known remainingInStream.
             accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
 
@@ -224,8 +211,8 @@ public class ChunkedRecordAccumulatorTest {
             assertTrue(aHoldsChunks.await(10, TimeUnit.SECONDS), "A did not reach allocateChunks");
 
             // B runs on this thread. Its allocateChunks is the second call — armed=false now,
-            // so it proceeds without blocking. B probes the same R as A (A hasn't attached yet),
-            // attaches its own chunks, appends its record. Now the tail's remaining has shrunk
+            // so it proceeds without blocking. B reads the same R as A (A hasn't attached yet),
+            // attaches its own chunks, appends its record. Now the open batch's remaining has shrunk
             // by B's actual record size, but A's still-off-lock allocation didn't know that.
             accum.append(topic, partition1, 0L, key, new byte[recordValueSize], Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
@@ -245,17 +232,9 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * Regression: when the sticky partition switches while extension chunks are held off-lock,
-     * those chunks — sized against the <em>previous</em> partition's tail batch — must be refunded
-     * to the pool on the retry, not carried into the next iteration and attached to a different
-     * partition's tail (which would over-extend the wrong batch).
-     * <p>
-     * Deterministic reproduction without threads: the extension path is the only one that calls
-     * {@code allocateChunks} non-blocking ({@code maxTimeToBlockMs == 0}), so the pool flags when an
-     * extension allocation has happened; a {@code partitionChanged} override then fires exactly one
-     * spurious switch on the very next check — which is the second-sync-block check, with the
-     * extension chunks held. The fix refunds those chunks before the retry; without it they are
-     * carried and attached instead, so no refund is observed during the append.
+     * When the sticky partition switches while extension chunks are held off-lock, those
+     * chunks (sized against the previous partition's open batch) must be refunded to the pool on the
+     * retry (not carried over and attached to a different partition's open batch)
      */
     @Test
     public void testPartitionSwitchRefundsHeldExtensionChunks() throws Exception {
@@ -299,7 +278,7 @@ public class ChunkedRecordAccumulatorTest {
             }
         };
         try {
-            // Warmup: tiny first record establishes a chunked tail (first-record path, blocking
+            // Warmup: tiny first record establishes an open batch (first-record path, blocking
             // allocate — does not flag extensionAllocated).
             accum.append(topic, partition1, 0L, key, new byte[1], Record.EMPTY_HEADERS, null,
                     maxBlockTimeMs, time.milliseconds(), cluster);
@@ -318,6 +297,7 @@ public class ChunkedRecordAccumulatorTest {
             // The record still appends correctly after the switch-retry.
             Deque<ProducerBatch> dq = batchesFor(accum, tp1);
             assertEquals(1, dq.size());
+            assertNotNull(dq.peekFirst());
             assertEquals(2, dq.peekFirst().recordCount,
                     "second record should still land in the batch after the switch-retry");
         } finally {
@@ -325,14 +305,6 @@ public class ChunkedRecordAccumulatorTest {
         }
     }
 
-    /**
-     * Regression guard: an inflight chunked batch returns all K chunks to the pool on the
-     * expiration / broker-disconnect path, not just one {@code initialCapacity} chunkSize.
-     * For an inflight batch the parent {@code RecordAccumulator.deallocate} calls
-     * {@code batch.deallocateInflightBuffer(pool)} and then throws; {@link ChunkedProducerBatch}
-     * overrides that hook to return all chunks (instead of donating one fresh buffer). Removing
-     * that override would re-introduce a (K−1)×chunkSize leak and fail this test.
-     */
     @Test
     public void testInflightExpirationReturnsAllChunksToPool() throws Exception {
         int chunkSize = 128;
@@ -377,13 +349,7 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * Sender's drain (and any other caller of {@code batch.close()}) cascades through
-     * {@code MemoryRecordsBuilder.closeForRecordAppends()} →
-     * {@code appendStream.close()} → {@code bufferStream.close()}. The chunk data must remain
-     * readable through that cascade so the builder can flatten the chunks into the heap buffer it
-     * sends over the network — chunks are returned to the pool only at batch completion
-     * (deallocate), never at close. If they were released at close, the flattened buffer would be
-     * empty and the header write would fail (or produce an empty record set).
+     * Test that chunks are returned to the pool only at batch completion (deallocate), never at close.
      */
     @Test
     public void testBatchCloseDoesNotDeallocateChunksPrematurely() throws Exception {
@@ -417,11 +383,8 @@ public class ChunkedRecordAccumulatorTest {
     }
 
     /**
-     * Chunks attached grow with the batch's cumulative projected output, not per-record. With a
-     * chunkSize smaller than the batch's eventual content, a sequence of small records should
-     * extend the chunks as the running total (header + uncompressed bytes for NONE) crosses
-     * chunk boundaries — not allocate the first record's worth and then never extend until
-     * physical capacity is exhausted (which the per-record formula would do).
+     * As small records accumulate in a batch, the attached chunks grow with the batch's cumulative
+     * projected output (not per-record).
      */
     @Test
     public void testExtensionTracksCumulativeBatchSize() throws Exception {
@@ -455,15 +418,8 @@ public class ChunkedRecordAccumulatorTest {
         accum.close();
     }
 
-    /**
-     * The cumulative sizing formula counts the batch header once. The previous per-record
-     * formula effectively included the batch header in each record's upper bound, which
-     * over-allocated as records accumulated. With the cumulative formula, chunk count for N
-     * small records of total uncompressed size {@code U} is {@code ceil((header + U) / chunkSize)},
-     * not {@code N × ceil((header + recordSize) / chunkSize)}.
-     */
     @Test
-    public void testCumulativeAccountsForHeaderOnce() throws Exception {
+    public void testCumulativeAccountsForBatchHeaderOnce() throws Exception {
         int chunkSize = 256;
         int batchSize = 8192;
         long totalMemory = 64L * chunkSize;

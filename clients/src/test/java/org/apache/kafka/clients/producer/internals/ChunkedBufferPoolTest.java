@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,7 +43,6 @@ public class ChunkedBufferPoolTest {
 
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(time);
-    private final String metricGroup = "producer-metrics";
 
     @AfterEach
     public void teardown() {
@@ -49,6 +50,7 @@ public class ChunkedBufferPoolTest {
     }
 
     private ChunkedBufferPool pool(long totalMemory, int chunkSize) {
+        String metricGroup = "producer-metrics";
         return new ChunkedBufferPool(totalMemory, chunkSize, metrics, time, metricGroup);
     }
 
@@ -62,7 +64,7 @@ public class ChunkedBufferPoolTest {
         assertEquals(chunkSize, chunks.get(0).capacity());
     }
 
-    /** Total size that's not a multiple of chunk size rounds up; returned chunks cover it. */
+    /** Total size that's not a multiple of chunk size rounds up */
     @Test
     public void testAllocateRoundsUpToChunkBoundary() throws Exception {
         int chunkSize = 64;
@@ -105,14 +107,12 @@ public class ChunkedBufferPoolTest {
         assertEquals(total, p.availableMemory());
     }
 
-    /** Requesting more than total memory throws IllegalArgumentException. */
     @Test
     public void testRejectsRequestExceedingTotalMemory() {
         ChunkedBufferPool p = pool(128, 64);
         assertThrows(IllegalArgumentException.class, () -> p.allocateChunks(129, 100));
     }
 
-    /** Non-positive totalSize is rejected. */
     @Test
     public void testRejectsNonPositiveRequest() {
         ChunkedBufferPool p = pool(128, 64);
@@ -122,7 +122,7 @@ public class ChunkedBufferPoolTest {
 
     /**
      * When a multi-chunk request can't be fully satisfied within the deadline, chunks already
-     * acquired during the call must be returned to the pool — the caller must not leak memory.
+     * acquired during the call must be returned to the pool.
      */
     @Test
     public void testRollbackOnPartialFailure() throws Exception {
@@ -145,10 +145,7 @@ public class ChunkedBufferPoolTest {
 
     /**
      * No partial chunk holds during the wait. While a multi-chunk request blocks, the pool's
-     * {@code availableMemory()} must reflect bytes the waiter has not yet "earned" — i.e., the
-     * reservation is via the accumulator and not via chunks pulled out of the pool's accounting.
-     * Distinguishes the atomic implementation from the older loop-with-rollback (which held
-     * partials off the accounting between iterations).
+     * {@code availableMemory()} must reflect bytes the waiter has not yet "earned".
      */
     @Test
     public void testNoPartialHoldsDuringWait() throws Exception {
@@ -173,10 +170,7 @@ public class ChunkedBufferPoolTest {
         }, "chunked-waiter");
         t.start();
         // Wait until the thread has joined the waiters queue.
-        long deadlineMs = System.currentTimeMillis() + 2_000;
-        while (p.queued() == 0 && System.currentTimeMillis() < deadlineMs)
-            Thread.sleep(5);
-        assertEquals(1, p.queued(), "waiter should be parked on the pool's queue");
+        TestUtils.waitForCondition(() -> p.queued() == 1, "waiter should be parked on the pool's queue");
 
         // While the waiter is parked, the pool's available memory must still report the
         // 1 chunk's worth — the waiter has NOT consumed any of it (no partial hold).
@@ -235,16 +229,10 @@ public class ChunkedBufferPoolTest {
         tMulti.start();
         assertTrue(multiStarted.await(2, TimeUnit.SECONDS));
         // Wait for tMulti to be parked before starting tSingle, so the FIFO order is deterministic.
-        long deadlineMs = System.currentTimeMillis() + 2_000;
-        while (p.queued() == 0 && System.currentTimeMillis() < deadlineMs)
-            Thread.sleep(5);
-        assertEquals(1, p.queued(), "multi-chunk waiter should be the only one queued");
+        TestUtils.waitForCondition(() -> p.queued() == 1, "multi-chunk waiter should be the only one queued");
         tSingle.start();
         // Wait for tSingle to also be parked.
-        deadlineMs = System.currentTimeMillis() + 2_000;
-        while (p.queued() < 2 && System.currentTimeMillis() < deadlineMs)
-            Thread.sleep(5);
-        assertEquals(2, p.queued(), "single-chunk waiter joined after the multi-chunk one");
+        TestUtils.waitForCondition(() -> p.queued() == 2, "single-chunk waiter joined after the multi-chunk one");
 
         // Now free chunks one at a time, allowing the multi-chunk request to accumulate.
         p.deallocate(h1);
@@ -302,10 +290,7 @@ public class ChunkedBufferPoolTest {
         }, "partial-holder");
         t.start();
 
-        long deadline = System.currentTimeMillis() + 2_000;
-        while (p.queued() == 0 && System.currentTimeMillis() < deadline)
-            Thread.sleep(5);
-        assertEquals(1, p.queued());
+        TestUtils.waitForCondition(() -> p.queued() == 1, "waiter should be parked on the pool's queue");
 
         // Hand the waiter 2 chunks — it polls them into `pooled` then awaits again for the 3rd.
         p.deallocate(h1);
@@ -315,8 +300,7 @@ public class ChunkedBufferPoolTest {
         Thread.sleep(100);
 
         t.join(5_000);
-        assertTrue(err.get() instanceof BufferExhaustedException,
-                "expected BufferExhaustedException, got " + err.get());
+        assertInstanceOf(BufferExhaustedException.class, err.get(), "expected BufferExhaustedException, got " + err.get());
 
         // After the throw, exactly 2 chunkSizes of physical memory should be back in the pool
         // (h1 + h2). h3 is still held outside the pool. The bug double-refunds: it credits
@@ -358,10 +342,7 @@ public class ChunkedBufferPoolTest {
         }, "slow-success");
         t.start();
 
-        long deadline = System.currentTimeMillis() + 2_000;
-        while (p.queued() == 0 && System.currentTimeMillis() < deadline)
-            Thread.sleep(5);
-        assertEquals(1, p.queued());
+        TestUtils.waitForCondition(() -> p.queued() == 1, "waiter should be parked on the pool's queue");
 
         // Deallocate 2 chunks → waiter wakes, polls both, accumulated reaches memoryRequired,
         // exits normally. The success path's finally must NOT refund or decrement nonPool.
@@ -406,16 +387,12 @@ public class ChunkedBufferPoolTest {
             }
         }, "close-during-wait");
         t.start();
-        long deadlineMs = System.currentTimeMillis() + 2_000;
-        while (p.queued() == 0 && System.currentTimeMillis() < deadlineMs)
-            Thread.sleep(5);
-        assertEquals(1, p.queued());
+        TestUtils.waitForCondition(() -> p.queued() == 1, "waiter should be parked on the pool's queue");
 
         // Close the pool: signals all waiters; the waiter must throw KafkaException.
         p.close();
         t.join(5_000);
-        assertTrue(err.get() instanceof KafkaException,
-                "expected KafkaException, got " + err.get());
+        assertInstanceOf(KafkaException.class, err.get(), "expected KafkaException, got " + err.get());
         p.deallocate(h1);
         p.deallocate(h2);
     }

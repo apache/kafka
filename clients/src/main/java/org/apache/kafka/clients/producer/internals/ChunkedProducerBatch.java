@@ -25,7 +25,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
- * A {@link ProducerBatch} for the incremental (chunked) buffer.memory allocation strategy, backed
+ * A {@link ProducerBatch} for the incremental buffer.memory allocation strategy, backed
  * by a {@link MemoryRecordsBuilder} whose stream is a {@link ChunkedByteBufferOutputStream}.
  * It adds mid-batch chunk extension support ({@link #extensionBytesNeeded} /
  * {@link #addBuffers}) and overrides the pool deallocation hooks so all chunks are returned to
@@ -44,12 +44,12 @@ public class ChunkedProducerBatch extends ProducerBatch {
     }
 
     /**
-     * Bytes of physical buffer this batch needs before {@code tryAppend} could accept the given
-     * record. Returns 0 when no extension is needed: the batch is empty (first record), it is
-     * logically full, or the stream's combined chunk capacity already has room. Positive when
-     * {@code hasRoomFor} allows the record but the
-     * chunks lack physical capacity — the accumulator allocates exactly the missing bytes
-     * (rounded up to whole chunks) and attaches them via {@link #addBuffers} before retrying.
+     * Bytes of chunk capacity this batch needs before {@code tryAppend} could accept the given
+     * record. Returns 0 when no extension is needed: the batch is empty (first record), it is at
+     * its batch-size limit, or the attached chunk capacity already has room. Positive when the
+     * record is within the batch-size limit but the attached chunks lack capacity — the accumulator
+     * then allocates exactly the missing bytes (rounded up to whole chunks) and attaches them via
+     * {@link #addBuffers} before retrying.
      */
     int extensionBytesNeeded(long timestamp, byte[] key, byte[] value, Header[] headers) {
         if (recordCount == 0)

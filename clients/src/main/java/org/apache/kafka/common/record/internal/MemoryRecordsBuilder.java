@@ -212,9 +212,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * The underlying output stream. Exposed so the incremental-strategy callers can attach
-     * pre-allocated chunks to a {@code ChunkedByteBufferOutputStream} and route deallocation
-     * polymorphically.
+     * The underlying output stream, exposed so the incremental strategy can manage its
+     * chunk-backed stream.
      */
     public ByteBufferOutputStream bufferStream() {
         return bufferStream;
@@ -828,15 +827,12 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * Static projection of the bytes a builder with the given magic, compression type, and ratio
-     * would have written for {@code uncompressedRecordsSizeInBytes} of records. Exact for
-     * uncompressed ({@code header + uncompressedBytes}); for compressed it applies the ratio and 5%
-     * safety multiplier to the whole total, like the per-builder {@link #estimatedBytesWritten()}.
+     * Returns the projected number of bytes the builder would write for
+     * {@code uncompressedRecordsSizeInBytes} of records under the given magic, compression type,
+     * and ratio: exact for uncompressed, a ratio-aware estimate for compressed.
      * <p>
      * Used by the incremental strategy to size chunk reservations (first record, and mid-batch via
-     * {@link #estimatedBytesWrittenAfter}). This is the batch's projected total <em>output</em>,
-     * distinct from the {@link #hasRoomFor} writeLimit gate, which counts the incoming record at
-     * full uncompressed size; the two coincide for uncompressed data and diverge under compression.
+     * {@link #estimatedBytesWrittenAfter}).
      */
     public static int estimatedBytesWritten(byte magic, CompressionType compressionType,
                                             float compressionRatio,

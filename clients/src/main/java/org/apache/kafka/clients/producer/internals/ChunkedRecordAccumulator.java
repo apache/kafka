@@ -41,22 +41,12 @@ import java.util.Deque;
 import java.util.List;
 
 /**
- * A {@link RecordAccumulator} variant that uses chunked buffer allocation: each new batch
- * pre-allocates the chunks needed for the first record's estimated size (batch header plus the
- * record), and grows mid-batch by attaching additional chunks via
- * {@link ChunkedProducerBatch#addBuffers(List)} when later records would overflow.
+ * A {@link RecordAccumulator} variant that backs each batch with fixed-size chunks drawn from a
+ * {@link ChunkedBufferPool}, attaching more chunks on demand as records are appended instead of
+ * reserving {@code batch.size} per batch up front. Buffered memory therefore scales with the data
+ * actually written rather than with {@code active_partition_count × batch.size}.
  * <p>
- * This is the "incremental" buffer.memory allocation strategy: memory consumption scales with
- * actual data buffered, not with {@code active_partition_count × batch.size}.
- * <p>
- * When a record arrives mid-batch (an open batch already exists) and the batch's chunks are
- * full, the flow is: under the deque lock, probe that open batch — the tail of the partition's
- * deque — via the {@link #tryAppend} override, which returns
- * {@link RecordAppendResult#needsExtension(int)} when the batch has logical room but lacks
- * physical chunk capacity, then attempt a <b>non-blocking</b> pool acquire for the extra chunks. If the pool is exhausted, close the current batch (so the sender can drain it)
- * and route the record through the first-record path, which <b>blocks</b> on the pool up to
- * {@code max.block.ms}. As a result, unlike the "full" strategy, {@code send()} may block (or
- * fail with {@link BufferExhaustedException}) on records other than the first of a batch.
+ * See {@link #append} and {@link #tryAppend} for how batches are created and grown.
  * <p>
  * TODO: support compressed data (with mid-record growth); the constructor rejects compression for now.
  */
@@ -128,7 +118,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
         appendsInProgress.incrementAndGet();
         ChunkedByteBufferOutputStream bufferStream = null;
         List<ByteBuffer> extensionChunks = null;
-        int extensionBytes = 0;
+        int extensionBytes;
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
             while (true) {
@@ -148,11 +138,11 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
                         continue;
 
-                    // The tryAppend override probes the physical capacity of the tail batch
-                    // (dq.peekLast(), the partition's open batch): a needsBufferExtension result
-                    // means it has logical room but its chunks lack space for this record — fall
-                    // through to allocate the gap outside the deque lock. A null result means the
-                    // tail batch is full or absent — fall through to the first-record (new batch) path.
+                    // The tryAppend override checks the open batch (dq.peekLast()) for chunk
+                    // capacity: a needsBufferExtension result means it is within its batch-size limit
+                    // but its chunks lack capacity for this record — fall through to allocate the gap
+                    // outside the deque lock. A null result means there is no open batch (it is full
+                    // or absent) — fall through to the first-record (new batch) path.
                     RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
                     if (appendResult != null && !appendResult.needsBufferExtension) {
                         boolean enableSwitch = allBatchesFull(dq);
@@ -162,7 +152,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                     extensionBytes = appendResult == null ? 0 : appendResult.extensionBytesNeeded;
                 }
 
-                if (extensionBytes > 0 && extensionChunks == null) {
+                if (extensionBytes > 0) {
                     // Mid-batch extension: non-blocking only. The thread already holds the open
                     // batch's chunks, so blocking here could deadlock with the Sender (which frees
                     // pool memory by completing batches). On exhaustion, close the batch (making it
@@ -201,9 +191,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                 synchronized (dq) {
                     if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster)) {
                         // The partition switched while we allocated extension chunks off-lock. They
-                        // were sized against the previous partition's tail batch, so they must not be
-                        // attached to a different partition's tail — refund them and let the next
-                        // iteration re-probe the new partition from scratch.
+                        // were sized against the previous partition's open batch, so they must not be
+                        // attached to a different partition's open batch — refund them and let the next
+                        // iteration re-check the new partition from scratch.
                         if (extensionChunks != null) {
                             for (ByteBuffer chunk : extensionChunks)
                                 chunkedFree.deallocate(chunk);
@@ -214,10 +204,10 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
 
                     if (extensionChunks != null) {
                         ProducerBatch last = dq.peekLast();
-                        // The off-lock allocateChunks window allows the probed tail batch to be
+                        // The off-lock allocateChunks window allows the open batch we checked to be
                         // drained and replaced — possibly by a split batch (a plain
                         // ProducerBatch), which can't take extension chunks. Only attach to a
-                        // writable chunked tail; otherwise refund the chunks and re-evaluate.
+                        // writable chunked batch; otherwise refund the chunks and re-evaluate.
                         if (last instanceof ChunkedProducerBatch && last.isWritable()) {
                             ((ChunkedProducerBatch) last).addBuffers(extensionChunks);
                             extensionChunks = null;
@@ -228,27 +218,28 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
                                 return retryResult;
                             }
                             // needsBufferExtension: a concurrent appender consumed capacity our
-                            // extension was sized against — loop to re-probe. null: batch became
+                            // extension was sized against — loop to re-check. null: batch became
                             // full — loop into new-batch creation. Terminates because writeLimit is
-                            // fixed: once full, the probe stops requesting extension. Regression:
-                            // testConcurrentExtensionRaceDoesNotOverflowChunkedStream.
+                            // fixed: once full, the check stops requesting extension.
                             continue;
                         }
-                        // Tail is gone, closed, or non-chunked (e.g., a split batch). Return chunks to pool.
+                        // The open batch is gone, closed, or non-chunked (e.g., a split batch). Return chunks to pool.
                         for (ByteBuffer chunk : extensionChunks)
                             chunkedFree.deallocate(chunk);
                         extensionChunks = null;
                         continue;
                     }
 
-                    // bufferStream is non-null here (first-record path).
+                    // First-record path: extensionChunks == null here implies extensionBytes == 0,
+                    // so bufferStream was allocated (this iteration or carried from a prior one).
+                    assert bufferStream != null;
                     int firstRecordSize = AbstractRecords.estimateSizeInBytesUpperBound(
                             RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
                     final ChunkedByteBufferOutputStream batchStream = bufferStream;
                     RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks,
                             () -> chunkedRecordsBuilder(batchStream, firstRecordSize), nowMs);
                     if (appendResult.needsBufferExtension) {
-                        // A concurrent appender created a tail batch we should extend rather
+                        // A concurrent appender created an open batch we should extend rather
                         // than start a new one (detected by appendNewBatch's in-lock tryAppend).
                         // Our bufferStream was sized for a fresh batch — release it and loop so
                         // the extension path allocates exactly the gap-sized chunks.
@@ -277,8 +268,8 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
     /**
      * Try to append to a ProducerBatch, with mid-batch chunk extension support.
      * <p>
-     * If the tail batch has logical room (writeLimit-wise) but its chunked stream lacks
-     * physical capacity, returns {@link RecordAppendResult#needsExtension(int)} without
+     * If the open batch is within its batch-size limit but its chunked stream lacks chunk
+     * capacity, returns {@link RecordAppendResult#needsExtension(int)} without
      * attempting the append; the caller allocates chunks outside the deque lock, attaches
      * them, and retries. Otherwise defers to the parent.
      */
@@ -289,7 +280,7 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
             throw new KafkaException("Producer closed while send in progress");
         ProducerBatch last = deque.peekLast();
         // Split batches in an incremental deque are plain ProducerBatch (heap-backed, grow-on-demand)
-        // and never need chunk extension, so the probe only applies to chunked batches.
+        // and never need chunk extension, so the check only applies to chunked batches.
         if (last instanceof ChunkedProducerBatch) {
             int extensionBytes = ((ChunkedProducerBatch) last).extensionBytesNeeded(timestamp, key, value, headers);
             if (extensionBytes > 0)
@@ -304,10 +295,9 @@ public class ChunkedRecordAccumulator extends RecordAccumulator {
     }
 
     /**
-     * Build a {@link MemoryRecordsBuilder} backed by the chunked stream. {@code writeLimit} =
-     * {@code max(batchSize, firstRecordSize)} (the same logical cap as the full path) bounds when
-     * the batch is full; physical capacity grows on demand via
-     * {@link ChunkedByteBufferOutputStream#addBuffers(List)}.
+     * Build a {@link MemoryRecordsBuilder} backed by the chunked stream. Its {@code writeLimit}
+     * bounds when the batch is full (the same batch-size limit as the full path), while chunk
+     * capacity grows on demand via {@link ChunkedByteBufferOutputStream#addBuffers(List)}.
      */
     private MemoryRecordsBuilder chunkedRecordsBuilder(ChunkedByteBufferOutputStream bufferStream,
                                                        int firstRecordSize) {
