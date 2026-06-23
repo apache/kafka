@@ -284,6 +284,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
@@ -957,6 +958,15 @@ public class KafkaAdminClient extends AdminClient {
             runnable.pendingCalls.add(this);
         }
 
+        /**
+         * Invoked by the polling loop when no node could be assigned to this call. Returns true if
+         * the call took corrective action and should be removed from the pending queue, false to
+         * remain pending and retry node assignment on a later iteration.
+         */
+        boolean handleNodeUnavailable(long now) {
+            return false;
+        }
+
         private void handleTimeoutFailure(long now, Throwable cause) {
             if (log.isDebugEnabled()) {
                 log.debug("{} timed out at {} after {} attempt(s)", this, now, tries,
@@ -1225,6 +1235,8 @@ public class KafkaAdminClient extends AdminClient {
                     log.trace("Assigned {} to node {}", call, node);
                     call.curNode = node;
                     getOrCreateListValue(callsToSend, node).add(call);
+                    return true;
+                } else if (call.handleNodeUnavailable(now)) {
                     return true;
                 } else {
                     log.trace("Unable to assign {} to a node.", call);
@@ -5150,6 +5162,27 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     super.maybeRetry(currentTimeMs, throwable);
                 }
+            }
+
+            @Override
+            boolean handleNodeUnavailable(long currentTimeMs) {
+                OptionalInt brokerId = spec.scope.destinationBrokerId();
+                // The fulfillment target broker is no longer present in the cluster metadata. This
+                // happens when a stale entry in the partition leader cache points at a broker that
+                // has since left the cluster. Send the keys back to the lookup stage so the leader
+                // can be re-resolved, rather than waiting for the request deadline to expire without
+                // ever issuing another lookup. maybeRetryLookup is a no-op (returns false) for
+                // strategies that target a fixed broker id, in which case we leave the call pending.
+                if (brokerId.isPresent()
+                        && metadataManager.isReady()
+                        && metadataManager.nodeById(brokerId.getAsInt()) == null
+                        && driver.maybeRetryLookup(currentTimeMs, spec)) {
+                    log.debug("Broker {} for {} is no longer in the cluster metadata; retrying lookup.",
+                        brokerId.getAsInt(), spec.name);
+                    maybeSendRequests(driver, currentTimeMs);
+                    return true;
+                }
+                return false;
             }
         };
     }

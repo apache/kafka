@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.timer.Timer;
 
@@ -45,9 +46,10 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         ShareGroupDLQMetadataCacheHelper cacheHelper,
         Time time,
         Timer timer,
-        ShareGroupMetrics metrics
+        ShareGroupMetrics shareGroupMetrics,
+        LogReader logReader
     ) {
-        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, metrics);
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
         instance.start();
         return instance;
     }
@@ -57,9 +59,10 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
         ShareGroupDLQMetadataCacheHelper cacheHelper,
         Time time,
         Timer timer,
-        ShareGroupMetrics shareGroupMetrics
+        ShareGroupMetrics shareGroupMetrics,
+        LogReader logReader
     ) {
-        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics);
+        this.stateManager = new ShareGroupDLQStateManager(client, cacheHelper, time, timer, shareGroupMetrics, logReader);
     }
 
     private void start() {

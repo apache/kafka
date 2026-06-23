@@ -71,7 +71,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -286,15 +285,15 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public Properties shareGroupStateTopicConfigs() {
-        Properties properties = new Properties();
+    public Map<String, String> shareGroupStateTopicConfigs() {
         // As defined in KIP-932.
-        properties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-        properties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
-        properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.shareCoordinatorStateTopicSegmentBytes());
-        properties.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.shareCoordinatorStateTopicMinIsr());
-        properties.put(TopicConfig.RETENTION_MS_CONFIG, -1);
-        return properties;
+        return Map.of(
+            TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE,
+            TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name,
+            TopicConfig.SEGMENT_BYTES_CONFIG, String.valueOf(config.shareCoordinatorStateTopicSegmentBytes()),
+            TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(config.shareCoordinatorStateTopicMinIsr()),
+            TopicConfig.RETENTION_MS_CONFIG, "-1"
+        );
     }
 
     /**

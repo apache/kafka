@@ -190,6 +190,10 @@ public class MeteredKeyValueStore<K, V>
                     }
             );
         }
+        StateStoreMetrics.addUncommittedBytesGauge(
+            taskId.toString(), metricsScope, name(), streamsMetrics,
+            (config, now) -> wrapped().approximateNumUncommittedBytes()
+        );
     }
 
     @Override

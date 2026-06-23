@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
 import java.util.Collection;
 
 /**
@@ -31,9 +32,24 @@ import java.util.Collection;
  * of the members changes. This can occur when processes die, new process instances are added or old instances come back to life after failure.
  * Partition re-assignments can also be triggered by changes affecting the subscribed topics (e.g. when the number of partitions is
  * administratively adjusted).
+ *
+ * <h3>Consumer-Aware Callbacks</h3>
+ *
+ * Each callback method has two variants: a one-argument form that receives only the affected partitions, and a
+ * two-argument form (inherited from {@link RebalanceListener}) that additionally receives a
+ * {@link RebalanceConsumer} - a restricted view of the {@link Consumer} exposing only operations that are safe
+ * during a rebalance. The two-argument variants on this interface default to delegating to their one-argument
+ * counterparts, so existing implementations continue to work unchanged.
  * <p>
+ * When consumer access is needed during a rebalance (e.g. to commit offsets or seek to external positions),
+ * prefer overriding the two-argument variants and using the provided {@link RebalanceConsumer} instead of
+ * capturing the full {@code Consumer} reference externally. This avoids accidental use of operations like
+ * {@code poll()}, {@code close()}, or {@code subscribe()} that could corrupt consumer state mid-rebalance.
+ *
+ * <h3>Common Use Cases</h3>
+ *
  * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
- * the {@link #onPartitionsRevoked(Collection)} call we can ensure that any time partition assignment changes
+ * the {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} call we can ensure that any time partition assignment changes
  * the offset gets saved.
  * <p>
  * Another use is flushing out any kind of cache of intermediate results the consumer may be keeping. For example,
@@ -44,31 +60,33 @@ import java.util.Collection;
  * partition is reassigned it may want to automatically trigger a flush of this cache, before the new owner takes over
  * consumption.
  * <p>
- * This callback will only execute in the user thread as part of the {@link Consumer#poll(java.time.Duration) poll(long)} call
+ * This callback will only execute in the user thread as part of the {@link KafkaConsumer#poll(java.time.Duration) poll(Duration)} call
  * whenever partition assignment changes.
  * <p>
  * Under normal conditions, if a partition is reassigned from one consumer to another, then the old consumer will
- * always invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} for that partition prior to the new consumer
- * invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} for the same partition. So if offsets or other state is saved in the
- * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will always be accessible by the time the
- * other consumer member taking over that partition and triggering its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback to load the state.
+ * always invoke {@link #onPartitionsRevoked(Collection, RebalanceConsumer) onPartitionsRevoked} for that partition
+ * prior to the new consumer invoking {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned}
+ * for the same partition. So if offsets or other state is saved durably in the
+ * {@link #onPartitionsRevoked(Collection, RebalanceConsumer) onPartitionsRevoked} callback by one consumer member,
+ * it will always be accessible by the time the other consumer member taking over that partition triggers its
+ * {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned} callback to load the state.
  * <p>
  * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, the consumer may not have an opportunity to do so.
  * For example, if the session times out, then the partitions may be reassigned before we have a chance to revoke them gracefully.
- * For this case, we have a third callback {@link #onPartitionsLost(Collection)}. The difference between this function and
- * {@link #onPartitionsRevoked(Collection)} is that upon invocation of {@link #onPartitionsLost(Collection)}, the partitions
+ * For this case, we have a third callback {@link #onPartitionsLost(Collection, RebalanceConsumer)}. The difference between this function and
+ * {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} is that upon invocation of {@link #onPartitionsLost(Collection, RebalanceConsumer)}, the partitions
  * may already be owned by some other members in the group and therefore users would not be able to commit its consumed offsets for example.
  * Users could implement these two functions differently (by default,
- * {@link #onPartitionsLost(Collection)} will be calling {@link #onPartitionsRevoked(Collection)} directly); for example, in the
- * {@link #onPartitionsLost(Collection)} we should not need to store the offsets since we know these partitions are no longer owned by the consumer
+ * {@link #onPartitionsLost(Collection, RebalanceConsumer)} will be calling {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} directly); for example, in the
+ * {@link #onPartitionsLost(Collection, RebalanceConsumer)} we should not need to store the offsets since we know these partitions are no longer owned by the consumer
  * at that time.
  * <p>
- * During a rebalance event, the {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} function will always be triggered exactly once when
- * the rebalance completes. That is, even if there is no newly assigned partitions for a consumer member, its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned}
+ * During a rebalance event, the {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned} function will always be triggered exactly once when
+ * the rebalance completes. That is, even if there are no newly assigned partitions for a consumer member, its {@link #onPartitionsAssigned(Collection, RebalanceConsumer) onPartitionsAssigned}
  * will still be triggered with an empty collection of partitions. As a result this function can be used also to notify when a rebalance event has happened.
- * With eager rebalancing, {@link #onPartitionsRevoked(Collection)} will always be called at the start of a rebalance. On the other hand, {@link #onPartitionsLost(Collection)}
+ * With eager rebalancing, {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} will always be called at the start of a rebalance. On the other hand, {@link #onPartitionsLost(Collection, RebalanceConsumer)}
  * will only be called when there were non-empty partitions that were lost.
- * With cooperative rebalancing, {@link #onPartitionsRevoked(Collection)} and {@link #onPartitionsLost(Collection)}
+ * With cooperative rebalancing, {@link #onPartitionsRevoked(Collection, RebalanceConsumer)} and {@link #onPartitionsLost(Collection, RebalanceConsumer)}
  * will only be triggered when there are non-empty partitions revoked or lost from this consumer member during a rebalance event.
  * <p>
  * It is possible
@@ -89,33 +107,34 @@ import java.util.Collection;
  * Here is pseudo-code for a callback implementation for saving offsets:
  * <pre>
  * {@code
- *   public class SaveOffsetsOnRebalance implements ConsumerRebalanceListener {
- *       private Consumer<?,?> consumer;
- *
- *       public SaveOffsetsOnRebalance(Consumer<?,?> consumer) {
- *           this.consumer = consumer;
- *       }
- *
- *       public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+ *   consumer.setRebalanceListener(new ConsumerRebalanceListener() {
+ *       @Override
+ *       public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // save the offsets in an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
- *              saveOffsetInExternalStore(consumer.position(partition));
+ *              saveOffsetInExternalStore(rebalanceConsumer.position(partition));
  *       }
  *
- *       public void onPartitionsLost(Collection<TopicPartition> partitions) {
+ *       @Override
+ *       public void onPartitionsLost(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // do not need to save the offsets since these partitions are probably owned by other consumers already
  *       }
  *
- *       public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+ *       @Override
+ *       public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rebalanceConsumer) {
  *           // read the offsets from an external store using some custom code not described here
  *           for(TopicPartition partition: partitions)
- *              consumer.seek(partition, readOffsetFromExternalStore(partition));
+ *              rebalanceConsumer.seek(partition, readOffsetFromExternalStore(partition));
  *       }
- *   }
+ *   });
+ *   consumer.subscribe(List.of("topic-1", "topic-2"));
  * }
  * </pre>
+ *
+ * @see RebalanceListener
+ * @see RebalanceConsumer
  */
-public interface ConsumerRebalanceListener {
+public interface ConsumerRebalanceListener extends RebalanceListener {
 
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store.
@@ -138,11 +157,11 @@ public interface ConsumerRebalanceListener {
      *     </li>
      *     <li>
      *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions to revoke,
-     *         iff the set is non-empty.
+     *         if and only if the set is non-empty.
      *     </li>
      * </ul>
      * If the consumer is using the {@link GroupProtocol#CONSUMER} rebalance protocol, this callback will be called
-     * with the set of partitions to revoke iff the set is non-empty
+     * with the set of partitions to revoke if and only if the set is non-empty
      * (same behavior as the {@link GroupProtocol#CLASSIC} rebalance protocol with Cooperative mode).
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.
@@ -154,7 +173,7 @@ public interface ConsumerRebalanceListener {
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
      * @param partitions The list of partitions that were assigned to the consumer and now need to be revoked. This will
-     *                  include the full assignment under the Classic/Eager protocol, given that it revokes all partitions.
+     *                   include the full assignment under the Classic/Eager protocol, given that it revokes all partitions.
      *                   It will only include the subset to revoke under the Classic/Cooperative and Consumer protocols.
      * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
@@ -162,10 +181,22 @@ public interface ConsumerRebalanceListener {
     void onPartitionsRevoked(Collection<TopicPartition> partitions);
 
     /**
+     * {@inheritDoc}
+     * <p>
+     * The default implementation in this interface delegates to {@link #onPartitionsRevoked(Collection)},
+     * so existing listeners that only override the one-argument method continue to work unchanged.
+     */
+    @Override
+    default void onPartitionsRevoked(Collection<TopicPartition> partitions,
+                                     RebalanceConsumer consumer) {
+        onPartitionsRevoked(partitions);
+    }
+
+    /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
      * partition re-assignment. This method will be called after the partition re-assignment completes (even if no new
      * partitions were assigned to the consumer), and before the consumer starts fetching data,
-     * and only as the result of a {@link Consumer#poll(java.time.Duration) poll(long)} call.
+     * and only as the result of a {@link KafkaConsumer#poll(Duration) poll(Duration)} call.
      * <p>
      * It is guaranteed that under normal conditions all the processes in a consumer group will execute their
      * {@link #onPartitionsRevoked(Collection)} callback before any instance executes this onPartitionsAssigned callback.
@@ -188,6 +219,18 @@ public interface ConsumerRebalanceListener {
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
     void onPartitionsAssigned(Collection<TopicPartition> partitions);
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * The default implementation in this interface delegates to {@link #onPartitionsAssigned(Collection)},
+     * so existing listeners that only override the one-argument method continue to work unchanged.
+     */
+    @Override
+    default void onPartitionsAssigned(Collection<TopicPartition> partitions,
+                                      RebalanceConsumer consumer) {
+        onPartitionsAssigned(partitions);
+    }
 
     /**
      * A callback method you can implement to provide handling of cleaning up resources for partitions that have already
@@ -216,5 +259,21 @@ public interface ConsumerRebalanceListener {
      */
     default void onPartitionsLost(Collection<TopicPartition> partitions) {
         onPartitionsRevoked(partitions);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * The default implementation in this interface delegates to {@link #onPartitionsLost(Collection)},
+     * which itself defaults to {@link #onPartitionsRevoked(Collection)}. The chain always passes through
+     * the one-argument methods, not the two-argument variants, so listeners overriding either one-argument
+     * method see consistent results regardless of which entry point was used.
+     * <p>
+     * If you need custom behavior for both revocation and loss, override both one-argument methods explicitly.
+     */
+    @Override
+    default void onPartitionsLost(Collection<TopicPartition> partitions,
+                                  RebalanceConsumer consumer) {
+        onPartitionsLost(partitions);
     }
 }

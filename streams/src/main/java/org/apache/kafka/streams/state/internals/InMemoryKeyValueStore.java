@@ -58,6 +58,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final Position position = Position.emptyPosition();
     private volatile boolean open = false;
     private StateStoreContext context;
+    private InMemoryTransactionBuffer transactionBuffer;
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
@@ -85,7 +86,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                 (RecordBatchingStateRestoreCallback) records -> {
                     synchronized (position) {
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
-                            put(Bytes.wrap(record.key()), record.value());
+                            final Bytes key = Bytes.wrap(record.key());
+                            putInternal(key, record.value());
                             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                                 record,
                                 consistencyEnabled,
@@ -99,6 +101,13 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         open = true;
         this.context = stateStoreContext;
+        final boolean transactional = StreamsConfig.InternalConfig.getBoolean(
+            stateStoreContext.appConfigs(),
+            StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG,
+            false);
+        if (transactional) {
+            this.transactionBuffer = new InMemoryTransactionBuffer(map);
+        }
     }
 
     @Override
@@ -133,11 +142,21 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized byte[] get(final Bytes key) {
+        if (transactionBuffer != null) {
+            final java.util.Optional<byte[]> staged = transactionBuffer.get(key);
+            if (staged != null) {
+                return staged.orElse(null);
+            }
+        }
         return map.get(key);
     }
 
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
+        if (transactionBuffer != null) {
+            transactionBuffer.stage(key, value);
+            return;
+        }
         putInternal(key, value);
     }
 
@@ -165,6 +184,12 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        if (transactionBuffer != null) {
+            for (final KeyValue<Bytes, byte[]> entry : entries) {
+                transactionBuffer.stage(entry.key, entry.value);
+            }
+            return;
+        }
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             putInternal(entry.key, entry.value);
         }
@@ -176,11 +201,19 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
         final Bytes to = ByteUtils.increment(from);
 
+        if (transactionBuffer != null) {
+            return transactionBuffer.range(from, to, true, false);
+        }
         return new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true);
     }
 
     @Override
     public synchronized byte[] delete(final Bytes key) {
+        if (transactionBuffer != null) {
+            final byte[] oldValue = get(key);
+            transactionBuffer.stage(key, null);
+            return oldValue;
+        }
         return map.remove(key);
     }
 
@@ -195,6 +228,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean forward) {
+        if (transactionBuffer != null) {
+            return transactionBuffer.range(from, to, forward, true);
+        }
         if (from == null && to == null) {
             return getKeyValueIterator(map.keySet(), forward);
         } else if (from == null) {
@@ -232,12 +268,33 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        if (transactionBuffer != null) {
+            return transactionBuffer.approximateNumUncommittedBytes();
+        }
+        return 0;
+    }
+
+    @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
-        // do-nothing since it is in-memory
+        commitStagedWrites();
+    }
+
+    void commitStagedWrites() {
+        if (transactionBuffer != null) {
+            transactionBuffer.commit();
+        }
+    }
+
+    void rollbackStagedWrites() {
+        if (transactionBuffer != null) {
+            transactionBuffer.rollback();
+        }
     }
 
     @Override
     public void close() {
+        rollbackStagedWrites();
         map.clear();
         open = false;
     }

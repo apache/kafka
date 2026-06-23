@@ -1,6 +1,6 @@
 ---
 title: Log
-description: Log
+description: Kafka log storage format and segment management.
 weight: 4
 tags: ['kafka', 'docs']
 aliases: 

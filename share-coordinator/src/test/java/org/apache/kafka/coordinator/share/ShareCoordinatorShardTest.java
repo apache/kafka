@@ -1006,6 +1006,8 @@ class ShareCoordinatorShardTest {
         CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> result2 = shard.readStateAndMaybeUpdateLeaderEpoch(request2);
 
         assertTrue(result2.records().isEmpty());    // Leader epoch -1 - no update.
+        assertEquals(Errors.NONE.code(), result2.response().results().get(0).partitions().get(0).errorCode());
+        assertEquals(2, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
 
         ReadShareGroupStateRequestData request3 = new ReadShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1019,6 +1021,8 @@ class ShareCoordinatorShardTest {
         CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> result3 = shard.readStateAndMaybeUpdateLeaderEpoch(request3);
 
         assertTrue(result3.records().isEmpty());    // Same leader epoch - no update.
+        assertEquals(Errors.NONE.code(), result3.response().results().get(0).partitions().get(0).errorCode());
+        assertEquals(2, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
         verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
     }
 
