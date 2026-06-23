@@ -925,7 +925,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = buildService(runtime, Optional.empty(), true);
 
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.runOneStreamsTopologyCleanupCycle();
 
         verify(runtime, never()).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
         verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
@@ -945,7 +945,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(null));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.runOneStreamsTopologyCleanupCycle();
 
         verify(plugin, times(1)).deleteTopology("foo");
         verify(runtime, times(1)).scheduleWriteOperation(eq("clear-stored-topology-epoch"), eq(GROUP_TP), any());
@@ -963,7 +963,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(List.of(CompletableFuture.completedFuture(Map.of("foo", 4))));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.runOneStreamsTopologyCleanupCycle();
 
         verify(plugin, times(1)).deleteTopology("foo");
         verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
@@ -990,7 +990,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         // the cycle wiped the entry the heartbeat would arm freshly and set the flag; if the
         // entry survived the heartbeat sees an active window and the flag stays unset.
         service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.runOneStreamsTopologyCleanupCycle();
 
         assertFalse(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
             "failed cycle must not clear the back-off entry");
@@ -1012,7 +1012,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         service.streamsGroupTopologyDescriptionManager().armBackoff("foo", 4);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.runOneStreamsTopologyCleanupCycle();
 
         assertTrue(heartbeatTopologyDescriptionRequired(runtime, service, 4, 2, -1),
             "successful cycle must clear the back-off so a fresh solicitation can arm");
@@ -1027,7 +1027,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(List.of(CompletableFuture.completedFuture(Map.of())));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.runOneStreamsTopologyCleanupCycle();
 
         verify(plugin, never()).deleteTopology(anyString());
         verify(runtime, never()).scheduleWriteOperation(eq("clear-stored-topology-epoch"), any(), any());
@@ -1043,8 +1043,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(List.of(new CompletableFuture<>()));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
 
         verify(runtime, times(1)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
@@ -1068,14 +1068,14 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(parkedClearWrite);
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
         // Plugin call resolved synchronously but clear-write is parked — second cycle skipped.
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
         verify(runtime, times(1)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
 
         // Settle the clear-write: flag should now release, next cycle scans afresh.
         parkedClearWrite.complete(null);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
         verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
 
@@ -1090,9 +1090,9 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         // First tick throws — the cycle must still release the flag so a subsequent tick runs.
         assertThrows(RuntimeException.class,
-            () -> service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime));
+            () -> service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle));
         // Second tick must reach the runtime read, confirming the flag was released.
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
 
         verify(runtime, times(2)).scheduleReadAllOperation(
             eq("list-streams-groups-needing-topology-cleanup"), any());
@@ -1114,9 +1114,9 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(null));
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
         // Same runtime, second invocation: must schedule another read (flag released).
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
 
         verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
@@ -1137,7 +1137,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
         // Cycle dispatched, parked on the per-partition read.
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.runOneStreamsTopologyCleanupCycle();
         // service.shutdown() closes the manager which flips its running flag false and
         // cancels the scheduled task (and closes the mocked runtime; mocks remain callable
         // for verification).
@@ -1200,8 +1200,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(List.of());
 
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
-        service.streamsGroupTopologyDescriptionManager().runCleanupCycle(runtime);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
+        service.streamsGroupTopologyDescriptionManager().runOnce(service::runOneStreamsTopologyCleanupCycle);
 
         verify(runtime, times(2)).scheduleReadAllOperation(eq("list-streams-groups-needing-topology-cleanup"), any());
     }
