@@ -1661,7 +1661,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
-    public void fetchResponseWithUnexpectedPartitionIsIgnored(GroupProtocol groupProtocol) {
+    public void testFetchResponseWithUnexpectedPartitionIsIgnored(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
