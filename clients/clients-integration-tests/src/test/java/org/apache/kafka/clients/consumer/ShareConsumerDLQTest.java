@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -63,8 +64,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-        @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
-        @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
         // share.version 2 (which enables the share group DLQ) is not yet a production feature version.
         @ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true")
     }
@@ -269,7 +268,7 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             consumer.assign(List.of(dlqTp));
             consumer.seekToBeginning(List.of(dlqTp));
             waitForCondition(() -> {
-                consumer.poll(Duration.ofMillis(1000)).records(dlqTp).forEach(dlqRecords::add);
+                    dlqRecords.addAll(consumer.poll(Duration.ofMillis(1000)).records(dlqTp));
                 return dlqRecords.size() >= expectedSourceOffsets.size();
             }, DEFAULT_MAX_WAIT_MS, 500L,
                 () -> "DLQ topic did not receive " + expectedSourceOffsets.size() + " records, got " + dlqRecords.size());
@@ -283,7 +282,7 @@ public class ShareConsumerDLQTest extends ShareConsumerTestBase {
             assertEquals(groupId, headerValue(record, HEADER_DLQ_ERRORS_GROUP));
             assertEquals(tp.topic(), headerValue(record, HEADER_DLQ_ERRORS_TOPIC));
             assertEquals(Integer.toString(tp.partition()), headerValue(record, HEADER_DLQ_ERRORS_PARTITION));
-            actualSourceOffsets.add(Long.parseLong(headerValue(record, HEADER_DLQ_ERRORS_OFFSET)));
+            actualSourceOffsets.add(Long.parseLong(Objects.requireNonNull(headerValue(record, HEADER_DLQ_ERRORS_OFFSET))));
         }
         assertEquals(expectedSourceOffsets, actualSourceOffsets, "DLQ records should cover every expected source offset");
     }
