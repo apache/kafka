@@ -60,13 +60,13 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "User:broker"),
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AuthorizerIntegrationTest.STANDARD_AUTHORIZER),
-        @ClusterConfigProperty(key = PRINCIPAL_BUILDER_CLASS_CONFIG, value = AuthorizerIntegrationTest.PRINCIPAL_BUILDER)
+        @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = ConsumerGroupCommandAuthorizationTest.STANDARD_AUTHORIZER),
+        @ClusterConfigProperty(key = PRINCIPAL_BUILDER_CLASS_CONFIG, value = ConsumerGroupCommandAuthorizationTest.PRINCIPAL_BUILDER)
     }
 )
-public class AuthorizerIntegrationTest {
+public class ConsumerGroupCommandAuthorizationTest {
     public static final String STANDARD_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer";
-    public static final String PRINCIPAL_BUILDER = "org.apache.kafka.tools.consumer.group.AuthorizerIntegrationTest$PrincipalBuilder";
+    public static final String PRINCIPAL_BUILDER = "org.apache.kafka.tools.consumer.group.ConsumerGroupCommandAuthorizationTest$PrincipalBuilder";
 
     private static final KafkaPrincipal BROKER_PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "broker");
     private static final KafkaPrincipal CLIENT_PRINCIPAL = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client");
@@ -84,7 +84,14 @@ public class AuthorizerIntegrationTest {
 
     @ClusterTest
     public void testDescribeGroupCliWithGroupDescribe(ClusterInstance clusterInstance) throws Exception {
-        setup(clusterInstance);
+        addAndVerifyAcls(Set.of(createAcl(CREATE, CLIENT_PRINCIPAL)), OFFSETS_TOPIC_RESOURCE, clusterInstance);
+
+        NewTopic offsetTopic = new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
+        try (Admin admin = clusterInstance.admin()) {
+            admin.createTopics(List.of(offsetTopic)).all().get();
+            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
+        }
+
         addAndVerifyAcls(Set.of(createAcl(DESCRIBE, CLIENT_PRINCIPAL)), GROUP_RESOURCE, clusterInstance);
 
         String[] cgcArgs = new String[]{
@@ -99,16 +106,6 @@ public class AuthorizerIntegrationTest {
         } catch (ExecutionException e) {
             assertInstanceOf(GroupIdNotFoundException.class, e.getCause(),
                 "Non-existent group should throw GroupIdNotFoundException");
-        }
-    }
-
-    private void setup(ClusterInstance clusterInstance) throws Exception {
-        addAndVerifyAcls(Set.of(createAcl(CREATE, CLIENT_PRINCIPAL)), OFFSETS_TOPIC_RESOURCE, clusterInstance);
-
-        NewTopic offsetTopic = new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
-        try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(offsetTopic)).all().get();
-            clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
         }
     }
 
