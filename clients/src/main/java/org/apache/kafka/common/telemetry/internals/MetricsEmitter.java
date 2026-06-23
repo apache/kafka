@@ -72,15 +72,6 @@ public interface MetricsEmitter extends Closeable {
     }
 
     /**
-     * Emits a metric if {@link MetricsEmitter#shouldEmitMetric(MetricKeyable)} returns <tt>true</tt>.
-     * @param metric to emit
-     * @return true if emit is successful, false otherwise
-     */
-    default boolean maybeEmitMetric(SinglePointMetric metric) {
-        return shouldEmitMetric(metric) && emitMetric(metric);
-    }
-
-    /**
      * Allows the {@code MetricsEmitter} implementation to initialize itself. This method should be invoked
      * by the telemetry reporter before calls to {@link #emitMetric(SinglePointMetric)} are made.
      *

@@ -63,7 +63,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.network.Request
 import org.apache.kafka.security.DelegationTokenManager
-import org.apache.kafka.server.{ApiVersionManager, AutoTopicCreationManager, ClientMetricsManager, FetchManager, ProcessRole}
+import org.apache.kafka.server.{ApiVersionManager, AutoTopicCreationManager, ClientMetricsManager, FetchManager, ForwardingManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
@@ -84,6 +84,7 @@ import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 import scala.jdk.javaapi.OptionConverters
 
 /**
@@ -131,14 +132,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def forwardToController(request: Request): Unit = {
-    def responseCallback(responseOpt: Option[AbstractResponse]): Unit = {
-      responseOpt match {
+    def responseCallback(responseOpt: Optional[AbstractResponse]): Unit = {
+      responseOpt.toScala match {
         case Some(response) => requestHelper.sendForwardedResponse(request, response)
         case None => handleInvalidVersionsDuringForwarding(request)
       }
     }
 
-    forwardingManager.forwardRequest(request, responseCallback)
+    forwardingManager.forwardRequest(request, r => responseCallback(r))
   }
 
   private def handleInvalidVersionsDuringForwarding(request: Request): Unit = {
@@ -524,7 +525,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendNoOpResponseExemptThrottle(request)
         }
       } else {
-        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs, nodeEndpoints.values.toList.asJava), None)
+        requestChannel.sendResponse(request, new ProduceResponse(mergedResponseStatus.asJava, maxThrottleTimeMs, nodeEndpoints.values.toList.asJava))
       }
     }
 
@@ -725,7 +726,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         recordBytesOutMetric(fetchResponse)
         // Send the response immediately.
-        requestChannel.sendResponse(request, fetchResponse, None)
+        requestChannel.sendResponse(request, fetchResponse)
       }
     }
 
@@ -1455,6 +1456,17 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setErrorCode(error.code))
         }
       } else {
+        // GROUP_DELETION_FAILED was introduced for DeleteGroups v3 (KIP-1331). Older
+        // clients cannot interpret the new code, so downgrade it to UNKNOWN_SERVER_ERROR.
+        // ErrorMessage is "versions": "3+", "ignorable": true and is stripped at the
+        // serialization layer for v<3, so only the error code needs gating here.
+        if (request.context.apiVersion < 3) {
+          results.forEach { result =>
+            if (result.errorCode == Errors.GROUP_DELETION_FAILED.code) {
+              result.setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
+            }
+          }
+        }
         response.setResults(results)
       }
 
@@ -1533,10 +1545,22 @@ class KafkaApis(val requestChannel: RequestChannel,
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception)
       } else if (!apiVersionRequest.isValid) {
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
+      } else if (clusterIdOrNodeIdIsInvalid(apiVersionRequest)) {
+        apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.REBOOTSTRAP_REQUIRED.exception)
       } else {
         apiVersionManager.apiVersionResponse(requestThrottleMs, request.header.apiVersion() < 4)
       }
     }
+
+    // KIP-1242 checks the cluster ID and node ID in the request if provided to ensure the
+    // client is connecting to the correct broker. If both are specified, they must match
+    // the expected values for this broker.
+    def clusterIdOrNodeIdIsInvalid(apiVersionRequest: ApiVersionsRequest): Boolean = {
+      apiVersionRequest.version >= 5 &&
+        apiVersionRequest.data.clusterId != null &&
+        (apiVersionRequest.data.clusterId != clusterId || apiVersionRequest.data.nodeId != brokerId)
+    }
+
     requestHelper.sendResponseMaybeThrottle(request, createResponseCallback)
   }
 
@@ -2192,8 +2216,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val original = request.body(classOf[AlterConfigsRequest])
     val preprocessingResponses = configManager.preprocess(original.data())
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
-    def sendResponse(secondPart: Option[ApiMessage]): Unit = {
-      secondPart match {
+    def sendResponse(secondPart: Optional[ApiMessage]): Unit = {
+      secondPart.toScala match {
         case Some(result: AlterConfigsResponseData) =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new AlterConfigsResponse(ConfigAdminManager.reassembleLegacyResponse(
@@ -2204,7 +2228,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
     if (remaining.resources().isEmpty) {
-      sendResponse(Some(new AlterConfigsResponseData()))
+      sendResponse(Optional.of(new AlterConfigsResponseData()))
     } else {
       forwardingManager.forwardRequest(request,
         new AlterConfigsRequest(remaining, request.header.apiVersion()),
@@ -2218,8 +2242,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       (rType, rName) => authHelper.authorize(request.context, ALTER_CONFIGS, rType, rName))
     val remaining = ConfigAdminManager.copyWithoutPreprocessed(original.data(), preprocessingResponses)
 
-    def sendResponse(secondPart: Option[ApiMessage]): Unit = {
-      secondPart match {
+    def sendResponse(secondPart: Optional[ApiMessage]): Unit = {
+      secondPart.toScala match {
         case Some(result: IncrementalAlterConfigsResponseData) =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new IncrementalAlterConfigsResponse(ConfigAdminManager.reassembleIncrementalResponse(
@@ -2231,7 +2255,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (remaining.resources().isEmpty) {
-      sendResponse(Some(new IncrementalAlterConfigsResponseData()))
+      sendResponse(Optional.of(new IncrementalAlterConfigsResponseData()))
     } else {
       forwardingManager.forwardRequest(request,
         new IncrementalAlterConfigsRequest(remaining, request.header.apiVersion()),
@@ -2898,13 +2922,32 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  // Stub handler for KIP-1331. The full handler lands in a later sub-task; until then this
-  // responds with UNSUPPORTED_VERSION so callers fail loud rather than hit the IllegalStateException
-  // default branch in handle().
   def handleStreamsGroupTopologyDescriptionUpdate(request: Request): CompletableFuture[Unit] = {
     val updateRequest = request.body(classOf[StreamsGroupTopologyDescriptionUpdateRequest])
-    requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!isStreamsGroupProtocolEnabled) {
+      // The streams group protocol is disabled on this broker, so the RPC is unreachable
+      // even if a topology description plugin is configured.
+      requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, updateRequest.data.groupId)) {
+      // Per KIP-1331: like offset commits, a topology push is not treated as a modification
+      // of the GROUP, so READ on the GROUP resource is sufficient. This lets apps deployed
+      // with READ-only group ACLs push topology descriptions without an ACL upgrade.
+      requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      groupCoordinator.streamsGroupTopologyDescriptionUpdate(
+        request.context,
+        updateRequest.data
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, updateRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupTopologyDescriptionUpdateResponse(response))
+        }
+      }
+    }
   }
 
   def handleStreamsGroupDescribe(request: Request): CompletableFuture[Unit] = {
@@ -2932,7 +2975,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       groupCoordinator.streamsGroupDescribe(
         request.context,
-        authorizedGroups.asJava
+        authorizedGroups.asJava,
+        streamsGroupDescribeRequest.data.includeTopologyDescription
       ).handle[Unit] { (results, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, streamsGroupDescribeRequest.getErrorResponse(exception))
@@ -3443,7 +3487,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
       } else {
-        requestChannel.sendResponse(request, result, None)
+        requestChannel.sendResponse(request, result)
       }
     }
   }

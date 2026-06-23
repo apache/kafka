@@ -808,6 +808,15 @@ public class StreamsConfig extends AbstractConfig {
     @Deprecated
     public static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
+    /** {@code statestore.uncommitted.max.bytes} */
+    public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG = "statestore.uncommitted.max.bytes";
+    private static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC =
+        "The maximum number of uncommitted bytes across all transactional state stores on this " +
+        "application instance before an early commit is triggered, regardless of commit.interval.ms. " +
+        "The limit is divided equally across the configured number of stream threads, and the global state thread," +
+        "if the topology has any global stores. Set to -1 to disable. Default is 67108864 (64 MB).";
+    private static final long STATESTORE_UNCOMMITTED_MAX_BYTES_DEFAULT = 67_108_864L;
+
     /** {@code task.assignor.class} */
     @SuppressWarnings("WeakerAccess")
     public static final String TASK_ASSIGNOR_CLASS_CONFIG = "task.assignor.class";
@@ -959,6 +968,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     STATESTORE_CACHE_MAX_BYTES_DOC)
+            .define(STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG,
+                    Type.LONG,
+                    STATESTORE_UNCOMMITTED_MAX_BYTES_DEFAULT,
+                    atLeast(-1),
+                    Importance.LOW,
+                    STATESTORE_UNCOMMITTED_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",

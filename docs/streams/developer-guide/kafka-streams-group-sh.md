@@ -1,7 +1,7 @@
 ---
 title: Kafka Streams Groups Tool
 type: docs
-description: 
+description: Kafka Streams groups tool for inspecting and managing streams groups.
 weight: 15
 tags: ['kafka', 'docs']
 aliases: 

@@ -50,20 +50,54 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String METRICS_GROUP = "group-coordinator-metrics";
 
     /**
-     * Old classic group count metric. To be deprecated.
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=group-count,protocol=classic
+     *             instead. This metric will be removed in Kafka 5.0.
      */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS = getMetricName(
         "GroupMetadataManager", "NumGroups");
+    /**
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=offset-count instead.
+     *             This metric will be removed in Kafka 5.0.
+     */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_OFFSETS = getMetricName(
         "GroupMetadataManager", "NumOffsets");
+    /**
+     * @deprecated Since 4.4. Use
+     *             kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=PreparingRebalance
+     *             instead. This metric will be removed in Kafka 5.0.
+     */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_PREPARING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsPreparingRebalance");
+    /**
+     * @deprecated Since 4.4. Use
+     *             kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=CompletingRebalance
+     *             instead. This metric will be removed in Kafka 5.0.
+     */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsCompletingRebalance");
+    /**
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Stable
+     *             instead. This metric will be removed in Kafka 5.0.
+     */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_STABLE = getMetricName(
         "GroupMetadataManager", "NumGroupsStable");
+    /**
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Dead
+     *             instead. This metric will be removed in Kafka 5.0.
+     */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_DEAD = getMetricName(
         "GroupMetadataManager", "NumGroupsDead");
+    /**
+     * @deprecated Since 4.4. Use kafka.server:type=group-coordinator-metrics,name=classic-group-count,state=Empty
+     *             instead. This metric will be removed in Kafka 5.0.
+     */
+    @Deprecated(since = "4.4", forRemoval = true)
     public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_EMPTY = getMetricName(
         "GroupMetadataManager", "NumGroupsEmpty");
 
@@ -77,6 +111,10 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String STREAMS_GROUP_COUNT_METRIC_NAME = "streams-group-count";
     public static final String STREAMS_GROUP_COUNT_STATE_TAG = "state";
 
+    public static final String CLASSIC_GROUP_COUNT_METRIC_NAME = "classic-group-count";
+    public static final String CLASSIC_GROUP_COUNT_STATE_TAG = "state";
+    public static final String OFFSET_COUNT_METRIC_NAME = "offset-count";
+
     public static final String OFFSET_COMMITS_SENSOR_NAME = "OffsetCommits";
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";
     public static final String OFFSET_DELETIONS_SENSOR_NAME = "OffsetDeletions";
@@ -85,7 +123,13 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String SHARE_GROUP_REBALANCES_SENSOR_NAME = "ShareGroupRebalances";
     public static final String STREAMS_GROUP_REBALANCES_SENSOR_NAME = "StreamsGroupRebalances";
 
+    private final MetricName offsetCountMetricName;
     private final MetricName classicGroupCountMetricName;
+    private final MetricName classicGroupCountPreparingRebalanceMetricName;
+    private final MetricName classicGroupCountCompletingRebalanceMetricName;
+    private final MetricName classicGroupCountStableMetricName;
+    private final MetricName classicGroupCountDeadMetricName;
+    private final MetricName classicGroupCountEmptyMetricName;
     private final MetricName consumerGroupCountMetricName;
     private final MetricName consumerGroupCountEmptyMetricName;
     private final MetricName consumerGroupCountAssigningMetricName;
@@ -122,11 +166,52 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         this.registry = Objects.requireNonNull(registry);
         this.metrics = Objects.requireNonNull(metrics);
 
+        offsetCountMetricName = metrics.metricName(
+            OFFSET_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of offsets currently retained for Classic, Consumer, and Streams Groups."
+        );
+
         classicGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the classic rebalance protocol.",
             Map.of(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CLASSIC.toString())
+        );
+
+        classicGroupCountPreparingRebalanceMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in preparing rebalance state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.PREPARING_REBALANCE.toString())
+        );
+
+        classicGroupCountCompletingRebalanceMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in completing rebalance state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.COMPLETING_REBALANCE.toString())
+        );
+
+        classicGroupCountStableMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in stable state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.STABLE.toString())
+        );
+
+        classicGroupCountDeadMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in dead state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.DEAD.toString())
+        );
+
+        classicGroupCountEmptyMetricName = metrics.metricName(
+            CLASSIC_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of classic groups in empty state.",
+            Map.of(CLASSIC_GROUP_COUNT_STATE_TAG, ClassicGroupState.EMPTY.toString())
         );
 
         consumerGroupCountMetricName = metrics.metricName(
@@ -373,7 +458,13 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         ).forEach(registry::removeMetric);
 
         Arrays.asList(
+            offsetCountMetricName,
             classicGroupCountMetricName,
+            classicGroupCountPreparingRebalanceMetricName,
+            classicGroupCountCompletingRebalanceMetricName,
+            classicGroupCountStableMetricName,
+            classicGroupCountDeadMetricName,
+            classicGroupCountEmptyMetricName,
             consumerGroupCountMetricName,
             consumerGroupCountEmptyMetricName,
             consumerGroupCountAssigningMetricName,
@@ -485,8 +576,38 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         });
 
         metrics.addMetric(
+            offsetCountMetricName,
+            (Gauge<Long>) (config, now) -> numOffsets()
+        );
+
+        metrics.addMetric(
             classicGroupCountMetricName,
             (Gauge<Long>) (config, now) -> numClassicGroups()
+        );
+
+        metrics.addMetric(
+            classicGroupCountPreparingRebalanceMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.PREPARING_REBALANCE)
+        );
+
+        metrics.addMetric(
+            classicGroupCountCompletingRebalanceMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE)
+        );
+
+        metrics.addMetric(
+            classicGroupCountStableMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.STABLE)
+        );
+
+        metrics.addMetric(
+            classicGroupCountDeadMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.DEAD)
+        );
+
+        metrics.addMetric(
+            classicGroupCountEmptyMetricName,
+            (Gauge<Long>) (config, now) -> numClassicGroups(ClassicGroupState.EMPTY)
         );
 
         metrics.addMetric(

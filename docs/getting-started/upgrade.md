@@ -1,6 +1,6 @@
 ---
 title: Upgrading
-description: 
+description: Find upgrade steps for Kafka clusters and clients, along with compatibility requirements and notable changes across releases.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 
@@ -33,7 +33,14 @@ type: docs
 ### Notable changes in 4.4.0
 
   * The `ClientQuotaCallback#updateClusterMetadata` method is deprecated and will be removed in Kafka 5.0. Custom implementations of `ClientQuotaCallback` no longer need to override this method, as a default no-op implementation is now provided. For further details, please refer to [KIP-1200](https://cwiki.apache.org/confluence/x/axBJFg).
-  * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.   
+  * The in-memory keystores (used for PEM certificates) now use the default type provided by `KeyStore.getDefaultType()` instead of the hardcoded PKCS12 type.
+  * Storage directories formatted by the `kafka-storage` tool are no longer forward-compatible. A Kafka broker must be the same version as, or newer than, the `kafka-storage` tool that formatted its directory, regardless of the `--release-version` chosen at format time. For further details, please refer to [KIP-1170](https://cwiki.apache.org/confluence/x/ZYoEFQ).
+  * Several Yammer-based group coordinator metrics are deprecated and will be removed in Kafka 5.0 in favor of equivalent Kafka Metrics.
+    Please use `kafka.server:type=group-coordinator-metrics,name=group-count,protocol=classic` instead of `kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups`,
+    `kafka.server:type=group-coordinator-metrics,name=offset-count` instead of `kafka.coordinator.group:type=GroupMetadataManager,name=NumOffsets`, and
+    `kafka.server:type=group-coordinator-metrics,name=classic-group-count,state={PreparingRebalance|CompletingRebalance|Stable|Dead|Empty}` instead of the `kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups{PreparingRebalance|CompletingRebalance|Stable|Dead|Empty}` metrics.
+    For further details, please refer to [KIP-1301](https://cwiki.apache.org/confluence/x/Z5U8G).
+  * The broker-side OAUTHBEARER JWT validator now fails fast at startup when a JWKS endpoint (`sasl.oauthbearer.jwks.endpoint.url`) is configured but `sasl.oauthbearer.expected.audience` or `sasl.oauthbearer.expected.issuer` is not set. Brokers that previously started without these settings will now fail to start until they are configured. To intentionally accept tokens regardless of their audience or issuer, set the new `sasl.oauthbearer.allow.unverified.audience` or `sasl.oauthbearer.allow.unverified.issuer` configs (both default `false`) to `true`.
 
 ## Upgrading to 4.3.0
 
@@ -70,6 +77,7 @@ Note: Apache Kafka 4.3 only supports KRaft mode - ZooKeeper mode has been remove
 
   * Includes a fix for a critical deadlock in the [KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw) Share Group path ([KAFKA-20505](https://issues.apache.org/jira/browse/KAFKA-20505)).
   * Includes a fix for a rolling upgrade issue ([KAFKA-20322](https://issues.apache.org/jira/browse/KAFKA-20322)) that could cause `UnsupportedVersionException` for clusters using transactional producers.
+  * Includes a fix for a critical broker-side bug in the offline migration code for the Streams Rebalance Protocol ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)). Migrations from classic to streams groups are now safe starting with 4.2.1.
 
 ## Upgrading to 4.2.0
 
@@ -90,7 +98,7 @@ Note: Apache Kafka 4.2 only supports KRaft mode - ZooKeeper mode has been remove
 
   * The `--max-partition-memory-bytes` option in `kafka-console-producer` is deprecated and will be removed in Kafka 5.0. Please use `--batch-size` instead. 
   * Queues for Kafka ([KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw)) is production-ready in Apache Kafka 4.2. This feature introduces a new kind of group called share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer. Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part of an ordered stream. 
-  * The Streams Rebalance Protocol ([KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol)) is now production-ready for its core feature set. This broker-driven rebalancing system designed specifically for Kafka Streams applications provides faster, more stable rebalances and better observability. For more information about the supported feature set, usage, and migration, please refer to the [Streams developer guide](/{version}/streams/developer-guide/streams-rebalance-protocol). Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix will be targeted for a future release.
+  * The Streams Rebalance Protocol ([KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol)) is now production-ready for its core feature set. This broker-driven rebalancing system designed specifically for Kafka Streams applications provides faster, more stable rebalances and better observability. For more information about the supported feature set, usage, and migration, please refer to the [Streams developer guide](/{version}/streams/developer-guide/streams-rebalance-protocol). Due to a critical broker-side bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. The fix is available in 4.2.1.
   * The `org.apache.kafka.common.header.internals.RecordHeader` class has been updated to be read thread-safe. See [KIP-1205](https://cwiki.apache.org/confluence/x/nYmhFg) for details. In other words, each individual `Header` object within a `ConsumerRecord`'s `headers` can now be safely read from multiple threads concurrently. 
   * The `org.apache.kafka.disallowed.login.modules` config was deprecated. Please use the `org.apache.kafka.allowed.login.modules` instead. 
   * The `remote.log.manager.thread.pool.size` config was deprecated. Please use the `remote.log.manager.follower.thread.pool.size` instead. 

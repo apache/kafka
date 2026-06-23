@@ -321,6 +321,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        // All logical segments share one physical store — its buffer holds all uncommitted bytes
+        return segmentStores.physicalStore().approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void close() {
         open = false;
 
