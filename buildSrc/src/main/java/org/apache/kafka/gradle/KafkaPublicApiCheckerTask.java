@@ -98,8 +98,7 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
             reporter.writeTextReport(violations, suppressions, report);
 
             // Also write JSON report
-            File jsonReport = new File(report.getParentFile(),
-                report.getName().replace(".txt", ".json"));
+            File jsonReport = ViolationReporter.jsonReportFor(report);
             reporter.writeJsonReport(violations, suppressions, jsonReport);
 
             // Print summary to console
@@ -108,7 +107,7 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
             getLogger().info("Public API check completed. Report written to: {}", report.getAbsolutePath());
 
             if (!suppressions.isEmpty()) {
-                getLogger().lifecycle("⚠️  {} suppression(s) honoured — see report for justifications.", suppressions.size());
+                getLogger().lifecycle("{} suppression(s) honoured — see report for justifications.", suppressions.size());
             }
             if (!violations.isEmpty()) {
                 String message = String.format("Found %d public API violations. See report: %s",
@@ -120,7 +119,7 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
                     getLogger().warn(message);
                 }
             } else {
-                getLogger().info("✅ No public API violations found!");
+                getLogger().info("No public API violations found.");
             }
 
         } catch (IOException e) {

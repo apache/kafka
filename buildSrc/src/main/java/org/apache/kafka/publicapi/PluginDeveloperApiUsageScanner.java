@@ -233,6 +233,18 @@ public class PluginDeveloperApiUsageScanner {
     }
 
     /** Convert any of: {@code Lorg/apache/kafka/Foo;}, {@code [Lorg/apache/kafka/Foo;}, {@code org/apache/kafka/Foo} to the bare internal form. */
+    /**
+     * Return the ASM internal name for a reference-typed {@link Type} (OBJECT or ARRAY), or
+     * {@code null} for VOID/primitive types. {@link Type#getInternalName()} is only documented
+     * for reference types — calling it on a primitive happens to produce a single-char descriptor
+     * ("V"/"I"/...) today which the prefix gate happens to reject, but that's undefined behaviour
+     * we shouldn't depend on.
+     */
+    private static String referenceInternalName(Type type) {
+        int sort = type.getSort();
+        return (sort == Type.OBJECT || sort == Type.ARRAY) ? type.getInternalName() : null;
+    }
+
     private static String stripDescriptor(String name) {
         if (name == null || name.isEmpty()) {
             return null;
@@ -269,30 +281,6 @@ public class PluginDeveloperApiUsageScanner {
             this.internalName = internalName;
             this.memberName = memberName;
             this.line = line;
-        }
-    }
-
-    /** Captures the {@code value()} of a {@code @SuppressKafkaInternalApiUsage} annotation. */
-    private static final class ReasonCaptureVisitor extends AnnotationVisitor {
-        private final java.util.function.Consumer<String> setter;
-        private boolean assigned;
-        ReasonCaptureVisitor(java.util.function.Consumer<String> setter) {
-            super(ASM_API);
-            this.setter = setter;
-        }
-        @Override
-        public void visit(String name, Object value) {
-            if ("value".equals(name) && value instanceof String) {
-                setter.accept((String) value);
-                assigned = true;
-            }
-        }
-        @Override
-        public void visitEnd() {
-            if (!assigned) {
-                // Annotation is present but value() was omitted -- treat as suppressed with empty reason.
-                setter.accept("");
-            }
         }
     }
 
@@ -436,9 +424,9 @@ public class PluginDeveloperApiUsageScanner {
                 super(ASM_API);
                 this.methodName = name;
                 Type methodType = Type.getMethodType(descriptor);
-                headerBuffer.add(new PendingReference(methodType.getReturnType().getInternalName(), name, -1));
+                headerBuffer.add(new PendingReference(referenceInternalName(methodType.getReturnType()), name, -1));
                 for (Type arg : methodType.getArgumentTypes()) {
-                    headerBuffer.add(new PendingReference(arg.getInternalName(), name, -1));
+                    headerBuffer.add(new PendingReference(referenceInternalName(arg), name, -1));
                 }
                 if (exceptions != null) {
                     for (String ex : exceptions) {
@@ -525,9 +513,9 @@ public class PluginDeveloperApiUsageScanner {
                                         String descriptor, boolean isInterface) {
                 recordBody(owner);
                 Type methodType = Type.getMethodType(descriptor);
-                recordBody(methodType.getReturnType().getInternalName());
+                recordBody(referenceInternalName(methodType.getReturnType()));
                 for (Type arg : methodType.getArgumentTypes()) {
-                    recordBody(arg.getInternalName());
+                    recordBody(referenceInternalName(arg));
                 }
             }
 
@@ -542,9 +530,9 @@ public class PluginDeveloperApiUsageScanner {
             public void visitInvokeDynamicInsn(String name, String descriptor,
                                                Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
                 Type methodType = Type.getMethodType(descriptor);
-                recordBody(methodType.getReturnType().getInternalName());
+                recordBody(referenceInternalName(methodType.getReturnType()));
                 for (Type arg : methodType.getArgumentTypes()) {
-                    recordBody(arg.getInternalName());
+                    recordBody(referenceInternalName(arg));
                 }
             }
 

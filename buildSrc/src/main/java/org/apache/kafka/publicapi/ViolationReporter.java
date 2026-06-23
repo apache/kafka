@@ -17,9 +17,10 @@
 package org.apache.kafka.publicapi;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -44,7 +45,7 @@ public class ViolationReporter {
         List<PublicApiViolation> safeSuppressions =
                 suppressions == null ? Collections.emptyList() : suppressions;
 
-        try (PrintWriter writer = new PrintWriter(new FileWriter(reportFile))) {
+        try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(reportFile.toPath(), StandardCharsets.UTF_8))) {
             writer.println("Apache Kafka Public API Violation Report");
             writer.println("========================================");
             writer.println("Generated: " + LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
@@ -53,7 +54,7 @@ public class ViolationReporter {
             writer.println();
 
             if (violations.isEmpty()) {
-                writer.println("No violations found! ✅");
+                writer.println("No violations found.");
             } else {
                 // Group violations by type
                 Map<String, List<PublicApiViolation>> violationsByType = violations.stream()
@@ -113,7 +114,7 @@ public class ViolationReporter {
         List<PublicApiViolation> safeSuppressions =
                 suppressions == null ? Collections.emptyList() : suppressions;
 
-        try (PrintWriter writer = new PrintWriter(new FileWriter(reportFile))) {
+        try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(reportFile.toPath(), StandardCharsets.UTF_8))) {
             writer.println("{");
             writer.println("  \"timestamp\": \"" + LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "\",");
             writer.println("  \"totalViolations\": " + violations.size() + ",");
@@ -181,9 +182,9 @@ public class ViolationReporter {
         String resetColor = useColors ? "\u001B[0m" : "";
 
         if (violations.isEmpty()) {
-            System.out.println(greenColor + "✅ No public API violations found!" + resetColor);
+            System.out.println(greenColor + "No public API violations found." + resetColor);
         } else {
-            System.out.println(redColor + "❌ Found " + violations.size() + " public API violations:" + resetColor);
+            System.out.println(redColor + "Found " + violations.size() + " public API violation(s):" + resetColor);
             System.out.println();
             for (PublicApiViolation violation : violations) {
                 System.out.println(yellowColor + violation.toString() + resetColor);
@@ -194,7 +195,7 @@ public class ViolationReporter {
 
         if (suppressions != null && !suppressions.isEmpty()) {
             System.out.println();
-            System.out.println(cyanColor + "ℹ " + suppressions.size()
+            System.out.println(cyanColor + suppressions.size()
                     + " check(s) suppressed via @SuppressKafkaInternalApiUsage:" + resetColor);
             for (PublicApiViolation suppression : suppressions) {
                 System.out.println(cyanColor + "  " + suppression.getDescription() + resetColor);
@@ -207,14 +208,61 @@ public class ViolationReporter {
         printToConsole(violations, Collections.emptyList(), useColors);
     }
 
-    private String escapeJson(String value) {
+    /**
+     * Escape a string for embedding in a JSON value, per RFC 8259 §7. Handles the standard
+     * shorthand escapes (\\, \", \n, \r, \t, \b, \f) and falls back to \\uXXXX for any other
+     * control character (suppression reasons can contain arbitrary user-supplied text, so
+     * dropping a raw control char into a JSON string would produce an invalid document).
+     */
+    static String escapeJson(String value) {
         if (value == null) {
             return "";
         }
-        return value.replace("\\", "\\\\")
-                   .replace("\"", "\\\"")
-                   .replace("\n", "\\n")
-                   .replace("\r", "\\r")
-                   .replace("\t", "\\t");
+        StringBuilder sb = new StringBuilder(value.length() + 8);
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\b':
+                    sb.append("\\b");
+                    break;
+                case '\f':
+                    sb.append("\\f");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\t':
+                    sb.append("\\t");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Derive the JSON report path from the text report path. Strips a trailing {@code .txt}
+     * extension (case-sensitive) and appends {@code .json}; if the input doesn't end in
+     * {@code .txt}, just appends {@code .json}. Centralised here so the three task / mojo
+     * call sites stay in lock-step.
+     */
+    public static File jsonReportFor(File textReport) {
+        String name = textReport.getName();
+        String stem = name.endsWith(".txt") ? name.substring(0, name.length() - ".txt".length()) : name;
+        return new File(textReport.getParentFile(), stem + ".json");
     }
 }

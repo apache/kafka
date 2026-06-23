@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -233,27 +232,4 @@ final class CascadeValidator {
         return new PublicApiViolation(original.getClassName(), "SUPPRESSED", description, original.getMemberName());
     }
 
-    /** Captures the {@code value()} of a {@code @SuppressKafkaInternalApiUsage} annotation. */
-    private static final class ReasonCaptureVisitor extends AnnotationVisitor {
-        private final Consumer<String> setter;
-        private boolean assigned;
-
-        ReasonCaptureVisitor(Consumer<String> setter) {
-            super(Opcodes.ASM9);
-            this.setter = setter;
-        }
-
-        @Override
-        public void visit(String name, Object value) {
-            if ("value".equals(name) && value instanceof String) {
-                setter.accept((String) value);
-                assigned = true;
-            }
-        }
-
-        @Override
-        public void visitEnd() {
-            if (!assigned) setter.accept(""); // value() omitted — treat as suppressed with empty reason
-        }
-    }
 }

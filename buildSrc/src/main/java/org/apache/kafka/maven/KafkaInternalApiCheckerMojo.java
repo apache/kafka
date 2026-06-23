@@ -132,8 +132,7 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
             reporter.writeTextReport(violations, suppressions, reportFile);
 
             // Also write JSON report
-            File jsonReport = new File(reportFile.getParentFile(),
-                reportFile.getName().replace(".txt", ".json"));
+            File jsonReport = ViolationReporter.jsonReportFor(reportFile);
             reporter.writeJsonReport(violations, suppressions, jsonReport);
 
             // Print summary to console
@@ -151,7 +150,7 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
                     getLog().warn(message);
                 }
             } else {
-                getLog().info("✅ No internal API usage found!");
+                getLog().info("No internal API usage found.");
             }
 
         } catch (IOException e) {

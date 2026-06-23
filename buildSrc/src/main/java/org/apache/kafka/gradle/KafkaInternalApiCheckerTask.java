@@ -116,8 +116,7 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
             reporter.writeTextReport(violations, suppressions, report);
 
             // Also write JSON report
-            File jsonReport = new File(report.getParentFile(),
-                report.getName().replace(".txt", ".json"));
+            File jsonReport = ViolationReporter.jsonReportFor(report);
             reporter.writeJsonReport(violations, suppressions, jsonReport);
 
             // Print summary to console
@@ -135,7 +134,7 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
                     getLogger().warn(message);
                 }
             } else {
-                getLogger().info("✅ No internal API usage found!");
+                getLogger().info("No internal API usage found.");
             }
 
         } catch (IOException e) {

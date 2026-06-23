@@ -105,6 +105,15 @@ final class ApiSurface {
         return false;
     }
 
+    /**
+     * Treat {@code $} purely as a Java-style nesting separator. This is correct for Java
+     * source-level nested classes and for the {@code @InterfaceAudience.Public} surface (which
+     * is itself defined in plain Java). It's a known oversimplification for Scala/Kotlin
+     * compiled output — e.g. Scala companion-object names ({@code Foo$}) or anonymous-function
+     * synthetics ({@code Foo$$anonfun$1}) — but those compiler-generated symbols are not part
+     * of the Public surface, so any normalization confusion they cause stays below the
+     * checker's prefix gate.
+     */
     private static String normalize(String name) {
         return name.indexOf('$') < 0 ? name : name.replace('$', '.');
     }
