@@ -197,10 +197,11 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
                                                                              final Bytes from, final Bytes to,
                                                                              final boolean forward, final boolean toInclusive) {
         final Snapshot snapshot = db.getSnapshot();
-        final ReadOptions readOptions = new ReadOptions();
-        readOptions.setSnapshot(snapshot);
+        ReadOptions readOptions = null;
         boolean released = false;
         try {
+            readOptions = new ReadOptions();
+            readOptions.setSnapshot(snapshot);
             final RocksIterator rocksIterator = db.newIterator(cf, readOptions);
             final ManagedKeyValueIterator<Bytes, byte[]> iter =
                 buildBaseIterator(rocksIterator, from, to, forward, toInclusive);
@@ -211,7 +212,9 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         } finally {
             if (!released) {
                 db.releaseSnapshot(snapshot);
-                readOptions.close();
+                if (readOptions != null) {
+                    readOptions.close();
+                }
             }
         }
     }
