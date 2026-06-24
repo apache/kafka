@@ -523,6 +523,8 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDLQRecordCopyEnabledWithErrorOnLogRead
 - testDLQRecordCopyEnabledWithMultipleLogReaderIterations
 - testDLQRecordCopyEnabledWithPartialLogReaderRecords
+- testDlqAfterStopFailsWithIllegalState
+- testDlqBeforeStartFailsWithIllegalState
 - testDlqCreateTopicFatalErrorFailsFuture
 - testDlqCreateTopicNoClusterNodesFailsFuture
 - testDlqCreateTopicPartialFailuresThenSucceeds
@@ -544,7 +546,7 @@ org.apache.kafka.server.share.dlq.ShareGroupDLQStateManagerTest:
 - testDlqTopicPrefixMismatchFailsValidation
 - testDlqTopicStartingWithUnderscoreFailsValidation
 - testDlqTwoEnqueuedRecordsBothComplete
-- testDlqValidationFailureCompletesFutureBeforeStart
+- testDlqValidationFailureCompletesFutureSynchronously
 - testMultipleAccumulatedHandlersInNodeRPCMap
 - testStartIsIdempotent
 - testStopWithoutStartIsNoOp
