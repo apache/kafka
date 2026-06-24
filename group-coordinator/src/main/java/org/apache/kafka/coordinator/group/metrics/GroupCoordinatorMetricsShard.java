@@ -79,10 +79,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      */
     private final TimelineGaugeCounter numOffsetsTimelineGaugeCounter;
 
-    /**
-     * The number of classic groups metric counter.
-     */
-    private final TimelineGaugeCounter numClassicGroupsTimelineCounter;
 
     /**
      * The topic partition.
@@ -96,7 +92,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     ) {
         Objects.requireNonNull(snapshotRegistry);
         numOffsetsTimelineGaugeCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
-        numClassicGroupsTimelineCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
 
         this.classicGroupGauges = Map.of();
         this.consumerGroupGauges = Map.of();
@@ -283,11 +278,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
     @Override
     public void commitUpTo(long offset) {
-        synchronized (numClassicGroupsTimelineCounter.timelineLong) {
-            long value = numClassicGroupsTimelineCounter.timelineLong.get(offset);
-            numClassicGroupsTimelineCounter.atomicLong.set(value);
-        }
-
         synchronized (numOffsetsTimelineGaugeCounter.timelineLong) {
             long value = numOffsetsTimelineGaugeCounter.timelineLong.get(offset);
             numOffsetsTimelineGaugeCounter.atomicLong.set(value);

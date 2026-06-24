@@ -35,9 +35,9 @@ import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
@@ -1006,6 +1006,8 @@ class ShareCoordinatorShardTest {
         CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> result2 = shard.readStateAndMaybeUpdateLeaderEpoch(request2);
 
         assertTrue(result2.records().isEmpty());    // Leader epoch -1 - no update.
+        assertEquals(Errors.NONE.code(), result2.response().results().get(0).partitions().get(0).errorCode());
+        assertEquals(2, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
 
         ReadShareGroupStateRequestData request3 = new ReadShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1019,6 +1021,8 @@ class ShareCoordinatorShardTest {
         CoordinatorResult<ReadShareGroupStateResponseData, CoordinatorRecord> result3 = shard.readStateAndMaybeUpdateLeaderEpoch(request3);
 
         assertTrue(result3.records().isEmpty());    // Same leader epoch - no update.
+        assertEquals(Errors.NONE.code(), result3.response().results().get(0).partitions().get(0).errorCode());
+        assertEquals(2, shard.getLeaderMapValue(SHARE_PARTITION_KEY));
         verify(shard.getMetricsShard()).record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME);
     }
 

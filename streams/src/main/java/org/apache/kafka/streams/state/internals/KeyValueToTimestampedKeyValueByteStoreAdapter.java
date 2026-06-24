@@ -106,6 +106,22 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         store.commit(changelogOffsets);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return store.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return store.committedOffset(partition);
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
+    }
+
     @Override
     public void close() {
         store.close();

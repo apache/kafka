@@ -33,6 +33,7 @@ import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.server.log.remote.storage.RetriableRemoteStorageException
 import org.apache.kafka.server.{PartitionFetchState, ReplicaState}
+import org.apache.kafka.server.util.ServerTestUtils
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -53,7 +54,7 @@ class AbstractFetcherThreadTest {
 
   @BeforeEach
   def cleanMetricRegistry(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   private def allMetricsNames: Set[String] = KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)

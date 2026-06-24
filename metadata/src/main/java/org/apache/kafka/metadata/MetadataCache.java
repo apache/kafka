@@ -36,7 +36,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -188,7 +187,7 @@ public interface MetadataCache extends ConfigRepository {
             clusterId,
             brokerToNodes.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
             partitionInfos,
-            Collections.emptySet(),
+            Set.of(),
             internalTopics,
             controllerNode
         );

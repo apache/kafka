@@ -16,28 +16,25 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareGroupConfigTest {
 
     @Test
     public void testConfigs() {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, true);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 200);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, 100);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, 10000);
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, 5);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG, 2);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, 9);
@@ -49,7 +46,6 @@ public class ShareGroupConfigTest {
 
         ShareGroupConfig config = createConfig(configs);
 
-        assertTrue(config.isShareGroupEnabled());
         assertEquals(200, config.shareGroupPartitionMaxRecordLocks());
         assertEquals(5, config.shareGroupDeliveryCountLimit());
         assertEquals(30000, config.shareGroupRecordLockDurationMs());
@@ -104,6 +100,20 @@ public class ShareGroupConfigTest {
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
+        // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is less than SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, 200);
+        configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 150);
+        assertEquals("group.share.partition.max.record.locks must be greater than or equal to group.share.min.partition.max.record.locks",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is greater than SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, 3000);
+        configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 4000);
+        assertEquals("group.share.max.partition.max.record.locks must be greater than or equal to group.share.partition.max.record.locks",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
         // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is out of bounds
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 50);
         assertEquals("Invalid value 50 for configuration group.share.partition.max.record.locks: Value must be at least 100",
@@ -124,8 +134,9 @@ public class ShareGroupConfigTest {
     }
 
     public static ShareGroupConfig createShareGroupConfig(
-        boolean shareGroupEnable,
         int shareGroupPartitionMaxRecordLocks,
+        int shareGroupMinPartitionMaxRecordLocks,
+        int shareGroupMaxPartitionMaxRecordLocks,
         int shareGroupDeliveryCountLimit,
         int shareGroupMinDeliveryCountLimit,
         int shareGroupMaxDeliveryCountLimit,
@@ -134,8 +145,9 @@ public class ShareGroupConfigTest {
         int shareGroupMaxRecordLockDurationMs
     ) {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, shareGroupEnable);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupPartitionMaxRecordLocks);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupMinPartitionMaxRecordLocks);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupMaxPartitionMaxRecordLocks);
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupDeliveryCountLimit);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupMinDeliveryCountLimit);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupMaxDeliveryCountLimit);
@@ -149,7 +161,6 @@ public class ShareGroupConfigTest {
     }
 
     private static ShareGroupConfig createConfig(Map<String, Object> configs) {
-        return new ShareGroupConfig(
-            new AbstractConfig(Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)), configs, false));
+        return ShareGroupConfig.fromProps(configs);
     }
 }

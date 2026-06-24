@@ -265,7 +265,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         members().forEach((memberId, member) ->
             records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
             records.add(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
@@ -313,7 +313,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
             .setAssignorName(defaultAssignor)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asShareGroupDescribeMember(

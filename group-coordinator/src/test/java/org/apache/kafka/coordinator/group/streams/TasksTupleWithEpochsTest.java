@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,6 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TasksTupleWithEpochsTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(TasksTupleWithEpochs.class);
+    private static final String GROUP_ID = "test-group";
     private static final String SUBTOPOLOGY_1 = "1";
     private static final String SUBTOPOLOGY_2 = "2";
     private static final String SUBTOPOLOGY_3 = "3";
@@ -97,7 +102,7 @@ public class TasksTupleWithEpochsTest {
             .setPartitions(Arrays.asList(7, 8, 9)));
 
         TasksTupleWithEpochs tuple = TasksTupleWithEpochs.fromCurrentAssignmentRecord(
-            activeTasks, standbyTasks, warmupTasks, 100
+            LOG, GROUP_ID, activeTasks, standbyTasks, warmupTasks, 100
         );
 
         assertEquals(
@@ -133,7 +138,7 @@ public class TasksTupleWithEpochsTest {
 
         int memberEpoch = 100;
         TasksTupleWithEpochs tuple = TasksTupleWithEpochs.fromCurrentAssignmentRecord(
-            activeTasks, List.of(), List.of(), memberEpoch
+            LOG, GROUP_ID, activeTasks, List.of(), List.of(), memberEpoch
         );
 
         // Should use member epoch as default
@@ -152,9 +157,16 @@ public class TasksTupleWithEpochsTest {
             .setPartitions(Arrays.asList(1, 2, 3))
             .setAssignmentEpochs(Arrays.asList(10, 11))); // Only 2 epochs for 3 partitions
 
-        assertThrows(IllegalStateException.class, () ->
-            TasksTupleWithEpochs.fromCurrentAssignmentRecord(activeTasks, List.of(), List.of(), 100)
-        );
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TasksTupleWithEpochs.class)) {
+            TasksTupleWithEpochs tuple = TasksTupleWithEpochs.fromCurrentAssignmentRecord(LOG, GROUP_ID, activeTasks, List.of(), List.of(), 100);
+            assertEquals(
+                Map.of(SUBTOPOLOGY_1, Map.of(1, 100, 2, 100, 3, 100)),
+                tuple.activeTasksWithEpochs()
+            );
+            assertEquals(1, appender.getMessages("ERROR").stream()
+                .filter(msg -> msg.contains("[GroupId " + GROUP_ID + "] Size of assignment epochs 2 is not equal to partitions 3 for subtopology 1."))
+                .count());
+        }
     }
 
     @Test

@@ -1,6 +1,6 @@
 ---
 title: Application Reset Tool
-description: 
+description: Kafka Streams application reset tool usage and limitations.
 weight: 13
 tags: ['kafka', 'docs']
 aliases: 
@@ -56,7 +56,7 @@ Prerequisites
 
 # Step 1: Run the application reset tool
 
-If you are using **streams rebalance protocol** (available since AK 4.2), use the [Streams groups CLI](kafka-streams-group-sh#reset-offsets).
+If you are using **streams rebalance protocol** (available since AK 4.2), use the [Streams groups CLI](/{version}/streams/developer-guide/kafka-streams-group-sh#reset-offsets).
 
 If you are using **classic rebalance protocol** , run the classic application reset tool as described below.
 
@@ -131,7 +131,7 @@ All the other parameters can be combined as needed. For example, if you want to 
 
 For a complete application reset, you must delete the application's local state directory on any machines where the application instance was run. You must do this before restarting an application instance on the same machine. You can use either of these methods:
 
-  * The API method `KafkaStreams#cleanUp()` in your application code.
+  * The API method `KafkaStreams#cleanUp()` removes local state, but it may retain the application state directory if only expected metadata files remain, such as `kafka-streams-process-metadata` and/or `.lock`.
   * Manually delete the corresponding local state directory (default location: `/${java.io.tmpdir}/kafka-streams/<application.id>`). For more information, see [Streams](/{version}/javadoc/org/apache/kafka/streams/StreamsConfig.html#STATE_DIR_CONFIG) javadocs.
 
 

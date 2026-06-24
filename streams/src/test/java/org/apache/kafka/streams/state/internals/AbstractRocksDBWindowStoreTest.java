@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
-    private static final String STORE_NAME = "rocksDB window store";
+    private static final String STORE_NAME = "rocksDB-windowstore";
     private static final String METRICS_SCOPE = "test-state-id";
 
     private final KeyValueSegments segments =
@@ -58,7 +58,9 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
     enum StoreType {
         RocksDBWindowStore,
         RocksDBTimeOrderedWindowStoreWithIndex,
-        RocksDBTimeOrderedWindowStoreWithoutIndex
+        RocksDBTimeOrderedWindowStoreWithoutIndex,
+        RocksDBTimeOrderedWindowStoreWithHeadersWithIndex,
+        RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndex
     }
 
     abstract StoreType storeType();
@@ -87,7 +89,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
                 return Stores.windowStoreBuilder(
                         new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
                                 retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
-                                true),
+                                true, false),
                         keySerde,
                         valueSerde
                 ).build();
@@ -97,7 +99,27 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
                 return Stores.windowStoreBuilder(
                         new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
                                 retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
-                                false),
+                                false, false),
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedWindowStoreWithHeadersWithIndex: {
+                final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+                return Stores.windowStoreBuilder(
+                        new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                                retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                                true, true),
+                        keySerde,
+                        valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndex: {
+                final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+                return Stores.windowStoreBuilder(
+                        new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                                retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                                false, true),
                         keySerde,
                         valueSerde
                 ).build();
@@ -602,7 +624,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         windowStore.close();
 
         // remove local store image
-        Utils.delete(baseDir);
+        Utils.delete(new File(baseDir, STORE_NAME));
 
         windowStore = buildWindowStore(RETENTION_PERIOD,
                 WINDOW_SIZE,

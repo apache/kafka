@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -36,7 +37,14 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -68,8 +76,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -128,6 +138,8 @@ public class MeteredSessionStoreWithHeadersTest {
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
         when(innerStore.name()).thenReturn(STORE_NAME);
+        lenient().when(context.recordContext()).thenReturn(new ProcessorRecordContext(
+            0L, 0L, 0, "topic", new RecordHeaders()));
     }
 
     private void init() {
@@ -462,7 +474,7 @@ public class MeteredSessionStoreWithHeadersTest {
 
         store.recordRestoreTime(100L);
 
-        final Map<MetricName, ? extends org.apache.kafka.common.Metric> allMetrics = metrics.metrics();
+        final Map<MetricName, ? extends Metric> allMetrics = metrics.metrics();
         final List<MetricName> restoreMetrics = allMetrics.keySet().stream()
             .filter(metricName -> metricName.name().equals("restore-rate"))
             .collect(Collectors.toList());
@@ -732,5 +744,334 @@ public class MeteredSessionStoreWithHeadersTest {
         } catch (final NullPointerException expected) {
             // Expected
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldHandleWindowRangeQueryWithKeyAndUnwrapHeaders() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
+
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+            QueryResult.forResult(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) rawResult);
+
+        final WindowRangeQuery<String, String> query = WindowRangeQuery.withKey(KEY);
+        final QueryResult<KeyValueIterator<Windowed<String>, String>> result =
+            store.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        final KeyValueIterator<Windowed<String>, String> iterator = result.getResult();
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, String> next = iterator.next();
+        assertEquals(VALUE, next.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldFailWindowRangeQueryWithoutKey() {
+        setUp();
+        init();
+
+        final WindowRangeQuery<String, String> query = WindowRangeQuery.withWindowStartRange(
+            java.time.Instant.ofEpochMilli(0L),
+            java.time.Instant.ofEpochMilli(0L)
+        );
+        final QueryResult<KeyValueIterator<Windowed<String>, String>> result =
+            store.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isFailure());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldDelegateUnknownQueryToWrappedStore() {
+        setUp();
+        init();
+
+        final QueryResult<Void> expectedResult = QueryResult.forFailure(
+            FailureReason.UNKNOWN_QUERY_TYPE, "unknown");
+        when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) expectedResult);
+
+        final Query<Void> unknownQuery = new Query<Void>() { };
+        final QueryResult<Void> result =
+            store.query(unknownQuery, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isFailure());
+    }
+
+    // --- Tests verifying headers from value are used to deserialize keys ---
+
+    private static final Headers HEADERS = new RecordHeaders().add("key1", "value1".getBytes());
+    private static final AggregationWithHeaders<String> AGG_WITH_HEADERS = AggregationWithHeaders.make(VALUE, HEADERS);
+    private static final byte[] SERIALIZED_VALUE = new AggregationWithHeadersSerializer<>(Serdes.String().serializer())
+        .serialize(CHANGELOG_TOPIC, AGG_WITH_HEADERS);
+
+    @SuppressWarnings("unchecked")
+    private MeteredSessionStoreWithHeaders<String, String> createStoreWithMockSerdes(
+        final Serde<String> keySerde
+    ) {
+        final Deserializer<String> keyDeserializer = mock(Deserializer.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Deserializer<AggregationWithHeaders<String>> valueDeserializer = mock(Deserializer.class);
+        final Serde<AggregationWithHeaders<String>> valueSerde = mock(Serde.class);
+
+        lenient().when(keySerde.deserializer()).thenReturn(keyDeserializer);
+        lenient().when(keySerde.serializer()).thenReturn(keySerializer);
+        lenient().when(valueSerde.deserializer()).thenReturn(valueDeserializer);
+
+        lenient().when(keySerializer.serialize(any(), any(RecordHeaders.class), any())).thenReturn(KEY.getBytes());
+
+        lenient().when(valueDeserializer.deserialize(any(), any(RecordHeaders.class), eq(SERIALIZED_VALUE)))
+            .thenReturn(AGG_WITH_HEADERS);
+
+        lenient().when(keyDeserializer.deserialize(any(), eq(HEADERS), eq(KEY.getBytes())))
+            .thenReturn(KEY);
+
+        when(context.headers()).thenReturn(new RecordHeaders());
+
+        final MeteredSessionStoreWithHeaders<String, String> mockStore = new MeteredSessionStoreWithHeaders<>(
+            innerStore,
+            STORE_TYPE,
+            keySerde,
+            valueSerde,
+            new MockTime()
+        );
+        mockStore.init(context, mockStore);
+        return mockStore;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInFetch() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.fetch(any(Bytes.class)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInBackwardFetch() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.backwardFetch(any(Bytes.class)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFetch(KEY);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInFetchRange() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.fetch(any(Bytes.class), any(Bytes.class)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY, KEY);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInBackwardFetchRange() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.backwardFetch(any(Bytes.class), any(Bytes.class)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFetch(KEY, KEY);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInFindSessions() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.findSessions(any(Bytes.class), eq(0L), eq(100L)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+            store.findSessions(KEY, 0, 100);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInBackwardFindSessions() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.backwardFindSessions(any(Bytes.class), eq(0L), eq(100L)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+            store.backwardFindSessions(KEY, 0, 100);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInFindSessionsRange() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.findSessions(any(Bytes.class), any(Bytes.class), eq(0L), eq(100L)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+            store.findSessions(KEY, KEY, 0, 100);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInBackwardFindSessionsRange() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.backwardFindSessions(any(Bytes.class), any(Bytes.class), eq(0L), eq(100L)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+            store.backwardFindSessions(KEY, KEY, 0, 100);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldUseHeadersFromValueToDeserializeKeyInFindSessionsByTime() {
+        setUp();
+        final Serde<String> keySerde = mock(Serde.class);
+        final MeteredSessionStoreWithHeaders<String, String> store = createStoreWithMockSerdes(keySerde);
+
+        when(innerStore.findSessions(eq(0L), eq(100L)))
+            .thenReturn(new KeyValueIteratorStub<>(
+                List.of(KeyValue.pair(WINDOWED_KEY_BYTES, SERIALIZED_VALUE)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator =
+            store.findSessions(0, 100);
+
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.peekNextKey().key());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> result = iterator.next();
+        assertEquals(KEY, result.key.key());
+        assertEquals(AGG_WITH_HEADERS, result.value);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        verify(keySerde.deserializer()).deserialize(any(), eq(HEADERS), eq(KEY.getBytes()));
     }
 }

@@ -26,9 +26,9 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
@@ -483,18 +483,51 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testTopologyDescriptionPluginEpochs() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // KIP-1331: both fields default to -1, meaning "no topology description ever stored / failed".
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(7);
+        group.setFailedDescriptionTopologyEpoch(5);
+        assertEquals(7, group.storedDescriptionTopologyEpoch());
+        assertEquals(5, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(-1);
+        group.setFailedDescriptionTopologyEpoch(-1);
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testCurrentTopologyEpochReflectsLatestTopology() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // No topology yet → -1.
+        assertEquals(-1, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(3, Map.of()));
+        assertEquals(3, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(4, Map.of()));
+        assertEquals(4, group.currentTopologyEpoch());
+    }
+
+    @Test
     public void testGroupState() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         assertEquals(StreamsGroupState.EMPTY, streamsGroup.state());
 
         StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .build();
 
         streamsGroup.updateMember(member1);
-        streamsGroup.setGroupEpoch(1);
+        streamsGroup.setGroupEpoch(2);
 
         assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
@@ -508,24 +541,24 @@ public class StreamsGroupTest {
 
         StreamsGroupMember member2 = new StreamsGroupMember.Builder("member2")
             .setState(MemberState.STABLE)
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .build();
 
         streamsGroup.updateMember(member2);
-        streamsGroup.setGroupEpoch(2);
+        streamsGroup.setGroupEpoch(3);
 
         assertEquals(MemberState.STABLE, member2.state());
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
 
-        streamsGroup.setTargetAssignmentEpoch(2);
+        streamsGroup.setTargetAssignmentMetadata(3, 12345L);
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
 
         member1 = new StreamsGroupMember.Builder(member1)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         streamsGroup.updateMember(member1);
@@ -536,8 +569,8 @@ public class StreamsGroupTest {
         // Member 2 is not stable so the group stays in reconciling state.
         member2 = new StreamsGroupMember.Builder(member2)
             .setState(MemberState.UNREVOKED_TASKS)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         streamsGroup.updateMember(member2);
@@ -547,8 +580,8 @@ public class StreamsGroupTest {
 
         member2 = new StreamsGroupMember.Builder(member2)
             .setState(MemberState.STABLE)
-            .setMemberEpoch(2)
-            .setPreviousMemberEpoch(1)
+            .setMemberEpoch(3)
+            .setPreviousMemberEpoch(2)
             .build();
 
         streamsGroup.updateMember(member2);
@@ -567,8 +600,8 @@ public class StreamsGroupTest {
         MockTime time = new MockTime();
         StreamsGroup group = createStreamsGroup("group-foo");
 
-        // Group epoch starts at 0.
-        assertEquals(0, group.groupEpoch());
+        // Group epoch starts at 1.
+        assertEquals(1, group.groupEpoch());
 
         // The refresh time deadline should be empty when the group is created or loaded.
         assertTrue(group.hasMetadataExpired(time.milliseconds()));
@@ -802,7 +835,7 @@ public class StreamsGroupTest {
         group.setTopology(new StreamsTopology(1, Map.of()));
         group.setValidatedTopologyEpoch(1);
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
-        group.setTargetAssignmentEpoch(1);
+        group.setTargetAssignmentMetadata(1, 12345L);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(1)
             .build());
@@ -856,7 +889,7 @@ public class StreamsGroupTest {
         assertDoesNotThrow(streamsGroup::validateDeleteGroup);
 
         StreamsGroupMember member1 = new StreamsGroupMember.Builder("member1")
-            .setMemberEpoch(1)
+            .setMemberEpoch(2)
             .setPreviousMemberEpoch(0)
             .setState(MemberState.STABLE)
             .build();
@@ -872,12 +905,12 @@ public class StreamsGroupTest {
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
 
-        streamsGroup.setGroupEpoch(1);
+        streamsGroup.setGroupEpoch(2);
 
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
 
-        streamsGroup.setTargetAssignmentEpoch(1);
+        streamsGroup.setTargetAssignmentMetadata(2, 12345L);
 
         assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
@@ -914,7 +947,7 @@ public class StreamsGroupTest {
         group.setTopology(new StreamsTopology(1, Map.of()));
         group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
         group.setValidatedTopologyEpoch(1);
-        group.setTargetAssignmentEpoch(1);
+        group.setTargetAssignmentMetadata(1, 12345L);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(1)
             .setPreviousMemberEpoch(0)
@@ -1139,7 +1172,7 @@ public class StreamsGroupTest {
 
         group.setGroupEpoch(2);
         group.setTopology(new StreamsTopology(2, subtopologies));
-        group.setTargetAssignmentEpoch(2);
+        group.setTargetAssignmentMetadata(2, 12345L);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(2)
             .setPreviousMemberEpoch(1)
@@ -1198,7 +1231,7 @@ public class StreamsGroupTest {
         group.setGroupEpoch(3);
         group.setTopology(new StreamsTopology(2, subtopologies));
         group.setConfiguredTopology(new ConfiguredTopology(3, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
-        group.setTargetAssignmentEpoch(3);
+        group.setTargetAssignmentMetadata(3, 12345L);
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);
@@ -1225,7 +1258,7 @@ public class StreamsGroupTest {
         group.setGroupEpoch(4);
         group.setTopology(new StreamsTopology(4, subtopologies));
         // No ConfiguredTopology set, so should fallback to StreamsTopology
-        group.setTargetAssignmentEpoch(4);
+        group.setTargetAssignmentMetadata(4, 12345L);
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);

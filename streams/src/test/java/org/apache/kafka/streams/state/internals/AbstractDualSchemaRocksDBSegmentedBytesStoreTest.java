@@ -28,9 +28,9 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -169,36 +169,32 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> getBytesStore() {
         switch (schemaType()) {
             case WindowSchemaWithIndex:
-                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         storeName,
-                        METRICS_SCOPE,
                         retention,
-                        segmentInterval,
-                        true
+                        true,
+                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case WindowSchemaWithoutIndex:
-                return new RocksDBTimeOrderedWindowSegmentedBytesStore(
+                return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
                         storeName,
-                        METRICS_SCOPE,
                         retention,
-                        segmentInterval,
-                        false
+                        false,
+                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithIndex:
-                return new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                        storeName,
-                        METRICS_SCOPE,
-                        retention,
-                        segmentInterval,
-                        true
+                return new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+                    storeName,
+                    retention,
+                    true,
+                    new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithoutIndex:
-                return new RocksDBTimeOrderedSessionSegmentedBytesStore(
-                        storeName,
-                        METRICS_SCOPE,
-                        retention,
-                        segmentInterval,
-                        false
+                return new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
+                    storeName,
+                    retention,
+                    false,
+                    new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             default:
                 throw new IllegalStateException("Unknown SchemaType: " + schemaType());
@@ -854,28 +850,28 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), expectedValue4);
 
         // Record expired as timestampFromRawKey = 1000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value1 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value1 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key1, windows[0].start(), windows[0].end());
         assertNull(value1);
 
         // Record expired as timestampFromRawKey = 1000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value2 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value2 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key1, windows[1].start(), windows[1].end());
         assertNull(value2);
 
         // expired record
         // timestampFromRawKey = 1500 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value3 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value3 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key2, windows[2].start(), windows[2].end());
         assertNull(value3);
 
         // only non-expired record
         // timestampFromRawKey = 60,000 while observedStreamTime = 60,000 and retention = 1000.
-        final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key3, windows[3].start(), windows[3].end());
         assertEquals(Bytes.wrap(value4), Bytes.wrap(expectedValue4));
 
-        final byte[] noValue = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+        final byte[] noValue = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSession(
             key3, 2000, 3000);
         assertNull(noValue);
     }
@@ -902,7 +898,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         // Fetch point
         assertEquals(
             Collections.singletonList(KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L)),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 100L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 100L))
         );
 
         // Fetch partial boundary
@@ -911,7 +907,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 200L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 200L))
         );
 
         // Fetch partial
@@ -920,11 +916,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(99L, 201L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(99L, 201L))
         );
 
         // Fetch partial
-        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(101L, 199L)) {
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(101L, 199L)) {
             assertTrue(toListAndCloseIterator(values).isEmpty());
         }
 
@@ -935,7 +931,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L),
                 KeyValue.pair(new Windowed<>(keyC, sessionWindows[2]), 200L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 300L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(100L, 300L))
         );
 
         // Fetch all
@@ -945,13 +941,13 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L),
                 KeyValue.pair(new Windowed<>(keyC, sessionWindows[2]), 200L)
             ),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(99L, 301L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(99L, 301L))
         );
 
         // Fetch all
         assertEquals(
             Collections.singletonList(KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)),
-            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(101L, 299L))
+            toListAndCloseIterator(((RocksDBTimeOrderedSessionSegmentedBytesStore<?>) bytesStore).fetchSessions(101L, 299L))
         );
     }
 
@@ -1629,6 +1625,57 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         bytesStore.close();
     }
 
+    @Test
+    public void shouldMigrateExistingPositionFromFile() {
+        final Position position = Position.fromMap(mkMap(mkEntry("topic", mkMap(mkEntry(0, 1L)))));
+        final OffsetCheckpoint positionCheckpoint = new OffsetCheckpoint(new File(stateDir, storeName + ".position"));
+        StoreQueryUtils.checkpointPosition(positionCheckpoint, position);
+
+        final AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> bytesStore = getBytesStore();
+
+        // store.init migrates the position from the legacy checkpoint file into the store.
+        bytesStore.init(context, bytesStore);
+        assertEquals(position, bytesStore.getPosition());
+        bytesStore.close();
+    }
+
+    @Test
+    public void shouldRestoreMergedPositionFromMultipleSegmentsAfterRestart() {
+        final AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> bytesStore = getBytesStore();
+        // 0 segments initially.
+        bytesStore.init(context, bytesStore);
+
+        // Writes record to different partitions
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[1])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[2])), serializeValue(10));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 1, "t1", new RecordHeaders()));
+        bytesStore.put(serializeKey(new Windowed<>("a", windows[3])), serializeValue(10));
+        final Position expected = Position.fromMap(mkMap(mkEntry("t1", mkMap(mkEntry(0, 2L), mkEntry(1, 3L)))));
+
+        // Each open segment should share the same position.
+        for (final KeyValueSegment segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
+
+        // Persist the merged position and simulate a full store restart.
+        bytesStore.commit(Map.of());
+        bytesStore.segments.writePosition();
+        bytesStore.close();
+        bytesStore.init(context, bytesStore);
+
+        // The store-level position should be restored from the merged position.
+        assertEquals(expected, bytesStore.getPosition());
+
+        // Restored segments should all have the same merged position.
+        for (final KeyValueSegment segment : bytesStore.getSegments()) {
+            assertEquals(expected, segment.getPosition());
+        }
+    }
+
     private Set<String> segmentDirs() {
         final File windowDir = new File(stateDir, storeName);
 
@@ -1647,9 +1694,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
             if (changeLog) {
-                return WindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
+                return WindowKeySchema.toStoreKeyBinary(key, seq, new RecordHeaders(), stateSerdes);
             }
-            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
+            return TimeFirstWindowKeySchema.toStoreKeyBinary(key, seq, new RecordHeaders(), stateSerdes);
         } else if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
             if (changeLog) {
                 return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
@@ -1663,7 +1710,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
     private Bytes serializeKeyForIndex(final Windowed<String> key) {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (getIndexSchema() instanceof KeyFirstWindowKeySchema) {
-            return KeyFirstWindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
+            return KeyFirstWindowKeySchema.toStoreKeyBinary(key, 0, new RecordHeaders(), stateSerdes);
         } else if (getIndexSchema() instanceof KeyFirstSessionKeySchema) {
             return Bytes.wrap(KeyFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
         } else {
@@ -1689,6 +1736,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                             next.key.get(),
                             windowSizeForTimeWindow,
                             stateSerdes.keyDeserializer(),
+                            new RecordHeaders(),
                             stateSerdes.topic()
                         ),
                         stateSerdes.valueDeserializer().deserialize("dummy", next.value)

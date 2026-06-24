@@ -181,6 +181,9 @@ public class PlaintextConsumerFetchTest {
             var outOfRangePos = totalRecords + 17; // arbitrary, much higher offset
             consumer.seek(tp, outOfRangePos);
             // assert that poll resets to the ending position
+            // use pollUntilTrue because AsyncConsumer with manual assignment sends fewer
+            // fetch requests per poll compared to the fix before KAFKA-20426, so the
+            // offset reset from out-of-range may not complete in a single poll() call
             pollUntilTrue(consumer, () -> consumer.position(tp) == totalRecords,
                 "Consumer position should advance to the latest end offset " + totalRecords);
             sendRecords(producer, tp, totalRecords, totalRecords);

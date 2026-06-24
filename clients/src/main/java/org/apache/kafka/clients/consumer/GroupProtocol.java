@@ -18,6 +18,13 @@ package org.apache.kafka.clients.consumer;
 
 import java.util.Locale;
 
+/**
+ * Enum representing the supported consumer group protocols.
+ * <ul>
+ *     <li>{@link #CLASSIC} - The Classic consumer group protocol (pre KIP-848)</li>
+ *     <li>{@link #CONSUMER} - The Consumer rebalance protocol (KIP-848)</li>
+ * </ul>
+ */
 public enum GroupProtocol {
     /** Classic group protocol.  */
     CLASSIC("CLASSIC"),
@@ -36,6 +43,10 @@ public enum GroupProtocol {
 
     /**
      * Case-insensitive group protocol lookup by string name.
+     *
+     * @param name The name of the group protocol
+     * @return The corresponding GroupProtocol
+     * @throws IllegalArgumentException If the name does not match any protocol
      */
     public static GroupProtocol of(final String name) {
         return GroupProtocol.valueOf(name.toUpperCase(Locale.ROOT));

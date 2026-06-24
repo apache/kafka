@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 
-class KeyValueSegment extends RocksDBStore implements Segment {
+public class KeyValueSegment extends RocksDBStore implements Segment {
     private final long id;
 
     KeyValueSegment(final String segmentName,

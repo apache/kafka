@@ -20,13 +20,14 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.record.internal.FileLogInputStream;
 import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.util.Scheduler;
 
 import org.slf4j.Logger;
@@ -321,7 +322,7 @@ public class LocalLog {
      */
     public void close() {
         maybeHandleIOException(
-            () -> "Error while renaming dir for " + topicPartition + " in dir " + dir.getParent(),
+            () -> "Error while closing log segments for " + topicPartition + " in dir " + dir.getParent(),
             () -> {
                 checkIfMemoryMappedBufferClosed();
                 segments.close();
@@ -540,7 +541,9 @@ public class LocalLog {
         List<FetchResponseData.AbortedTransaction> abortedTransactions = new ArrayList<>();
         Consumer<List<AbortedTxn>> accumulator = abortedTxns -> {
             for (AbortedTxn abortedTxn : abortedTxns)
-                abortedTransactions.add(abortedTxn.asAbortedTransaction());
+                abortedTransactions.add(new FetchResponseData.AbortedTransaction()
+                    .setProducerId(abortedTxn.producerId())
+                    .setFirstOffset(abortedTxn.firstOffset()));
         };
         collectAbortedTransactions(startOffset, upperBoundOffset, segment, accumulator);
         return new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
@@ -738,8 +741,8 @@ public class LocalLog {
         return topicPartition.topic() + "-" + topicPartition.partition();
     }
 
-    private static KafkaException exception(File dir) throws IOException {
-        return new KafkaException("Found directory " + dir.getCanonicalPath() + ", '" + dir.getName() + "' is not in the form of " +
+    private static KafkaException exception(File dir) {
+        return new KafkaException("Found directory " + dir.getAbsolutePath() + ", '" + dir.getName() + "' is not in the form of " +
                 "topic-partition or topic-partition.uniqueId-delete (if marked for deletion).\n" +
                 "Kafka's log directories (and children) should only contain Kafka topic data.");
     }
@@ -747,7 +750,7 @@ public class LocalLog {
     /**
      * Parse the topic and partition out of the directory name of a log
      */
-    public static TopicPartition parseTopicPartitionName(File dir) throws IOException {
+    public static TopicPartition parseTopicPartitionName(File dir) {
         if (dir == null) {
             throw new KafkaException("dir should not be null");
         }
@@ -1034,9 +1037,10 @@ public class LocalLog {
         // delete the old files
         List<LogSegment> deletedNotReplaced = new ArrayList<>();
         for (LogSegment segment : sortedOldSegments) {
-            // remove the index entry
-            if (segment.baseOffset() != sortedNewSegments.get(0).baseOffset()) {
+            // remove the index entry; skip removal for base offsets that a new segment is replacing in-place
+            if (!newSegmentBaseOffsets.contains(segment.baseOffset())) {
                 existingSegments.remove(segment.baseOffset());
+                deletedNotReplaced.add(segment);
             }
             deleteSegmentFiles(
                     List.of(segment),
@@ -1047,9 +1051,6 @@ public class LocalLog {
                     scheduler,
                     logDirFailureChannel,
                     logPrefix);
-            if (!newSegmentBaseOffsets.contains(segment.baseOffset())) {
-                deletedNotReplaced.add(segment);
-            }
         }
 
         // okay we are safe now, remove the swap suffix

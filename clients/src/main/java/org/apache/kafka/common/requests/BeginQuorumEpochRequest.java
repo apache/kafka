@@ -23,7 +23,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.Collections;
+import java.util.List;
+
 
 public class BeginQuorumEpochRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<BeginQuorumEpochRequest> {
@@ -75,10 +76,10 @@ public class BeginQuorumEpochRequest extends AbstractRequest {
     ) {
         return new BeginQuorumEpochRequestData()
                    .setClusterId(clusterId)
-                   .setTopics(Collections.singletonList(
+                   .setTopics(List.of(
                        new BeginQuorumEpochRequestData.TopicData()
                            .setTopicName(topicPartition.topic())
-                           .setPartitions(Collections.singletonList(
+                           .setPartitions(List.of(
                                new BeginQuorumEpochRequestData.PartitionData()
                                    .setPartitionIndex(topicPartition.partition())
                                    .setLeaderEpoch(leaderEpoch)

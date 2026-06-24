@@ -19,7 +19,7 @@ package org.apache.kafka.connect.connector;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
-import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.errors.ConnectException;
 
 import java.util.List;
@@ -43,7 +43,7 @@ import java.util.Map;
  * Tasks.
  * </p>
  */
-public abstract class Connector implements Versioned {
+public abstract class Connector implements ConnectPlugin {
 
     protected ConnectorContext context;
 
@@ -149,5 +149,6 @@ public abstract class Connector implements Versioned {
      * Define the configuration for the connector.
      * @return The ConfigDef for this connector; may not be null.
      */
+    @Override
     public abstract ConfigDef config();
 }

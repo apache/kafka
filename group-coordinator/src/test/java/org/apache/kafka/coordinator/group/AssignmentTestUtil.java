@@ -71,6 +71,30 @@ public class AssignmentTestUtil {
         return Collections.unmodifiableMap(assignment);
     }
 
+    public static Map.Entry<Uuid, Map<Integer, Integer>> mkTopicAssignmentWithEpochs(
+        Uuid topicId,
+        int epoch,
+        Integer... partitions
+    ) {
+        Map<Integer, Integer> partitionEpochs = new HashMap<>();
+        for (Integer partition : partitions) {
+            partitionEpochs.put(partition, epoch);
+        }
+        return new AbstractMap.SimpleEntry<>(topicId, partitionEpochs);
+    }
+
+    @SafeVarargs
+    public static Map<Uuid, Map<Integer, Integer>> mkAssignmentWithEpochs(
+        Map.Entry<Uuid, Map<Integer, Integer>>... entries
+    ) {
+        Map<Uuid, Map<Integer, Integer>> assignment = new HashMap<>();
+        for (Map.Entry<Uuid, Map<Integer, Integer>> entry : entries) {
+            assignment.computeIfAbsent(entry.getKey(), k -> new HashMap<>()).putAll(entry.getValue());
+        }
+        assignment.replaceAll((id, innerMap) -> Collections.unmodifiableMap(innerMap));
+        return Collections.unmodifiableMap(assignment);
+    }
+
     /**
      * Verifies that the expected assignment is equal to the computed assignment for every member in the group.
      */

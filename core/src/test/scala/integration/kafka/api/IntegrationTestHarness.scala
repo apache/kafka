@@ -257,6 +257,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     val streamsRebalanceData = new StreamsRebalanceData(
       UUID.randomUUID(),
       Optional.empty(),
+      Optional.empty(),
       util.Map.of(
         "subtopology-0", new StreamsRebalanceData.Subtopology(
           inputTopics.asJava,
@@ -265,7 +266,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
           changelogTopics.map(c => (c, new StreamsRebalanceData.TopicInfo(Optional.empty(), boxed, util.Map.of()))).toMap.asJava,
           util.Set.of()
         )),
-      Map.empty[String, String].asJava
+      Map.empty[String, String].asJava,
+      () => util.Map.of[StreamsRebalanceData.TaskId, java.lang.Long](),
+      () => util.Map.of[StreamsRebalanceData.TaskId, java.lang.Long]()
     )
 
     val consumer = createStreamsConsumer(

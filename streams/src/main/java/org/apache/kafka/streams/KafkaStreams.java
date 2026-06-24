@@ -36,10 +36,10 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -489,7 +489,10 @@ public class KafkaStreams implements AutoCloseable {
             closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
-        deadThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        // Use DEFAULT so the consumer layer decides: classic protocol maps to REMAIN_IN_GROUP
+        // (avoiding an unnecessary rebalance before the replacement thread joins), while Streams
+        // protocol adapts to static vs dynamic membership.
+        deadThread.shutdown(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
         addStreamThread();
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
@@ -1009,6 +1012,7 @@ public class KafkaStreams implements AutoCloseable {
         totalCacheSize = totalCacheSize(applicationConfigs);
         final int numStreamThreads = topologyMetadata.numStreamThreads(applicationConfigs);
         final long cacheSizePerThread = cacheSizePerThread(numStreamThreads);
+        final long maxUncommittedBytesPerThread = maxUncommittedBytesPerThread(numStreamThreads);
 
         GlobalStreamThread.State globalThreadState = null;
         if (hasGlobalTopology) {
@@ -1019,6 +1023,7 @@ public class KafkaStreams implements AutoCloseable {
                 clientSupplier.getGlobalConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
                 cacheSizePerThread,
+                maxUncommittedBytesPerThread,
                 streamsMetrics,
                 time,
                 globalThreadId,
@@ -1036,9 +1041,11 @@ public class KafkaStreams implements AutoCloseable {
             globalStreamThread.setStateListener(streamStateListener);
         }
 
-        queryableStoreProvider = new QueryableStoreProvider(globalStateStoreProvider);
+        queryableStoreProvider = new QueryableStoreProvider(
+            globalStateStoreProvider,
+            applicationConfigs::defaultInteractiveQueryIsolationLevel);
         for (int i = 1; i <= numStreamThreads; i++) {
-            createAndAddStreamThread(cacheSizePerThread, i);
+            createAndAddStreamThread(cacheSizePerThread, maxUncommittedBytesPerThread, i);
         }
 
         stateDirCleaner = setupStateDirCleaner();
@@ -1061,7 +1068,9 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private StreamThread createAndAddStreamThread(final long cacheSizePerThread, final int threadIdx) {
+    private StreamThread createAndAddStreamThread(final long cacheSizePerThread,
+                                                  final long maxUncommittedBytesPerThread,
+                                                  final int threadIdx) {
         final StreamThread streamThread = StreamThread.create(
             topologyMetadata,
             applicationConfigs,
@@ -1073,6 +1082,7 @@ public class KafkaStreams implements AutoCloseable {
             time,
             streamsMetadataState,
             cacheSizePerThread,
+            maxUncommittedBytesPerThread,
             stateDirectory,
             delegatingStateRestoreListener,
             delegatingStandbyUpdateListener,
@@ -1119,12 +1129,14 @@ public class KafkaStreams implements AutoCloseable {
                 final int threadIdx = nextThreadIndex();
                 final int numLiveThreads = numLiveStreamThreads();
                 final long cacheSizePerThread = cacheSizePerThread(numLiveThreads + 1);
+                final long maxUncommittedBytesPerThread = maxUncommittedBytesPerThread(numLiveThreads + 1);
                 log.info("Adding StreamThread-{}, there will now be {} live threads and the new cache size per thread is {}",
                          threadIdx, numLiveThreads + 1, cacheSizePerThread);
                 resizeThreadCache(cacheSizePerThread);
+                resizeMaxUncommittedBytes(maxUncommittedBytesPerThread);
                 // Creating thread should hold the lock in order to avoid duplicate thread index.
                 // If the duplicate index happen, the metadata of thread may be duplicate too.
-                streamThread = createAndAddStreamThread(cacheSizePerThread, threadIdx);
+                streamThread = createAndAddStreamThread(cacheSizePerThread, maxUncommittedBytesPerThread, threadIdx);
             }
 
             synchronized (stateLock) {
@@ -1138,6 +1150,7 @@ public class KafkaStreams implements AutoCloseable {
                     final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                     log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
                     resizeThreadCache(cacheSizePerThread);
+                    resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
                     return Optional.empty();
                 }
             }
@@ -1218,6 +1231,7 @@ public class KafkaStreams implements AutoCloseable {
                         final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                         log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
                         resizeThreadCache(cacheSizePerThread);
+                        resizeMaxUncommittedBytes(maxUncommittedBytesPerThread(numLiveStreamThreads()));
                         final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                         if (remainingTimeMs <= 0) {
                             throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");
@@ -1319,10 +1333,26 @@ public class KafkaStreams implements AutoCloseable {
         return totalCacheSize / (numStreamThreads + (topologyMetadata.hasGlobalTopology() ? 1 : 0));
     }
 
+    private long maxUncommittedBytesPerThread(final int numStreamThreads) {
+        final long totalMax = applicationConfigs.getLong(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG);
+        if (totalMax <= 0) {
+            return -1;
+        }
+        final int divisor = Math.max(numStreamThreads, 0) + (topologyMetadata.hasGlobalTopology() ? 1 : 0);
+        return divisor == 0 ? totalMax : totalMax / divisor;
+    }
+
     private void resizeThreadCache(final long cacheSizePerThread) {
         processStreamThread(thread -> thread.resizeCache(cacheSizePerThread));
         if (globalStreamThread != null) {
             globalStreamThread.resize(cacheSizePerThread);
+        }
+    }
+
+    private void resizeMaxUncommittedBytes(final long maxUncommittedBytesPerThread) {
+        processStreamThread(thread -> thread.resizeMaxUncommittedBytes(maxUncommittedBytesPerThread));
+        if (globalStreamThread != null) {
+            globalStreamThread.resizeMaxUncommittedBytes(maxUncommittedBytesPerThread);
         }
     }
 
@@ -1388,6 +1418,11 @@ public class KafkaStreams implements AutoCloseable {
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
         if (setState(State.REBALANCING)) {
+            final Long dirMaxAgeMs = applicationConfigs.getLong(StreamsConfig.STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG);
+            if (dirMaxAgeMs != StreamsConfig.STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED) {
+                log.debug("Start cleaning outdated directories");
+                stateDirectory.cleanOutdatedDirsOnStartup(dirMaxAgeMs);
+            }
             log.debug("Initializing store offsets for existing local state");
             stateDirectory.initializeStartupStores(topologyMetadata, logContext, streamsMetrics);
 
@@ -1449,11 +1484,17 @@ public class KafkaStreams implements AutoCloseable {
      * Shutdown this {@code KafkaStreams} instance by signaling all the threads to stop, and then wait for them to join.
      * This will block until all threads have stopped.
      * <p>
-     * When using the classic protocol, the consumer will not leave the group explicitly. However, when using
-     * the streams group protocol ({@code group.protocol=streams}), the consumer will always leave the group.
+     * Uses {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#DEFAULT DEFAULT} behavior,
+     * which adapts based on the active protocol:
+     * <ul>
+     *   <li>Classic protocol: the consumer remains in the group (no explicit leave).</li>
+     *   <li>Streams protocol ({@code group.protocol=streams}): dynamic members leave the group;
+     *       static members (with {@code group.instance.id}) remain in the group and are removed
+     *       by the broker after the session timeout.</li>
+     * </ul>
      */
     public void close() {
-        close(Optional.empty(), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        close(Optional.empty(), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
     }
 
     private Thread shutdownHelper(
@@ -1580,7 +1621,7 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    private void closeToError() {
+    void closeToError() {
         if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in {}", state());
         } else {
@@ -1597,8 +1638,14 @@ public class KafkaStreams implements AutoCloseable {
      * A {@code timeout} of {@link Duration#ZERO} (or any other zero duration) makes the close operation asynchronous.
      * Negative-duration timeouts are rejected.
      * <p>
-     * When using the classic protocol, the consumer will not leave the group explicitly. However, when using
-     * the streams group protocol ({@code group.protocol=streams}), the consumer will always leave the group.
+     * Uses {@link org.apache.kafka.streams.CloseOptions.GroupMembershipOperation#DEFAULT DEFAULT} behavior,
+     * which adapts based on the active protocol:
+     * <ul>
+     *   <li>Classic protocol: the consumer remains in the group (no explicit leave).</li>
+     *   <li>Streams protocol ({@code group.protocol=streams}): dynamic members leave the group;
+     *       static members (with {@code group.instance.id}) remain in the group and are removed
+     *       by the broker after the session timeout.</li>
+     * </ul>
      *
      * @param timeout how long to wait for the threads to shut down
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
@@ -1613,7 +1660,7 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
 
-        return close(Optional.of(timeoutMs), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        return close(Optional.of(timeoutMs), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.DEFAULT);
     }
 
     /**
@@ -1668,6 +1715,15 @@ public class KafkaStreams implements AutoCloseable {
      * instance is {@link #close() closed}.
      * <p>
      * Calling this method triggers a restore of local {@link StateStore}s on the next {@link #start() application start}.
+     * <p>
+     * As a final step, this method attempts to delete the application's state directory.
+     * If only expected metadata files remain, such as {@code kafka-streams-process-metadata}
+     * and/or {@code .lock}, the directory itself may be retained. This is not considered
+     * a cleanup failure.
+     * 
+     * <p>
+     * If a full local reset is required, including removal of persisted process metadata,
+     * manually delete the application's state directory after this instance has been closed.
      *
      * @throws IllegalStateException if this {@code KafkaStreams} instance has been started and hasn't fully shut down
      * @throws StreamsException if cleanup failed
@@ -2118,7 +2174,10 @@ public class KafkaStreams implements AutoCloseable {
                                     request.isRequireActive()
                                         ? PositionBound.unbounded()
                                         : request.getPositionBound(),
-                                    new QueryConfig(request.executionInfoEnabled())
+                                    new QueryConfig(
+                                        request.executionInfoEnabled(),
+                                        request.isolationLevel()
+                                            .orElseGet(applicationConfigs::defaultInteractiveQueryIsolationLevel))
                                 );
                                 result.addResult(partition, r);
                             }

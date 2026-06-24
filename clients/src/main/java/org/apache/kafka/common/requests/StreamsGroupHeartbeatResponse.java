@@ -59,7 +59,7 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return Map.of(Errors.forCode(data.errorCode()), 1);
     }
 
     @Override

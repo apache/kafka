@@ -31,12 +31,17 @@ public class TopicConfig {
     public static final String SEGMENT_BYTES_CONFIG = "segment.bytes";
     public static final String SEGMENT_BYTES_DOC = "This configuration controls the segment file size for " +
         "the log. Retention and cleaning is always done a file at a time so a larger segment size means " +
-        "fewer files but less granular control over retention.";
+        "fewer files but less granular control over retention. " +
+        "The active segment is rolled once it reaches this size.";
 
     public static final String SEGMENT_MS_CONFIG = "segment.ms";
     public static final String SEGMENT_MS_DOC = "This configuration controls the period of time after " +
         "which Kafka will force the log to roll even if the segment file isn't full to ensure that retention " +
-        "can delete or compact old data.";
+        "can delete or compact old data. " +
+        "This forces active segment rolling by time, even if the active segment has not reached " +
+        "<code>segment.bytes</code>. For compacted topics, <code>max.compaction.lag.ms</code> can trigger " +
+        "active segment rolling sooner: the effective time-based roll threshold is the smaller of " +
+        "<code>segment.ms</code> and <code>max.compaction.lag.ms</code>.";
 
     public static final String SEGMENT_JITTER_MS_CONFIG = "segment.jitter.ms";
     public static final String SEGMENT_JITTER_MS_DOC = "The maximum random jitter subtracted from the scheduled " +
@@ -53,7 +58,7 @@ public class TopicConfig {
         "we would fsync after every message; if it were 5 we would fsync after every five messages. " +
         "In general we recommend you not set this and use replication for durability and allow the " +
         "operating system's background flush capabilities as it is more efficient. This setting can " +
-        "be overridden on a per-topic basis (see <a href=\"#topicconfigs\">the per-topic configuration section</a>).";
+        "be overridden on a per-topic basis (see <a href=\"https://kafka.apache.org/documentation/#topicconfigs\">the per-topic configuration section</a>).";
 
     public static final String FLUSH_MS_CONFIG = "flush.ms";
     public static final String FLUSH_MS_DOC = "This setting allows specifying a time interval at which we will " +
@@ -101,6 +106,22 @@ public class TopicConfig {
             "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
             "(i.e. retention.ms/bytes).";
 
+    public static final String REMOTE_COPY_LAG_MS_CONFIG = "remote.copy.lag.ms";
+    public static final String REMOTE_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
+            "When set to 0, immediate upload without any delay check. " +
+            "When set to a positive value (ms), a segment can't become eligible for upload until the time since the latest record in the segment reaches the value. " +
+            "The value should not exceed the real local retention ms except the latter is retained indefinitely (-1). " +
+            "When set to -1, resolves to the real local retention ms as maximum delay. " +
+            "For how the real local retention time is computed, see <code>local.retention.ms</code>.";
+
+    public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
+    public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
+            "When set to 0, immediate upload without any delay check. " +
+            "When set to a positive value (bytes), a segment can't become eligible for upload until the total bytes of log data after the segment reach the value. " +
+            "The value should not exceed the real local retention bytes except the latter is retained indefinitely (-1). " +
+            "When set to -1, resolves to the real local retention bytes as maximum delay. " +
+            "For how the real local retention size is computed, see <code>local.retention.bytes</code>.";
+
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
             "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
@@ -124,7 +145,7 @@ public class TopicConfig {
 
     public static final String DELETE_RETENTION_MS_CONFIG = "delete.retention.ms";
     public static final String DELETE_RETENTION_MS_DOC = "The amount of time to retain delete tombstone markers " +
-        "for <a href=\"#compaction\">log compacted</a> topics. This setting also gives a bound " +
+        "for <a href=\"https://kafka.apache.org/documentation/#compaction\">log compacted</a> topics. This setting also gives a bound " +
         "on the time in which a consumer must complete a read if they begin from offset 0 " +
         "to ensure that they get a valid snapshot of the final stage (otherwise delete " +
         "tombstones may be collected before they complete their scan).";
@@ -135,11 +156,17 @@ public class TopicConfig {
 
     public static final String MAX_COMPACTION_LAG_MS_CONFIG = "max.compaction.lag.ms";
     public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
-        "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
+        "ineligible for compaction in the log. Only applicable for logs that are being compacted. " +
+        "Because the active segment is never compacted, for compacted topics this value also drives " +
+        "active segment rolling: the effective time-based roll threshold is the smaller of " +
+        "<code>segment.ms</code> and <code>max.compaction.lag.ms</code>. Active segment rolling moves " +
+        "records out of the active segment, after which <code>max.compaction.lag.ms</code> makes them " +
+        "eligible for compaction even if <code>min.cleanable.dirty.ratio</code> is not met. See " +
+        "<a href=\"https://kafka.apache.org/documentation/#compaction\">log compaction</a>.";
 
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +
-        "the log compactor will attempt to clean the log (assuming <a href=\"#compaction\">log " +
+        "the log compactor will attempt to clean the log (assuming <a href=\"https://kafka.apache.org/documentation/#compaction\">log " +
         "compaction</a> is enabled). By default we will avoid cleaning a log where more than " +
         "50% of the log has been compacted. This ratio bounds the maximum space wasted in " +
         "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
@@ -156,7 +183,7 @@ public class TopicConfig {
     public static final String CLEANUP_POLICY_DOC = "This config designates the retention policy to " +
         "use on log segments. The \"delete\" policy (which is the default) will discard old segments " +
         "when their retention time or size limit has been reached. The \"compact\" policy will enable " +
-        "<a href=\"#compaction\">log compaction</a>, which retains the latest value for each key. " +
+        "<a href=\"https://kafka.apache.org/documentation/#compaction\">log compaction</a>, which retains the latest value for each key. " +
         "It is also possible to specify both policies in a comma-separated list (e.g. \"delete,compact\"). " +
         "In this case, old segments will be discarded per the retention time and size configuration, " +
         "while retained segments will be compacted. " +
@@ -185,7 +212,7 @@ public class TopicConfig {
         "A typical scenario would be to create a topic with a replication factor of 3, " +
         "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
         "This ensures that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers." +
-        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
+        "<p>Note that when the Eligible Leader Replicas feature is enabled, the semantics of this config changes. Please refer to <a href=\"https://kafka.apache.org/documentation/#eligible_leader_replicas\">the ELR section</a> for more info.</p>";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
@@ -235,4 +262,10 @@ public class TopicConfig {
     @Deprecated
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "Down-conversion is not possible in Apache Kafka 4.0 and newer, " +
         "hence this configuration is no-op and it is deprecated for removal in Apache Kafka 5.0.";
+
+    // Dead Letter Queue Configuration (KIP-1191)
+    public static final String ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG = "errors.deadletterqueue.group.enable";
+    public static final String ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC = "Enable this topic to be used as a dead-letter queue for share groups. " +
+        "When set to <code>true</code>, share groups can write undeliverable records to this topic. When set to <code>false</code> (the default), " +
+        "attempts to use this topic as a DLQ will be rejected.";
 }

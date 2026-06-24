@@ -60,7 +60,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             final JoinWindows windows,
             final Type type
     ) {
-        super(streamJoined.dslStoreSuppliers());
+        super(streamJoined.dslStoreSuppliers(), DslStoreFormat.PLAIN);
 
         // we store this one manually instead of relying on super#dslStoreSuppliers()
         // so that we can differentiate between one that was explicitly passed in and
@@ -96,8 +96,8 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoined.keySerde());
         final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoined.valueSerde(), streamJoined.otherValueSerde());
 
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.PLAIN : DslStoreFormat.HEADERS;
-        final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, storeFormat);
+        // Once the headers-aware version of ListValueStore is implemented (planned for AK 4.4), replace the PLAIN constant with the dslStoreFormat() method.
+        final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, DslStoreFormat.PLAIN);
         final KeyValueBytesStoreSupplier supplier;
 
         if (passedInDslStoreSuppliers != null) {

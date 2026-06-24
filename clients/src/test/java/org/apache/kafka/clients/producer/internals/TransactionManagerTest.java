@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -79,9 +81,9 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -209,7 +211,7 @@ public class TransactionManagerTest {
             finalizedFeaturesEpoch));
         finalizedFeaturesEpoch += 1;
         this.transactionManager = new TestableTransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, enable2pc);
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, this.metadata, enable2pc);
 
 
         int batchSize = 16 * 1024;
@@ -1060,7 +1062,7 @@ public class TransactionManagerTest {
                 .setMinVersionLevel((short) 1)),
             0));
         this.transactionManager = new TestableTransactionManager(logContext, transactionalId,
-            transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, false);
+            transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, this.metadata, false);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -1249,8 +1251,36 @@ public class TransactionManagerTest {
             assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
             assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
             assertEquals(epoch, txnOffsetCommitRequest.data().producerEpoch());
-            return txnOffsetCommitRequest.data().generationId() != generationId;
+            return txnOffsetCommitRequest.data().generationIdOrMemberEpoch() != generationId;
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.ILLEGAL_GENERATION)));
+
+        runUntil(transactionManager::hasError);
+        assertInstanceOf(CommitFailedException.class, transactionManager.lastError());
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertInstanceOf(CommitFailedException.class, sendOffsetsResult.error());
+        assertAbortableError(CommitFailedException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"GROUP_ID_NOT_FOUND", "STALE_MEMBER_EPOCH"})
+    public void testGroupMetadataMismatchErrorInTxnOffsetCommit(Errors error) {
+        // GROUP_ID_NOT_FOUND and STALE_MEMBER_EPOCH from TxnOffsetCommit (v6+)
+        // must abort the transaction with a CommitFailedException, matching the
+        // behavior for ILLEGAL_GENERATION returned by older broker versions.
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            Map.of(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, Map.of(tp, error));
 
         runUntil(transactionManager::hasError);
         assertInstanceOf(CommitFailedException.class, transactionManager.lastError());
@@ -2555,6 +2585,117 @@ public class TransactionManagerTest {
     @Test
     public void testHandlingOfUnsupportedForMessageFormatErrorOnTxnOffsetCommit() {
         testFatalErrorInTxnOffsetCommit(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT);
+    }
+
+    @Test
+    public void testTxnOffsetCommitNegotiatesV6WhenAllTopicIdsAreAvailable() {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        // Seed the metadata cache with the topic id so the request can negotiate v6.
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(
+            1, singletonMap(topic, 2), Map.of(topic, TOPIC_ID)));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+        offsets.put(tp1, new OffsetAndMetadata(1));
+
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        TxnOffsetCommitResponseData responseData = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(
+                    new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                        .setPartitionIndex(tp0.partition())
+                        .setErrorCode(Errors.NONE.code()),
+                    new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                        .setPartitionIndex(tp1.partition())
+                        .setErrorCode(Errors.NONE.code())))));
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequest txnRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(), txnRequest.version());
+            assertEquals(1, txnRequest.data().topics().size());
+            assertEquals(TOPIC_ID, txnRequest.data().topics().get(0).topicId());
+            return true;
+        }, new TxnOffsetCommitResponse(responseData));
+
+        runUntil(sendOffsetsResult::isCompleted);
+        assertTrue(sendOffsetsResult.isSuccessful());
+        assertFalse(transactionManager.hasPendingOffsetCommits());
+    }
+
+    @Test
+    public void testTxnOffsetCommitDowngradesToV5WhenAnyTopicIdIsMissing() {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        // Only `topic` has a known id; `other` is not in the metadata cache,
+        // so the builder must downgrade to v5 (which encodes by name).
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(
+            1, singletonMap(topic, 2), Map.of(topic, TOPIC_ID)));
+
+        TopicPartition otherTp = new TopicPartition("other", 0);
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+        offsets.put(otherTp, new OffsetAndMetadata(1));
+
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp0, Errors.NONE);
+        txnOffsetCommitResponse.put(otherTp, Errors.NONE);
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequest txnRequest = (TxnOffsetCommitRequest) request;
+            assertTrue(txnRequest.version() < 6,
+                "Expected downgrade to v0-5, got " + txnRequest.version());
+            txnRequest.data().topics().forEach(t -> assertFalse(t.name() == null || t.name().isEmpty()));
+            return true;
+        }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
+
+        runUntil(sendOffsetsResult::isCompleted);
+        assertTrue(sendOffsetsResult.isSuccessful());
+    }
+
+    @Test
+    public void testTxnOffsetCommitRetriesOnUnknownTopicIdAtV6() {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(
+            1, singletonMap(topic, 2), Map.of(topic, TOPIC_ID)));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp0, new OffsetAndMetadata(1));
+
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        TxnOffsetCommitResponseData unknownTopicId = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                    .setPartitionIndex(tp0.partition())
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code())))));
+        client.prepareResponse(request -> {
+            TxnOffsetCommitRequest txnRequest = (TxnOffsetCommitRequest) request;
+            assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(), txnRequest.version());
+            return true;
+        }, new TxnOffsetCommitResponse(unknownTopicId));
+
+        runUntil(() -> client.inFlightRequestCount() == 0);
+        assertFalse(sendOffsetsResult.isCompleted(),
+            "UNKNOWN_TOPIC_ID is retriable; the commit should still be pending");
+        assertTrue(transactionManager.hasPendingOffsetCommits());
+        assertFalse(transactionManager.hasError());
     }
 
     private void testFatalErrorInTxnOffsetCommit(final Errors error) {
@@ -4454,6 +4595,7 @@ public class TransactionManagerTest {
                                                 Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
+            assertTxnOffsetCommitRequestUsesTopicNames(txnOffsetCommitRequest);
             assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
             assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
             assertEquals(producerEpoch, txnOffsetCommitRequest.data().producerEpoch());
@@ -4470,14 +4612,23 @@ public class TransactionManagerTest {
                                                 Map<TopicPartition, Errors> txnOffsetCommitResponse) {
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) request;
+            assertTxnOffsetCommitRequestUsesTopicNames(txnOffsetCommitRequest);
             assertEquals(consumerGroupId, txnOffsetCommitRequest.data().groupId());
             assertEquals(producerId, txnOffsetCommitRequest.data().producerId());
             assertEquals(producerEpoch, txnOffsetCommitRequest.data().producerEpoch());
             assertEquals(groupInstanceId, txnOffsetCommitRequest.data().groupInstanceId());
             assertEquals(memberId, txnOffsetCommitRequest.data().memberId());
-            assertEquals(generationId, txnOffsetCommitRequest.data().generationId());
+            assertEquals(generationId, txnOffsetCommitRequest.data().generationIdOrMemberEpoch());
             return true;
         }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
+    }
+
+    private static void assertTxnOffsetCommitRequestUsesTopicNames(TxnOffsetCommitRequest request) {
+        assertTrue(request.version() < 6,
+            "Expected TxnOffsetCommit request at version < 6, got " + request.version());
+        request.data().topics().forEach(topic -> assertFalse(
+            topic.name() == null || topic.name().isEmpty(),
+            "Expected every request topic to carry a non-empty name at version " + request.version()));
     }
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
@@ -4630,8 +4781,9 @@ public class TransactionManagerTest {
                                           int transactionTimeoutMs,
                                           long retryBackoffMs,
                                           ApiVersions apiVersions,
+                                          Metadata metadata,
                                           boolean enable2Pc) {
-            super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions, enable2Pc);
+            super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions, metadata, enable2Pc);
             this.shouldPoisonStateOnInvalidTransitionOverride = Optional.empty();
         }
 

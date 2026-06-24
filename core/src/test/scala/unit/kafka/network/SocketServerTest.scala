@@ -35,8 +35,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils._
-import org.apache.kafka.network.RequestConvertToJson
-import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.common.utils.internals.{AppInfoParser, LogContext}
+import org.apache.kafka.network.{CallbackRequest, Request, RequestConvertToJson, ShutdownRequest, SocketServerConfigs, WakeupRequest}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{ApiVersionManager, SimpleApiVersionManager}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
@@ -44,6 +44,7 @@ import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.ConnectionDisconnectListener
 import org.apache.kafka.server.quota.{ThrottleCallback, ThrottledChannel}
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.logging.log4j.{Level, LogManager}
 import org.apache.logging.log4j.core.config.Configurator
@@ -82,10 +83,10 @@ class SocketServerTest {
   val localAddress = InetAddress.getLoopbackAddress
 
   // Clean-up any metrics left around by previous tests
-  TestUtils.clearYammerMetrics()
+  ServerTestUtils.clearYammerMetrics()
 
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-    () => new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
+    () => FinalizedFeatures.of(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 
@@ -113,7 +114,7 @@ class SocketServerTest {
     sockets.foreach(_.close())
     sockets.clear()
     Configurator.setLevel(kafkaLogger.getName, logLevelToRestore)
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true): Unit = {
@@ -144,12 +145,12 @@ class SocketServerTest {
     response
   }
 
-  private def receiveRequest(channel: RequestChannel, timeout: Long = 2000L): RequestChannel.Request = {
+  private def receiveRequest(channel: RequestChannel, timeout: Long = 2000L): Request = {
     channel.receiveRequest(timeout) match {
-      case request: RequestChannel.Request => request
-      case RequestChannel.WakeupRequest => throw new AssertionError("Unexpected wakeup received")
-      case request: RequestChannel.CallbackRequest => throw new AssertionError("Unexpected callback received")
-      case RequestChannel.ShutdownRequest => throw new AssertionError("Unexpected shutdown received")
+      case request: Request => request
+      case _: WakeupRequest => throw new AssertionError("Unexpected wakeup received")
+      case _: CallbackRequest => throw new AssertionError("Unexpected callback received")
+      case _: ShutdownRequest => throw new AssertionError("Unexpected shutdown received")
       case null => throw new AssertionError("receiveRequest timed out")
     }
   }
@@ -159,14 +160,14 @@ class SocketServerTest {
     processRequest(channel, receiveRequest(channel))
   }
 
-  def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val byteBuffer = request.body[AbstractRequest].serializeWithHeader(request.header)
+  def processRequest(channel: RequestChannel, request: Request): Unit = {
+    val byteBuffer = request.body(classOf[AbstractRequest]).serializeWithHeader(request.header)
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
-    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
+    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog)))
   }
 
-  def processRequestNoOpResponse(channel: RequestChannel, request: RequestChannel.Request): Unit = {
+  def processRequestNoOpResponse(channel: RequestChannel, request: Request): Unit = {
     channel.sendNoOpResponse(request)
   }
 
@@ -221,7 +222,7 @@ class SocketServerTest {
     (socket, request.context.connectionId)
   }
 
-  def sendAndReceiveRequest(socket: Socket, server: SocketServer): RequestChannel.Request = {
+  def sendAndReceiveRequest(socket: Socket, server: SocketServer): Request = {
     sendRequest(socket, producerRequestBytes())
     receiveRequest(server.dataPlaneRequestChannel)
   }
@@ -547,7 +548,7 @@ class SocketServerTest {
   private def makeSocketWithBufferedRequests(server: SocketServer,
                                              serverSelector: Selector,
                                              proxyServer: ProxyServer,
-                                             numBufferedRequests: Int = 2): (Socket, RequestChannel.Request) = {
+                                             numBufferedRequests: Int = 2): (Socket, Request) = {
 
     val requestBytes = producerRequestBytes()
     val socket = sslClientSocket(proxyServer.localPort)
@@ -576,7 +577,7 @@ class SocketServerTest {
    */
   private def makeChannelWithBufferedRequestsAndCloseRemote(server: TestableSocketServer,
                                                             serverSelector: TestableSelector,
-                                                            makeClosing: Boolean = false): RequestChannel.Request = {
+                                                            makeClosing: Boolean = false): Request = {
 
     val proxyServer = new ProxyServer(server)
     try {
@@ -597,15 +598,15 @@ class SocketServerTest {
     }
   }
 
-  def sendRequestsReceiveOne(server: SocketServer, socket: Socket, requestBytes: Array[Byte], numRequests: Int): RequestChannel.Request = {
+  def sendRequestsReceiveOne(server: SocketServer, socket: Socket, requestBytes: Array[Byte], numRequests: Int): Request = {
     (1 to numRequests).foreach(i => sendRequest(socket, requestBytes, flush = i == numRequests))
     receiveRequest(server.dataPlaneRequestChannel)
   }
 
   private def closeSocketWithPendingRequest(server: SocketServer,
-                                            createSocket: () => Socket): RequestChannel.Request = {
+                                            createSocket: () => Socket): Request = {
 
-    def maybeReceiveRequest(): Option[RequestChannel.Request] = {
+    def maybeReceiveRequest(): Option[Request] = {
       try {
         Some(receiveRequest(server.dataPlaneRequestChannel, timeout = 1000))
       } catch {
@@ -613,7 +614,7 @@ class SocketServerTest {
       }
     }
 
-    def closedChannelWithPendingRequest(): Option[RequestChannel.Request] = {
+    def closedChannelWithPendingRequest(): Option[Request] = {
       val socket = createSocket.apply()
       val req1 = sendRequestsReceiveOne(server, socket, producerRequestBytes(), numRequests = 100)
       processRequestNoOpResponse(server.dataPlaneRequestChannel, req1)
@@ -634,13 +635,13 @@ class SocketServerTest {
   // Prepares test setup for throttled channel tests. throttlingDone controls whether or not throttling has completed
   // in quota manager.
   def throttledChannelTestSetUp(socket: Socket, serializedBytes: Array[Byte], noOpResponse: Boolean,
-                                throttlingInProgress: Boolean): RequestChannel.Request = {
+                                throttlingInProgress: Boolean): Request = {
     sendRequest(socket, serializedBytes)
 
     // Mimic a primitive request handler that fetches the request from RequestChannel and place a response with a
     // throttled channel.
     val request = receiveRequest(server.dataPlaneRequestChannel)
-    val byteBuffer = request.body[AbstractRequest].serializeWithHeader(request.header)
+    val byteBuffer = request.body(classOf[AbstractRequest]).serializeWithHeader(request.header)
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
 
     val channelThrottlingCallback = new ThrottleCallback {
@@ -651,7 +652,7 @@ class SocketServerTest {
     val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
-        new RequestChannel.SendResponse(request, send, Some(headerLog), None)
+        new RequestChannel.SendResponse(request, send, Some(headerLog))
       else
         new RequestChannel.NoOpResponse(request)
     server.dataPlaneRequestChannel.sendResponse(response)
@@ -664,10 +665,10 @@ class SocketServerTest {
     request
   }
 
-  def openChannel(request: RequestChannel.Request, server: SocketServer = this.server): Option[KafkaChannel] =
+  def openChannel(request: Request, server: SocketServer = this.server): Option[KafkaChannel] =
     server.dataPlaneAcceptor(listener).get.processors(0).channel(request.context.connectionId)
 
-  def openOrClosingChannel(request: RequestChannel.Request, server: SocketServer = this.server): Option[KafkaChannel] =
+  def openOrClosingChannel(request: Request, server: SocketServer = this.server): Option[KafkaChannel] =
     server.dataPlaneAcceptor(listener).get.processors(0).openOrClosingChannel(request.context.connectionId)
 
   @Test
@@ -1103,7 +1104,7 @@ class SocketServerTest {
       val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
       val headerLog = new ObjectNode(JsonNodeFactory.instance)
       headerLog.set("response", new TextNode("someResponse"))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog)))
 
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")

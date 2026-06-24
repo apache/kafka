@@ -51,8 +51,8 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
@@ -457,7 +457,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public static class Builder {
-        private MockTime time = new MockTime(0, 0, 0);
+        private MockTime time = new MockTime(0, 1000, 1000);
         private final MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();
@@ -734,17 +734,28 @@ public class GroupMetadataManagerTestContext {
     }
 
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
-        StreamsGroupHeartbeatRequestData request
+        StreamsGroupHeartbeatRequestData request,
+        String clientId,
+        InetAddress clientAddress
+    ) {
+        return streamsGroupHeartbeat(request, clientId, clientAddress, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion());
+    }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request,
+        String clientId,
+        InetAddress clientAddress,
+        short version
     ) {
         RequestContext context = new RequestContext(
             new RequestHeader(
                 ApiKeys.STREAMS_GROUP_HEARTBEAT,
-                ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(),
-                "client",
+                version,
+                clientId,
                 0
             ),
             "1",
-            InetAddress.getLoopbackAddress(),
+            clientAddress,
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -763,6 +774,19 @@ public class GroupMetadataManagerTestContext {
         return result;
     }
 
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request
+    ) {
+        return streamsGroupHeartbeat(request, "client", InetAddress.getLoopbackAddress());
+    }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request,
+        short version
+    ) {
+        return streamsGroupHeartbeat(request, "client", InetAddress.getLoopbackAddress(), version);
+    }
+    
     public List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> sleep(long ms) {
         time.sleep(ms);
         List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = timer.poll();
@@ -1374,7 +1398,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     public List<StreamsGroupDescribeResponseData.DescribedGroup> sendStreamsGroupDescribe(List<String> groupIds) {
-        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset);
+        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset).describedGroups();
     }
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {

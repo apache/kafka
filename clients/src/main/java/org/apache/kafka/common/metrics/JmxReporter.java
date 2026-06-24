@@ -19,7 +19,7 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Sanitizer;
+import org.apache.kafka.common.utils.internals.Sanitizer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

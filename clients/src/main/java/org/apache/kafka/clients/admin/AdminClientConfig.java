@@ -146,6 +146,9 @@ public class AdminClientConfig extends AbstractConfig {
     public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC;
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS;
 
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC;
+
     /**
      * <code>security.providers</code>
      */
@@ -285,6 +288,11 @@ public class AdminClientConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG, 
                                         ConfigDef.Type.LIST,
                                         List.of(),

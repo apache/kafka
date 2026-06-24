@@ -58,6 +58,7 @@ public class StateSerdesTest {
         assertThrows(NullPointerException.class, () -> StateSerdes.withBuiltinTypes("anyName", byte[].class, null));
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void shouldReturnSerdesForBuiltInKeyAndValueTypesForBuiltinTypes() {
         final Class[] supportedBuildInTypes = new Class[] {
@@ -106,10 +107,11 @@ public class StateSerdesTest {
 
     @Test
     public void shouldThrowIfIncompatibleSerdeForValue() throws ClassNotFoundException {
+        @SuppressWarnings("rawtypes")
         final Class myClass = Class.forName("java.lang.String");
         final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
         final Integer myInt = 123;
-        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(myInt));
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(myInt, new RecordHeaders()));
         assertThat(
             e.getMessage(),
             equalTo(
@@ -120,11 +122,13 @@ public class StateSerdesTest {
 
     @Test
     public void shouldSkipValueAndTimestampeInformationForErrorOnTimestampAndValueSerialization() throws ClassNotFoundException {
+        @SuppressWarnings("rawtypes")
         final Class myClass = Class.forName("java.lang.String");
+        @SuppressWarnings("rawtypes")
         final StateSerdes<Object, Object> stateSerdes =
             new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), new ValueAndTimestampSerde(Serdes.serdeFrom(myClass)));
         final Integer myInt = 123;
-        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(ValueAndTimestamp.make(myInt, 0L)));
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(ValueAndTimestamp.make(myInt, 0L), new RecordHeaders()));
         assertThat(
             e.getMessage(),
             equalTo(
@@ -135,10 +139,11 @@ public class StateSerdesTest {
 
     @Test
     public void shouldThrowIfIncompatibleSerdeForKey() throws ClassNotFoundException {
+        @SuppressWarnings("rawtypes")
         final Class myClass = Class.forName("java.lang.String");
         final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
         final Integer myInt = 123;
-        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawKey(myInt));
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawKey(myInt, new RecordHeaders()));
         assertThat(
             e.getMessage(),
             equalTo(

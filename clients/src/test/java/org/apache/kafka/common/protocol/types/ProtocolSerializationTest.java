@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

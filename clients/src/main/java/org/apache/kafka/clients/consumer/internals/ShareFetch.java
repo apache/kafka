@@ -23,7 +23,6 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -83,7 +82,7 @@ public class ShareFetch<K, V> {
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> records() {
         final LinkedHashMap<TopicPartition, List<ConsumerRecord<K, V>>> result = new LinkedHashMap<>();
         batches.forEach((tip, batch) -> result.put(tip.topicPartition(), batch.getInFlightRecords()));
-        return Collections.unmodifiableMap(result);
+        return Map.copyOf(result);
     }
 
     /**
@@ -250,7 +249,10 @@ public class ShareFetch<K, V> {
     public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, Optional<Integer> acquisitionLockTimeoutMs) {
         int recordsRenewed = 0;
         for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
-            recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
+            ShareInFlightBatch<K, V> batch = batches.get(entry.getKey());
+            if (batch != null) {
+                recordsRenewed += batch.renew(entry.getValue());
+            }
         }
         acquisitionLockTimeoutMsRenewed = acquisitionLockTimeoutMs;
         return recordsRenewed;

@@ -58,7 +58,7 @@ public class TimestampedWindowStoreBuilderTest {
     @Mock
     private RocksDBTimestampedWindowStore timestampedStore;
     @Mock
-    private RocksDBTimeOrderedWindowStore timeOrderedStore;
+    private RocksDBTimeOrderedWindowStore<?> timeOrderedStore;
     private TimestampedWindowStoreBuilder<String, String> builder;
     private boolean isTimeOrderedStore;
     private WindowStore inner;
@@ -199,7 +199,6 @@ public class TimestampedWindowStoreBuilderTest {
     }
 
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
-    @SuppressWarnings("unchecked")
     @ParameterizedTest
     public void shouldDisableCachingWithRetainDuplicates(final String storeName) {
         setUpWithoutInner(storeName);

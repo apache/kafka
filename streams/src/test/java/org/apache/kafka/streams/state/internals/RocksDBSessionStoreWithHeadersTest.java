@@ -16,18 +16,107 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import java.io.File;
+import java.util.Properties;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RocksDBSessionStoreWithHeadersTest {
 
+    private static final String STORE_NAME = "test-session-store";
+    private static final long RETENTION_PERIOD = 60_000L;
+    private static final long SEGMENT_INTERVAL = 30_000L;
+
+    private RocksDBSessionStoreWithHeaders sessionStore;
+    private InternalMockProcessorContext<String, String> context;
+    private File baseDir;
+
+    @BeforeEach
+    public void setUp() {
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        baseDir = TestUtils.tempDirectory();
+        context = new InternalMockProcessorContext<>(
+            baseDir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
+        );
+
+        final SegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
+            STORE_NAME,
+            "test-metrics-scope",
+            RETENTION_PERIOD,
+            SEGMENT_INTERVAL,
+            new SessionKeySchema()
+        );
+
+        sessionStore = new RocksDBSessionStoreWithHeaders(segmentedBytesStore);
+        sessionStore.init(context, sessionStore);
+    }
+
+    @AfterEach
+    public void tearDown() {
+        if (sessionStore != null) {
+            sessionStore.close();
+        }
+    }
+
     @Test
-    public void shouldThrowUnsupportedOperationOnQuery() {
-        final RocksDBSessionStoreWithHeaders store = new RocksDBSessionStoreWithHeaders(
-            new RocksDBSegmentedBytesStore("test", "scope", 10_000L,
-                60_000L, new SessionKeySchema()));
-        assertThrows(UnsupportedOperationException.class,
-            () -> store.query(null, null, null));
+    public void shouldReturnUnknownQueryTypeForWindowRangeQuery() {
+        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withKey(
+            new Bytes("test-key".getBytes())
+        );
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
+            sessionStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertFalse(result.isSuccess());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+        assertNotNull(result.getPosition());
+    }
+
+    @Test
+    public void shouldCollectExecutionInfoWhenRequested() {
+        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withKey(
+            new Bytes("test-key".getBytes())
+        );
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
+            sessionStore.query(query, PositionBound.unbounded(), new QueryConfig(true));
+
+        assertFalse(result.getExecutionInfo().isEmpty());
+        assertTrue(result.getExecutionInfo().get(0).contains("Handled in"));
+        assertTrue(result.getExecutionInfo().get(0).contains(
+            RocksDBSessionStoreWithHeaders.class.getName()));
+    }
+
+    @Test
+    public void shouldNotCollectExecutionInfoWhenNotRequested() {
+        final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withKey(
+            new Bytes("test-key".getBytes())
+        );
+        final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
+            sessionStore.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.getExecutionInfo().isEmpty());
     }
 }

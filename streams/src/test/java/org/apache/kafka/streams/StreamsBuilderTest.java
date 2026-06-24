@@ -63,8 +63,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
+import org.apache.kafka.streams.state.internals.PlainToHeadersWindowStoreAdapter;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper;
 import org.apache.kafka.streams.utils.TestUtils.RecordingProcessorWrapper.WrapperRecorder;
@@ -1222,7 +1222,7 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertTypesForStateStore(topology.stateStores(),
                 InMemoryWindowStore.class,
-                RocksDBWindowStore.class,
+                PlainToHeadersWindowStoreAdapter.class,
                 InMemoryKeyValueStore.class);
     }
 
@@ -1257,7 +1257,7 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertTypesForStateStore(topology.stateStores(),
                 InMemoryWindowStore.class,
-                RocksDBWindowStore.class,
+                PlainToHeadersWindowStoreAdapter.class,
                 RocksDBStore.class);
     }
 
@@ -1296,7 +1296,7 @@ public class StreamsBuilderTest {
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertTypesForStateStore(topology.stateStores(),
                 InMemoryWindowStore.class,
-                RocksDBWindowStore.class,
+                PlainToHeadersWindowStoreAdapter.class,
                 InMemoryKeyValueStore.class);
     }
 

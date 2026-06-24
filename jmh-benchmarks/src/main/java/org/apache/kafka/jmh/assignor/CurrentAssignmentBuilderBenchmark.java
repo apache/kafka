@@ -91,18 +91,19 @@ public class CurrentAssignmentBuilderBenchmark {
     }
 
     private void setupMember() {
-        Map<Uuid, Set<Integer>> assignedPartitions = new HashMap<>();
+        Map<Uuid, Map<Integer, Integer>> assignedPartitions = new HashMap<>();
+        int memberEpoch = 10;
         for (Uuid topicId : topicIds) {
-            Set<Integer> partitions = IntStream.range(0, partitionsPerTopic)
+            Map<Integer, Integer> partitionEpochs = IntStream.range(0, partitionsPerTopic)
                 .boxed()
-                .collect(Collectors.toSet());
-            assignedPartitions.put(topicId, partitions);
+                .collect(Collectors.toMap(p -> p, p -> memberEpoch));
+            assignedPartitions.put(topicId, partitionEpochs);
         }
 
         ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder("member")
             .setState(MemberState.STABLE)
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(10)
+            .setMemberEpoch(memberEpoch)
+            .setPreviousMemberEpoch(memberEpoch)
             .setSubscribedTopicNames(topicNames)
             .setAssignedPartitions(assignedPartitions);
 

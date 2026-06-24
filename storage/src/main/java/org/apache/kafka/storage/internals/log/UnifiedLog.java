@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.CompressionType;
@@ -41,10 +42,10 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -70,7 +71,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -957,7 +957,7 @@ public class UnifiedLog implements AutoCloseable {
             localLog.checkIfMemoryMappedBufferClosed();
             producerExpireCheck.cancel(true);
             maybeHandleIOException(
-                    () -> "Error while renaming dir for " + topicPartition() + " in dir " + dir().getParent(),
+                    () -> "Error while taking producer state snapshot for " + topicPartition() + " in dir " + dir().getParent(),
                     () -> {
                         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
                         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
@@ -1588,7 +1588,7 @@ public class UnifiedLog implements AutoCloseable {
 
         return new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp,
                 RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
-                validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList(), LeaderHwChange.NONE);
+                validBytesCount, lastOffsetOfFirstBatch, List.of(), LeaderHwChange.NONE);
     }
 
     /**
@@ -2321,7 +2321,7 @@ public class UnifiedLog implements AutoCloseable {
     // visible for testing
     public void flushProducerStateSnapshot(Path snapshot) {
         maybeHandleIOException(
-                () -> "Error while deleting producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
+                () -> "Error while flushing producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
                 () -> {
                     Utils.flushFileIfExists(snapshot);
                     return null;
@@ -2781,7 +2781,7 @@ public class UnifiedLog implements AutoCloseable {
         return LogSegments.sizeInBytes(segments);
     }
 
-    public static TopicPartition parseTopicPartitionName(File dir) throws IOException {
+    public static TopicPartition parseTopicPartitionName(File dir) {
         return LocalLog.parseTopicPartitionName(dir);
     }
 }

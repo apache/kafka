@@ -68,6 +68,12 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     private static final String SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DOC = "Frequency of consumer group offset sync.";
     public static final long SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DEFAULT = 60;
 
+    public static final String METRIC_NAMES_FORMAT_DOC = "Deprecated. The formats in which metrics are emitted. Valid values are legacy and new. " +
+            "When set to legacy, the metrics have the following name \"kafka.connect.mirror:type=MirrorCheckpointConnector,source={SOURCE},target={TARGET},group={GROUP},topic={TOPIC},partition={PARTITION}\". " +
+            "When set to new, the metrics have the following name \"kafka.connect:type=plugins,connector={CONNECTOR},task={TASK},source={SOURCE},target={TARGET},group={GROUP},topic={TOPIC},partition={PARTITION}\". " +
+            "When set to \"legacy,new\" the connector will emit metrics with both names, this can be useful when migrating to the new format but it doubles the amount of metrics that are emitted.\n" +
+            "In Kafka 5.0 the legacy format and this configuration will be removed and the metrics will always use the new names.";
+
     public static final String GROUP_FILTER_CLASS = "group.filter.class";
     private static final String GROUP_FILTER_CLASS_DOC = "GroupFilter to use. Selects consumer groups to replicate.";
     public static final Class<?> GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
@@ -160,6 +166,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
 
     Duration consumerPollTimeout() {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
+    }
+
+    List<String> metricNamesFormats() {
+        return getList(METRIC_NAMES_FORMAT);
     }
 
     public static Map<String, String> validate(Map<String, String> configs) {
@@ -264,7 +274,16 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         ConfigDef.Type.CLASS,
                         TOPIC_FILTER_CLASS_DEFAULT,
                         ConfigDef.Importance.LOW,
-                        TOPIC_FILTER_CLASS_DOC);
+                        TOPIC_FILTER_CLASS_DOC
+                )
+                .define(
+                        METRIC_NAMES_FORMAT,
+                        ConfigDef.Type.LIST,
+                        METRIC_NAMES_FORMAT_DEFAULT,
+                        ConfigDef.ValidList.in(false, METRIC_NAMES_LEGACY, METRIC_NAMES_NEW),
+                        ConfigDef.Importance.LOW,
+                        METRIC_NAMES_FORMAT_DOC
+                );
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineCheckpointConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));

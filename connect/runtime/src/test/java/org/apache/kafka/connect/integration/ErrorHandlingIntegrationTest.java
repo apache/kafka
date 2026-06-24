@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -288,7 +287,7 @@ public class ErrorHandlingIntegrationTest {
         assertEquals(expected, new String(actual));
     }
 
-    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
 
         static final ConfigDef CONFIG_DEF = new ConfigDef();
 

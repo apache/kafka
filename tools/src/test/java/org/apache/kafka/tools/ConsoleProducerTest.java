@@ -21,7 +21,7 @@ import kafka.utils.TestUtils;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.tools.ConsoleProducer.ConsoleProducerOptions;
 import org.apache.kafka.tools.api.RecordReader;
 

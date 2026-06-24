@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

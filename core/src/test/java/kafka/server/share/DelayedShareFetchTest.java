@@ -19,7 +19,6 @@ package kafka.server.share;
 import kafka.cluster.Partition;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicaQuota;
 
 import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
@@ -36,6 +35,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
+import org.apache.kafka.server.quota.ReplicaQuota;
+import org.apache.kafka.server.share.LogReader;
+import org.apache.kafka.server.share.PartitionMetadataProvider;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
@@ -44,6 +46,7 @@ import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.ServerTestUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -86,6 +89,7 @@ import scala.jdk.javaapi.CollectionConverters;
 import static kafka.server.share.PendingRemoteFetches.RemoteFetch;
 import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL;
 import static kafka.server.share.SharePartitionManagerTest.REMOTE_FETCH_MAX_WAIT_MS;
+import static kafka.server.share.SharePartitionManagerTest.buildEmptyLogReadResult;
 import static kafka.server.share.SharePartitionManagerTest.buildLogReadResult;
 import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDelayedShareFetch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -122,7 +126,7 @@ public class DelayedShareFetchTest {
 
     @BeforeEach
     public void setUp() {
-        kafka.utils.TestUtils.clearYammerMetrics();
+        ServerTestUtils.clearYammerMetrics();
         mockTimer = new SystemTimerReaper("DelayedShareFetchTestReaper",
             new SystemTimer("DelayedShareFetchTestTimer"));
     }
@@ -693,6 +697,112 @@ public class DelayedShareFetchTest {
                 any(), any(), any(ReplicaQuota.class), anyBoolean());
             assertFalse(delayedShareFetch1.isCompleted());
             Mockito.verify(replicaManager, times(1)).addToActionQueue(any());
+            Mockito.verify(replicaManager, times(0)).tryCompleteActions();
+            Mockito.verify(delayedShareFetch2, times(1)).releasePartitionLocks(any());
+            assertTrue(delayedShareFetch2.lock().tryLock());
+            delayedShareFetch2.lock().unlock();
+        }
+    }
+
+    @Test
+    public void testForceCompleteNotTriggersDelayedActionsQueueWhenFetchDataIsEmpty() {
+        String groupId = "grp";
+        Uuid topicId = Uuid.randomUuid();
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(topicId, new TopicPartition("foo", 2));
+        List<TopicIdPartition> topicIdPartitions1 = List.of(tp0, tp1);
+
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions1 = new LinkedHashMap<>();
+        sharePartitions1.put(tp0, sp0);
+        sharePartitions1.put(tp1, sp1);
+        sharePartitions1.put(tp2, sp2);
+
+        ShareFetch shareFetch1 = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), topicIdPartitions1, BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
+            "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
+            DELAYED_SHARE_FETCH_PURGATORY_PURGE_INTERVAL, false, true);
+        mockReplicaManagerDelayedShareFetch(replicaManager, delayedShareFetchPurgatory);
+
+        List<DelayedOperationKey> delayedShareFetchWatchKeys = new ArrayList<>();
+        topicIdPartitions1.forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
+
+        Uuid fetchId1 = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch1 = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch1)
+            .withReplicaManager(replicaManager)
+            .withSharePartitions(sharePartitions1)
+            .withFetchId(fetchId1)
+            .build();
+
+        // No share partition is available for acquiring initially.
+        when(sp0.maybeAcquireFetchLock(fetchId1)).thenReturn(false);
+        when(sp1.maybeAcquireFetchLock(fetchId1)).thenReturn(false);
+        when(sp2.maybeAcquireFetchLock(fetchId1)).thenReturn(false);
+
+        // We add a delayed share fetch entry to the purgatory which will be waiting for completion since neither of the
+        // partitions in the share fetch request can be acquired.
+        delayedShareFetchPurgatory.tryCompleteElseWatch(delayedShareFetch1, delayedShareFetchWatchKeys);
+
+        assertEquals(2, delayedShareFetchPurgatory.watched());
+        assertFalse(shareFetch1.isCompleted());
+        assertTrue(delayedShareFetch1.lock().tryLock());
+        delayedShareFetch1.lock().unlock();
+
+        ShareFetch shareFetch2 = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), List.of(tp0, tp1), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        doAnswer(invocation -> buildEmptyLogReadResult(List.of(tp1))).when(replicaManager).readFromLog(
+            any(), any(), any(ReplicaQuota.class), anyBoolean());
+
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Set.of(tp1));
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions2 = new LinkedHashMap<>();
+        sharePartitions2.put(tp0, sp0);
+        sharePartitions2.put(tp1, sp1);
+        sharePartitions2.put(tp2, sp2);
+
+        Uuid fetchId2 = Uuid.randomUuid();
+        BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
+        DelayedShareFetch delayedShareFetch2 = spy(DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch2)
+            .withReplicaManager(replicaManager)
+            .withSharePartitions(sharePartitions2)
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withFetchId(fetchId2)
+            .withExceptionHandler(exceptionHandler)
+            .build());
+
+        // sp1 can be acquired now.
+        when(sp1.maybeAcquireFetchLock(fetchId2)).thenReturn(true);
+        when(sp1.canAcquireRecords()).thenReturn(true);
+        try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class, Mockito.CALLS_REAL_METHODS)) {
+            ShareFetchResponseData.PartitionData mockedPartitionData = mock(ShareFetchResponseData.PartitionData.class);
+            // Empty fetched data.
+            when(mockedPartitionData.records()).thenReturn(MemoryRecords.EMPTY);
+            mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any()))
+                .thenReturn(Map.of(tp0, mockedPartitionData));
+
+            // when forceComplete is called for delayedShareFetch2, since tp1 is common in between delayed share fetch
+            // requests, it will not add a "check and complete" action for request key tp1 on the purgatory since no
+            // data was returned in tp1.
+            delayedShareFetch2.forceComplete();
+            assertTrue(delayedShareFetch2.isCompleted());
+            assertTrue(shareFetch2.isCompleted());
+            Mockito.verify(exceptionHandler, never()).accept(any(), any());
+            Mockito.verify(replicaManager, times(1)).readFromLog(
+                any(), any(), any(ReplicaQuota.class), anyBoolean());
+            assertFalse(delayedShareFetch1.isCompleted());
+            Mockito.verify(replicaManager, times(0)).addToActionQueue(any());
             Mockito.verify(replicaManager, times(0)).tryCompleteActions();
             Mockito.verify(delayedShareFetch2, times(1)).releasePartitionLocks(any());
             assertTrue(delayedShareFetch2.lock().tryLock());
@@ -2162,6 +2272,91 @@ public class DelayedShareFetchTest {
         }
     }
 
+    @Test
+    public void testRemoteStorageFetchCompletionNotTriggerActionsQueue() {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        SharePartition sp0 = mock(SharePartition.class);
+
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.nextFetchOffset()).thenReturn(10L);
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
+            future, List.of(tp0), BATCH_OPTIMIZED, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        PendingRemoteFetches pendingRemoteFetches = mock(PendingRemoteFetches.class);
+        Uuid fetchId = Uuid.randomUuid();
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withReplicaManager(replicaManager)
+            .withSharePartitions(sharePartitions)
+            .withPartitionMaxBytesStrategy(PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM))
+            .withPendingRemoteFetches(pendingRemoteFetches)
+            .withFetchId(fetchId)
+            .build());
+
+        LinkedHashMap<TopicIdPartition, Long> partitionsAcquired = new LinkedHashMap<>();
+        partitionsAcquired.put(tp0, 10L);
+        // Manually update acquired partitions maps.
+        delayedShareFetch.updatePartitionsAcquired(partitionsAcquired);
+
+        // Mock remote fetch result.
+        RemoteFetch remoteFetch = mock(RemoteFetch.class);
+        when(remoteFetch.topicIdPartition()).thenReturn(tp0);
+        when(remoteFetch.remoteFetchResult()).thenReturn(CompletableFuture.completedFuture(
+            new RemoteLogReadResult(Optional.of(REMOTE_FETCH_INFO), Optional.empty()))
+        );
+        when(remoteFetch.logReadResult()).thenReturn(new LogReadResult(
+            REMOTE_FETCH_INFO,
+            Optional.empty(),
+            -1L,
+            -1L,
+            -1L,
+            -1L,
+            -1L,
+            OptionalLong.empty(),
+            OptionalInt.empty(),
+            Errors.NONE
+        ));
+        when(pendingRemoteFetches.remoteFetches()).thenReturn(List.of(remoteFetch));
+        when(pendingRemoteFetches.isDone()).thenReturn(false);
+
+        doAnswer(invocationOnMock -> null).when(pendingRemoteFetches).invokeCallbackOnCompletion(any());
+        // Mock the behaviour of replica manager such that remote storage fetch completion timer task completes on adding it to the watch queue.
+        doAnswer(invocationOnMock -> {
+            TimerTask timerTask = invocationOnMock.getArgument(0);
+            timerTask.run();
+            return null;
+        }).when(replicaManager).addShareFetchTimerRequest(any());
+
+        try (MockedStatic<ShareFetchUtils> mockedShareFetchUtils = Mockito.mockStatic(ShareFetchUtils.class)) {
+            Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitionDataMap = new LinkedHashMap<>();
+            // 0 bytes fetched data for tp0.
+            ShareFetchResponseData.PartitionData mockedPartitionData0 = mock(ShareFetchResponseData.PartitionData.class);
+            when(mockedPartitionData0.records()).thenReturn(MemoryRecords.EMPTY);
+            partitionDataMap.put(tp0, mockedPartitionData0);
+            mockedShareFetchUtils.when(() -> ShareFetchUtils.processFetchResponse(any(), any(), any(), any(), any())).thenReturn(partitionDataMap);
+
+            assertFalse(delayedShareFetch.isCompleted());
+            delayedShareFetch.forceComplete();
+            assertTrue(delayedShareFetch.isCompleted());
+            // The future of shareFetch completes.
+            assertTrue(shareFetch.isCompleted());
+            assertEquals(Set.of(tp0), future.join().keySet());
+            // Verify the locks are released for tp0 but not added to action queue since no records are fetched from remote storage.
+            Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
+            Mockito.verify(replicaManager, times(0)).addToActionQueue(any());
+            assertTrue(delayedShareFetch.outsidePurgatoryCallbackLock());
+            assertTrue(delayedShareFetch.lock().tryLock());
+            delayedShareFetch.lock().unlock();
+        }
+    }
+
     static void mockTopicIdPartitionToReturnDataEqualToMinBytes(ReplicaManager replicaManager, TopicIdPartition topicIdPartition, int minBytes) {
         LogOffsetMetadata hwmOffsetMetadata = new LogOffsetMetadata(1, 1, minBytes);
         LogOffsetSnapshot endOffsetSnapshot = new LogOffsetSnapshot(1, mock(LogOffsetMetadata.class),
@@ -2227,6 +2422,8 @@ public class DelayedShareFetchTest {
     static class DelayedShareFetchBuilder {
         private ShareFetch shareFetch = mock(ShareFetch.class);
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
+        private LogReader logReader = mock(LogReader.class);
+        private PartitionMetadataProvider metadataProvider = mock(PartitionMetadataProvider.class);
         private BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
         private LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = mock(LinkedHashMap.class);
         private PartitionMaxBytesStrategy partitionMaxBytesStrategy = mock(PartitionMaxBytesStrategy.class);
@@ -2242,6 +2439,8 @@ public class DelayedShareFetchTest {
 
         DelayedShareFetchBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
+            this.logReader = new ReplicaManagerLogReader(replicaManager);
+            this.metadataProvider = new ReplicaManagerPartitionMetadataProvider(replicaManager);
             return this;
         }
 
@@ -2288,6 +2487,8 @@ public class DelayedShareFetchTest {
             return new DelayedShareFetch(
                 shareFetch,
                 replicaManager,
+                logReader,
+                metadataProvider,
                 exceptionHandler,
                 sharePartitions,
                 partitionMaxBytesStrategy,

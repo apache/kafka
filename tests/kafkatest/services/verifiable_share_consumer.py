@@ -183,6 +183,8 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
                         self._update_global_consumed(event)
                     elif name == "record_data" and self.on_record_consumed:
                         self.on_record_consumed(event, node)
+                    elif name == "shutdown_requested":
+                        self.logger.debug("Shutdown has been requested")
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 

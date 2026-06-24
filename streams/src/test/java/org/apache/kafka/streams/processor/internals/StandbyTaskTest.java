@@ -27,9 +27,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
@@ -77,9 +77,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -217,60 +215,13 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldAlwaysCheckpointStateIfEnforced() {
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
-
+    public void shouldAlwaysCommitStateIfEnforced() {
         task = createStandbyTask();
 
         task.initializeIfNeeded();
-        task.maybeCheckpoint(true);
+        task.maybeCheckpoint();
 
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
-    }
-
-    @Test
-    public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
-        when(stateManager.changelogOffsets())
-                .thenReturn(Collections.singletonMap(partition, 50L))
-                .thenReturn(Collections.singletonMap(partition, 11000L))
-                .thenReturn(Collections.singletonMap(partition, 12000L));
-
-        task = createStandbyTask();
-        task.initializeIfNeeded();
-
-        task.maybeCheckpoint(false);  // this should not checkpoint
-        assertTrue(task.offsetSnapshotSinceLastFlush.isEmpty());
-        task.maybeCheckpoint(false);  // this should checkpoint
-        assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
-        task.maybeCheckpoint(false);  // this should not checkpoint
-        assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
-
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
-    }
-
-    @Test
-    public void shouldFlushAndCheckpointStateManagerOnCommit() {
-        when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
-        doNothing().when(stateManager).flush();
-        when(stateManager.changelogOffsets())
-                .thenReturn(Collections.singletonMap(partition, 50L))
-                .thenReturn(Collections.singletonMap(partition, 11000L))
-                .thenReturn(Collections.singletonMap(partition, 11000L));
-
-        task = createStandbyTask();
-        task.initializeIfNeeded();
-        task.prepareCommit(true);
-        task.postCommit(false);  // this should not checkpoint
-
-        task.prepareCommit(true);
-        task.postCommit(false);  // this should checkpoint
-
-        task.prepareCommit(true);
-        task.postCommit(false);  // this should not checkpoint
-
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
     }
 
     @Test
@@ -283,7 +234,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldNotFlushAndThrowOnCloseDirty() {
+    public void shouldNotCommitAndThrowOnCloseDirty() {
         doThrow(new ProcessorStateException("KABOOM!")).when(stateManager).close();
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -297,8 +248,7 @@ public class StandbyTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        verify(stateManager, never()).flush();
-        verify(stateManager, never()).checkpoint();
+        verify(stateManager, never()).commit();
     }
 
     @Test
@@ -315,8 +265,6 @@ public class StandbyTaskTest {
     @Test
     public void shouldSuspendAndCommitBeforeCloseClean() {
         doNothing().when(stateManager).close();
-        when(stateManager.changelogOffsets())
-                .thenReturn(Collections.singletonMap(partition, 60L));
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
@@ -330,7 +278,7 @@ public class StandbyTaskTest {
 
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
     }
 
     @Test
@@ -341,27 +289,6 @@ public class StandbyTaskTest {
 
         task.suspend();
         task.closeClean();
-    }
-
-    @Test
-    public void shouldOnlyNeedCommitWhenChangelogOffsetChanged() {
-        when(stateManager.changelogOffsets())
-            .thenReturn(Collections.singletonMap(partition, 50L))
-            .thenReturn(Collections.singletonMap(partition, 10100L));
-        doNothing().when(stateManager).flush();
-        doNothing().when(stateManager).checkpoint();
-
-        task = createStandbyTask();
-        task.initializeIfNeeded();
-
-        // no need to commit if we've just initialized and offset not advanced much
-        assertFalse(task.commitNeeded());
-
-        // could commit if the offset advanced beyond threshold
-        assertTrue(task.commitNeeded());
-
-        task.prepareCommit(true);
-        task.postCommit(true);
     }
 
     @Test
@@ -380,10 +307,8 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldThrowOnCloseCleanCheckpointError() {
-        when(stateManager.changelogOffsets())
-            .thenReturn(Collections.singletonMap(partition, 50L));
-        doThrow(new RuntimeException("KABOOM!")).when(stateManager).checkpoint();
+    public void shouldThrowOnCloseCleanCommitError() {
+        doThrow(new RuntimeException("KABOOM!")).when(stateManager).commit();
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
@@ -463,6 +388,29 @@ public class StandbyTaskTest {
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
         assertEquals(Task.State.CLOSED, task.state());
+    }
+
+    @Test
+    public void shouldNotWipeStateDirOnDirtyCloseWithEosAndTransactionalStateStores() {
+        doNothing().when(stateManager).close();
+        when(stateManager.hasCorruptedStores()).thenReturn(false);
+
+        config = new StreamsConfig(mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
+            mkEntry(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true")
+        )));
+
+        task = createStandbyTask();
+
+        task.suspend();
+        task.closeDirty();
+
+        assertEquals(Task.State.CLOSED, task.state());
+        // With transactional state stores, the state dir should NOT be wiped on dirty close
+        // unless stores are specifically marked as corrupted.
+        verify(stateManager, never()).baseDir();
     }
 
     @Test

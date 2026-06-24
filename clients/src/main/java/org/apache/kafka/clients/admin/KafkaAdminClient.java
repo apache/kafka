@@ -257,13 +257,13 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
-import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.KafkaThread;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.KafkaThread;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -284,6 +284,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
@@ -657,7 +658,7 @@ public class KafkaAdminClient extends AdminClient {
                     " must be no smaller than the value of " + AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG + ".");
             } else {
                 log.warn("Overriding the default value for {} ({}) with the explicitly configured request timeout {}",
-                    AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, this.defaultApiTimeoutMs,
+                    AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs,
                     requestTimeoutMs);
                 return requestTimeoutMs;
             }
@@ -900,6 +901,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param now       The current time in milliseconds.
          * @param throwable The failure exception.
          */
+        @SuppressWarnings("NPathComplexity")
         final void fail(long now, Throwable throwable) {
             if (curNode != null) {
                 runnable.nodeReadyDeadlines.remove(curNode);
@@ -921,6 +923,11 @@ public class KafkaAdminClient extends AdminClient {
             }
             nextAllowedTryMs = now + retryBackoff.backoff(tries++);
 
+            // Don't mask VirtualMachineError as TimeoutException - propagate it directly
+            if (throwable instanceof VirtualMachineError) {
+                handleFailure(throwable);
+                return;
+            }
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
                 handleTimeoutFailure(now, throwable);
@@ -949,6 +956,15 @@ public class KafkaAdminClient extends AdminClient {
 
         void maybeRetry(long now, Throwable throwable) {
             runnable.pendingCalls.add(this);
+        }
+
+        /**
+         * Invoked by the polling loop when no node could be assigned to this call. Returns true if
+         * the call took corrective action and should be removed from the pending queue, false to
+         * remain pending and retry node assignment on a later iteration.
+         */
+        boolean handleNodeUnavailable(long now) {
+            return false;
         }
 
         private void handleTimeoutFailure(long now, Throwable cause) {
@@ -1219,6 +1235,8 @@ public class KafkaAdminClient extends AdminClient {
                     log.trace("Assigned {} to node {}", call, node);
                     call.curNode = node;
                     getOrCreateListValue(callsToSend, node).add(call);
+                    return true;
+                } else if (call.handleNodeUnavailable(now)) {
                     return true;
                 } else {
                     log.trace("Unable to assign {} to a node.", call);
@@ -3838,7 +3856,7 @@ public class KafkaAdminClient extends AdminClient {
                                                              final DescribeStreamsGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
             DescribeStreamsGroupsHandler.newFuture(groupIds);
-        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), logContext);
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), options.includeTopologyDescription(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeStreamsGroupsResult(future.all().entrySet().stream()
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
@@ -3865,6 +3883,14 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    /**
+     * Get the metrics kept by the admin client.
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the admin client
+     */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
@@ -5037,10 +5063,10 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse response) {
                 handleNotControllerError(response);
-                RemoveRaftVoterResponse addResponse = (RemoveRaftVoterResponse) response;
-                Errors error = Errors.forCode(addResponse.data().errorCode());
+                RemoveRaftVoterResponse removeResponse = (RemoveRaftVoterResponse) response;
+                Errors error = Errors.forCode(removeResponse.data().errorCode());
                 if (error != Errors.NONE)
-                    future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
+                    future.completeExceptionally(error.exception(removeResponse.data().errorMessage()));
                 else
                     future.complete(null);
             }
@@ -5136,6 +5162,27 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     super.maybeRetry(currentTimeMs, throwable);
                 }
+            }
+
+            @Override
+            boolean handleNodeUnavailable(long currentTimeMs) {
+                OptionalInt brokerId = spec.scope.destinationBrokerId();
+                // The fulfillment target broker is no longer present in the cluster metadata. This
+                // happens when a stale entry in the partition leader cache points at a broker that
+                // has since left the cluster. Send the keys back to the lookup stage so the leader
+                // can be re-resolved, rather than waiting for the request deadline to expire without
+                // ever issuing another lookup. maybeRetryLookup is a no-op (returns false) for
+                // strategies that target a fixed broker id, in which case we leave the call pending.
+                if (brokerId.isPresent()
+                        && metadataManager.isReady()
+                        && metadataManager.nodeById(brokerId.getAsInt()) == null
+                        && driver.maybeRetryLookup(currentTimeMs, spec)) {
+                    log.debug("Broker {} for {} is no longer in the cluster metadata; retrying lookup.",
+                        brokerId.getAsInt(), spec.name);
+                    maybeSendRequests(driver, currentTimeMs);
+                    return true;
+                }
+                return false;
             }
         };
     }

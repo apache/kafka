@@ -29,7 +29,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -72,7 +71,7 @@ class AcknowledgementCommitCallbackHandlerTest {
         acknowledgements.add(1L, AcknowledgeType.REJECT);
         acknowledgementsMap.put(tip0, acknowledgements);
 
-        acknowledgementCommitCallbackHandler.onComplete(Collections.singletonList(acknowledgementsMap));
+        acknowledgementCommitCallbackHandler.onComplete(List.of(acknowledgementsMap));
 
         TestUtils.retryOnExceptionWithTimeout(() -> {
             assertNull(exceptionMap.get(tpo00));
@@ -88,7 +87,7 @@ class AcknowledgementCommitCallbackHandlerTest {
         acknowledgements.complete(Errors.INVALID_RECORD_STATE.exception());
         acknowledgementsMap.put(tip0, acknowledgements);
 
-        acknowledgementCommitCallbackHandler.onComplete(Collections.singletonList(acknowledgementsMap));
+        acknowledgementCommitCallbackHandler.onComplete(List.of(acknowledgementsMap));
         TestUtils.retryOnExceptionWithTimeout(() -> {
             assertInstanceOf(InvalidRecordStateException.class, exceptionMap.get(tpo00));
             assertInstanceOf(InvalidRecordStateException.class, exceptionMap.get(tpo01));
@@ -104,7 +103,7 @@ class AcknowledgementCommitCallbackHandlerTest {
         acknowledgements.complete(Errors.TOPIC_AUTHORIZATION_FAILED.exception());
         acknowledgementsMap.put(tip0, acknowledgements);
 
-        acknowledgementCommitCallbackHandler.onComplete(Collections.singletonList(acknowledgementsMap));
+        acknowledgementCommitCallbackHandler.onComplete(List.of(acknowledgementsMap));
         TestUtils.retryOnExceptionWithTimeout(() -> {
             assertInstanceOf(TopicAuthorizationException.class, exceptionMap.get(tpo00));
             assertInstanceOf(TopicAuthorizationException.class, exceptionMap.get(tpo01));

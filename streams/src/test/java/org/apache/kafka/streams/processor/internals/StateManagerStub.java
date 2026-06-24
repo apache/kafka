@@ -39,7 +39,7 @@ public class StateManagerStub implements StateManager {
                               final CommitCallback checkpoint) {}
 
     @Override
-    public void flush() {}
+    public void commit() {}
 
     @Override
     public void close() {}
@@ -61,9 +61,6 @@ public class StateManagerStub implements StateManager {
 
     @Override
     public void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets) {}
-
-    @Override
-    public void checkpoint() {}
 
     @Override
     public TaskType taskType() {

@@ -158,7 +158,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   @Test
   def testListNodesFromControllersIncludingFencedBrokers(): Unit = {
-    useBoostrapControllers()
+    useBootstrapControllers()
     client = createAdminClient
     val result = client.describeCluster(new DescribeClusterOptions().includeFencedBrokers(true))
     val exception = assertThrows(classOf[Exception], () => { result.nodes().get()})
@@ -167,7 +167,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
   @Test
   def testListNodesFromControllers(): Unit = {
-    useBoostrapControllers()
+    useBootstrapControllers()
     client = createAdminClient
     val result = client.describeCluster(new DescribeClusterOptions())
     assertTrue(result.nodes().get().size().equals(controllerServers.size))
@@ -194,7 +194,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
     waitForNoBlockedRequestThreads()
 
-    useBoostrapControllers()
+    useBootstrapControllers()
     // Queue requests until all threads are blocked. ACL create requests are sent to least loaded
     // node, so we may need more than `numRequestThreads` requests to block all threads.
     val aclFutures = mutable.Buffer[CreateAclsResult]()
@@ -247,7 +247,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
     waitForNoBlockedRequestThreads()
 
-    useBoostrapControllers()
+    useBootstrapControllers()
     // In KRaft mode, ACL creation is handled exclusively by controller servers, not brokers.
     // Therefore, only the number of controller I/O threads is relevant in this context.
     val numReqThreads = controllerServers.head.config.numIoThreads * controllerServers.size
@@ -285,7 +285,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
-    useBoostrapControllers()
+    useBootstrapControllers()
     client = createAdminClient
     val results = client.createAcls(java.util.List.of(acl2, acl3)).values
     assertEquals(Set(acl2, acl3), results.keySet().asScala)
@@ -349,7 +349,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     props
   }
 
-  private def useBoostrapControllers(): Unit = {
+  private def useBootstrapControllers(): Unit = {
     val controllerListenerName = ListenerName.forSecurityProtocol(extraControllerSecurityProtocol)
     val config = controllerServers.map { s =>
       val listener = s.config.effectiveAdvertisedControllerListeners

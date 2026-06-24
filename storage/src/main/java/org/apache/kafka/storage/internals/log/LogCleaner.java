@@ -20,8 +20,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.config.BrokerReconfigurable;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
@@ -35,12 +35,12 @@ import java.io.File;
 import java.io.IOException;
 import java.security.DigestException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -140,7 +140,7 @@ public class LogCleaner implements BrokerReconfigurable {
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
     private final LogDirFailureChannel logDirFailureChannel;
     private final Time time;
-    private final List<CleanerThread> cleaners = new ArrayList<>();
+    private final List<CleanerThread> cleaners = new CopyOnWriteArrayList<>();
 
     /**
      * Log cleaner configuration which may be dynamically updated.

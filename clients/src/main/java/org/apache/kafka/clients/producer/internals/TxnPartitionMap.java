@@ -19,8 +19,8 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 

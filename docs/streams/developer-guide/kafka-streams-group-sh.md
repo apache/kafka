@@ -1,7 +1,7 @@
 ---
 title: Kafka Streams Groups Tool
 type: docs
-description: 
+description: Kafka Streams groups tool for inspecting and managing streams groups.
 weight: 15
 tags: ['kafka', 'docs']
 aliases: 
@@ -41,6 +41,7 @@ A **Streams group** is a broker‑coordinated group type for Kafka Streams that 
     * Group state, group epoch, target assignment epoch (with `--state`, `--verbose` for additional details).
     * Per‑member info such as epochs, current vs target assignments, and whether a member still uses the classic protocol (with `--members` and `--verbose`).
     * Input‑topic offsets and lag (with `--offsets`), to understand how far behind processing is.
+    * The processing topology, as recorded by the broker's topology description plugin (with `--topology`), in a format that mirrors `Topology#describe()`.
   * **Reset input‑topic offsets** for a Streams group to control reprocessing boundaries using precise specifiers (earliest, latest, to‑offset, to‑datetime, by‑duration, shift‑by, from‑file). Requires `--dry-run` or `--execute` and inactive instances.
   * **Delete offsets** for input topics to force re‑consumption on next start.
   * **Delete a Streams group** to clean up broker‑side Streams metadata (offsets, topology, assignments). Optionally delete all, or a subset of, **internal topics** at the same time using `--internal-topics`.
@@ -83,6 +84,10 @@ Inspecting group's state, members, and lag
     # Describe a group: input-topic offsets and lag
     kafka-streams-groups.sh --bootstrap-server localhost:9092 \
       --describe --group my-streams-app --offsets
+
+    # Describe a group: processing topology
+    kafka-streams-groups.sh --bootstrap-server localhost:9092 \
+      --describe --group my-streams-app --topology
     
 
 ## Reset input-topic offsets (preview, then apply) {#reset-offsets}
@@ -140,7 +145,7 @@ Delete broker-side Streams metadata for a group and optionally remove a subset o
 
   * `--list`: List Streams groups. Use `--state` to display/filter by state.
   * `--describe`: Describe a group selected by `--group`. Combine with: 
-    * `--state` (group state and epochs), `--members` (members and assignments), `--offsets` (input and repartition topics offsets/lag).
+    * `--state` (group state and epochs), `--members` (members and assignments), `--offsets` (input and repartition topics offsets/lag), `--topology` (processing topology recorded by the broker's topology description plugin).
     * `--verbose` for additional details (e.g., leader epochs where applicable).
   * `--reset-offsets`: Reset input-topic offsets (one group at a time; instances should be inactive). Choose exactly one specifier: 
     * `--to-earliest`, `--to-latest`, `--to-current`, `--to-offset <n>`

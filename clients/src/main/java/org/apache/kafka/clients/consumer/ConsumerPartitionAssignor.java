@@ -102,6 +102,9 @@ public interface ConsumerPartitionAssignor {
      */
     String name();
 
+    /**
+     * Represents a consumer's subscription information including topics, user data, and owned partitions.
+     */
     final class Subscription {
         private final List<String> topics;
         private final ByteBuffer userData;
@@ -110,6 +113,15 @@ public interface ConsumerPartitionAssignor {
         private Optional<String> groupInstanceId;
         private final Optional<Integer> generationId;
 
+        /**
+         * Constructs a subscription with full details.
+         *
+         * @param topics The list of topics to subscribe to
+         * @param userData Nullable user data to include in the subscription
+         * @param ownedPartitions The partitions currently owned by this consumer
+         * @param generationId The generation ID of the consumer group
+         * @param rackId Optional rack ID for rack-aware assignment
+         */
         public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions, int generationId, Optional<String> rackId) {
             this.topics = topics;
             this.userData = userData;
@@ -119,42 +131,95 @@ public interface ConsumerPartitionAssignor {
             this.rackId = rackId;
         }
 
+        /**
+         * Constructs a subscription without generation ID and rack ID.
+         *
+         * @param topics The list of topics to subscribe to
+         * @param userData Nullable user data to include in the subscription
+         * @param ownedPartitions The partitions currently owned by this consumer
+         */
         public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
             this(topics, userData, ownedPartitions, DEFAULT_GENERATION, Optional.empty());
         }
 
+        /**
+         * Constructs a subscription without owned partitions.
+         *
+         * @param topics The list of topics to subscribe to
+         * @param userData Nullable user data to include in the subscription
+         */
         public Subscription(List<String> topics, ByteBuffer userData) {
             this(topics, userData, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
         }
 
+        /**
+         * Constructs a basic subscription with only topics.
+         *
+         * @param topics The list of topics to subscribe to
+         */
         public Subscription(List<String> topics) {
             this(topics, null, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());
         }
 
+        /**
+         * Returns the list of topics subscribed to.
+         *
+         * @return The list of topics
+         */
         public List<String> topics() {
             return topics;
         }
 
+        /**
+         * Returns the user data included in the subscription.
+         *
+         * @return The user data, or null if none was provided
+         */
         public ByteBuffer userData() {
             return userData;
         }
 
+        /**
+         * Returns the partitions currently owned by this consumer.
+         *
+         * @return The list of owned partitions
+         */
         public List<TopicPartition> ownedPartitions() {
             return ownedPartitions;
         }
 
+        /**
+         * Returns the rack ID for rack-aware assignment.
+         *
+         * @return The rack ID, or empty if not provided
+         */
         public Optional<String> rackId() {
             return rackId;
         }
 
+        /**
+         * Sets the group instance ID for static membership.
+         *
+         * @param groupInstanceId The group instance ID
+         */
         public void setGroupInstanceId(Optional<String> groupInstanceId) {
             this.groupInstanceId = groupInstanceId;
         }
 
+        /**
+         * Returns the group instance ID if this is a static member.
+         *
+         * @return The group instance ID, or empty if this is a dynamic member
+         */
         public Optional<String> groupInstanceId() {
             return groupInstanceId;
         }
 
+        /**
+         * Returns the generation ID of the consumer group.
+         *
+         * @return The generation ID, or empty if not provided
+         */
         public Optional<Integer> generationId() {
             return generationId;
         }
@@ -172,23 +237,47 @@ public interface ConsumerPartitionAssignor {
         }
     }
 
+    /**
+     * Represents the partition assignment for a consumer.
+     */
     final class Assignment {
         private final List<TopicPartition> partitions;
         private final ByteBuffer userData;
 
+        /**
+         * Constructs an assignment with partitions and user data.
+         *
+         * @param partitions The list of partitions assigned to the consumer
+         * @param userData Nullable user data to include in the assignment
+         */
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
             this.partitions = partitions;
             this.userData = userData;
         }
 
+        /**
+         * Constructs an assignment with only partitions.
+         *
+         * @param partitions The list of partitions assigned to the consumer
+         */
         public Assignment(List<TopicPartition> partitions) {
             this(partitions, null);
         }
 
+        /**
+         * Returns the list of partitions assigned to the consumer.
+         *
+         * @return The list of partitions
+         */
         public List<TopicPartition> partitions() {
             return partitions;
         }
 
+        /**
+         * Returns the user data included in the assignment.
+         *
+         * @return The user data, or null if none was provided
+         */
         public ByteBuffer userData() {
             return userData;
         }
@@ -202,13 +291,26 @@ public interface ConsumerPartitionAssignor {
         }
     }
 
+    /**
+     * Represents the subscriptions of all members in a consumer group.
+     */
     final class GroupSubscription {
         private final Map<String, Subscription> subscriptions;
 
+        /**
+         * Constructs a group subscription with member subscriptions.
+         *
+         * @param subscriptions A map from member ID to their subscription
+         */
         public GroupSubscription(Map<String, Subscription> subscriptions) {
             this.subscriptions = subscriptions;
         }
 
+        /**
+         * Returns the subscriptions of all members in the group.
+         *
+         * @return A map from member ID to their subscription
+         */
         public Map<String, Subscription> groupSubscription() {
             return subscriptions;
         }
@@ -221,13 +323,26 @@ public interface ConsumerPartitionAssignor {
         }
     }
 
+    /**
+     * Represents the partition assignments for all members in a consumer group.
+     */
     final class GroupAssignment {
         private final Map<String, Assignment> assignments;
 
+        /**
+         * Constructs a group assignment with member assignments.
+         *
+         * @param assignments A map from member ID to their partition assignment
+         */
         public GroupAssignment(Map<String, Assignment> assignments) {
             this.assignments = assignments;
         }
 
+        /**
+         * Returns the partition assignments for all members in the group.
+         *
+         * @return A map from member ID to their partition assignment
+         */
         public Map<String, Assignment> groupAssignment() {
             return assignments;
         }
@@ -266,10 +381,22 @@ public interface ConsumerPartitionAssignor {
             this.id = id;
         }
 
+        /**
+         * Returns the unique identifier for this rebalance protocol.
+         *
+         * @return The protocol ID
+         */
         public byte id() {
             return id;
         }
 
+        /**
+         * Returns the rebalance protocol for the given identifier.
+         *
+         * @param id The identifier for the rebalance protocol
+         * @return The corresponding rebalance protocol
+         * @throws IllegalArgumentException If the ID is not recognized
+         */
         public static RebalanceProtocol forId(byte id) {
             switch (id) {
                 case 0:

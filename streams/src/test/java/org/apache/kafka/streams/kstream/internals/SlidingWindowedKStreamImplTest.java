@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -42,8 +43,8 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -62,16 +63,22 @@ public class SlidingWindowedKStreamImplTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private TimeWindowedKStream<String, String> windowedStream;
 
-    @BeforeEach
-    public void before() {
+    public void before(final boolean withHeaders) {
+        if (withHeaders) {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_HEADERS);
+        } else {
+            props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
+        }
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         windowedStream = stream.
             groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(1000L)));
     }
 
-    @Test
-    public void shouldCountSlidingWindows() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldCountSlidingWindows(final boolean withHeaders) {
+        before(withHeaders);
         final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .count()
@@ -111,8 +118,10 @@ public class SlidingWindowedKStreamImplTest {
             equalTo(ValueAndTimestamp.make(1L, 200L)));
     }
 
-    @Test
-    public void shouldReduceSlidingWindows() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldReduceSlidingWindows(final boolean withHeaders) {
+        before(withHeaders);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .reduce(MockReducer.STRING_ADDER)
@@ -152,8 +161,10 @@ public class SlidingWindowedKStreamImplTest {
             equalTo(ValueAndTimestamp.make("10", 200L)));
     }
 
-    @Test
-    public void shouldAggregateSlidingWindows() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldAggregateSlidingWindows(final boolean withHeaders) {
+        before(withHeaders);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         windowedStream
             .aggregate(
@@ -196,8 +207,10 @@ public class SlidingWindowedKStreamImplTest {
             equalTo(ValueAndTimestamp.make("0+10", 200L)));
     }
 
-    @Test
-    public void shouldMaterializeCount() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldMaterializeCount(final boolean withHeaders) {
+        before(withHeaders);
         windowedStream.count(
             Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
                 .withKeySerde(Serdes.String())
@@ -235,8 +248,10 @@ public class SlidingWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldMaterializeReduced() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldMaterializeReduced(final boolean withHeaders) {
+        before(withHeaders);
         windowedStream.reduce(
             MockReducer.STRING_ADDER,
             Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
@@ -275,8 +290,10 @@ public class SlidingWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldMaterializeAggregated() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldMaterializeAggregated(final boolean withHeaders) {
+        before(withHeaders);
         windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
@@ -316,28 +333,38 @@ public class SlidingWindowedKStreamImplTest {
         }
     }
 
-    @Test
-    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnAggregateIfInitializerIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(MockInitializer.STRING_INIT, null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnReduceIfReducerIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnReduceIfReducerIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, Materialized.as("store")));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             null,
@@ -345,34 +372,46 @@ public class SlidingWindowedKStreamImplTest {
     }
 
     @SuppressWarnings("unchecked")
-    @Test
-    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, (Materialized) null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(null, Materialized.as("store")));
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     @SuppressWarnings("unchecked")
-    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
+    public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(MockReducer.STRING_ADDER, (Materialized) null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.reduce(MockReducer.STRING_ADDER, (Named) null));
     }
 
-    @Test
-    public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowNullPointerOnCountIfMaterializedIsNull(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(NullPointerException.class, () -> windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null));
     }
 
-    @Test
-    public void shouldThrowIllegalArgumentWhenRetentionIsTooSmall() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldThrowIllegalArgumentWhenRetentionIsTooSmall(final boolean withHeaders) {
+        before(withHeaders);
         assertThrows(IllegalArgumentException.class, () -> windowedStream
             .aggregate(
                 MockInitializer.STRING_INIT,
@@ -386,8 +425,10 @@ public class SlidingWindowedKStreamImplTest {
         );
     }
 
-    @Test
-    public void shouldDropWindowsOutsideOfRetention() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldDropWindowsOutsideOfRetention(final boolean withHeaders) {
+        before(withHeaders);
         final WindowBytesStoreSupplier storeSupplier = Stores.inMemoryWindowStore("aggregated", ofMillis(1200L), ofMillis(100L), false);
         windowedStream.aggregate(
             MockInitializer.STRING_INIT,
