@@ -1665,11 +1665,11 @@ public class KafkaRaftClientReconfigTest {
 
         // Attempt to update the follower
         InetSocketAddress defaultAddress = InetSocketAddress.createUnresolved(
-            "localhost",
-            9990 + follower.id()
+            "new_host",
+            7770 + follower.id()
         );
         InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
-            "localhost",
+            "new_host",
             8990 + follower.id()
         );
         HashMap<ListenerName, InetSocketAddress> listenersMap = new HashMap<>(2);
@@ -1977,6 +1977,13 @@ public class KafkaRaftClientReconfigTest {
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
+
+        // Establish a HWM and commit the latest voter set
+        context.deliverRequest(
+            context.fetchRequest(epoch, follower, context.log.endOffset().offset(), epoch, 0)
+        );
+        context.pollUntilResponse();
+        context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
 
         // missing directory id
         context.deliverRequest(

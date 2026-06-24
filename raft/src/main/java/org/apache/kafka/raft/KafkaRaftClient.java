@@ -2534,18 +2534,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             );
         }
 
-        Endpoints voterEndpoints = Endpoints.fromUpdateVoterRequest(data.listeners());
-        if (voterEndpoints.address(channel.listenerName()).isEmpty()) {
-            return completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.INVALID_REQUEST,
-                    requestMetadata.listenerName(),
-                    quorum.leaderAndEpoch(),
-                    quorum.leaderEndpoints()
-                )
-            );
-        }
-
         UpdateRaftVoterRequestData.KRaftVersionFeature supportedKraftVersions = data.kRaftVersionFeature();
         if (supportedKraftVersions.minSupportedVersion() < 0 ||
             supportedKraftVersions.maxSupportedVersion() < 0 ||
@@ -2565,7 +2553,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             quorum.leaderStateOrThrow(),
             requestMetadata.listenerName(),
             voter.get(),
-            voterEndpoints,
+            Endpoints.fromUpdateVoterRequest(data.listeners()),
             supportedKraftVersions,
             currentTimeMs
         );

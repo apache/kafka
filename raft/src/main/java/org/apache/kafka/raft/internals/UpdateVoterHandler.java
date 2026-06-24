@@ -288,6 +288,15 @@ public final class UpdateVoterHandler {
             voters = inMemoryVoters.map(KRaftVersionUpgrade.Voters::voters);
         }
         if (voters.isEmpty()) {
+            /* This can happen if the remote voter sends an update voter request after the kraft
+             * version has been upgraded to 1 but before the updated kraft version has been written
+             * to the log.
+             *
+             * During this time the kraft version and the voter set have been written to the batch
+             * accumulator and the leader's volatile voter set has been cleared. These updates have
+             * not been written to the log. The KRaft replica's partition state is only updated when
+             * the control record has been written to the log (disk).
+             */
             logger.info("Unable to read the current voter set with kraft version {}", kraftVersion);
             changeVoterState.resetUpdateVoterHandlerState(
                 Errors.REQUEST_TIMED_OUT,
@@ -359,7 +368,7 @@ public final class UpdateVoterHandler {
         if (inMemoryVoters.isEmpty()) {
             /* Since the partition support reconfig then just write the update voter set directly to the log.
              *
-             * Complete the RPC but don't reset the handler state. This allows the followr to send a FETCH
+             * Complete the RPC but don't reset the handler state. This allows the follower to send a FETCH
              * request and help to commit the voter set change.
              */
             current.setLastOffset(leaderState.appendVotersRecord(newVoters, currentTimeMs));
