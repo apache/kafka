@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: 
+description: Quick start for running the Kafka Streams demo application.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 

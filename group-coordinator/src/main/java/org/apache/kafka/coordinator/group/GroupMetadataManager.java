@@ -182,6 +182,7 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1571,15 +1572,25 @@ public class GroupMetadataManager {
      * Checks whether the consumer group can accept a new member or not based on the
      * max group size defined.
      *
-     * @param group     The consumer group.
-     * @param memberId  The member id.
+     * @param group      The consumer group.
+     * @param memberId   The member id.
+     * @param instanceId The instance id.
      *
      * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
      */
     private void throwIfConsumerGroupIsFull(
         ConsumerGroup group,
-        String memberId
+        String memberId,
+        String instanceId
     ) throws GroupMaxSizeReachedException {
+        // If a static member already exists, we do not enforce the maximum group size check.
+        // An existing static member will fall into one of the following two cases,
+        // and neither affects the group size:
+        // 1. The member is replaced due to the static member rejoining.
+        // 2. 'UnreleasedInstanceIdException' is raised due to an epoch mismatch.
+        if (group.hasStaticMember(instanceId))
+            return;
+
         // If the consumer group has reached its maximum capacity, the member is rejected if it is not
         // already a member of the consumer group.
         if (group.numMembers() >= config.consumerGroupMaxSize() && (memberId.isEmpty() || !group.hasMember(memberId))) {
@@ -2009,7 +2020,7 @@ public class GroupMetadataManager {
                 ByteBuffer.wrap(protocols.iterator().next().metadata())
             );
         } catch (SchemaException e) {
-            throw new IllegalStateException("Malformed embedded consumer protocol in subscription deserialization.");
+            throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception("Malformed embedded consumer protocol in subscription deserialization.");
         }
     }
 
@@ -2325,7 +2336,13 @@ public class GroupMetadataManager {
 
         response.setStatus(returnedStatus);
 
-        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated, updatedTopology.topologyEpoch()));
+        return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(
+            response,
+            internalTopicsToBeCreated,
+            updatedTopology.topologyEpoch(),
+            group.storedDescriptionTopologyEpoch(),
+            group.failedDescriptionTopologyEpoch()
+        ));
     }
 
     /**
@@ -2457,7 +2474,7 @@ public class GroupMetadataManager {
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
-        throwIfConsumerGroupIsFull(group, memberId);
+        throwIfConsumerGroupIsFull(group, memberId, instanceId);
 
         // Get or create the member.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
@@ -2631,7 +2648,7 @@ public class GroupMetadataManager {
         final boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
         if (isUnknownMember) memberId = Uuid.randomUuid().toString();
 
-        throwIfConsumerGroupIsFull(group, memberId);
+        throwIfConsumerGroupIsFull(group, memberId, instanceId);
         throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
 
         if (JoinGroupRequest.requiresKnownMemberId(request, context.requestVersion())) {
@@ -3171,15 +3188,16 @@ public class GroupMetadataManager {
         combinedTopicIdSet.addAll(initializingSet);
 
         for (Uuid topicId : combinedTopicIdSet) {
-            Set<Integer> initializedPartitions = initialized.containsKey(topicId) ? initialized.get(topicId).partitions() : new HashSet<>();
-            long timestamp = initialized.containsKey(topicId) ? initialized.get(topicId).timestamp() : -1;
-            String name = initialized.containsKey(topicId) ? initialized.get(topicId).name() : "UNKNOWN";
+            InitMapValue initializedValue = initialized.get(topicId);
+            Set<Integer> finalPartitions = initializedValue != null ? new HashSet<>(initializedValue.partitions()) : new HashSet<>();
+            long timestamp = initializedValue != null ? initializedValue.timestamp() : -1;
+            String name = initializedValue != null ? initializedValue.name() : "UNKNOWN";
 
-            Set<Integer> finalPartitions = new HashSet<>(initializedPartitions);
             if (initializingSet.contains(topicId)) {
-                finalPartitions.addAll(initializing.get(topicId).partitions());
-                timestamp = initializing.get(topicId).timestamp();
-                name = initializing.get(topicId).name();
+                InitMapValue initializingValue = initializing.get(topicId);
+                finalPartitions.addAll(initializingValue.partitions());
+                timestamp = initializingValue.timestamp();
+                name = initializingValue.name();
             }
             finalInitMap.putIfAbsent(topicId, new InitMapValue(name, finalPartitions, timestamp));
         }
@@ -4466,7 +4484,13 @@ public class GroupMetadataManager {
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
             log.info("[GroupId {}][MemberId {}] Member {} left the streams group.", groupId, memberId, memberId);
-            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch()));
+            return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(
+                response,
+                Map.of(),
+                group.currentTopologyEpoch(),
+                group.storedDescriptionTopologyEpoch(),
+                group.failedDescriptionTopologyEpoch()
+            ));
         } else {
             StreamsGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
@@ -4478,7 +4502,13 @@ public class GroupMetadataManager {
             } else {
                 log.info("[GroupId {}][MemberId {}] Static member {} with instance id {} left the streams group.",
                     group.groupId(), memberId, memberId, instanceId);
-                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch()));
+                return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(
+                    response,
+                    Map.of(),
+                    group.currentTopologyEpoch(),
+                    group.storedDescriptionTopologyEpoch(),
+                    group.failedDescriptionTopologyEpoch()
+                ));
             }
         }
     }
@@ -4547,7 +4577,13 @@ public class GroupMetadataManager {
 
         return new CoordinatorResult<>(
             List.of(record),
-            new StreamsGroupHeartbeatResult(response, Map.of(), group.currentTopologyEpoch())
+            new StreamsGroupHeartbeatResult(
+                response,
+                Map.of(),
+                group.currentTopologyEpoch(),
+                group.storedDescriptionTopologyEpoch(),
+                group.failedDescriptionTopologyEpoch()
+            )
         );
     }
 
@@ -8338,26 +8374,130 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates that a streams group exists and that the given member is a current member of it.
-     * Used by the StreamsGroupTopologyDescriptionUpdate RPC handler to enforce the
-     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID contract before consulting the topology description plugin.
-     * The lookup runs at {@code committedOffset} so an uncommitted fence/leave does not cause a
-     * still-live member to appear unknown (or vice versa).
+     * Validates that a streams group exists, that the given member is a current member of it,
+     * and that {@code pushedEpoch} matches the group's current topology epoch. Used by the
+     * StreamsGroupTopologyDescriptionUpdate RPC handler to enforce the
+     * GROUP_ID_NOT_FOUND / UNKNOWN_MEMBER_ID / INVALID_REQUEST contract before consulting
+     * the topology description plugin.
+     *
+     * <p>The epoch check rejects stale or out-of-order pushes so they cannot regress
+     * {@code storedDescriptionTopologyEpoch} or be persisted at an epoch the group never
+     * advertised. The lookup runs at {@code committedOffset} so an uncommitted
+     * fence/leave does not cause a still-live member to appear unknown (or vice versa).
      *
      * @param groupId         The group ID.
      * @param memberId        The member ID.
+     * @param pushedEpoch     The topology epoch carried by the push request.
      * @param committedOffset A committed offset corresponding to the desired snapshot.
      * @return The matching {@link StreamsGroupMember}.
      * @throws GroupIdNotFoundException if no streams group with this id exists.
      * @throws UnknownMemberIdException if the member is not currently in the group.
+     * @throws InvalidRequestException  if {@code pushedEpoch} does not match the group's
+     *                                  current topology epoch.
      */
-    public StreamsGroupMember validateStreamsGroupMember(
+    public StreamsGroupMember validateStreamsGroupTopologyDescriptionUpdate(
         String groupId,
         String memberId,
+        int pushedEpoch,
         long committedOffset
-    ) throws GroupIdNotFoundException, UnknownMemberIdException {
+    ) throws GroupIdNotFoundException, UnknownMemberIdException, InvalidRequestException {
         StreamsGroup group = streamsGroup(groupId, committedOffset);
-        return group.getMemberOrThrow(memberId, committedOffset);
+        StreamsGroupMember member = group.getMemberOrThrow(memberId, committedOffset);
+        int currentEpoch = group.currentTopologyEpoch();
+        if (pushedEpoch != currentEpoch) {
+            throw new InvalidRequestException(
+                "Topology epoch " + pushedEpoch + " does not match the group's current topology epoch "
+                    + currentEpoch + ".");
+        }
+        return member;
+    }
+
+    /**
+     * Filter the given group ids down to those that are streams groups with a non-default
+     * {@code StoredDescriptionTopologyEpoch}. The result is used by {@code DeleteGroups}
+     * to decide which groups warrant a {@code plugin.deleteTopology} call before the
+     * group is tombstoned. Non-existent groups and non-streams groups are silently
+     * skipped — they have no plugin state to clean up.
+     *
+     * @param groupIds        Candidate group ids on this shard.
+     * @param committedOffset A committed offset corresponding to the desired snapshot.
+     * @return The subset of {@code groupIds} that are streams groups with a stored topology.
+     */
+    public Set<String> streamsGroupsWithStoredTopologyDescription(
+        Collection<String> groupIds,
+        long committedOffset
+    ) {
+        Set<String> withStored = new HashSet<>();
+        for (String groupId : groupIds) {
+            // Non-throwing lookup + type check: silently skip absent or non-streams groups.
+            Group group = groups.get(groupId, committedOffset);
+            if (group != null
+                && group.type() == STREAMS
+                && ((StreamsGroup) group).storedDescriptionTopologyEpoch(committedOffset) != -1) {
+                withStored.add(groupId);
+            }
+        }
+        return withStored;
+    }
+
+    /**
+     * Advance {@code StoredDescriptionTopologyEpoch} to {@code pushedEpoch} after a successful
+     * plugin {@code setTopology}, so subsequent heartbeats at the same epoch do not re-solicit.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record that updates the field.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setStoredDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) throws GroupIdNotFoundException {
+        return updateTopologyDescriptionEpochs(groupId, pushedEpoch, false);
+    }
+
+    /**
+     * Advance {@code FailedDescriptionTopologyEpoch} to {@code pushedEpoch} after a permanent
+     * plugin failure, so subsequent heartbeats at the same epoch do not re-solicit a push.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record that updates the field.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setFailedDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) throws GroupIdNotFoundException {
+        return updateTopologyDescriptionEpochs(groupId, pushedEpoch, true);
+    }
+
+    private CoordinatorResult<Void, CoordinatorRecord> updateTopologyDescriptionEpochs(
+        String groupId,
+        int pushedEpoch,
+        boolean permanentFailure
+    ) throws GroupIdNotFoundException {
+        StreamsGroup group = streamsGroup(groupId);
+
+        // Only advance these epochs, never regress them: a stale push committing after the group
+        // advanced (or after a concurrent higher-epoch push) must not move stored/failed back.
+        int newStored = permanentFailure
+            ? group.storedDescriptionTopologyEpoch()
+            : Math.max(group.storedDescriptionTopologyEpoch(), pushedEpoch);
+        int newFailed = permanentFailure
+            ? Math.max(group.failedDescriptionTopologyEpoch(), pushedEpoch)
+            : group.failedDescriptionTopologyEpoch();
+
+        CoordinatorRecord record = newStreamsGroupMetadataRecord(
+            groupId,
+            group.groupEpoch(),
+            group.metadataHash(),
+            group.validatedTopologyEpoch(),
+            group.lastAssignmentConfigs(),
+            newStored,
+            newFailed
+        );
+        return new CoordinatorResult<>(List.of(record), null);
     }
 
     /**

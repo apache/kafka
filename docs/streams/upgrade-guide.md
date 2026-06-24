@@ -1,6 +1,6 @@
 ---
 title: Upgrade Guide
-description: 
+description: Kafka Streams upgrade guidance and compatibility notes.
 weight: 6
 tags: ['kafka', 'docs']
 aliases: 
@@ -66,6 +66,10 @@ Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS v
 Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.
 
 ## Streams API changes in 4.4.0
+
+Kafka Streams no longer emits a WARN from `KafkaStreams#cleanUp()` when the application state directory cannot be deleted only because expected metadata files remain, such as `kafka-streams-process-metadata` and/or `.lock`. In this case, the local state cleanup is considered successful and the application state directory may be retained. Users who require a full local reset including persisted process metadata should manually delete the application state directory after the Kafka Streams instance has been closed. More details can be found in [KIP-1283](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1283:+Clarify+KafkaStreams+cleanUp+semantics+to+preserve+process+metadata+and+state+directory+lock+file)
+
+Kafka Streams now validates the `application.server` configuration when `StreamsConfig` is created. The value must be empty or a valid endpoint from which Kafka Streams can parse both host and port, such as `host:port` or `protocol://host:port`. Invalid values that may previously have failed later during startup or assignment now fail earlier with a `ConfigException`. More details can be found in [KIP-1245](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1245%3A+Enforce+%27application.server%27+%3Cserver%3E%3A%3Cport%3E+format+at+config+level).
 
 `org.apache.kafka.streams.CloseOptions.GroupMembershipOperation` adds a new `DEFAULT` value, which is now the default for `CloseOptions`. Under the classic protocol, `DEFAULT` keeps the existing behavior — the consumer remains in the group on close. Under the streams protocol (`group.protocol=streams`), `DEFAULT` adapts to the membership type: dynamic members leave the group on close, while static members remain in the group until session timeout. `LEAVE_GROUP` and `REMAIN_IN_GROUP` continue to force the corresponding behavior regardless of protocol. More details can be found in [KIP-1284](https://cwiki.apache.org/confluence/x/1ow8G).
 
