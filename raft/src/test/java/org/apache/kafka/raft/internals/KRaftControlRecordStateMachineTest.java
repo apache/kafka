@@ -58,7 +58,6 @@ final class KRaftControlRecordStateMachineTest {
             staticVoterSet,
             log,
             STRING_SERDE,
-            BufferSupplier.NO_CACHING,
             1024,
             new LogContext(),
             raftMetrics,
