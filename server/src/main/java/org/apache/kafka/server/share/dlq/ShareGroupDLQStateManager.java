@@ -185,6 +185,9 @@ public class ShareGroupDLQStateManager {
 
     // Visibility for tests
     CompletableFuture<Void> dlq(ShareGroupDLQRecordParameter param, long requestBackoffMs, long requestBackoffMaxMs, int maxRequestAttempts) {
+        if (!this.isStarted.get()) {
+            return CompletableFuture.failedFuture(new IllegalStateException("ShareGroupDLQStateManager is not started."));
+        }
         CompletableFuture<Void> future = new CompletableFuture<>();
         ProduceRequestHandler requestHandler = new ProduceRequestHandler(param, future, requestBackoffMs, requestBackoffMaxMs, maxRequestAttempts);
         enqueue(requestHandler);
@@ -921,19 +924,24 @@ public class ShareGroupDLQStateManager {
     // Visibility for tests
     static CoalesceResults coalesceProduceRequests(List<ProduceRequestHandler> handlers) {
         // Above handlers are destined for the same broker node - it could be for different DLQ topics and partitions
-        // but the same broker node. Now the produce request requires each topic data request to be
-        // scoped to a specific topic/topicId and the partition data could have all the record information
-        // and the destination DLQ partition. To accomplish this, we will map handlers by DLQ topic id.
-        Map<Uuid, ProduceRequestData.TopicProduceData> produceHandlerMap = new HashMap<>();
+        // but the same broker node. The produce request requires each topic data request to be scoped to a
+        // specific topic/topicId, and within a topic each partition must appear at most once (the broker keys
+        // partitions by (topicId, index) and would otherwise drop all but one entry). So we first collect the
+        // records into a map keyed by DLQ topic id and then DLQ partition - merging the records of all handlers
+        // that target the same (topic, partition) - and then build a single produce request from that map.
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Map<Uuid, Map<Integer, List<MemoryRecords>>> recordsByTopicAndPartition = new LinkedHashMap<>();
         List<ProduceRequestHandler> liveHandlers = new ArrayList<>(handlers.size());
         handlers.forEach(handler -> {
             try {
                 ProduceRequestData.TopicProduceData topicProduceData = handler.topicProduceData();
-                produceHandlerMap.computeIfAbsent(topicProduceData.topicId(), topicId ->
-                    new ProduceRequestData.TopicProduceData()
-                        .setName(topicProduceData.name())
-                        .setTopicId(topicId)
-                ).partitionData().addAll(topicProduceData.partitionData());
+                Uuid topicId = topicProduceData.topicId();
+                topicNames.putIfAbsent(topicId, topicProduceData.name());
+                Map<Integer, List<MemoryRecords>> partitionRecords =
+                    recordsByTopicAndPartition.computeIfAbsent(topicId, k -> new LinkedHashMap<>());
+                topicProduceData.partitionData().forEach(partitionData ->
+                    partitionRecords.computeIfAbsent(partitionData.index(), k -> new ArrayList<>())
+                        .add((MemoryRecords) partitionData.records()));
                 liveHandlers.add(handler);
             } catch (Exception exception) {
                 log.error("Unable to coalesce ProduceRequestData for handler {}. It will be skipped from DLQ.", handler, exception);
@@ -941,8 +949,21 @@ public class ShareGroupDLQStateManager {
             }
         });
 
+        ProduceRequestData.TopicProduceDataCollection topicData = new ProduceRequestData.TopicProduceDataCollection();
+        recordsByTopicAndPartition.forEach((topicId, partitionRecords) -> {
+            List<ProduceRequestData.PartitionProduceData> partitionData = new ArrayList<>(partitionRecords.size());
+            partitionRecords.forEach((partitionIndex, records) ->
+                partitionData.add(new ProduceRequestData.PartitionProduceData()
+                    .setIndex(partitionIndex)
+                    .setRecords(mergeRecords(records))));
+            topicData.add(new ProduceRequestData.TopicProduceData()
+                .setName(topicNames.get(topicId))
+                .setTopicId(topicId)
+                .setPartitionData(partitionData));
+        });
+
         ProduceRequestData data = new ProduceRequestData()
-            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(produceHandlerMap.values().iterator()))
+            .setTopicData(topicData)
             .setAcks((short) -1)  // all replicas
             .setTimeoutMs(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT);
 
@@ -950,5 +971,24 @@ public class ShareGroupDLQStateManager {
             new ProduceRequest.Builder(ApiKeys.PRODUCE.latestVersion(), ApiKeys.PRODUCE.latestVersion(), data),
             liveHandlers
         );
+    }
+
+    /**
+     * Merges the records of all handlers that target the same DLQ partition into a single {@link MemoryRecords}
+     * (one record batch). The partition must appear only once in the coalesced produce request, and a produce
+     * request is only allowed one record batch per partition - so when more than one handler contributes records
+     * for a partition, they are combined into a single batch.
+     */
+    private static MemoryRecords mergeRecords(List<MemoryRecords> recordsList) {
+        if (recordsList.size() == 1) {
+            return recordsList.get(0);
+        }
+        List<SimpleRecord> simpleRecords = new ArrayList<>();
+        for (MemoryRecords records : recordsList) {
+            for (Record record : records.records()) {
+                simpleRecords.add(new SimpleRecord(record.timestamp(), record.key(), record.value(), record.headers()));
+            }
+        }
+        return MemoryRecords.withRecords(Compression.NONE, simpleRecords.toArray(new SimpleRecord[0]));
     }
 }
