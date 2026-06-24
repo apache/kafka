@@ -200,7 +200,7 @@ public class StreamsGroup implements Group {
      * it is not persisted to the {@code __consumer_offsets} topic; it is held in memory and re-reported by members
      * on the task-offset interval (and is therefore lost on coordinator failover until re-reported).
      */
-    private final TimelineHashMap<String, MemberTaskOffsets> taskOffsets;
+    private final Map<String, MemberTaskOffsets> taskOffsets = new HashMap<>();
 
     /**
      * The Streams topology.
@@ -279,7 +279,6 @@ public class StreamsGroup implements Group {
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.taskOffsets = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
