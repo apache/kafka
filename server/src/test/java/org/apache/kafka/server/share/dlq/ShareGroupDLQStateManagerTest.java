@@ -59,6 +59,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -1368,6 +1369,79 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
+    public void testCoalesceProduceRequestsMergesRecordsForSameDlqPartition() throws Exception {
+        // One share group with two source topics, two partitions each (four source topic-partitions). The DLQ
+        // topic has a single partition (default cache helper), so all four handlers target the same DLQ
+        // (topic, partition). Their records must be merged into a single partition entry / single record batch,
+        // preserving every record - rather than producing duplicate partition entries that the broker would
+        // collapse, dropping records.
+        Uuid sourceTopicAId = Uuid.randomUuid();
+        Uuid sourceTopicBId = Uuid.randomUuid();
+        List<TopicIdPartition> sources = List.of(
+            new TopicIdPartition(sourceTopicAId, 0, "source-topic-a"),
+            new TopicIdPartition(sourceTopicAId, 1, "source-topic-a"),
+            new TopicIdPartition(sourceTopicBId, 0, "source-topic-b"),
+            new TopicIdPartition(sourceTopicBId, 1, "source-topic-b"));
+
+        stateManager = builder().build();
+        List<ShareGroupDLQStateManager.ProduceRequestHandler> handlers = new ArrayList<>();
+        for (TopicIdPartition source : sources) {
+            ShareGroupDLQStateManager.ProduceRequestHandler handler =
+                newHandlerForCoalesceTest(stateManager, GROUP_ID, source);
+            handler.populateDLQTopicData();
+            handlers.add(handler);
+        }
+
+        ShareGroupDLQStateManager.CoalesceResults result =
+            ShareGroupDLQStateManager.coalesceProduceRequests(handlers);
+
+        assertEquals(handlers, result.liveHandlers());
+
+        ProduceRequest request = ((ProduceRequest.Builder) result.request()).build();
+        assertEquals(1, request.data().topicData().size(), "All records target the single DLQ topic");
+        ProduceRequestData.TopicProduceData topic = request.data().topicData().iterator().next();
+        assertEquals(DLQ_TOPIC_ID, topic.topicId());
+        assertEquals(1, topic.partitionData().size(),
+            "All four handlers target the same DLQ partition and must merge into a single partition entry");
+        ProduceRequestData.PartitionProduceData partition = topic.partitionData().get(0);
+        assertEquals(0, partition.index());
+
+        // The single merged batch must contain one record per source topic-partition, with each record's
+        // source topic + partition headers intact.
+        MemoryRecords records = (MemoryRecords) partition.records();
+        assertEquals(sources.size(), recordCount(records));
+        Set<String> headers = new HashSet<>();
+        for (Record record : records.records()) {
+            headers.add(headerValue(record, HEADER_DLQ_ERRORS_TOPIC)
+                + "-" + headerValue(record, HEADER_DLQ_ERRORS_PARTITION));
+        }
+        assertEquals(
+            Set.of("source-topic-a-0", "source-topic-a-1", "source-topic-b-0", "source-topic-b-1"),
+            headers);
+
+        verify(mockMetrics, times(sources.size())).recordDLQProduce(GROUP_ID);
+    }
+
+    private static int recordCount(MemoryRecords records) {
+        int count = 0;
+        Iterator<Record> iterator = records.records().iterator();
+        while (iterator.hasNext()) {
+            count++;
+            iterator.next();
+        }
+        return count;
+    }
+
+    private static String headerValue(Record record, String key) {
+        for (Header header : record.headers()) {
+            if (header.key().equals(key)) {
+                return new String(header.value(), StandardCharsets.UTF_8);
+            }
+        }
+        return null;
+    }
+
+    @Test
     public void testCoalesceProduceRequestsKeepsDifferentDlqTopicsSeparate() throws Exception {
         String groupA = "group-a";
         String groupB = "group-b";
@@ -1711,9 +1785,18 @@ class ShareGroupDLQStateManagerTest {
         String groupId,
         int sourcePartition
     ) {
+        return newHandlerForCoalesceTest(manager, groupId,
+            new TopicIdPartition(SOURCE_TOPIC_ID, sourcePartition, "source-topic"));
+    }
+
+    private static ShareGroupDLQStateManager.ProduceRequestHandler newHandlerForCoalesceTest(
+        ShareGroupDLQStateManager manager,
+        String groupId,
+        TopicIdPartition source
+    ) {
         ShareGroupDLQRecordParameter param = new ShareGroupDLQRecordParameter(
             groupId,
-            new TopicIdPartition(SOURCE_TOPIC_ID, sourcePartition, "source-topic"),
+            source,
             0L, 0L,
             Optional.empty(), Optional.empty());
         return manager.new ProduceRequestHandler(
