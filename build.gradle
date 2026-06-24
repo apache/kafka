@@ -3032,7 +3032,7 @@ project(':streams:streams-scala') {
   spotless {
     scala {
       target '**/*.scala'
-      scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
+      // Skip scalafmt while Spotless is affected by https://github.com/diffplug/spotless/issues/2850.
       licenseHeaderFile '../../checkstyle/java.header', 'package'
     }
   }
