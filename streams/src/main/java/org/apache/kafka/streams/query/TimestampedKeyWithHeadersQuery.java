@@ -64,10 +64,6 @@ public final class TimestampedKeyWithHeadersQuery<K, V> implements Query<ReadOnl
     /**
      * Specifies that the cache should be skipped during query evaluation. This means, that the query will always
      * get forwarded to the underlying store.
-     *
-     * <p><b>PoC limitation:</b> this flag is currently a no-op. The header-aware store handler does not yet
-     * propagate it to the underlying cache, so queries are evaluated against the cache regardless. Wiring
-     * this through is out of scope for the proof-of-concept.
      */
     public TimestampedKeyWithHeadersQuery<K, V> skipCache() {
         return new TimestampedKeyWithHeadersQuery<>(key, true);

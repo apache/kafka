@@ -337,7 +337,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
 
-        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.getKey(), internalContext.headers()));
+        KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.getKey(), internalContext.headers()));
+        if (typedKeyQuery.isSkipCache()) {
+            rawKeyQuery = rawKeyQuery.skipCache();
+        }
         final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
@@ -363,7 +366,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedKeyQuery<K, V> typedKeyQuery = (TimestampedKeyQuery<K, V>) query;
 
-        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
+        KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
+        if (typedKeyQuery.isSkipCache()) {
+            rawKeyQuery = rawKeyQuery.skipCache();
+        }
         final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
@@ -393,14 +399,13 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedKeyWithHeadersQuery<K, V> typedKeyQuery = (TimestampedKeyWithHeadersQuery<K, V>) query;
 
-        // Forward a raw byte-level KeyQuery to the wrapped store; the result bytes are the serialized
-        // ValueTimestampHeaders, which we deserialize below to recover value, timestamp, and headers.
-        // PoC limitation: typedKeyQuery.isSkipCache() is intentionally NOT propagated to the raw
-        // KeyQuery below. CachingKeyValueStore only honors skipCache when it is set on the forwarded
-        // KeyQuery, so for now skipCache() is a no-op for this query type (the existing
-        // runTimestampedKeyQuery has the same gap). Out of scope for this PoC; would be wired by
-        // calling rawKeyQuery.skipCache() when typedKeyQuery.isSkipCache() is true.
-        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
+        // Forward a raw byte-level KeyQuery to the wrapped store, propagating skipCache so the caching
+        // layer can honor it; the result bytes are the serialized ValueTimestampHeaders, which we
+        // deserialize below to recover value, timestamp, and headers.
+        KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
+        if (typedKeyQuery.isSkipCache()) {
+            rawKeyQuery = rawKeyQuery.skipCache();
+        }
         final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
