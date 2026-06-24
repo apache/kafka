@@ -34,7 +34,6 @@
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
   <allow pkg="org.ietf.jgss" />
-  <allow pkg="net.jqwik.api" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />
@@ -475,7 +474,6 @@
     <allow pkg="org.apache.kafka.storage.log.metrics" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
-    <allow pkg="net.jqwik"/>
   </subpackage>
 
   <subpackage name="snapshot">

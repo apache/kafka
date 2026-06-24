@@ -227,9 +227,9 @@ To reset offsets of a consumer group, "--reset-offsets" option can be used. This
 
 It has 3 execution options: 
 
-  * (default) to display which offsets to reset. 
+  * \--dry-run : to display which offsets to reset. (the default)
   * \--execute : to execute --reset-offsets process. 
-  * \--export : to export the results to a CSV format. 
+  * \--export : to generate offset reset information in CSV format for export to a file. 
 
 
 
@@ -240,7 +240,7 @@ It has 3 execution options:
   * \--to-latest : Reset offsets to latest offset. 
   * \--shift-by <Long: number-of-offsets> : Reset offsets shifting current offset by 'n', where 'n' can be positive or negative. 
   * \--from-file : Reset offsets to values defined in CSV file. 
-  * \--to-current : Resets offsets to current offset. 
+  * \--to-current : Reset offsets to current offset. 
   * \--by-duration <String: duration> : Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS' 
   * \--to-offset : Reset offsets to a specific offset. 
 
@@ -297,10 +297,11 @@ You can see that both members have been assigned the same partition which they a
 
 To reset the offsets of a share group, use the "--reset-offsets" option: 
 
-It has 2 execution options: 
+It has 3 execution options: 
 
-  * \--dry-run: to display which offsets to reset. 
+  * \--dry-run : to display which offsets to reset. 
   * \--execute : to execute --reset-offsets process. 
+  * \--export : to generate offset reset information in CSV format for export to a file.
 
 
 
@@ -309,6 +310,9 @@ It has 2 execution options:
   * \--to-datetime <String: datetime> : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss' 
   * \--to-earliest : Reset offsets to earliest offset. 
   * \--to-latest : Reset offsets to latest offset. 
+  * \--from-file : Reset offsets to values defined in CSV file.
+  * \--to-current : Reset offsets to current offset.
+  * \--to-offset : Reset offsets to a specific offset.
 
 
 
@@ -319,6 +323,17 @@ $ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --reset-offsets --
 GROUP           TOPIC           PARTITION  NEW-OFFSET
 my-share-group  topic1          0          10
 ```
+
+For example, you can export the current offsets from an inactive consumer group and use them to set the offsets for a share group:
+
+```bash
+$ bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group my-group --all-topics --to-current --dry-run --export > FILE.CSV
+
+$ bin/kafka-share-groups.sh --bootstrap-server localhost:9092 --reset-offsets --group my-share-group --from-file FILE.CSV --execute
+GROUP           TOPIC           PARTITION  NEW-OFFSET
+my-share-group  topic1          0          10
+```
+
 
 To delete the offsets of individual topics in the share group, use the "--delete-offsets" option: 
 

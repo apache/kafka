@@ -282,6 +282,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             throw e;
         }
 
+        final boolean transactional = StreamsConfig.InternalConfig.getBoolean(
+            configs, StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, false);
+        if (transactional) {
+            dbAccessor = new TransactionalDBAccessor(dbAccessor, db, cfAccessor.dataColumnFamily(), cfAccessor.offsetsColumnFamily(), wOptions, name);
+        }
+
         addValueProvidersToMetricsRecorder();
     }
 
@@ -733,6 +739,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
      * @return an approximate count of key-value mappings in the store.
      */
     @Override
+    public long approximateNumUncommittedBytes() {
+        if (dbAccessor instanceof TransactionalDBAccessor) {
+            return ((TransactionalDBAccessor) dbAccessor).buffer.approximateNumUncommittedBytes();
+        }
+        return 0;
+    }
+
+    @Override
     public long approximateNumEntries() {
         validateStoreOpen();
         final long numEntries;
@@ -1034,6 +1048,116 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
 
+    static class TransactionalDBAccessor implements DBAccessor {
+
+        private final DBAccessor underlying;
+        private final RocksDBTransactionBuffer buffer;
+        private final ColumnFamilyHandle offsetsColumnFamily;
+
+        TransactionalDBAccessor(final DBAccessor underlying,
+                                final RocksDB db,
+                                final ColumnFamilyHandle dataColumnFamily,
+                                final ColumnFamilyHandle offsetsColumnFamily,
+                                final WriteOptions wOptions,
+                                final String storeName) {
+            this.underlying = underlying;
+            this.offsetsColumnFamily = offsetsColumnFamily;
+            this.buffer = new RocksDBTransactionBuffer(db, dataColumnFamily, wOptions, storeName);
+        }
+
+        @Override
+        public byte[] get(final ColumnFamilyHandle columnFamily, final byte[] key) throws RocksDBException {
+            if (!columnFamily.equals(offsetsColumnFamily)) {
+                final java.util.Optional<byte[]> staged = buffer.get(Bytes.wrap(key));
+                if (staged != null) {
+                    return staged.orElse(null);
+                }
+            }
+            return underlying.get(columnFamily, key);
+        }
+
+        @Override
+        public byte[] get(final ColumnFamilyHandle columnFamily, final ReadOptions readOptions, final byte[] key) throws RocksDBException {
+            if (!columnFamily.equals(offsetsColumnFamily)) {
+                final java.util.Optional<byte[]> staged = buffer.get(Bytes.wrap(key));
+                if (staged != null) {
+                    return staged.orElse(null);
+                }
+            }
+            return underlying.get(columnFamily, readOptions, key);
+        }
+
+        @Override
+        public RocksIterator newIterator(final ColumnFamilyHandle columnFamily) {
+            return underlying.newIterator(columnFamily);
+        }
+
+        @Override
+        public void put(final ColumnFamilyHandle columnFamily, final byte[] key, final byte[] value) throws RocksDBException {
+            buffer.stage(columnFamily, Bytes.wrap(key), value);
+        }
+
+        @Override
+        public void delete(final ColumnFamilyHandle columnFamily, final byte[] key) throws RocksDBException {
+            buffer.stage(columnFamily, Bytes.wrap(key), null);
+        }
+
+        @Override
+        public void deleteRange(final ColumnFamilyHandle columnFamily, final byte[] from, final byte[] to) throws RocksDBException {
+            buffer.stageDeleteRange(columnFamily, Bytes.wrap(from), Bytes.wrap(to));
+        }
+
+        @Override
+        public long approximateNumEntries(final ColumnFamilyHandle columnFamily) throws RocksDBException {
+            return underlying.approximateNumEntries(columnFamily);
+        }
+
+        @Override
+        public void flush(final ColumnFamilyHandle... columnFamilies) throws RocksDBException {
+            underlying.flush(columnFamilies);
+        }
+
+        @Override
+        public void reset() {
+            underlying.reset();
+        }
+
+        @Override
+        public void close() {
+            buffer.close();
+            underlying.close();
+        }
+
+        @Override
+        public ManagedKeyValueIterator<Bytes, byte[]> all(final ColumnFamilyHandle cf, final String storeName, final boolean forward) {
+            return buffer.all(cf, forward);
+        }
+
+        @Override
+        public ManagedKeyValueIterator<Bytes, byte[]> range(final ColumnFamilyHandle cf, final String storeName,
+                                                              final Bytes from, final Bytes to,
+                                                              final boolean forward, final boolean toInclusive) {
+            return buffer.range(cf, from, to, forward, toInclusive);
+        }
+
+        @Override
+        public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final ColumnFamilyHandle cf, final String storeName,
+                                                                    final Bytes prefix, final Bytes to) {
+            return buffer.range(cf, prefix, to, true, false);
+        }
+
+        @Override
+        public void commitStagedWrites() {
+            buffer.commit();
+        }
+
+        @Override
+        public void rollbackStagedWrites() {
+            buffer.rollback();
+        }
+
+    }
+
     interface ColumnFamilyAccessor {
 
         void put(final DBAccessor accessor, final byte[] key, final byte[] value);
@@ -1086,6 +1210,26 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         Position open(final RocksDBStore.DBAccessor accessor, final boolean ignoreInvalidState) throws RocksDBException, StreamsException;
 
         Long getCommittedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
+
+        /**
+         * Returns the primary data column family handle.
+         *
+         * <p>This is the CF that all live puts target. It is passed to the transaction buffer
+         * as its default CF for WriteBatch staging.
+         *
+         * <p>For dual-CF (upgrade-mode) stores this is the new-format CF, since all puts
+         * land there and reads check it first.
+         */
+        ColumnFamilyHandle dataColumnFamily();
+
+        /**
+         * Returns the column family handle used to persist offset metadata.
+         *
+         * <p>Reads from this CF must bypass the staged-write buffer so they always reflect
+         * committed state, guarding against the case where a data key coincidentally matches
+         * an offset key in the buffer.
+         */
+        ColumnFamilyHandle offsetsColumnFamily();
     }
 
     class SingleColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
@@ -1193,6 +1337,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             } finally {
                 columnFamily.close();
             }
+        }
+
+        @Override
+        public ColumnFamilyHandle dataColumnFamily() {
+            return columnFamily;
         }
 
         // Visible for testing
