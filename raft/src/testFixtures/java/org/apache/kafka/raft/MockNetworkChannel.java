@@ -35,6 +35,9 @@ public class MockNetworkChannel implements NetworkChannel {
     private final List<RequestEntry> sendQueue = new ArrayList<>();
     private final Map<Integer, CompletableFuture<RaftResponse.Inbound>> awaitingResponse = new HashMap<>();
 
+    // Cumulative count of outbound requests sent, used by the JMH raft benchmarks.
+    private int requestsSent = 0;
+
     public MockNetworkChannel(AtomicInteger correlationIdCounter) {
         this.correlationIdCounter = correlationIdCounter;
     }
@@ -52,7 +55,15 @@ public class MockNetworkChannel implements NetworkChannel {
     public CompletionStage<RaftResponse.Inbound> send(RaftRequest.Outbound request) {
         var future = new CompletableFuture<RaftResponse.Inbound>();
         sendQueue.add(new RequestEntry(request, future));
+        requestsSent++;
         return future;
+    }
+
+    /**
+     * Cumulative number of outbound requests the client has sent since this channel was created.
+     */
+    public int requestsSent() {
+        return requestsSent;
     }
 
     @Override

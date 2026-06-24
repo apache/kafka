@@ -65,4 +65,8 @@
     <subpackage name="metadata">
         <allow class="org.apache.kafka.raft.KRaftConfigs"/>
     </subpackage>
+    <subpackage name="raft">
+        <allow pkg="org.apache.kafka.raft"/>
+        <allow pkg="org.apache.kafka.snapshot"/>
+    </subpackage>
 </import-control>

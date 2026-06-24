@@ -1,0 +1,286 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.raft;
+
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.server.common.KRaftVersion;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+/**
+ * A thin, public adapter over {@link RaftClientTestContext} for the JMH raft benchmarks.
+ *
+ * <p>Benchmarks live in {@code org.apache.kafka.jmh.raft}, a different package from the test
+ * fixtures, so they cannot reach the package-private primitives on {@link RaftClientTestContext} the
+ * way in-package unit tests (e.g. {@code KafkaRaftClientFetchTest}) can. This adapter re-exposes
+ * exactly those primitives as public methods, plus factories that encapsulate the (package-private)
+ * builder and the work counters. Benchmarks compose each scenario from these primitives inline,
+ * mirroring how the raft unit tests are written.
+ *
+ * <h2>Work counters</h2>
+ * Each counter is exposed as a drainable delta (read-and-reset): the underlying mock totals grow for
+ * as long as the context lives, but every benchmark invocation must report only its own work. Call
+ * {@link #resetCounters()} at the end of benchmark setup so that work done while preparing the
+ * scenario is excluded from the first measured invocation.
+ */
+public final class RaftClientBenchmarkContext {
+    private final RaftClientTestContext context;
+    private final MockLog log;
+    private final MockNetworkChannel channel;
+
+    // The leader this context fetches from, for follower scenarios (-1 when not applicable).
+    private final int leaderId;
+    private final int leaderEpoch;
+
+    // Baselines for the drainable-delta counters (see resetCounters / drain* methods).
+    private int lastFlushCount;
+    private int lastReadCount;
+    private int lastRequestsSent;
+    private int lastQuorumWrites;
+
+    private RaftClientBenchmarkContext(RaftClientTestContext context, int leaderId, int leaderEpoch) {
+        this.context = context;
+        this.log = context.log;
+        this.channel = context.channel;
+        this.leaderId = leaderId;
+        this.leaderEpoch = leaderEpoch;
+        resetCounters();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Factories (encapsulate the package-private builder)
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Builds an unattached node in a {@code voterCount}-node quorum (the local node is not yet the
+     * leader). Use {@link #unattachedToLeader()} as the measured operation to drive a full
+     * Unattached &rarr; Leader election. A single-voter quorum is rejected because such a node elects
+     * itself at initialization, before any measured poll.
+     */
+    public static RaftClientBenchmarkContext unattached(int localId, int voterCount) throws Exception {
+        if (voterCount < 2) {
+            throw new IllegalArgumentException("voterCount must be at least 2; a single voter self-elects at init");
+        }
+        return new RaftClientBenchmarkContext(multiVoterContext(localId, voterCount), -1, -1);
+    }
+
+    /**
+     * Builds a leader of a {@code voterCount}-node quorum with the high watermark already advanced to
+     * the log end offset, ready for steady-state FETCH handling.
+     */
+    public static RaftClientBenchmarkContext leader(int localId, int voterCount) throws Exception {
+        RaftClientTestContext context = multiVoterContext(localId, voterCount);
+        context.unattachedToLeader();
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        return new RaftClientBenchmarkContext(context, localId, context.currentEpoch());
+    }
+
+    /**
+     * Builds a follower of {@code leaderId} in a two-node quorum. The follower issues its first FETCH
+     * on the next poll. {@link #leaderId()} and {@link #leaderEpoch()} return the values to build
+     * FETCH responses with.
+     */
+    public static RaftClientBenchmarkContext follower(int localId, int leaderId) throws Exception {
+        int epoch = 2;
+        ReplicaKey local = ReplicaKey.of(localId, Uuid.randomUuid());
+        ReplicaKey leader = ReplicaKey.of(leaderId, Uuid.randomUuid());
+        VoterSet voters = VoterSetTestUtil.voterSet(Stream.of(local, leader));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withStartingVoters(voters, KRaftVersion.KRAFT_VERSION_1)
+            .withKip853Rpc(true)
+            .withElectedLeader(epoch, leader.id())
+            .build();
+
+        return new RaftClientBenchmarkContext(context, leader.id(), epoch);
+    }
+
+    /**
+     * Builds an unattached node in a {@code voterCount}-node KIP-853 quorum. The local voter's
+     * directory id is shared between the voter set and the client so they agree.
+     */
+    private static RaftClientTestContext multiVoterContext(int localId, int voterCount) throws Exception {
+        ReplicaKey local = ReplicaKey.of(localId, Uuid.randomUuid());
+        List<ReplicaKey> voterKeys = IntStream.range(0, voterCount)
+            .mapToObj(i -> i == 0 ? local : ReplicaKey.of(localId + i, Uuid.randomUuid()))
+            .collect(Collectors.toList());
+        VoterSet voters = VoterSetTestUtil.voterSet(voterKeys.stream());
+
+        return new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withStartingVoters(voters, KRaftVersion.KRAFT_VERSION_1)
+            .withKip853Rpc(true)
+            .withUnknownLeader(0)
+            .build();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Primitives (public views of RaftClientTestContext helpers, for inline scenario composition)
+    // ---------------------------------------------------------------------------------------------
+
+    /** Drives a full Unattached &rarr; Leader election (election timeout, vote grants, epoch-start append). */
+    public void unattachedToLeader() throws Exception {
+        context.unattachedToLeader();
+    }
+
+    /** Polls until the client has sent at least one request. */
+    public void pollUntilRequest() throws InterruptedException {
+        context.pollUntilRequest();
+    }
+
+    /** Polls until the client has sent at least one response to an inbound request. */
+    public void pollUntilResponse() throws InterruptedException {
+        context.pollUntilResponse();
+    }
+
+    /** A single {@code poll()} of the client. */
+    public void poll() {
+        context.client.poll();
+    }
+
+    /** The client's current epoch. */
+    public int currentEpoch() {
+        return context.currentEpoch();
+    }
+
+    /** The client's log end offset. */
+    public long logEndOffset() {
+        return log.endOffset().offset();
+    }
+
+    /** The leader this context fetches from (follower scenarios). */
+    public int leaderId() {
+        return leaderId;
+    }
+
+    /** The epoch of the leader this context fetches from (follower scenarios). */
+    public int leaderEpoch() {
+        return leaderEpoch;
+    }
+
+    /** A voter other than the local node, e.g. to deliver a FETCH from on the leader. */
+    public ReplicaKey otherVoter() {
+        return context.startingVoters.voterKeys().stream()
+            .filter(key -> key.id() != context.localReplicaKey().id())
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("No other voter in the quorum"));
+    }
+
+    /** Hands an inbound request to the client. */
+    public void deliverRequest(ApiMessage request) {
+        context.deliverRequest(request);
+    }
+
+    /** Completes an outbound request with the given response. */
+    public void deliverResponse(int correlationId, Node source, ApiMessage response) {
+        context.deliverResponse(correlationId, source, response);
+    }
+
+    /** Builds a FETCH request as it would be sent by {@code replicaKey}. */
+    public FetchRequestData fetchRequest(
+        int epoch,
+        ReplicaKey replicaKey,
+        long fetchOffset,
+        int lastFetchedEpoch,
+        int maxWaitMs
+    ) {
+        return context.fetchRequest(epoch, replicaKey, fetchOffset, lastFetchedEpoch, maxWaitMs);
+    }
+
+    /** Builds a FETCH response carrying {@code records}. */
+    public FetchResponseData fetchResponse(
+        int epoch,
+        int leaderId,
+        Records records,
+        long highWatermark,
+        Errors error
+    ) {
+        return context.fetchResponse(epoch, leaderId, records, highWatermark, error);
+    }
+
+    /** Builds a record batch starting at {@code baseOffset} for the given epoch. */
+    public MemoryRecords buildBatch(long baseOffset, int epoch, List<String> records) {
+        return context.buildBatch(baseOffset, epoch, records);
+    }
+
+    /** Removes and returns the single outstanding outbound FETCH request. */
+    public RaftRequest.Outbound drainSentFetchRequest() {
+        return channel.drainSentRequests(Optional.of(ApiKeys.FETCH)).get(0);
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Work counters (drainable deltas)
+    // ---------------------------------------------------------------------------------------------
+
+    /** Re-baselines all counters to the current totals. Call at the end of benchmark setup. */
+    public void resetCounters() {
+        lastFlushCount = log.flushCount();
+        lastReadCount = log.readCount();
+        lastRequestsSent = channel.requestsSent();
+        lastQuorumWrites = context.quorumStateWriteCount();
+        context.drainAllSentResponses();
+    }
+
+    /** Log flushes (a proxy for disk I/Os) since the last drain or {@link #resetCounters()}. */
+    public int drainLogFlushes() {
+        int current = log.flushCount();
+        int delta = current - lastFlushCount;
+        lastFlushCount = current;
+        return delta;
+    }
+
+    /** Log reads since the last drain or {@link #resetCounters()}. */
+    public int drainLogReads() {
+        int current = log.readCount();
+        int delta = current - lastReadCount;
+        lastReadCount = current;
+        return delta;
+    }
+
+    /** Outbound RPC requests sent since the last drain or {@link #resetCounters()}. */
+    public int drainRpcRequestsSent() {
+        int current = channel.requestsSent();
+        int delta = current - lastRequestsSent;
+        lastRequestsSent = current;
+        return delta;
+    }
+
+    /** Quorum-state-file writes since the last drain or {@link #resetCounters()}. */
+    public int drainQuorumStateWrites() {
+        int current = context.quorumStateWriteCount();
+        int delta = current - lastQuorumWrites;
+        lastQuorumWrites = current;
+        return delta;
+    }
+
+    /** Responses sent to inbound requests since the last drain or {@link #resetCounters()}. */
+    public int drainRpcResponsesSent() {
+        return context.drainAllSentResponses();
+    }
+}

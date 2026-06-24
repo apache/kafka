@@ -69,6 +69,11 @@ public class MockLog implements RaftLog {
     private long firstUnflushedOffset = 0;
     private boolean flushedSinceLastChecked = false;
 
+    // Cumulative work counters used by the JMH raft benchmarks. They grow for the lifetime of the
+    // log; benchmarks read them as drainable deltas (see RaftClientBenchmarkContext).
+    private int flushCount = 0;
+    private int readCount = 0;
+
     public MockLog(
         TopicPartition topicPartition,
         Uuid topicId,
@@ -363,6 +368,7 @@ public class MockLog implements RaftLog {
     @Override
     public void flush(boolean forceFlushActiveSegment) {
         flushedSinceLastChecked = true;
+        flushCount++;
         firstUnflushedOffset = endOffset().offset();
     }
 
@@ -382,6 +388,21 @@ public class MockLog implements RaftLog {
         boolean oldValue = flushedSinceLastChecked;
         flushedSinceLastChecked = false;
         return oldValue;
+    }
+
+    /**
+     * Cumulative number of {@link #flush(boolean)} calls since this log was created. Used as a
+     * proxy for disk I/Os by the JMH raft benchmarks.
+     */
+    public int flushCount() {
+        return flushCount;
+    }
+
+    /**
+     * Cumulative number of {@link #read(long, Isolation, int)} calls since this log was created.
+     */
+    public int readCount() {
+        return readCount;
     }
 
     /**
@@ -420,6 +441,7 @@ public class MockLog implements RaftLog {
 
     @Override
     public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchBytes) {
+        readCount++;
         verifyOffsetInRange(startOffset);
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();

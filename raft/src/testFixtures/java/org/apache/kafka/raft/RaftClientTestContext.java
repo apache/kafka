@@ -127,7 +127,7 @@ public final class RaftClientTestContext {
     private int requestTimeoutMs;
     private int appendLingerMs;
 
-    private final QuorumStateStore quorumStateStore;
+    private final MockQuorumStateStore quorumStateStore;
     final String clusterId;
     private final OptionalInt localId;
     public final Uuid localDirectoryId;
@@ -167,7 +167,7 @@ public final class RaftClientTestContext {
 
         private final MockMessageQueue messageQueue = new MockMessageQueue();
         private final MockTime time = new MockTime();
-        private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
+        private final MockQuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final MockableRandom random = new MockableRandom(1L);
         private final LogContext logContext = new LogContext();
         private final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID, logContext);
@@ -533,7 +533,7 @@ public final class RaftClientTestContext {
         MockNetworkChannel channel,
         MockMessageQueue messageQueue,
         MockTime time,
-        QuorumStateStore quorumStateStore,
+        MockQuorumStateStore quorumStateStore,
         VoterSet startingVoters,
         Set<Integer> bootstrapIds,
         RaftProtocol raftProtocol,
@@ -565,6 +565,13 @@ public final class RaftClientTestContext {
 
     int electionTimeoutMs() {
         return electionTimeoutMs;
+    }
+
+    /**
+     * Cumulative number of quorum-state-file writes. Used by the JMH raft benchmarks.
+     */
+    int quorumStateWriteCount() {
+        return quorumStateStore.writeCount();
     }
 
     int requestTimeoutMs() {
@@ -1059,6 +1066,18 @@ public final class RaftClientTestContext {
         assertEquals(destinationIds, requests.stream().map(r -> r.destination().id()).collect(Collectors.toSet()));
 
         return requests;
+    }
+
+    /**
+     * Removes and counts all responses the client has sent to inbound requests. Used by the JMH
+     * raft benchmarks to measure {@code rpcResponsesSent} per operation. Unlike the mock work
+     * counters, responses are collected here (not in a mock), so draining the collection both
+     * yields the per-operation delta and bounds its growth across a long benchmark iteration.
+     */
+    int drainAllSentResponses() {
+        int count = sentResponses.size();
+        sentResponses.clear();
+        return count;
     }
 
     List<RaftResponse.Outbound> drainSentResponses(
