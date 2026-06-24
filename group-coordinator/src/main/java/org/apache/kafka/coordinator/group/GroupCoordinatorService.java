@@ -428,7 +428,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         this.streamsGroupTopologyDescriptionManager = new StreamsGroupTopologyDescriptionManager(
             logContext,
             streamsGroupTopologyDescriptionPlugin,
-            time
+            time,
+            groupCoordinatorMetrics
         );
     }
 
@@ -747,29 +748,32 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .thenApply(__ -> StreamsGroupTopologyDescriptionConverter.fromRequest(request.topologyDescription()))
             .thenCompose(description -> streamsGroupTopologyDescriptionManager.invokeSetTopology(
                 groupId, pushedEpoch, description))
-            .thenCompose(pluginOutcome -> switch (pluginOutcome.kind()) {
-                case SUCCESS -> runtime.scheduleWriteOperation(
-                    "streams-group-set-stored-topology-epoch",
-                    tp,
-                    coordinator -> coordinator.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch)
-                ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
-                    groupId, pushedEpoch, throwable,
-                    new StreamsGroupTopologyDescriptionUpdateResponseData()));
-                case PERMANENT -> runtime.scheduleWriteOperation(
-                    "streams-group-set-failed-topology-epoch",
-                    tp,
-                    coordinator -> coordinator.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch)
-                ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
-                    groupId, pushedEpoch, throwable,
-                    new StreamsGroupTopologyDescriptionUpdateResponseData()
-                        .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
-                        .setErrorMessage(pluginOutcome.message())));
-                case TRANSIENT -> {
-                    streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
-                    yield CompletableFuture.completedFuture(new StreamsGroupTopologyDescriptionUpdateResponseData()
-                        .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
-                        .setErrorMessage(pluginOutcome.message()));
-                }
+            .thenCompose(pluginOutcome -> {
+                recordPluginSetOutcome(pluginOutcome.kind());
+                return switch (pluginOutcome.kind()) {
+                    case SUCCESS -> runtime.scheduleWriteOperation(
+                        "streams-group-set-stored-topology-epoch",
+                        tp,
+                        coordinator -> coordinator.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch)
+                    ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
+                        groupId, pushedEpoch, throwable,
+                        new StreamsGroupTopologyDescriptionUpdateResponseData()));
+                    case PERMANENT -> runtime.scheduleWriteOperation(
+                        "streams-group-set-failed-topology-epoch",
+                        tp,
+                        coordinator -> coordinator.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch)
+                    ).handle((unused, throwable) -> streamsGroupTopologyDescriptionManager.completeEpochWrite(
+                        groupId, pushedEpoch, throwable,
+                        new StreamsGroupTopologyDescriptionUpdateResponseData()
+                            .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
+                            .setErrorMessage(pluginOutcome.message())));
+                    case TRANSIENT -> {
+                        streamsGroupTopologyDescriptionManager.armBackoff(groupId, pushedEpoch);
+                        yield CompletableFuture.completedFuture(new StreamsGroupTopologyDescriptionUpdateResponseData()
+                            .setErrorCode(Errors.STREAMS_TOPOLOGY_DESCRIPTION_UPDATE_FAILED.code())
+                            .setErrorMessage(pluginOutcome.message()));
+                    }
+                };
             })
             .exceptionally(exception -> handleOperationException(
                 "streams-group-topology-description-update",
@@ -898,6 +902,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * pair of meters tracks every {@code plugin.deleteTopology} the broker drives,
      * regardless of trigger.
      */
+    /**
+     * Record the outcome of a single {@code plugin.setTopology} call against the
+     * {@code set-success} / {@code set-error} sensors. A {@code SUCCESS} outcome increments
+     * the success sensor; every failure outcome ({@code PERMANENT} or {@code TRANSIENT},
+     * regardless of the underlying exception type) increments the error sensor.
+     */
+    private void recordPluginSetOutcome(StreamsGroupTopologyDescriptionManager.PluginOutcome.Kind kind) {
+        String sensorName = kind == StreamsGroupTopologyDescriptionManager.PluginOutcome.Kind.SUCCESS
+            ? GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME
+            : GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME;
+        groupCoordinatorMetrics.recordSensor(sensorName);
+    }
+
     private void recordPluginDeleteOutcome(int attempted, int errors) {
         int successes = attempted - errors;
         if (successes > 0) {

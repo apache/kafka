@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescription;
 import org.apache.kafka.coordinator.group.api.streams.StreamsGroupTopologyDescriptionPlugin;
 import org.apache.kafka.coordinator.group.api.streams.StreamsTopologyDescriptionPermanentFailureException;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
@@ -73,6 +74,7 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     private final Logger log;
     private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
     private final StreamsGroupTopologyDescriptionBackoff backoff;
+    private final GroupCoordinatorMetrics metrics;
 
     /**
      * True between {@link #startCleanupCycle} and {@link #close}. The {@link TimerTask}
@@ -100,11 +102,13 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     public StreamsGroupTopologyDescriptionManager(
         LogContext logContext,
         Optional<StreamsGroupTopologyDescriptionPlugin> plugin,
-        Time time
+        Time time,
+        GroupCoordinatorMetrics metrics
     ) {
         this.log = logContext.logger(StreamsGroupTopologyDescriptionManager.class);
         this.plugin = plugin;
         this.backoff = new StreamsGroupTopologyDescriptionBackoff(time);
+        this.metrics = metrics;
     }
 
     /**
@@ -511,10 +515,12 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             pluginFuture = p.getTopology(describedGroup.groupId(), topologyEpoch);
         } catch (Exception e) {
             // SPI contract violation: synchronous throw treated as ERROR.
+            recordGetError();
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
             return CompletableFuture.completedFuture(null);
         }
         if (pluginFuture == null) {
+            recordGetError();
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
             return CompletableFuture.completedFuture(null);
         }
@@ -533,9 +539,14 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             Throwable cause = Errors.maybeUnwrapException(throwable);
             log.warn("Topology description plugin getTopology failed for group {}.",
                 describedGroup.groupId(), cause != null ? cause : throwable);
+            recordGetError();
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
             return;
         }
+        // The plugin call itself completed normally; count it as a successful getTopology
+        // regardless of whether it carried a description. A null return is the documented
+        // "plugin no longer has the data" path and surfaces as NOT_STORED, not an error.
+        recordGetSuccess();
         if (topology == null) {
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
             return;
@@ -549,6 +560,14 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             describedGroup.setTopologyDescription(null);
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
         }
+    }
+
+    private void recordGetSuccess() {
+        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_SUCCESS_SENSOR_NAME);
+    }
+
+    private void recordGetError() {
+        metrics.recordSensor(GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_GET_ERROR_SENSOR_NAME);
     }
 
     // Visible for testing.
