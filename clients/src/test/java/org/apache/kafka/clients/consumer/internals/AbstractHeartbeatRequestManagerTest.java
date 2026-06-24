@@ -81,6 +81,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     @Test
     public void testTimerNotDue() {
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS); // the initial heartbeat request
         time.sleep(100); // before heartbeatInterval, no heartbeat should be sent
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
@@ -142,6 +143,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     @Test
     public void testSuccessfulHeartbeatTiming() {
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS); // the initial heartbeat request
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(),
             "No heartbeat should be sent while interval has not expired");
@@ -313,6 +315,19 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(),
             "No further heartbeat should be sent after a fatal " + expectedError + " error.");
+    }
+
+    protected void assertHeartbeat(AbstractHeartbeatRequestManager<R> hrm, int nextPollMs) {
+        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(nextPollMs, pollResult.timeUntilNextPollMs);
+        pollResult.unsentRequests.get(0).handler().onComplete(createHeartbeatResponse(pollResult.unsentRequests.get(0),
+            Errors.NONE));
+    }
+
+    protected void assertNoHeartbeat(AbstractHeartbeatRequestManager<R> hrm) {
+        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
+        assertEquals(0, pollResult.unsentRequests.size());
     }
 
     // error, isFatal
