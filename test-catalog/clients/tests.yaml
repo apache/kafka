@@ -474,6 +474,11 @@ org.apache.kafka.clients.admin.MemberDescriptionTest:
 - testEqualsWithGroupInstanceId
 - testEqualsWithoutGroupInstanceId
 - testNonEqual
+org.apache.kafka.clients.admin.MockAdminClientTest:
+- testDescribeStreamsGroupsOmitsTopologyDescriptionWhenNotRequested
+- testDescribeStreamsGroupsReturnsRegisteredDescription
+- testDescribeStreamsGroupsReturnsTopologyDescriptionWhenRequested
+- testDescribeStreamsGroupsUnknownGroupFails
 org.apache.kafka.clients.admin.NewTopicTest:
 - testConfigsNotNull
 - testConfigsNull
@@ -637,6 +642,16 @@ org.apache.kafka.clients.admin.internals.DescribeProducersHandlerTest:
 - testRetriableErrors
 - testUnexpectedError
 - testUnmappedAfterNotLeaderError
+org.apache.kafka.clients.admin.internals.DescribeStreamsGroupsHandlerTest:
+- testAvailableStatusWithMissingTopologyDescriptionFailsOnlyAffectedGroup
+- testBuildRequestSetsIncludeTopologyDescription
+- testGlobalStorePredecessorReconstruction
+- testMalformedGlobalStoreFailsOnlyAffectedGroup
+- testTopologyDescriptionAbsentWhenStatusNotAvailable
+- testTopologyDescriptionNotRequestedByDefault
+- testTopologyDescriptionParsedWhenAvailable
+- testUnknownTopologyDescriptionStatusFailsOnlyAffectedGroup
+- testUnknownTopologyNodeTypeFailsOnlyAffectedGroup
 org.apache.kafka.clients.admin.internals.DescribeTransactionsHandlerTest:
 - testBuildRequest
 - testHandleErrorResponse

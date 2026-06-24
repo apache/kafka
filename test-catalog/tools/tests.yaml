@@ -1040,6 +1040,8 @@ org.apache.kafka.tools.streams.StreamsGroupCommandTest:
 - testDeleteStreamsGroup
 - testDescribeStreamsGroups
 - testDescribeStreamsGroupsGetOffsets
+- testDescribeStreamsGroupsWithTopologyAvailable
+- testDescribeStreamsGroupsWithTopologyNotStored
 - testExitCodeOnExecutionException
 - testExitCodeOnIllegalArguments
 - testExitCodeOnInterruptedException
@@ -1053,3 +1055,11 @@ org.apache.kafka.tools.streams.StreamsGroupCommandTest:
 - testPrintEmptyGroupState
 - testResetOffsetsWithPartitionNotExist
 - testRetrieveInternalTopics
+org.apache.kafka.tools.streams.TopologyDescriptionFormatterTest:
+- testFormatEmptyTopologyHasNoTrailingSpace
+- testFormatGlobalStore
+- testFormatMultipleGlobalStoresAreSeparatedByBlankLine
+- testFormatMultipleSubtopologiesAreIndentedConsistently
+- testFormatRendersEmptySuccessorsAndPredecessorsAsNone
+- testFormatSimpleSubtopology
+- testFormatSinkWithoutTopicAndMultipleSuccessors
