@@ -2201,6 +2201,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             release();
             throw new IllegalStateException("This consumer has already been closed.");
         }
+
+        try {
+            metadata.maybeThrowBootstrapFatalException();
+        } catch (RuntimeException e) {
+            release();
+            throw e;
+        }
     }
 
     /**

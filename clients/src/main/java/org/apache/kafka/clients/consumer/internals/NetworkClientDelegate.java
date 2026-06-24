@@ -74,6 +74,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final long retryBackoffMs;
     private Optional<Exception> metadataError;
     private final boolean notifyMetadataErrorsViaErrorQueue;
+    private boolean bootstrapErrorPropagated = false;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     public NetworkClientDelegate(
@@ -161,7 +162,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         try {
             trySend(currentTimeMs);
         } catch (BootstrapResolutionException e) {
-            metadata.fatalError(e);
+            // already recorded as bootstrapFatalError on the metadata at the NetworkClient layer
         }
 
         long pollTimeoutMs = timeoutMs;
@@ -171,7 +172,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         try {
             this.client.poll(pollTimeoutMs, currentTimeMs);
         } catch (BootstrapResolutionException e) {
-            metadata.fatalError(e);
+            // already recorded as bootstrapFatalError on the metadata at the NetworkClient layer
         }
         maybePropagateMetadataError();
         checkDisconnects(currentTimeMs, onClose);
@@ -181,12 +182,23 @@ public class NetworkClientDelegate implements AutoCloseable {
     private void maybePropagateMetadataError() {
         try {
             metadata.maybeThrowAnyException();
+        } catch (BootstrapResolutionException e) {
+            // Bootstrap failure is permanent and re-thrown on every check by Metadata;
+            // only propagate it to the app thread once to avoid flooding the event queue.
+            if (bootstrapErrorPropagated)
+                return;
+            bootstrapErrorPropagated = true;
+            propagateMetadataError(e);
         } catch (Exception e) {
-            if (notifyMetadataErrorsViaErrorQueue) {
-                backgroundEventHandler.add(new ErrorEvent(e));
-            } else {
-                metadataError = Optional.of(e);
-            }
+            propagateMetadataError(e);
+        }
+    }
+
+    private void propagateMetadataError(Exception e) {
+        if (notifyMetadataErrorsViaErrorQueue) {
+            backgroundEventHandler.add(new ErrorEvent(e));
+        } else {
+            metadataError = Optional.of(e);
         }
     }
 

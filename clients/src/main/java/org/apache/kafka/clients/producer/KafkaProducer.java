@@ -768,6 +768,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws TimeoutException if the combined time taken for resolving topic metadata and sending the offsets
      *         has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
+     * @throws BootstrapResolutionException if DNS resolution of the bootstrap servers fails within {@code bootstrap.resolve.timeout.ms}
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
@@ -797,7 +798,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private long awaitTopicMetadata(Set<String> topics) {
         long startNanos = time.nanoseconds();
         OptionalInt versionOpt = metadata.add(topics, time.milliseconds());
-        if (versionOpt.isEmpty()) return 0L;
+        if (versionOpt.isEmpty()) {
+            // Even when no metadata refresh is needed for these topics, a permanent bootstrap
+            // failure must still be surfaced so every API call sees the error.
+            metadata.maybeThrowBootstrapFatalException();
+            return 0L;
+        }
         sender.wakeup();
         try {
             metadata.awaitUpdate(versionOpt.getAsInt(), maxBlockTimeMs);

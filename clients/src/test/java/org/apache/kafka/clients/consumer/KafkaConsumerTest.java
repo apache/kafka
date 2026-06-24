@@ -4356,6 +4356,10 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
             assertTrue(exception.getMessage().contains("Failed to resolve bootstrap servers") ||
                        exception.getMessage().contains("DNS resolution"),
                        "Exception message should mention DNS resolution failure: " + exception.getMessage());
+
+            // After the first failure, any further API call must also throw. This guards against
+            // accidentally clearing the bootstrap error from the metadata layer.
+            assertThrows(BootstrapResolutionException.class, () -> consumer.poll(Duration.ofMillis(100)));
         }
     }
 

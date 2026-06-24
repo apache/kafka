@@ -3444,6 +3444,39 @@ public class KafkaProducerTest {
                 }
                 fail("Expected BootstrapResolutionException to be thrown within " + maxWaitTime + "ms");
             });
+
+            // After the first failure, any further API call must also throw. This guards against
+            // accidentally clearing the bootstrap error from the metadata layer.
+            assertThrows(BootstrapResolutionException.class, () -> producer.partitionsFor("test-topic"));
+        }
+    }
+
+    @Test
+    public void testProducerSendOffsetsToTransactionBootstrapResolutionExceptionPropagated() {
+        // sendOffsetsToTransaction became metadata-aware in KIP-1319, so it can also block on
+        // bootstrap and must surface BootstrapResolutionException.
+        String invalidHost = "unresolvable.invalid:9092";
+        Map<String, Object> configs = Map.of(
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, invalidHost,
+            CommonClientConfigs.BOOTSTRAP_RESOLVE_TIMEOUT_MS_CONFIG, "3000",
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-tx-id"
+        );
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(
+            new TopicPartition("test-topic", 0),
+            new OffsetAndMetadata(0L)
+        );
+        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("test-group");
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs)) {
+            assertThrows(BootstrapResolutionException.class,
+                () -> producer.sendOffsetsToTransaction(offsets, groupMetadata));
+
+            // After the first failure, any further API call must also throw.
+            assertThrows(BootstrapResolutionException.class,
+                () -> producer.sendOffsetsToTransaction(offsets, groupMetadata));
         }
     }
 }

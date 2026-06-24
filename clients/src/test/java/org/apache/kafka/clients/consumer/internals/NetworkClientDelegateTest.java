@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -66,7 +65,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -254,10 +252,8 @@ public class NetworkClientDelegateTest {
     }
 
     @Test
-    public void testBootstrapResolutionExceptionFromPollPropagatedViaErrorEvent() throws Exception {
+    public void testBootstrapResolutionExceptionPropagatedViaErrorEventOnce() throws Exception {
         BootstrapResolutionException bootstrapException = new BootstrapResolutionException("DNS resolution failed");
-        KafkaClient mockKafkaClient = mock(KafkaClient.class);
-        when(mockKafkaClient.poll(anyLong(), anyLong())).thenThrow(bootstrapException);
 
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
@@ -274,11 +270,14 @@ public class NetworkClientDelegateTest {
         try (NetworkClientDelegate ncd = new NetworkClientDelegate(time,
                 new ConsumerConfig(properties),
                 logContext,
-                mockKafkaClient,
+                this.client,
                 realMetadata,
                 this.backgroundEventHandler,
                 true,
                 mock(AsyncConsumerMetrics.class))) {
+
+            // Simulate NetworkClient recording a permanent bootstrap failure on the metadata.
+            realMetadata.bootstrapFatalError(bootstrapException);
 
             assertEquals(0, backgroundEventQueue.size());
             ncd.poll(0, time.milliseconds());
@@ -288,6 +287,12 @@ public class NetworkClientDelegateTest {
             assertNotNull(event);
             assertEquals(BackgroundEvent.Type.ERROR, event.type());
             assertEquals(bootstrapException, ((ErrorEvent) event).error());
+
+            // Subsequent polls must NOT keep flooding the queue with duplicate ErrorEvents,
+            // even though metadata.maybeThrowAnyException keeps surfacing the permanent error.
+            ncd.poll(0, time.milliseconds());
+            ncd.poll(0, time.milliseconds());
+            assertEquals(0, backgroundEventQueue.size());
         }
     }
 

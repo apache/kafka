@@ -1359,6 +1359,7 @@ public class NetworkClient implements KafkaClient {
             bootstrapException = new BootstrapResolutionException("Failed to resolve bootstrap servers after " +
                 bootstrapConfiguration.bootstrapResolveTimeoutMs + "ms. " +
                 "Please check your bootstrap.servers configuration and DNS settings.");
+            metadataUpdater.bootstrapFailed(bootstrapException);
             throw bootstrapException;
         }
     }
@@ -1570,6 +1571,11 @@ public class NetworkClient implements KafkaClient {
         public void rebootstrap(long now) {
             metadata.rebootstrap();
             metadataAttemptStartMs = Optional.of(now);
+        }
+
+        @Override
+        public void bootstrapFailed(KafkaException exception) {
+            metadata.bootstrapFatalError(exception);
         }
 
         @Override

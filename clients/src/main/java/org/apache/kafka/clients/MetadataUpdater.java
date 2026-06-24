@@ -112,6 +112,11 @@ public interface MetadataUpdater extends Closeable {
     default void rebootstrap(long now) {}
 
     /**
+     * Record a permanent bootstrap DNS resolution failure so all API calls see the same error.
+     */
+    default void bootstrapFailed(KafkaException exception) {}
+
+    /**
      * Returns true if the metadata has been bootstrapped.
      */
     boolean isBootstrapped();

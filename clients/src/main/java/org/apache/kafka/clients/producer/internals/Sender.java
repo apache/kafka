@@ -312,7 +312,9 @@ public class Sender implements Runnable {
         try {
             runOnceInternal();
         } catch (BootstrapResolutionException e) {
-            metadata.fatalErrorAndNotify(e);
+            // The bootstrap fatal error is already recorded on the metadata at the NetworkClient
+            // layer, so app-thread API calls will see it. Swallow here to avoid spamming the
+            // "Uncaught error" log entry every iteration of the I/O loop.
         }
     }
 
