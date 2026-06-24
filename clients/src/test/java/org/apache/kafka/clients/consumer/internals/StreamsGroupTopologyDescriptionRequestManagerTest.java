@@ -68,7 +68,7 @@ public class StreamsGroupTopologyDescriptionRequestManagerTest {
         when(membershipManager.groupId()).thenReturn(GROUP_ID);
         when(membershipManager.memberId()).thenReturn(MEMBER_ID);
         streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of
         );
         manager = new StreamsGroupTopologyDescriptionRequestManager(
             logContext, time, RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS,
