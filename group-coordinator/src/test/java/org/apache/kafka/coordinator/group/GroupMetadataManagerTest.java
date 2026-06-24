@@ -18624,6 +18624,110 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testNoMissingClientTagsStatusWhenRackAwareTagsNotConfigured() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        // No rack-aware assignment tags configured (broker default is empty).
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member joins without any client tags. Since the feature is not configured, no MISSING_CLIENT_TAGS
+        // status should be returned.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertTrue(result.response().data().status().stream()
+            .noneMatch(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code()));
+    }
+
+    @Test
+    public void testGroupConfigOverridesBrokerRackAwareAssignmentTags() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+        // Broker default requires only the "zone" tag.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone")
+            .build();
+
+        // The per-group override requires "rack" instead, taking precedence over the broker default.
+        Properties newConfig = new Properties();
+        newConfig.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "rack");
+        context.groupConfigManager.updateGroupConfig(groupId, newConfig);
+
+        assignor.prepareGroupAssignment(Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+            TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2, 3, 4, 5)
+        )));
+
+        // Member reports the broker-default tag "zone" but not the group-override tag "rack". Because the
+        // group override takes precedence, "rack" must be reported as missing (and "zone" must not be).
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setProcessId("process-id")
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setClientTags(List.of(
+                    new StreamsGroupHeartbeatRequestData.KeyValue().setKey("zone").setValue("us-east-1a")))
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        StreamsGroupHeartbeatResponseData.Status status = result.response().data().status().stream()
+            .filter(s -> s.statusCode() == Status.MISSING_CLIENT_TAGS.code())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Expected a MISSING_CLIENT_TAGS status"));
+        assertTrue(status.statusDetail().contains("[rack]"),
+            "The group-level override tag 'rack' should be reported as missing");
+        assertFalse(status.statusDetail().contains("zone"),
+            "The broker-default tag 'zone' should not be used once the group override is set");
+    }
+
+    @Test
     public void testJoinEmptyStreamsGroupAndDescribe() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
