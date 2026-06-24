@@ -26,6 +26,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.KeyQuery;
@@ -291,10 +293,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     /**
      * Executes a query against this store.
      *
-     * <p>Note: Query results do NOT include headers, even though headers are
-     * preserved in the underlying store. This behavior provides compatibility
-     * with existing IQv2 APIs that operate on timestamped stores.
-     *
      * @param query the query to execute
      * @param positionBound the position bound
      * @param config the query configuration
@@ -395,6 +393,8 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedKeyWithHeadersQuery<K, V> typedKeyQuery = (TimestampedKeyWithHeadersQuery<K, V>) query;
 
+        // Forward a raw byte-level KeyQuery to the wrapped store; the result bytes are the serialized
+        // ValueTimestampHeaders, which we deserialize below to recover value, timestamp, and headers.
         // PoC limitation: typedKeyQuery.isSkipCache() is intentionally NOT propagated to the raw
         // KeyQuery below. CachingKeyValueStore only honors skipCache when it is set on the forwarded
         // KeyQuery, so for now skipCache() is a no-op for this query type (the existing
@@ -403,12 +403,19 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
         final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
-            // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
             final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializer.apply(rawResult.getResult());
-            // Unlike runTimestampedKeyQuery, the headers are kept rather than discarded.
-            final QueryResult<ValueTimestampHeaders<V>> typedQueryResult =
-                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, valueTimestampHeaders);
+            // Surface the result as a ReadOnlyRecord (implemented by Record), keeping the headers.
+            // A null wrapper means the key is absent or tombstoned, which we surface as a null result.
+            final ReadOnlyRecord<K, V> record = valueTimestampHeaders == null
+                ? null
+                : new Record<>(
+                    typedKeyQuery.key(),
+                    valueTimestampHeaders.value(),
+                    valueTimestampHeaders.timestamp(),
+                    valueTimestampHeaders.headers());
+            final QueryResult<ReadOnlyRecord<K, V>> typedQueryResult =
+                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, record);
             result = (QueryResult<R>) typedQueryResult;
         } else {
             // the generic type doesn't matter, since failed queries have no result set.

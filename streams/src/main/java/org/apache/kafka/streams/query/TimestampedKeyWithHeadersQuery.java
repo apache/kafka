@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
-import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.util.Objects;
 
@@ -27,8 +27,9 @@ import java.util.Objects;
  * from a {@link TimestampedKeyValueStoreWithHeaders}.
  *
  * <p>This is the headers-aware parallel of {@link TimestampedKeyQuery}: it returns a
- * {@link ValueTimestampHeaders} (value, timestamp, and headers) instead of a
- * {@link org.apache.kafka.streams.state.ValueAndTimestamp} (value and timestamp only).
+ * {@link ReadOnlyRecord} carrying the key, value, timestamp, and headers, whereas
+ * {@link TimestampedKeyQuery} returns a {@link org.apache.kafka.streams.state.ValueAndTimestamp}
+ * (value and timestamp only, no key or headers).
  *
  * <p>Headers are only returned when the queried store was built with a KIP-1271
  * {@code WithHeaders} supplier. Against a plain (non-headers) store, this query type is
@@ -38,7 +39,7 @@ import java.util.Objects;
  * @param <V> Type of values
  */
 @Evolving
-public final class TimestampedKeyWithHeadersQuery<K, V> implements Query<ValueTimestampHeaders<V>> {
+public final class TimestampedKeyWithHeadersQuery<K, V> implements Query<ReadOnlyRecord<K, V>> {
 
     private final K key;
     private final boolean skipCache;
