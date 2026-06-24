@@ -140,7 +140,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     /**
      * Config based sentinel used to start or eventually stop defined periodic job tasks.
      */
-    private volatile boolean shouldRunPeriodicJob;
+    private volatile boolean periodicJobsEnabled;
 
     private final AtomicLong periodicJobGeneration = new AtomicLong();
 
@@ -342,7 +342,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
-                if (!shouldRunPeriodicJob(generation)) {
+                if (!shouldRunPeriodicJobForGeneration(generation)) {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -353,7 +353,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         if (exp != null) {
                             log.error("Received error in share-group state topic prune.", exp);
                         }
-                        if (!shouldRunPeriodicJob(generation)) {
+                        if (!shouldRunPeriodicJobForGeneration(generation)) {
                             return;
                         }
                         // Perpetual recursion, failure or not.
@@ -433,7 +433,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
             @Override
             public void run() {
-                if (!shouldRunPeriodicJob(generation)) {
+                if (!shouldRunPeriodicJobForGeneration(generation)) {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
@@ -446,7 +446,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                         if (exp != null) {
                             log.error("Received error while snapshotting cold partitions.", exp);
                         }
-                        if (!shouldRunPeriodicJob(generation)) {
+                        if (!shouldRunPeriodicJobForGeneration(generation)) {
                             return;
                         }
                         setupSnapshotColdPartitions(generation);
@@ -1147,13 +1147,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
         }
 
         boolean enabled = isShareGroupsEnabled(newImage);
-        // enabled    shouldRunJob         result (XOR)
+        // enabled    periodicJobsEnabled result (XOR)
         // 0            0               no op on flag, do not call jobs
         // 0            1               disable flag, do not call jobs                      => action
         // 1            0               enable flag, call jobs as they are not recursing    => action
         // 1            1               no op on flag, do not call jobs
-        if (enabled ^ shouldRunPeriodicJob) {
-            shouldRunPeriodicJob = enabled;
+        if (enabled ^ periodicJobsEnabled) {
+            periodicJobsEnabled = enabled;
             long generation = periodicJobGeneration.incrementAndGet();
             if (enabled) {
                 setupPeriodicJobs(generation);
@@ -1196,12 +1196,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         ).supportsShareGroups();
     }
 
-    // Visibility for tests
-    boolean shouldRunPeriodicJob() {
-        return shouldRunPeriodicJob;
-    }
-
-    private boolean shouldRunPeriodicJob(long generation) {
-        return shouldRunPeriodicJob && periodicJobGeneration.get() == generation;
+    private boolean shouldRunPeriodicJobForGeneration(long generation) {
+        return periodicJobsEnabled && periodicJobGeneration.get() == generation;
     }
 }

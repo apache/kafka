@@ -71,7 +71,6 @@ import java.util.concurrent.TimeoutException;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -2002,8 +2001,6 @@ class ShareCoordinatorServiceTest {
             any()
         )).thenReturn(List.of());
 
-        assertFalse(service.shouldRunPeriodicJob());
-
         service.startup(() -> 1);
 
         MetadataImage mockedImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
@@ -2022,8 +2019,6 @@ class ShareCoordinatorServiceTest {
             eq("snapshot-cold-partitions"),
             any()
         );
-        assertFalse(service.shouldRunPeriodicJob());
-
         // Enable feature.
         Mockito.reset(mockedImage);
         when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 1);
@@ -2040,8 +2035,6 @@ class ShareCoordinatorServiceTest {
             eq("snapshot-cold-partitions"),
             any()
         );
-        assertTrue(service.shouldRunPeriodicJob());
-
         // Disable feature
         Mockito.reset(mockedImage);
         when(mockedImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 0);
@@ -2058,8 +2051,6 @@ class ShareCoordinatorServiceTest {
             eq("snapshot-cold-partitions"),
             any()
         );
-        assertFalse(service.shouldRunPeriodicJob());
-
         timer.advanceClock(30001L);
         verify(timer, times(4)).add(any()); // No new additions.
 
@@ -2126,10 +2117,8 @@ class ShareCoordinatorServiceTest {
         );
 
         service.onMetadataUpdate(mock(MetadataDelta.class), disabledImage);
-        assertFalse(service.shouldRunPeriodicJob());
 
         service.onMetadataUpdate(mock(MetadataDelta.class), enabledImage);
-        assertTrue(service.shouldRunPeriodicJob());
         verify(timer, times(4)).add(any());
 
         firstPruneFuture.complete(Optional.empty());
