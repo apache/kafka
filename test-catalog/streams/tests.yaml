@@ -3321,6 +3321,12 @@ org.apache.kafka.streams.processor.internals.TopicPartitionMetadataTest:
 - shouldGetPartitionTimeAndProcessorMeta
 - shouldReturnUnknownTimestampIfInvalidMetadata
 - shouldReturnUnknownTimestampIfUnknownVersion
+org.apache.kafka.streams.processor.internals.TopologyDescriptionConverterTest:
+- shouldApplyTopicNameDecorator
+- shouldConvertBranchTopology
+- shouldConvertMultipleSubtopologiesWithMultiSourceProcessor
+- shouldConvertSinkWithDynamicTopic
+- shouldConvertTopologyWithStatefulProcessorAndGlobalStore
 org.apache.kafka.streams.processor.internals.TopologyMetadataTest:
 - testPauseResume
 - testSubtopologyCompare
