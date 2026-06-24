@@ -3769,6 +3769,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val data = txnShareAcknowledgeRequest.data
     val groupId = data.groupId
     val memberId = data.memberId
+    val memberEpoch = data.memberEpoch
     val transactionalId = data.transactionalId
     val producerId = data.producerId
     val producerEpoch = data.producerEpoch
@@ -3826,8 +3827,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.context,
       READ,
       TOPIC,
-      acknowledgeBatchesMap.keys
-    )(_.topicPartition.topic)
+      acknowledgeBatchesMap.keys.asJava,
+      (tip: TopicIdPartition) => tip.topicPartition.topic
+    )
 
     val validAcknowledgeBatches = mutable.Map[TopicIdPartition, util.List[ShareAcknowledgementBatch]]()
     acknowledgeBatchesMap.foreach { case (tip, batches) =>
@@ -3852,36 +3854,43 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareCoordinator.partitionFor(SharePartitionKey.getInstance(groupId, tip))))
     }
 
-    val registrationDone = new CompletableFuture[Errors]()
-    addPartitionsToTxnManager.addOrVerifyTransaction(
-      transactionalId,
-      producerId,
-      producerEpoch,
-      shareStatePartitions,
-      errors => {
-        val firstError = errors.values().asScala.find(_ != Errors.NONE).getOrElse(Errors.NONE)
-        registrationDone.complete(firstError)
-      },
-      AddPartitionsToTxnManager.TransactionSupportedOperation.ADD_PARTITION)
-
-    registrationDone.thenCompose[Unit] { error =>
-      if (error != Errors.NONE) {
-        requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, error.exception))
+    groupCoordinator.validateShareGroupMember(request.context, groupId, memberId, memberEpoch).thenCompose[Unit] { memberError =>
+      if (memberError != Errors.NONE) {
+        requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, memberError.exception))
         CompletableFuture.completedFuture[Unit](())
       } else {
-        sharePartitionManager.acknowledgeTransactional(
-            memberId,
-            groupId,
-            producerId,
-            producerEpoch,
-            validAcknowledgeBatches.asJava)
-          .handle[Unit] { (result, exception) =>
-            if (exception != null) {
-              requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
-            } else {
-              sendPartitionResponse(result.asScala.toMap ++ erroneous)
+        val registrationDone = new CompletableFuture[Errors]()
+        addPartitionsToTxnManager.addOrVerifyTransaction(
+          transactionalId,
+          producerId,
+          producerEpoch,
+          shareStatePartitions,
+          errors => {
+            val firstError = errors.values().asScala.find(_ != Errors.NONE).getOrElse(Errors.NONE)
+            registrationDone.complete(firstError)
+          },
+          AddPartitionsToTxnManager.TransactionSupportedOperation.ADD_PARTITION)
+
+        registrationDone.thenCompose[Unit] { error =>
+          if (error != Errors.NONE) {
+            requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, error.exception))
+            CompletableFuture.completedFuture[Unit](())
+          } else {
+            sharePartitionManager.acknowledgeTransactional(
+                memberId,
+                groupId,
+                producerId,
+                producerEpoch,
+                validAcknowledgeBatches.asJava)
+              .handle[Unit] { (result, exception) =>
+                if (exception != null) {
+                  requestHelper.sendMaybeThrottle(request, txnShareAcknowledgeRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+                } else {
+                  sendPartitionResponse(result.asScala.toMap ++ erroneous)
+                }
+              }
             }
-          }
+        }
       }
     }
       .exceptionally { exception =>

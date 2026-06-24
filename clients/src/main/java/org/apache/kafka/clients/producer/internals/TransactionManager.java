@@ -2214,6 +2214,7 @@ public class TransactionManager {
             } else if (error == Errors.INVALID_RECORD_STATE) {
                 abortableError(error.exception());
             } else if (error == Errors.UNKNOWN_MEMBER_ID
+                    || error == Errors.GROUP_ID_NOT_FOUND
                     || error == Errors.STALE_MEMBER_EPOCH) {
                 abortableError(new CommitFailedException("Transactional share acknowledgement failed " +
                     "due to share group membership mismatch: " + error.exception().getMessage()));

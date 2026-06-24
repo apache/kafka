@@ -63,6 +63,7 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_POLL_INTERVAL_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(1200)
@@ -124,6 +125,51 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
             verifySharePartitionLag(admin, groupId, tp, 0L);
             assertEquals(0, shareConsumer.poll(Duration.ofMillis(500)).count());
             verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testTransactionalShareAckRejectsStaleMemberEpoch() throws Exception {
+        String groupId = "txn-share-stale-member-epoch";
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-stale-member-epoch-producer");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 groupId,
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin admin = createAdminClient()) {
+
+            producer.send(record("first")).get();
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+            assertEquals(0L, record.offset());
+            assertEquals("first", new String(record.value(), StandardCharsets.UTF_8));
+
+            ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+            ShareGroupMetadata staleGroupMetadata = new ShareGroupMetadata(
+                groupMetadata.groupId(),
+                groupMetadata.memberId(),
+                groupMetadata.memberEpoch() + 1
+            );
+            shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+            ShareAcknowledgements acknowledgements = shareConsumer.acknowledgementsForTransaction();
+            assertFalse(acknowledgements.isEmpty());
+
+            transactionalProducer.initTransactions();
+            transactionalProducer.partitionsFor(tp.topic());
+            transactionalProducer.beginTransaction();
+            try {
+                assertThrows(CommitFailedException.class,
+                    () -> transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, staleGroupMetadata));
+            } finally {
+                transactionalProducer.abortTransaction();
+            }
+
+            verifySharePartitionLag(admin, groupId, tp, 1L);
         }
     }
 
