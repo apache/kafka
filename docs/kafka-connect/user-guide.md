@@ -1,6 +1,6 @@
 ---
 title: User Guide
-description: User Guide
+description: Guide to running, configuring, and managing Kafka Connect workers and connectors.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 

@@ -50,7 +50,7 @@ import static org.mockito.Mockito.when;
  * behavior implemented in the abstract manager and must produce the same outcome for every
  * concrete subclass.
  */
-abstract class AbstractHeartbeatRequestManagerTest {
+abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
 
     protected static final String DEFAULT_GROUP_ID = "groupId";
     protected static final String DEFAULT_MEMBER_ID = "member-id";
@@ -67,8 +67,14 @@ abstract class AbstractHeartbeatRequestManagerTest {
     protected SubscriptionState subscriptions;
     protected BackgroundEventHandler backgroundEventHandler;
     protected HeartbeatRequestState heartbeatRequestState;
-    protected AbstractMembershipManager membershipManager;
-    protected AbstractHeartbeatRequestManager heartbeatRequestManager;
+    protected AbstractMembershipManager<R> membershipManager;
+    protected AbstractHeartbeatRequestManager<R> heartbeatRequestManager;
+
+    protected final Class<R> responseClass;
+
+    protected AbstractHeartbeatRequestManagerTest(Class<R> responseClass) {
+        this.responseClass = responseClass;
+    }
 
     protected abstract ClientResponse createHeartbeatResponse(
         NetworkClientDelegate.UnsentRequest request, Errors error);
@@ -220,14 +226,14 @@ abstract class AbstractHeartbeatRequestManagerTest {
             result.unsentRequests.get(0),
             error);
         result.unsentRequests.get(0).handler().onComplete(response);
-        AbstractResponse mockResponse = response.responseBody();
+        R mockResponse = responseClass.cast(response.responseBody());
 
         assertHeartbeatErrorHandling(error, isFatal, mockResponse);
     }
 
     protected void assertHeartbeatErrorHandling(final Errors error,
                                                 final boolean isFatal,
-                                                final AbstractResponse response) {
+                                                final R response) {
         switch (error) {
             case NONE:
                 verify(membershipManager).onHeartbeatSuccess(response);

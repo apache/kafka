@@ -120,6 +120,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -132,6 +133,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -948,22 +950,99 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Persist the outcome of a topology description plugin call. Writes a metadata record
-     * advancing either {@code StoredDescriptionTopologyEpoch} (on plugin success) or
-     * {@code FailedDescriptionTopologyEpoch} (on permanent plugin failure).
+     * Advance {@code StoredDescriptionTopologyEpoch} after a successful plugin {@code setTopology}.
      *
-     * @param groupId           The streams group id.
-     * @param pushedEpoch       The topology epoch on the push that just completed.
-     * @param permanentFailure  True if the plugin signalled a permanent failure; false on success.
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
      * @return A coordinator result carrying the metadata record.
      * @throws GroupIdNotFoundException if the streams group no longer exists.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> streamsGroupSetTopologyDescriptionEpoch(
+    public CoordinatorResult<Void, CoordinatorRecord> setStoredDescriptionTopologyEpoch(
         String groupId,
-        int pushedEpoch,
-        boolean permanentFailure
+        int pushedEpoch
     ) {
-        return groupMetadataManager.streamsGroupSetTopologyDescriptionEpoch(groupId, pushedEpoch, permanentFailure);
+        return groupMetadataManager.setStoredDescriptionTopologyEpoch(groupId, pushedEpoch);
+    }
+
+    /**
+     * Advance {@code FailedDescriptionTopologyEpoch} after a permanent plugin failure.
+     *
+     * @param groupId      The streams group id.
+     * @param pushedEpoch  The topology epoch on the push that just completed.
+     * @return A coordinator result carrying the metadata record.
+     * @throws GroupIdNotFoundException if the streams group no longer exists.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> setFailedDescriptionTopologyEpoch(
+        String groupId,
+        int pushedEpoch
+    ) {
+        return groupMetadataManager.setFailedDescriptionTopologyEpoch(groupId, pushedEpoch);
+    }
+
+    /**
+     * Return the subset of {@code groupIds} that are streams groups with a stored topology
+     * description. Used during {@code DeleteGroups} to identify which groups need a
+     * {@code plugin.deleteTopology} call before being tombstoned.
+     */
+    public Set<String> streamsGroupsWithStoredTopologyDescription(
+        Collection<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.streamsGroupsWithStoredTopologyDescription(groupIds, committedOffset);
+    }
+
+    /**
+     * Return the streams groups on this shard eligible for plugin-side topology cleanup: empty
+     * (no live members), every committed offset already past {@code offsets.retention.ms}, and a
+     * {@code StoredDescriptionTopologyEpoch != -1}. Keyed by group id, valued by the
+     * {@code StoredDescriptionTopologyEpoch} observed at {@code committedOffset} — the cleanup
+     * cycle echoes that epoch back to {@link #clearStoredDescriptionTopologyEpoch} so a
+     * concurrent {@code setTopology} that has since advanced the field cannot be silently undone
+     * by a stale plugin delete.
+     *
+     * <p>Every state lookup goes through the snapshot at {@code committedOffset}: the iterated
+     * group-id set, the per-group resolution, the {@code EMPTY}-state check, the stored
+     * topology epoch, and the per-offset retention check inside
+     * {@link OffsetMetadataManager#allOffsetsExpired}. The only non-snapshot input is
+     * {@code now} from the wall clock, which is unavoidable for "offset has aged past
+     * retention" and is captured once at the top of the scan so every group is compared
+     * against the same instant.
+     *
+     * <p>Non-streams and missing groups are silently skipped. Per-group errors are logged and
+     * the scan continues so one bad group cannot stall the cycle.
+     */
+    public Map<String, Integer> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
+        long now = time.milliseconds();
+        Map<String, Integer> eligible = new HashMap<>();
+        for (String groupId : groupMetadataManager.groupIds(committedOffset)) {
+            try {
+                Group group = groupMetadataManager.maybeGroup(groupId, committedOffset);
+                if (group == null || group.type() != Group.GroupType.STREAMS) continue;
+                StreamsGroup streamsGroup = (StreamsGroup) group;
+                if (!streamsGroup.isEmpty(committedOffset)) continue;
+                int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
+                if (storedEpoch == -1) continue;
+                if (!offsetMetadataManager.allOffsetsExpired(groupId, now, committedOffset)) continue;
+                eligible.put(groupId, storedEpoch);
+            } catch (Throwable t) {
+                // One bad group must not abort the whole scan; the next cycle retries.
+                log.warn("Unexpected error scanning streams group {} for topology cleanup; skipping.", groupId, t);
+            }
+        }
+        return eligible;
+    }
+
+    /**
+     * Clear {@code StoredDescriptionTopologyEpoch} to {@code -1} for {@code groupId}, but only
+     * when the persisted value still equals {@code expectedStoredEpoch}. Called from the
+     * topology-description cleanup cycle so a concurrent {@code setTopology} that has advanced
+     * the field is preserved.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpoch(
+        String groupId,
+        int expectedStoredEpoch
+    ) {
+        return groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch);
     }
 
     /**
@@ -1038,15 +1117,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      */
     public CoordinatorResult<Void, CoordinatorRecord> cleanupGroupMetadata() {
         long startMs = time.milliseconds();
+        boolean topologyPluginConfigured = config.isStreamsGroupTopologyDescriptionPluginConfigured();
         List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
             Group group = groupMetadataManager.group(groupId);
-            if (group.shouldExpire()) {
-                boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
-                if (allOffsetsExpired) {
-                    groupMetadataManager.maybeDeleteGroup(groupId, records);
-                }
-            }
+            if (!group.shouldExpire()) return;
+            boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
+            if (!allOffsetsExpired) return;
+            if (deferStreamsGroupTombstoneForPluginCleanup(topologyPluginConfigured, group)) return;
+            groupMetadataManager.maybeDeleteGroup(groupId, records);
         });
 
         if (!records.isEmpty()) {
@@ -1057,6 +1136,27 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
         return new CoordinatorResult<>(records, false);
+    }
+
+    /**
+     * Decide whether the natural-expiration sweep must defer tombstoning {@code group} so the
+     * broker-level topology-description cleanup cycle can drive {@code plugin.deleteTopology}
+     * and clear {@code StoredDescriptionTopologyEpoch} first. Returns true only when all of:
+     * a plugin is configured on this broker (otherwise no cycle would ever clear the field
+     * and the gate would prevent natural expiration indefinitely), the group is a streams
+     * group, and its {@code StoredDescriptionTopologyEpoch} is not the {@code -1} default.
+     *
+     * <p>The {@code (StreamsGroup) group} cast is safe because the {@code group.type() == STREAMS}
+     * check precedes it via short-circuit evaluation; pulling this out of the sweep lambda
+     * keeps the gate's intent and the cast's precondition next to each other.
+     */
+    private static boolean deferStreamsGroupTombstoneForPluginCleanup(
+        boolean topologyPluginConfigured,
+        Group group
+    ) {
+        return topologyPluginConfigured
+            && group.type() == Group.GroupType.STREAMS
+            && ((StreamsGroup) group).storedDescriptionTopologyEpoch() != -1;
     }
 
     /**

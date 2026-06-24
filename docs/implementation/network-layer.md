@@ -1,6 +1,6 @@
 ---
 title: Network Layer
-description: Network Layer
+description: Kafka NIO-based network layer implementation.
 weight: 1
 tags: ['kafka', 'docs']
 aliases: 

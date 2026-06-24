@@ -285,6 +285,7 @@ if (repo != null) {
         'gradle/wrapper/gradle-wrapper.properties',
         'trogdor/README.md',
         '**/README.md',
+        '**/AGENTS.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
@@ -1308,6 +1309,8 @@ project(':core') {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     into 'site-docs'
     duplicatesStrategy 'exclude'
   }
@@ -1438,7 +1441,6 @@ project(':metadata') {
     testFixturesImplementation libs.junitJupiter
 
     testImplementation libs.junitJupiter
-    testImplementation libs.jqwik
     testImplementation libs.mockitoCore
     testImplementation testFixtures(project(':clients'))
     testImplementation testFixtures(project(':raft'))
@@ -2214,7 +2216,6 @@ project(':raft') {
     testFixturesImplementation project(':clients')
     testFixturesImplementation testFixtures(project(':clients'))
     testFixturesImplementation project(':server-common')
-    testFixturesImplementation libs.jqwik
     testFixturesImplementation libs.junitJupiter
     testFixturesImplementation libs.mockitoCore
     testFixturesImplementation libs.slf4jApi
@@ -2226,7 +2227,6 @@ project(':raft') {
     testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
-    testImplementation libs.jqwik
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs
@@ -2292,7 +2292,7 @@ project(':raft') {
 
   test {
     useJUnitPlatform {
-      includeEngines 'jqwik', 'junit-jupiter'
+      includeEngines 'junit-jupiter'
     }
   }
 

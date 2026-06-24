@@ -1,6 +1,6 @@
 ---
 title: Testing a Streams Application
-description: 
+description: Guide to testing Kafka Streams applications.
 weight: 7
 tags: ['kafka', 'docs']
 aliases: 

@@ -70,7 +70,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ShareHeartbeatRequestManagerTest
-        extends AbstractHeartbeatRequestManagerTest {
+        extends AbstractHeartbeatRequestManagerTest<ShareGroupHeartbeatResponse> {
 
     private static final String SHARE_CONSUMER_COORDINATOR_METRICS = "consumer-share-coordinator-metrics";
 
@@ -83,6 +83,10 @@ public class ShareHeartbeatRequestManagerTest
     private ShareHeartbeatRequestManager.HeartbeatState heartbeatState;
     private Metrics metrics;
     private LogContext logContext;
+
+    public ShareHeartbeatRequestManagerTest() {
+        super(ShareGroupHeartbeatResponse.class);
+    }
 
     @BeforeEach
     public void setUp() {
