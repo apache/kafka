@@ -267,6 +267,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
           util.Set.of()
         )),
       Map.empty[String, String].asJava,
+      () => util.Map.of[StreamsRebalanceData.TaskId, java.lang.Long](),
       () => util.Map.of[StreamsRebalanceData.TaskId, java.lang.Long]()
     )
 

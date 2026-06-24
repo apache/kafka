@@ -1703,7 +1703,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of);
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         thread = new StreamThread(
             mockTime, config, null,
             mainConsumer, consumer,
@@ -1736,7 +1736,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of);
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         thread = new StreamThread(
             mockTime, config, null,
             mainConsumer, consumer,
@@ -2982,6 +2982,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -3854,6 +3855,10 @@ public class StreamThreadTest {
             )
         ));
         when(topologyBuilder.copartitionGroups()).thenReturn(Set.of(Set.of("source1")));
+        final InternalTopologyBuilder.TopologyDescription mockDescription = mock(InternalTopologyBuilder.TopologyDescription.class);
+        when(mockDescription.subtopologies()).thenReturn(Collections.emptySet());
+        when(mockDescription.globalStores()).thenReturn(Collections.emptySet());
+        when(topologyBuilder.describe()).thenReturn(mockDescription);
 
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
@@ -3935,6 +3940,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
@@ -3997,6 +4003,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -4100,6 +4107,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
@@ -4173,6 +4181,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
@@ -4238,6 +4247,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -4301,6 +4311,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -4374,6 +4385,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
