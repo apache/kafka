@@ -494,7 +494,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             staticVoters,
             log,
             serde,
-            BufferSupplier.create(),
             MAX_BATCH_SIZE_BYTES,
             logContext,
             kafkaRaftMetrics,
