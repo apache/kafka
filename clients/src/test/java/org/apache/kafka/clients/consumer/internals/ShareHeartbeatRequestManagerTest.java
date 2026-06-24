@@ -457,7 +457,6 @@ public class ShareHeartbeatRequestManagerTest
         assertEquals(0, pollResult.unsentRequests.size());
     }
 
-
     @Override
     protected ClientResponse createHeartbeatResponse(
             final NetworkClientDelegate.UnsentRequest request,
