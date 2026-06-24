@@ -242,6 +242,7 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldAllowMultipleOptimizations
 - shouldAllowSettingConsumerIsolationLevelIfEosDisabled
 - shouldAllowSettingProducerEnableIdempotenceIfEosDisabled
+- shouldAllowStaticMembershipWhenStreamsProtocolUsed
 - shouldAllowToSpecifyMaxInFlightRequestsPerConnectionAsStringIfEosV2Enabled
 - shouldAllowWhitespacesInRackAwareAssignmentTagsList
 - shouldBeSupportNonPrefixedConsumerConfigs
@@ -352,7 +353,6 @@ org.apache.kafka.streams.StreamsConfigTest:
 - shouldThrowConfigExceptionWhenMainConsumerMetricsDisabledStreamsMetricsPushEnabled
 - shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange
 - shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange
-- shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership
 - shouldThrowConfigExceptionWithInvalidApplicationServerConfigValue
 - shouldThrowExceptionIfApplicationIdIsNotSet
 - shouldThrowExceptionIfBootstrapServersIsNotSet
@@ -2869,6 +2869,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldNotEnforceRebalanceOnTaskCorruptedExceptionUnderStreamsProtocol
 - shouldNotEnforceRebalanceWhenCurrentlyRebalancing
 - shouldNotEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnInactiveTask
+- shouldNotPopulateWireTopologyDescriptionWhenPushDisabled
 - shouldNotProcessWhenPartitionRevoked
 - shouldNotPurgeBeforeThePurgeInterval
 - shouldNotRecordFailedStreamThread
@@ -2876,6 +2877,7 @@ org.apache.kafka.streams.processor.internals.StreamThreadTest:
 - shouldNotThrowWhenStandbyTasksAssignedAndNoStateStoresForTopology
 - shouldOnlyCompleteShutdownAfterRebalanceNotInProgress
 - shouldOnlyShutdownOnce
+- shouldPopulateWireTopologyDescriptionWhenPushEnabled
 - shouldProcessWhenPartitionAssigned
 - shouldProcessWhenRunning
 - shouldProcessWhenStarting

@@ -13,6 +13,9 @@ org.apache.kafka.connect.mirror.MirrorClientTest:
 - testRemoteConsumerOffsets
 - testRemoteConsumerOffsetsIllegalArgs
 - upstreamClustersTest
+org.apache.kafka.connect.mirror.MirrorRecordVersionTest:
+- checkpointDeserializeRejectsUnsupportedValueVersion
+- heartbeatDeserializeRejectsUnsupportedValueVersion
 org.apache.kafka.connect.mirror.ReplicationPolicyTest:
 - checkpointsTopic_shouldBeEffectedByInternalTopicSeparatorEnabled
 - heartbeatsTopic_shouldNotBeEffectedByInternalTopicSeparatorConfig

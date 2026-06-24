@@ -461,6 +461,15 @@ org.apache.kafka.server.partition.AlterPartitionManagerTest:
 - testUnknownTopicPartition
 org.apache.kafka.server.purgatory.DelayedFutureTest:
 - testDelayedFuture
+org.apache.kafka.server.purgatory.DelayedProduceTest:
+- testConstructorMarksPendingPartitionsAsTimedOut
+- testRemovePartitionMetrics
+- testRemovePartitionMetricsForNonExistentPartition
+- testTryCompleteSkipsValidationForNonPendingPartitions
+- testTryCompleteWaitsWhileAnyPartitionPending
+- testTryCompleteWhenAllPartitionsHaveEnoughReplicas
+- testTryCompleteWhenReplicasNotCaughtUp
+- testTryCompleteWhenValidationReturnsError
 org.apache.kafka.server.quota.ClientQuotasRequestTest:
 - testAlterClientQuotasBadIp
 - testAlterClientQuotasInvalidEntityCombination
