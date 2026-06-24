@@ -43,6 +43,11 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -149,6 +154,30 @@ public class MeteredKeyValueStoreTest {
 
     private void init() {
         metered.init(context, metered);
+    }
+
+    @Test
+    public void shouldPropagateSkipCacheForKeyQuery() {
+        setUp();
+        init();
+        assertTrue(forwardedRawKeyQuery(KeyQuery.withKey(KEY).skipCache()).isSkipCache());
+    }
+
+    @Test
+    public void shouldNotSkipCacheForKeyQueryByDefault() {
+        setUp();
+        init();
+        assertFalse(forwardedRawKeyQuery(KeyQuery.withKey(KEY)).isSkipCache());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private KeyQuery<?, ?> forwardedRawKeyQuery(final Query<?> query) {
+        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn((QueryResult) QueryResult.forResult(null));
+        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+        final ArgumentCaptor<KeyQuery> captor = ArgumentCaptor.forClass(KeyQuery.class);
+        verify(inner).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
+        return captor.getValue();
     }
 
     @Test

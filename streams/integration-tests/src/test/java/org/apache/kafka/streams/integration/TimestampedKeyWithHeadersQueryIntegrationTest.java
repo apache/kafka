@@ -34,12 +34,14 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
@@ -71,7 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Builds a KIP-1271 {@code WithHeaders} store, writes records (with headers) into it through a
  * processor, then queries the store through IQv2 and asserts that the returned
- * {@link ValueTimestampHeaders} carries value, timestamp, and the exact headers written.
+ * {@link ReadOnlyRecord} carries the key, value, timestamp, and the exact headers written.
  */
 @Tag("integration")
 public class TimestampedKeyWithHeadersQueryIntegrationTest {
@@ -87,6 +89,7 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
     private String inputStream;
     private String outputStream;
     private long baseTimestamp;
+    private long commitIntervalMs = 1000L;
     private KafkaStreams kafkaStreams;
     private TestInfo testInfo;
 
@@ -137,14 +140,16 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
             outputStream,
             4);
 
-        // key 1: value + timestamp + headers round-trip
-        final ValueTimestampHeaders<String> result1 = query(1);
+        // key 1: key + value + timestamp + headers round-trip
+        final ReadOnlyRecord<Integer, String> result1 = query(1);
+        assertEquals(Integer.valueOf(1), result1.key());
         assertEquals("a0", result1.value());
         assertEquals(baseTimestamp, result1.timestamp());
         assertEquals(HEADERS, result1.headers());
 
         // key 2: written with no headers -> empty (never null) headers
-        final ValueTimestampHeaders<String> result2 = query(2);
+        final ReadOnlyRecord<Integer, String> result2 = query(2);
+        assertEquals(Integer.valueOf(2), result2.key());
         assertEquals("b0", result2.value());
         assertEquals(baseTimestamp + 1, result2.timestamp());
         assertEquals(new RecordHeaders(), result2.headers());
@@ -154,6 +159,29 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
 
         // never-written key -> null result
         assertNull(query(999));
+    }
+
+    @Test
+    public void shouldServeCacheHitWhenCachingEnabledAndRecordNotYetFlushed() throws Exception {
+        // Use a very large commit interval so the processed record is never committed/flushed during
+        // the test: it lives only in the record cache (the persistent RocksDB layer stays empty). A
+        // successful query therefore proves the result was served from the cache via
+        // CachingKeyValueStoreWithHeaders -> the metered store's cache-hit path, end-to-end.
+        commitIntervalMs = Duration.ofMinutes(10).toMillis();
+        startStreams(true);
+
+        produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS, KeyValue.pair(1, "a0"));
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, StringDeserializer.class),
+            outputStream,
+            1);
+
+        // Read-your-writes: the not-yet-flushed record is visible (served from the cache), with headers.
+        final ReadOnlyRecord<Integer, String> result = query(1);
+        assertEquals(Integer.valueOf(1), result.key());
+        assertEquals("a0", result.value());
+        assertEquals(baseTimestamp, result.timestamp());
+        assertEquals(HEADERS, result.headers());
     }
 
     @Test
@@ -179,25 +207,29 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
             outputStream,
             1);
 
-        final StateQueryResult<ValueTimestampHeaders<String>> result =
-            kafkaStreams.query(inStore(STORE_NAME).withQuery(TimestampedKeyWithHeadersQuery.withKey(1)));
+        final StateQueryResult<ReadOnlyRecord<Integer, String>> result =
+            kafkaStreams.query(inStore(STORE_NAME).withQuery(TimestampedKeyWithHeadersQuery.<Integer, String>withKey(1)));
 
         assertTrue(result.getOnlyPartitionResult().isFailure());
         assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getOnlyPartitionResult().getFailureReason());
     }
 
     private void startStreams() throws Exception {
+        // Caching disabled: every IQv2 query is forced down to the persistent
+        // RocksDBTimestampedStoreWithHeaders layer, exercising its KeyQuery handling
+        // (rather than being short-circuited by a cache hit).
+        startStreams(false);
+    }
+
+    private void startStreams(final boolean cachingEnabled) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
+        final StoreBuilder<TimestampedKeyValueStoreWithHeaders<Integer, String>> storeBuilder =
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.String());
         builder
-            .addStateStore(
-                Stores.timestampedKeyValueStoreWithHeadersBuilder(
-                        Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME),
-                        Serdes.Integer(),
-                        Serdes.String())
-                    // Disable caching so every IQv2 query is forced down to the persistent
-                    // RocksDBTimestampedStoreWithHeaders layer, exercising its KeyQuery handling
-                    // (rather than being short-circuited by a cache hit).
-                    .withCachingDisabled())
+            .addStateStore(cachingEnabled ? storeBuilder.withCachingEnabled() : storeBuilder.withCachingDisabled())
             .stream(inputStream, Consumed.with(Serdes.Integer(), Serdes.String()))
             .process(() -> new HeadersStoreWriterProcessor(), STORE_NAME)
             .to(outputStream, Produced.with(Serdes.Integer(), Serdes.String()));
@@ -206,13 +238,13 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
     }
 
-    private ValueTimestampHeaders<String> query(final int key) {
-        final StateQueryRequest<ValueTimestampHeaders<String>> request =
+    private ReadOnlyRecord<Integer, String> query(final int key) {
+        final StateQueryRequest<ReadOnlyRecord<Integer, String>> request =
             inStore(STORE_NAME).withQuery(TimestampedKeyWithHeadersQuery.<Integer, String>withKey(key));
-        final StateQueryResult<ValueTimestampHeaders<String>> result = kafkaStreams.query(request);
+        final StateQueryResult<ReadOnlyRecord<Integer, String>> result = kafkaStreams.query(request);
         // getOnlyPartitionResult() returns null when the single partition result is a successful
         // null (tombstoned / absent key), which we surface to the caller as a null lookup.
-        final QueryResult<ValueTimestampHeaders<String>> onlyResult = result.getOnlyPartitionResult();
+        final QueryResult<ReadOnlyRecord<Integer, String>> onlyResult = result.getOnlyPartitionResult();
         return onlyResult == null ? null : onlyResult.getResult();
     }
 
@@ -222,7 +254,7 @@ public class TimestampedKeyWithHeadersQueryIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return streamsConfiguration;
     }

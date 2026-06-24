@@ -19,12 +19,16 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -32,40 +36,36 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
 import org.apache.kafka.streams.query.TimestampedKeyQuery;
-import org.apache.kafka.streams.state.HeadersBytesStore;
+import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -229,147 +229,152 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         assertInstanceOf(PlainToHeadersStoreAdapter.class, ((WrappedStateStore) store).wrapped());
     }
 
-    @Test
-    public void shouldHandleKeyQueryOnInMemoryStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("in-memory");
-        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
+    // ----------------------------------------------------------------------------------------------
+    // IQv2 query handling for the built header store.
+    //
+    // The header store can be built three ways; each is exercised with caching on and off through a
+    // single helper that builds the real store chain (Metered -> [Caching] -> inner) with a real
+    // record cache, then writes and reads real data at the typed (metered) level:
+    //   NATIVE    -> RocksDBTimestampedStoreWithHeaders                       (persists headers)
+    //   ADAPTER   -> RocksDBTimestampedStore via TimestampedToHeadersStoreAdapter (drops headers)
+    //   IN_MEMORY -> InMemoryKeyValueStore via the in-memory headers marker
+    // ----------------------------------------------------------------------------------------------
+
+    private enum StoreType { NATIVE, ADAPTER, IN_MEMORY }
+
+    private KeyValueStore<Bytes, byte[]> innerStore(final StoreType storeType) {
+        switch (storeType) {
+            case NATIVE:    return new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope");
+            case ADAPTER:   return new RocksDBTimestampedStore("test-store", "metrics-scope");
+            case IN_MEMORY: return new InMemoryKeyValueStore("test-store");
+            default:        throw new IllegalArgumentException("unknown store type: " + storeType);
+        }
+    }
+
+    private TimestampedKeyValueStoreWithHeaders<String, String> buildAndInitStore(
+            final StoreType storeType,
+            final boolean cachingEnabled) {
+        lenient().when(supplier.name()).thenReturn("test-store");
+        lenient().when(supplier.metricsScope()).thenReturn("metricScope");
+        lenient().when(supplier.get()).thenReturn(innerStore(storeType));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
+            supplier, Serdes.String(), Serdes.String(), new MockTime());
+        final TimestampedKeyValueStoreWithHeaders<String, String> store =
+            (cachingEnabled
+                ? builder.withLoggingDisabled().withCachingEnabled()
+                : builder.withLoggingDisabled().withCachingDisabled())
+                .build();
 
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
+        final ThreadCache cache = new ThreadCache(
+            new LogContext("test "),
+            cachingEnabled ? 10 * 1024 * 1024 : 0,
+            new MockStreamsMetrics(new Metrics()));
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
+            TestUtils.tempDirectory(), Serdes.String(), Serdes.String(), null, cache);
+        context.setRecordContext(new ProcessorRecordContext(0L, 0L, 0, "topic", new RecordHeaders()));
         store.init(context, store);
+        return store;
+    }
 
+    private static Headers headersWith(final String key, final String value) {
+        return new RecordHeaders().add(key, value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"NATIVE, true", "NATIVE, false", "ADAPTER, true", "ADAPTER, false", "IN_MEMORY, true", "IN_MEMORY, false"})
+    public void shouldHandleKeyQuery(final StoreType storeType, final boolean cachingEnabled) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, cachingEnabled);
         try {
-            // Put data into the store
-            final Headers headers = new RecordHeaders();
-            headers.add("key1", "value1".getBytes());
-            store.put("test-key", ValueTimestampHeaders.make("test-value", 12345L, headers));
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
 
-            // Verify wrapper type for InMemoryKeyValueStore
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            assertInstanceOf(HeadersBytesStore.class, wrapped,
-                "Expected wrapper to implement HeadersBytesStore for InMemoryKeyValueStore");
+            final QueryResult<String> result =
+                store.query(KeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false));
 
-            // Query at typed level - KeyQuery should return just the value
-            final KeyQuery<String, String> query = KeyQuery.withKey("test-key");
-            final QueryResult<String> result = store.query(query, PositionBound.unbounded(), new QueryConfig(false));
-
-            // Verify IQv2 query result
-            assertTrue(result.isSuccess(), "Expected query to succeed on InMemoryKeyValueStore");
+            assertTrue(result.isSuccess(), "Expected KeyQuery to succeed");
+            assertEquals("v", result.getResult(), "KeyQuery returns the value only");
             assertNotNull(result.getPosition(), "Expected position to be set");
-            assertInstanceOf(String.class, result.getResult());
-            assertEquals("test-value", result.getResult(), "KeyQuery should return just the value");
         } finally {
             store.close();
         }
     }
 
-    @Test
-    public void shouldHandleTimestampedKeyQueryOnInMemoryStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("in-memory");
-        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
+    @ParameterizedTest
+    @CsvSource({"NATIVE, true", "NATIVE, false", "ADAPTER, true", "ADAPTER, false", "IN_MEMORY, true", "IN_MEMORY, false"})
+    public void shouldHandleTimestampedKeyQuery(final StoreType storeType, final boolean cachingEnabled) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, cachingEnabled);
         try {
-            // Put data into the store
-            final Headers headers = new RecordHeaders();
-            headers.add("key1", "value1".getBytes());
-            store.put("test-key", ValueTimestampHeaders.make("test-value", 12345L, headers));
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
 
-            // Verify wrapper type for InMemoryKeyValueStore
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            assertInstanceOf(HeadersBytesStore.class, wrapped,
-                "Expected wrapper to implement HeadersBytesStore for InMemoryKeyValueStore");
+            final QueryResult<ValueAndTimestamp<String>> result =
+                store.query(TimestampedKeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false));
 
-            // Query at typed level - TimestampedKeyQuery should return value + timestamp
-            final TimestampedKeyQuery<String, String> query = TimestampedKeyQuery.withKey("test-key");
-            final QueryResult<ValueAndTimestamp<String>> result = store.query(query, PositionBound.unbounded(), new QueryConfig(false));
-
-            // Verify IQv2 query result
-            assertTrue(result.isSuccess(), "Expected query to succeed on InMemoryKeyValueStore");
+            assertTrue(result.isSuccess(), "Expected TimestampedKeyQuery to succeed");
+            assertEquals("v", result.getResult().value());
+            assertEquals(123L, result.getResult().timestamp());
             assertNotNull(result.getPosition(), "Expected position to be set");
-            assertNotNull(result.getResult(), "Expected non-null result");
-            assertInstanceOf(ValueAndTimestamp.class, result.getResult());
-            assertEquals("test-value", result.getResult().value(), "TimestampedKeyQuery should return the value");
-            assertEquals(12345L, result.getResult().timestamp(), "TimestampedKeyQuery should return the timestamp");
         } finally {
             store.close();
         }
     }
 
-    @Test
-    public void shouldReturnPositionFromHeadersStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldHandleTimestampedKeyWithHeadersQueryOnNativeStore(final boolean cachingEnabled) {
+        // Only the native store persists headers; the adapter and in-memory builds drop them on write.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, cachingEnabled);
         try {
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            final Position position = wrapped.getPosition();
+            final Headers headers = headersWith("h", "x");
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headers));
 
-            // Verify: Position is returned (should be non-null)
+            final QueryResult<ReadOnlyRecord<String, String>> result =
+                store.query(TimestampedKeyWithHeadersQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(result.isSuccess(), "Expected TimestampedKeyWithHeadersQuery to succeed");
+            final ReadOnlyRecord<String, String> record = result.getResult();
+            assertEquals("k", record.key());
+            assertEquals("v", record.value());
+            assertEquals(123L, record.timestamp());
+            // Headers must round-trip on both the persistent path and the cache path.
+            assertEquals(headers, record.headers());
+            assertNotNull(result.getPosition(), "Expected position to be set");
+        } finally {
+            store.close();
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"NATIVE", "ADAPTER", "IN_MEMORY"})
+    public void shouldHandleRangeQuery(final StoreType storeType) {
+        // Caching disabled: an IQv2 RangeQuery forwards straight to the store (it does not merge the
+        // record cache), so the write is served from the persistent store.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+
+            final QueryResult<KeyValueIterator<String, String>> result =
+                store.query(RangeQuery.withNoBounds(), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(result.isSuccess(), "Expected RangeQuery to succeed");
+            try (KeyValueIterator<String, String> iterator = result.getResult()) {
+                assertTrue(iterator.hasNext(), "Expected the stored key in the range result");
+                final KeyValue<String, String> keyValue = iterator.next();
+                assertEquals("k", keyValue.key);
+                assertEquals("v", keyValue.value);
+                assertFalse(iterator.hasNext());
+            }
+            assertNotNull(result.getPosition(), "Expected position to be set");
+        } finally {
+            store.close();
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"NATIVE", "ADAPTER", "IN_MEMORY"})
+    public void shouldReturnEmptyPositionInitially(final StoreType storeType) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
+        try {
+            final Position position = ((WrappedStateStore) store).wrapped().getPosition();
             assertNotNull(position, "Expected non-null position");
             assertTrue(position.isEmpty(), "Expected position to be empty initially");
         } finally {
@@ -377,454 +382,50 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
-    @Test
-    public void shouldReturnPositionFromAdaptedTimestampedStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
-        try {
-            // Verify adapter is used
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped);
-
-            // Get position from adapter (should delegate to underlying store)
-            final Position position = wrapped.getPosition();
-
-            assertNotNull(position, "Expected non-null position from adapter");
-            assertTrue(position.isEmpty(), "Expected position to be empty initially");
-        } finally {
-            store.close();
-        }
-    }
-
-    @Test
-    public void shouldReturnPositionFromInMemoryStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("in-memory");
-        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
-        try {
-            // Verify marker wrapper is used
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            assertInstanceOf(HeadersBytesStore.class, wrapped);
-
-            // Get position from marker (should delegate to InMemoryKeyValueStore)
-            final Position position = wrapped.getPosition();
-
-            assertNotNull(position, "Expected non-null position from in-memory store");
-            assertTrue(position.isEmpty(), "Expected position to be empty initially");
-        } finally {
-            store.close();
-        }
-    }
-
-    @Test
-    public void shouldMaintainPositionAcrossOperationsOnHeadersStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
-        try {
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-
-            // Get initial position
-            final Position initialPosition = wrapped.getPosition();
-            assertNotNull(initialPosition, "Expected non-null initial position");
-
-            // Put some data
-            store.put("key1", ValueTimestampHeaders.make("value1", 100L, new RecordHeaders()));
-            store.put("key2", ValueTimestampHeaders.make("value2", 200L, new RecordHeaders()));
-
-            // Get position after puts
-            final Position afterPutPosition = wrapped.getPosition();
-            assertNotNull(afterPutPosition, "Expected non-null position after puts");
-
-            // Position object should be the same instance (stores maintain a single position)
-            // The position content might be updated internally by the context
-        } finally {
-            store.close();
-        }
-    }
-
-    private static ThreadCache mockCacheHit() {
-        final ThreadCache cache = mock(ThreadCache.class);
-        final LRUCacheEntry entry = mock(LRUCacheEntry.class);
-        final byte[] entryValue = "mockEntryValue".getBytes(StandardCharsets.UTF_8);
-        lenient().when(entry.value()).thenReturn(entryValue);
-        lenient().when(cache.get(any(String.class), any(Bytes.class))).thenReturn(entry);
-        return cache;
-    }
-
-    private TimestampedKeyValueStoreWithHeaders<String, String> headersStoreMaybeWithCache(final boolean cachingEnabled) {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
-
-        final File dir = TestUtils.tempDirectory();
-        final ThreadCache cache = mockCacheHit();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            null,
-            cache
-        );
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-        
-        final TimestampedKeyValueStoreWithHeaders<String, String> store;
-        if (cachingEnabled) {
-            store = builder.withLoggingDisabled()
-                .withCachingEnabled()
-                .build();
-        } else {
-            store = builder.withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
-        }
-
-        store.init(context, store);
-        return store;
-    }
-
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldHandleKeyQueryOnHeadersStore(final boolean cachingEnabled) {
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = headersStoreMaybeWithCache(cachingEnabled);
-
+    @CsvSource({"NATIVE", "ADAPTER"})
+    public void shouldCollectExecutionInfoWhenRequested(final StoreType storeType) {
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, false);
         try {
-            final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
-            final PositionBound positionBound = PositionBound.unbounded();
-            final QueryConfig config = new QueryConfig(false);
-
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            final QueryResult<byte[]> result = wrapped.query(query, positionBound, config);
-
-            // KIP-1356 PoC: the headers store now serves KeyQuery (rather than UNKNOWN_QUERY_TYPE).
-            // No data was written for "test-key", so the result is a successful null lookup.
-            assertTrue(result.isSuccess(), "Expected KeyQuery to be handled");
-            assertNull(result.getResult(), "Expected null result for an absent key");
-            assertNotNull(result.getPosition(), "Expected position to be set");
-        } finally {
-            store.close();
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldReturnUnknownQueryTypeForRangeQueryOnHeadersStore(final boolean cachingEnabled) {
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = headersStoreMaybeWithCache(cachingEnabled);
-
-        try {
-            final RangeQuery<Bytes, byte[]> query = RangeQuery.withRange(
-                new Bytes("a".getBytes()),
-                new Bytes("z".getBytes())
-            );
-            final PositionBound positionBound = PositionBound.unbounded();
-            final QueryConfig config = new QueryConfig(false);
-
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            final QueryResult<KeyValueIterator<Bytes, byte[]>> result = wrapped.query(query, positionBound, config);
-
-            // Verify: Headers store currently returns UNKNOWN_QUERY_TYPE
-            assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
-            assertEquals(
-                FailureReason.UNKNOWN_QUERY_TYPE,
-                result.getFailureReason(),
-                "Expected UNKNOWN_QUERY_TYPE failure reason"
-            );
-            assertNotNull(result.getPosition(), "Expected position to be set");
-        } finally {
-            store.close();
-        }
-    }
-
-    @Test
-    public void shouldCollectExecutionInfoForQueryOnHeadersStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
-        try {
-            final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
-            final PositionBound positionBound = PositionBound.unbounded();
-            final QueryConfig config = new QueryConfig(true); // Enable execution info
-
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            final QueryResult<byte[]> result = wrapped.query(query, positionBound, config);
-
-            // Verify: Execution info was collected
-            assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
-            assertTrue(
-                result.getExecutionInfo().get(0).contains("Handled in"),
-                "Expected execution info to contain handling information"
-            );
-            assertTrue(
-                result.getExecutionInfo().get(0).contains(RocksDBTimestampedStoreWithHeaders.class.getName()),
-                "Expected execution info to mention the class name"
-            );
-        } finally {
-            store.close();
-        }
-    }
-
-    @Test
-    public void shouldHandleKeyQueryOnAdaptedTimestampedStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
-        try {
-            // Put data into the store (headers will be discarded when adapted to timestamped store)
-            final Headers headers = new RecordHeaders();
-            headers.add("adapter", "test".getBytes());
-            store.put("test-key", ValueTimestampHeaders.make("adapter-value", 55555L, headers));
-
-            // Verify adapter is used for legacy timestamped store
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped,
-                "Expected TimestampedToHeadersStoreAdapter for legacy timestamped store");
-
-            // Query at typed level - KeyQuery should return just the value
-            final KeyQuery<String, String> query = KeyQuery.withKey("test-key");
-            final QueryResult<String> result = store.query(query, PositionBound.unbounded(), new QueryConfig(false));
-
-            // Verify IQv2 query result
-            // Adapter delegates to RocksDBTimestampedStore which supports IQv2 through RocksDBStore
-            assertTrue(result.isSuccess(),
-                "Expected query to succeed since RocksDBTimestampedStore supports IQv2");
-            assertNotNull(result.getPosition(), "Expected position to be set");
-            assertInstanceOf(String.class, result.getResult());
-            assertEquals("adapter-value", result.getResult(), "KeyQuery should return just the value");
-        } finally {
-            store.close();
-        }
-    }
-
-    @Test
-    public void shouldHandleTimestampedKeyQueryOnAdaptedTimestampedStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
-        try {
-            // Put data into the store (headers will be discarded when adapted to timestamped store)
-            final Headers headers = new RecordHeaders();
-            headers.add("adapter", "test".getBytes());
-            store.put("test-key", ValueTimestampHeaders.make("adapter-value", 55555L, headers));
-
-            // Verify adapter is used for legacy timestamped store
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped,
-                "Expected TimestampedToHeadersStoreAdapter for legacy timestamped store");
-
-            // Query at typed level - TimestampedKeyQuery should return value + timestamp
-            final TimestampedKeyQuery<String, String> query = TimestampedKeyQuery.withKey("test-key");
-            final QueryResult<ValueAndTimestamp<String>> result = store.query(query, PositionBound.unbounded(), new QueryConfig(false));
-
-            // Verify IQv2 query result
-            // Adapter delegates to RocksDBTimestampedStore which supports IQv2 through RocksDBStore
-            assertTrue(result.isSuccess(),
-                "Expected query to succeed since RocksDBTimestampedStore supports IQv2");
-            assertNotNull(result.getPosition(), "Expected position to be set");
-            assertNotNull(result.getResult(), "Expected non-null result");
-            assertInstanceOf(ValueAndTimestamp.class, result.getResult());
-            assertEquals("adapter-value", result.getResult().value(), "TimestampedKeyQuery should return the value");
-            assertEquals(55555L, result.getResult().timestamp(), "TimestampedKeyQuery should return the timestamp");
-        } finally {
-            store.close();
-        }
-    }
-
-    @Test
-    public void shouldCollectExecutionInfoForQueryOnAdaptedTimestampedStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-            supplier,
-            Serdes.String(),
-            Serdes.String(),
-            new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-            .withLoggingDisabled()
-            .withCachingDisabled()
-            .build();
-
-        final File dir = TestUtils.tempDirectory();
-        final Properties props = StreamsTestUtils.getStreamsConfig();
-        final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>(
-            dir,
-            Serdes.String(),
-            Serdes.String(),
-            new StreamsConfig(props)
-        );
-        store.init(context, store);
-
-        try {
-            final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test-key".getBytes()));
-            final PositionBound positionBound = PositionBound.unbounded();
-            final QueryConfig config = new QueryConfig(true); // Enable execution info
-
-            final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-            final QueryResult<byte[]> result = wrapped.query(query, positionBound, config);
-
-            // Verify: Execution info includes both adapter and underlying store
-            assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
+            final QueryResult<byte[]> result = wrapped.query(
+                KeyQuery.withKey(new Bytes("k".getBytes())), PositionBound.unbounded(), new QueryConfig(true));
 
             final String executionInfo = String.join("\n", result.getExecutionInfo());
-            assertTrue(
-                executionInfo.contains("Handled in"),
-                "Expected execution info to contain handling information"
-            );
-            // Should mention the adapter class
-            assertTrue(
-                executionInfo.contains(TimestampedToHeadersStoreAdapter.class.getName()),
-                "Expected execution info to mention the adapter class"
-            );
+            assertFalse(executionInfo.isEmpty(), "Expected execution info to be collected");
+            assertTrue(executionInfo.contains("Handled in"), "Expected execution info to contain handling information");
+            final String expectedClass = storeType == StoreType.NATIVE
+                ? RocksDBTimestampedStoreWithHeaders.class.getName()
+                : TimestampedToHeadersStoreAdapter.class.getName();
+            assertTrue(executionInfo.contains(expectedClass), "Expected execution info to mention " + expectedClass);
         } finally {
             store.close();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReturnIdenticalResultsForNativeAndAdapterBuiltStores(final boolean cachingEnabled) {
+        // The existing (header-stripped) query types must return identical results on both build paths.
+        final ValueTimestampHeaders<String> value = ValueTimestampHeaders.make("v", 123L, headersWith("h", "x"));
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> nativeStore = buildAndInitStore(StoreType.NATIVE, cachingEnabled);
+        final TimestampedKeyValueStoreWithHeaders<String, String> adapterStore = buildAndInitStore(StoreType.ADAPTER, cachingEnabled);
+        try {
+            nativeStore.put("k", value);
+            adapterStore.put("k", value);
+
+            assertEquals(
+                nativeStore.query(KeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
+                adapterStore.query(KeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
+                "KeyQuery results should be identical across native and adapter build paths");
+            assertEquals(
+                nativeStore.query(TimestampedKeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
+                adapterStore.query(TimestampedKeyQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false)).getResult(),
+                "TimestampedKeyQuery results should be identical across native and adapter build paths");
+        } finally {
+            nativeStore.close();
+            adapterStore.close();
         }
     }
 }
