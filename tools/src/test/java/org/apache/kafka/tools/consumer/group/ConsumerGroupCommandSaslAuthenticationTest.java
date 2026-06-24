@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         @ClusterConfigProperty(key = ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, value = "true"),
     }
 )
-public class SaslClientsWithInvalidCredentialsTest {
+public class ConsumerGroupCommandSaslAuthenticationTest {
 
     private static final String TOPIC = "topic";
     private static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
@@ -73,7 +73,7 @@ public class SaslClientsWithInvalidCredentialsTest {
 
     private final ClusterInstance cluster;
 
-    public SaslClientsWithInvalidCredentialsTest(ClusterInstance cluster) {
+    public ConsumerGroupCommandSaslAuthenticationTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
 
