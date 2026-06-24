@@ -88,7 +88,7 @@ import static org.mockito.Mockito.when;
 
 
 public class ConsumerHeartbeatRequestManagerTest
-        extends AbstractHeartbeatRequestManagerTest {
+        extends AbstractHeartbeatRequestManagerTest<ConsumerGroupHeartbeatResponse> {
 
     private static final String DEFAULT_REMOTE_ASSIGNOR = "uniform";
     private static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
@@ -101,6 +101,10 @@ public class ConsumerHeartbeatRequestManagerTest
     private Metadata metadata;
     private HeartbeatState heartbeatState;
     private LogContext logContext;
+
+    public ConsumerHeartbeatRequestManagerTest() {
+        super(ConsumerGroupHeartbeatResponse.class);
+    }
 
     @BeforeEach
     public void setUp() {

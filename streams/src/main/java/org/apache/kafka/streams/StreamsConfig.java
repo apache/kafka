@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.ApplicationServerConfigValidator;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
@@ -911,6 +912,12 @@ public class StreamsConfig extends AbstractConfig {
             "Whether to use the configured <code>" + PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + "</code> during global store/KTable processing. " +
                     "Disabled by default. This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
 
+    /** {@code topology.description.push.enabled} */
+    public static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG = "topology.description.push.enabled";
+    private static final String TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC = "Controls whether the Kafka Streams client sends topology descriptions to the broker when requested. " +
+        "When set to false, the client will not prepare or push topology descriptions. " +
+        "Enabled by default.";
+
     static {
         CONFIG = new ConfigDef()
 
@@ -1114,6 +1121,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(APPLICATION_SERVER_CONFIG,
                     Type.STRING,
                     "",
+                    new ApplicationServerConfigValidator(),
                     Importance.LOW,
                     APPLICATION_SERVER_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
@@ -1357,7 +1365,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.MEDIUM,
+                    TOPOLOGY_DESCRIPTION_PUSH_ENABLED_DOC);
     }
 
     // this is the list of configs for underlying clients

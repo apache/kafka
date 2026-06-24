@@ -57,7 +57,20 @@ public class HostInfo {
         }
 
         final String host = getHost(endPoint);
-        final Integer port = getPort(endPoint);
+        if (Utils.isBlank(host)) {
+            throw new ConfigException(
+                String.format("Error parsing host address %s. Expected format host:port.", endPoint)
+            );
+        }
+
+        final Integer port;
+        try {
+            port = getPort(endPoint);
+        } catch (final NumberFormatException e) {
+            throw new ConfigException(
+                String.format("Error parsing host address %s. Expected format host:port.", endPoint)
+            );
+        }
 
         if (host == null || port == null) {
             throw new ConfigException(

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -33,6 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * This class holds the data that is needed to participate in the Streams rebalance protocol.
@@ -337,6 +339,10 @@ public class StreamsRebalanceData {
 
     private final Map<String, Subtopology> subtopologies;
 
+    private final Supplier<Map<TaskId, Long>> taskOffsetSum;
+
+    private final Supplier<Map<TaskId, Long>> taskEndOffsetSum;
+
     private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
     private final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
@@ -351,16 +357,24 @@ public class StreamsRebalanceData {
 
     private final AtomicLong acceptableRecoveryLag = new AtomicLong(-1);
 
+    private final AtomicReference<StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription> wireTopologyDescription = new AtomicReference<>(null);
+
+    private final AtomicBoolean topologyPushRequired = new AtomicBoolean(false);
+
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Optional<String> rackId,
                                 final Map<String, Subtopology> subtopologies,
-                                final Map<String, String> clientTags) {
+                                final Map<String, String> clientTags,
+                                final Supplier<Map<TaskId, Long>> taskOffsetSum,
+                                final Supplier<Map<TaskId, Long>> taskEndOffsetSum) {
         this.processId = Objects.requireNonNull(processId, "Process ID cannot be null");
         this.endpoint = Objects.requireNonNull(endpoint, "Endpoint cannot be null");
         this.rackId = Objects.requireNonNull(rackId, "Rack ID cannot be null");
         this.subtopologies = Map.copyOf(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null"));
         this.clientTags = Map.copyOf(Objects.requireNonNull(clientTags, "Client tags cannot be null"));
+        this.taskOffsetSum = Objects.requireNonNull(taskOffsetSum, "Task offset sum supplier cannot be null");
+        this.taskEndOffsetSum = Objects.requireNonNull(taskEndOffsetSum, "Task end offset sum supplier cannot be null");
     }
 
     public UUID processId() {
@@ -381,6 +395,14 @@ public class StreamsRebalanceData {
 
     public Map<String, Subtopology> subtopologies() {
         return subtopologies;
+    }
+
+    public Map<TaskId, Long> taskOffsetSum() {
+        return taskOffsetSum.get();
+    }
+
+    public Map<TaskId, Long> taskEndOffsetSum() {
+        return taskEndOffsetSum.get();
     }
 
     public int topologyEpoch() {
@@ -465,4 +487,19 @@ public class StreamsRebalanceData {
         return acceptableRecoveryLag.get();
     }
 
+    public void setWireTopologyDescription(final StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wireDescription) {
+        wireTopologyDescription.set(wireDescription);
+    }
+
+    public StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription wireTopologyDescription() {
+        return wireTopologyDescription.get();
+    }
+
+    public void setTopologyPushRequired(final boolean topologyPushRequired) {
+        this.topologyPushRequired.set(topologyPushRequired);
+    }
+
+    public boolean topologyPushRequired() {
+        return topologyPushRequired.get();
+    }
 }
