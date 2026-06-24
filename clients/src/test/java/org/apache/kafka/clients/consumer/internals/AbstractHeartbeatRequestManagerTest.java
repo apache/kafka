@@ -70,10 +70,14 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
     protected AbstractMembershipManager<R> membershipManager;
     protected AbstractHeartbeatRequestManager<R> heartbeatRequestManager;
 
+    protected final Class<R> responseClass;
+
+    protected AbstractHeartbeatRequestManagerTest(Class<R> responseClass) {
+        this.responseClass = responseClass;
+    }
+
     protected abstract ClientResponse createHeartbeatResponse(
         NetworkClientDelegate.UnsentRequest request, Errors error);
-
-    protected abstract Class<R> responseClass();
 
     @Test
     public void testTimerNotDue() {
@@ -222,7 +226,7 @@ abstract class AbstractHeartbeatRequestManagerTest<R extends AbstractResponse> {
             result.unsentRequests.get(0),
             error);
         result.unsentRequests.get(0).handler().onComplete(response);
-        R mockResponse = responseClass().cast(response.responseBody());
+        R mockResponse = responseClass.cast(response.responseBody());
 
         assertHeartbeatErrorHandling(error, isFatal, mockResponse);
     }

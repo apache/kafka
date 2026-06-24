@@ -84,6 +84,10 @@ public class ShareHeartbeatRequestManagerTest
     private Metrics metrics;
     private LogContext logContext;
 
+    public ShareHeartbeatRequestManagerTest() {
+        super(ShareGroupHeartbeatResponse.class);
+    }
+
     @BeforeEach
     public void setUp() {
         time = new MockTime();
@@ -453,10 +457,6 @@ public class ShareHeartbeatRequestManagerTest
         assertEquals(0, pollResult.unsentRequests.size());
     }
 
-    @Override
-    protected Class<ShareGroupHeartbeatResponse> responseClass() {
-        return ShareGroupHeartbeatResponse.class;
-    }
 
     @Override
     protected ClientResponse createHeartbeatResponse(

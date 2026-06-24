@@ -102,6 +102,10 @@ public class ConsumerHeartbeatRequestManagerTest
     private HeartbeatState heartbeatState;
     private LogContext logContext;
 
+    public ConsumerHeartbeatRequestManagerTest() {
+        super(ConsumerGroupHeartbeatResponse.class);
+    }
+
     @BeforeEach
     public void setUp() {
         this.time = new MockTime();
@@ -904,11 +908,6 @@ public class ConsumerHeartbeatRequestManagerTest
     protected ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
                                                      Errors error) {
         return createHeartbeatResponse(request, error, "stubbed error message");
-    }
-
-    @Override
-    protected Class<ConsumerGroupHeartbeatResponse> responseClass() {
-        return ConsumerGroupHeartbeatResponse.class;
     }
 
     private ClientResponse createHeartbeatResponse(
