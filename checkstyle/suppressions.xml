@@ -225,7 +225,8 @@
     <!-- Streams test-utils -->
     <suppress checks="ClassFanOutComplexity|ClassDataAbstractionCoupling"
               files="TopologyTestDriver.java"/>
-
+    <suppress checks="ParameterNumber"
+              files="MultiPartitionRuntime.java"/>
     <!-- Streams examples -->
     <suppress id="dontUseSystemExit"
               files="PageViewTypedDemo.java|PipeDemo.java|TemperatureDemo.java|WordCountDemo.java|WordCountProcessorDemo.java|WordCountTransformerDemo.java"/>
