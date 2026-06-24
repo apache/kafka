@@ -152,6 +152,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
+import org.apache.kafka.coordinator.group.streams.MemberTaskOffsets;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupDescribeResult;
@@ -308,23 +309,6 @@ public class GroupMetadataManager {
                 group.assignmentEpoch(),
                 group.targetAssignment(member.memberId())
             );
-        }
-
-        private static UpdateTargetAssignmentResult<TasksTuple> fromLastTargetAssignment(
-            StreamsGroup group,
-            Optional<StreamsGroupMember> member
-        ) {
-            if (member.isPresent()) {
-                return new UpdateTargetAssignmentResult<>(
-                    group.assignmentEpoch(),
-                    group.targetAssignment(member.get().memberId(), member.get().instanceId())
-                );
-            } else {
-                return new UpdateTargetAssignmentResult<>(
-                    group.assignmentEpoch(),
-                    TasksTuple.EMPTY
-                );
-            }
         }
     }
 
@@ -2259,7 +2243,7 @@ public class GroupMetadataManager {
         // 4. Update the target assignment if the group epoch is larger than the target assignment epoch or a static member
         // replaces an existing static member.
         // The delta between the existing and the new target assignment is persisted to the partition.
-        UpdateTargetAssignmentResult<TasksTuple> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
+        UpdateTargetAssignmentResult<Map<String, TasksTuple>> updateTargetAssignmentResult = maybeUpdateStreamsTargetAssignment(
             group,
             groupEpoch,
             Optional.of(updatedMember),
@@ -2270,7 +2254,18 @@ public class GroupMetadataManager {
             currentAssignmentConfigs
         );
 
-        // 5. Reconcile the member's assignment with the target assignment if the member is not
+        // 4b. Refine the target assignment into the intermediate assignment (with warm-up tasks) the member should be
+        // reconciled toward. Runs on every heartbeat, before reconciliation. No-op for now.
+        TasksTuple refinedTarget = refine(
+            updatedMember,
+            updateTargetAssignmentResult.targetAssignment,
+            group.targetAssignment(),
+            group.taskOffsets(),
+            config.streamsGroupNumWarmupReplicas(),
+            streamsGroupAcceptableRecoveryLag(group.groupId())
+        );
+
+        // 5. Reconcile the member's assignment with the (refined) target assignment if the member is not
         // fully reconciled yet.
         updatedMember = maybeReconcile(
             groupId,
@@ -2279,7 +2274,7 @@ public class GroupMetadataManager {
             group::currentStandbyTaskProcessIds,
             group::currentWarmupTaskProcessIds,
             updateTargetAssignmentResult.targetAssignmentEpoch(),
-            updateTargetAssignmentResult.targetAssignment(),
+            refinedTarget,
             ownedActiveTasks,
             ownedStandbyTasks,
             ownedWarmupTasks,
@@ -4322,9 +4317,9 @@ public class GroupMetadataManager {
      * @param metadataImage        The metadata image.
      * @param records              The list to accumulate any new records.
      * @param returnedStatus       A mutable collection of status to be returned in the response.
-     * @return The new target assignment for the updated member, or EMPTY if no member specified.
+     * @return The target assignment epoch and the full per-member target assignment.
      */
-    private UpdateTargetAssignmentResult<TasksTuple> maybeUpdateStreamsTargetAssignment(
+    private UpdateTargetAssignmentResult<Map<String, TasksTuple>> maybeUpdateStreamsTargetAssignment(
         StreamsGroup group,
         int groupEpoch,
         Optional<StreamsGroupMember> updatedMember,
@@ -4342,15 +4337,12 @@ public class GroupMetadataManager {
                     .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
             ));
 
-            return new UpdateTargetAssignmentResult<>(
-                group.assignmentEpoch(),
-                TasksTuple.EMPTY
-            );
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), Map.of());
         }
 
         if (group.assignmentEpoch() >= groupEpoch) {
             // The assignment is up to date.
-            return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), group.targetAssignment());
         }
 
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
@@ -4365,7 +4357,7 @@ public class GroupMetadataManager {
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")
             ));
 
-            return UpdateTargetAssignmentResult.fromLastTargetAssignment(group, updatedMember);
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), group.targetAssignment());
         }
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId());
@@ -4410,17 +4402,54 @@ public class GroupMetadataManager {
 
             records.addAll(assignmentResult.records());
 
-            return new UpdateTargetAssignmentResult<>(
-                groupEpoch,
-                updatedMember.map(member -> assignmentResult.targetAssignment().get(member.memberId()))
-                    .orElse(TasksTuple.EMPTY)
-            );
+            return new UpdateTargetAssignmentResult<>(groupEpoch, assignmentResult.targetAssignment());
         } catch (TaskAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());
             log.error("[GroupId {}] {}.", group.groupId(), msg, ex);
             throw new UnknownServerException(msg, ex);
         }
+    }
+
+
+    /**
+     * Refines the task assignor's target assignment into the <em>intermediate</em> assignment that
+     * the reconciler ({@link org.apache.kafka.coordinator.group.streams.CurrentAssignmentBuilder}) converges members toward.
+     * <p>
+     * The intermediate assignment is the current assignment with warm-up tasks inserted (for later promotion to active,
+     * based on per-member changelog lag), so that a task is moved to a new owner only once that owner has caught up.
+     * It is held in memory only and is never persisted: the assignor's target assignment remains the persisted source of
+     * truth (and the intermediate is reconstructed from the persisted current-assignment records after a coordinator failover).
+     * <p>
+     * The refiner is invoked on every heartbeat, before reconciliation, so it can react to all the inputs that can change
+     * the intermediate assignment between reassignments — newly reported task offsets (a warm-up may have become hot),
+     * {@code num.warmup.replicas} / {@code acceptable.recovery.lag} config changes, and members acknowledging task
+     * revocation/restoration (advancing an in-flight migration).
+     *
+     * @param member
+     *        The member to produce the refined (intermediate) assignment for.
+     * @param targetAssignment
+     *        All members' target assignments (group context).
+     * @param currentAssignment
+     *        The group's current (committed) target assignment, per member (group context).
+     * @param taskOffsets
+     *        The latest per-member changelog offsets/end-offsets reported via heartbeats (group context).
+     * @param numWarmupReplicas
+     *        The configured maximum number of warm-up replicas.
+     * @param acceptableRecoveryLag
+     *        The lag at or below which a warm-up is considered caught up and can be promoted.
+     *
+     * @return The member's intermediate assignment tuple.
+     */
+    private static TasksTuple refine(
+        final StreamsGroupMember member,
+        final Map<String, TasksTuple> targetAssignment,
+        final Map<String, TasksTuple> currentAssignment,
+        final Map<String, MemberTaskOffsets> taskOffsets,
+        final int numWarmupReplicas,
+        final long acceptableRecoveryLag
+    ) {
+        return targetAssignment.getOrDefault(member, TasksTuple.EMPTY);
     }
 
     /**
