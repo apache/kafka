@@ -543,11 +543,11 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
             return;
         }
-        // The plugin call itself completed normally; count it as a successful getTopology
-        // regardless of whether it carried a description. A null return is the documented
-        // "plugin no longer has the data" path and surfaces as NOT_STORED, not an error.
-        recordGetSuccess();
+        // The plugin call itself completed normally. A null return is the documented
+        // "plugin no longer has the data" path and surfaces as NOT_STORED, not an error,
+        // so it still counts as a successful getTopology.
         if (topology == null) {
+            recordGetSuccess();
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_NOT_STORED);
             return;
         }
@@ -555,8 +555,11 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
             describedGroup.setTopologyDescription(
                 StreamsGroupTopologyDescriptionConverter.toDescribeResponse(topology));
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_AVAILABLE);
+            recordGetSuccess();
         } catch (Exception conversionError) {
-            // Defensive catch, should be unreachable in practice
+            // Defensive catch, should be unreachable in practice. The outcome surfaces as
+            // ERROR to the client, so count it as a failed getTopology to stay consistent.
+            recordGetError();
             describedGroup.setTopologyDescription(null);
             describedGroup.setTopologyDescriptionStatus(TOPOLOGY_DESCRIPTION_STATUS_ERROR);
         }

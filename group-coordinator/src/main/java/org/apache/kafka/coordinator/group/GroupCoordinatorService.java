@@ -902,6 +902,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * pair of meters tracks every {@code plugin.deleteTopology} the broker drives,
      * regardless of trigger.
      */
+    private void recordPluginDeleteOutcome(int attempted, int errors) {
+        int successes = attempted - errors;
+        if (successes > 0) {
+            groupCoordinatorMetrics.recordSensor(
+                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME, successes);
+        }
+        if (errors > 0) {
+            groupCoordinatorMetrics.recordSensor(
+                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME, errors);
+        }
+    }
+
     /**
      * Record the outcome of a single {@code plugin.setTopology} call against the
      * {@code set-success} / {@code set-error} sensors. A {@code SUCCESS} outcome increments
@@ -913,18 +925,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ? GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME
             : GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME;
         groupCoordinatorMetrics.recordSensor(sensorName);
-    }
-
-    private void recordPluginDeleteOutcome(int attempted, int errors) {
-        int successes = attempted - errors;
-        if (successes > 0) {
-            groupCoordinatorMetrics.recordSensor(
-                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME, successes);
-        }
-        if (errors > 0) {
-            groupCoordinatorMetrics.recordSensor(
-                GroupCoordinatorMetrics.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME, errors);
-        }
     }
 
     /**
