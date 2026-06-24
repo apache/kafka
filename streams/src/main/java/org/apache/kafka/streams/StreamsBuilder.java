@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -70,8 +71,10 @@ public class StreamsBuilder {
     protected final Topology topology;
 
     /** The topology's internal builder. */
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalTopologyBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalTopologyBuilder internalTopologyBuilder;
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal InternalStreamsBuilder for subclass access — pending KIP review to promote the type or refactor")
     protected final InternalStreamsBuilder internalStreamsBuilder;
 
     public StreamsBuilder() {

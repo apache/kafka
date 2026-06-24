@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy.StrategyType;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 
@@ -31,6 +32,7 @@ import java.util.Optional;
  */
 @InterfaceAudience.Public
 public class AutoOffsetReset {
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal StrategyType for subclass access — pending KIP review to promote the type or refactor")
     protected final StrategyType offsetResetStrategy;
     protected final Optional<Duration> duration;
 

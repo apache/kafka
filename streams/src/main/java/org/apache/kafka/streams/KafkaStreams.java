@@ -173,6 +173,7 @@ public class KafkaStreams implements AutoCloseable {
     private final Metrics metrics;
     protected final StreamsConfig applicationConfigs;
     protected final List<StreamThread> threads;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal StreamsMetadataState for subclass access — pending KIP review to promote the type or refactor")
     protected final StreamsMetadataState streamsMetadataState;
     private final ScheduledExecutorService stateDirCleaner;
     private final ScheduledExecutorService rocksDBMetricsRecordingService;
@@ -183,12 +184,14 @@ public class KafkaStreams implements AutoCloseable {
     private final DelegatingStateRestoreListener delegatingStateRestoreListener;
     private final UUID processId;
     private final KafkaClientSupplier clientSupplier;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal TopologyMetadata for subclass access — pending KIP review to promote the type or refactor")
     protected final TopologyMetadata topologyMetadata;
     private final QueryableStoreProvider queryableStoreProvider;
     private final DelegatingStandbyUpdateListener delegatingStandbyUpdateListener;
     private final LogContext logContext;
 
     GlobalStreamThread globalStreamThread;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal StateDirectory for subclass access — pending KIP review to promote the type or refactor")
     protected StateDirectory stateDirectory = null;
     private KafkaStreams.StateListener stateListener;
     private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
@@ -937,6 +940,7 @@ public class KafkaStreams implements AutoCloseable {
         this(new TopologyMetadata(topology.internalTopologyBuilder, applicationConfigs), applicationConfigs, clientSupplier, time);
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected ctor takes internal TopologyMetadata as a subclass extension point — pending KIP review to promote the type or refactor")
     protected KafkaStreams(final TopologyMetadata topologyMetadata,
                            final StreamsConfig applicationConfigs,
                            final KafkaClientSupplier clientSupplier) throws StreamsException {
