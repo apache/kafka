@@ -1813,6 +1813,9 @@ org.apache.kafka.streams.processor.internals.DefaultStateUpdaterTest:
 - shouldPauseActiveTaskAndTransitToUpdateStandby
 - shouldPauseStandbyTask
 - shouldPauseStandbyTaskAndNotTransitToRestoreActive
+- shouldPublishEmptyTaskEndOffsetSumSnapshotBeforeStart
+- shouldPublishTaskEndOffsetSumSnapshotForMultipleRestoringTasks
+- shouldPublishTaskEndOffsetSumSnapshotForRestoringTask
 - shouldRecordMetrics
 - shouldRemoveActiveStatefulTaskFromFailedTasks
 - shouldRemoveActiveStatefulTaskFromRestoredActiveTasks
@@ -1822,6 +1825,8 @@ org.apache.kafka.streams.processor.internals.DefaultStateUpdaterTest:
 - shouldRemoveStatelessTaskFromRestoredActiveTasks
 - shouldRemoveUpdatingActiveStatefulTask
 - shouldRemoveUpdatingStandbyTask
+- shouldReportMaxValueInEndOffsetSnapshotOnOverflow
+- shouldReportMaxValueInEndOffsetSnapshotWhenAnyPartitionIsUnknown
 - shouldRestoreActiveStatefulTaskThenUpdateStandbyTaskAndAgainRestoreActiveStatefulTask
 - shouldRestoreActiveStatefulTasksAndUpdateStandbyTasks
 - shouldRestoreMultipleActiveStatefulTasks
@@ -2688,6 +2693,8 @@ org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapterTest:
 - shouldThrowOnRestore
 - shouldThrowOnRestoreAll
 org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
+- changelogEndOffsetsShouldFallBackToStoreMetadataWhenLogicalChangelogMetadataIsNull
+- logicalChangelogEndOffsetsShouldReturnNullWhenBothSourcesUnknown
 - shouldCallRecordRestoreTimeAtTheEndOfRestore
 - shouldCheckCompletionIfPositionLargerThanEndOffset
 - shouldInitializeChangelogAndCheckForCompletion
