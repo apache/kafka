@@ -18,6 +18,7 @@ import re
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
+from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StaticMemberTestService
 from kafkatest.services.verifiable_producer import VerifiableProducer
@@ -154,6 +155,180 @@ class StreamsStaticMembershipTest(Test):
         self.producer.stop()
         self.kafka.stop(timeout_sec=120)
 
+    @cluster(num_nodes=8)
+    @matrix(
+        bounce_mode=["all", "rolling"],
+        metadata_quorum=[quorum.isolated_kraft]
+    )
+    def test_static_member_process_id_persisted_after_rejoin(self, bounce_mode, metadata_quorum):
+        self.kafka.start()
+
+        processors = self.create_processors(
+            self.num_threads,
+            group_protocol=self.streams_group_protocol,
+            persistent_process_id_store_enabled=True
+        )
+
+        self.producer.start()
+
+        initial_log_checkpoints = {}
+        for processor in processors:
+            processor.CLEAN_NODE_ENABLED = False
+            self.set_topics(processor)
+            initial_log_checkpoints[processor] = self._line_count(processor, processor.LOG_FILE)
+            verify_running(processor, self.running_message)
+
+        self.verify_processing(processors)
+
+        baseline_process_ids = {
+            processor: self.assert_initial_process_id_persisted(processor, initial_log_checkpoints[processor])
+            for processor in processors
+        }
+
+        if bounce_mode == "all":
+            checkpoints = {
+                processor: self._line_count(processor, processor.LOG_FILE)
+                for processor in processors
+            }
+
+            for processor in processors:
+                verify_stopped(processor, self.stopped_message)
+
+            for processor in processors:
+                verify_running(processor, self.running_message)
+
+            for processor in processors:
+                self.assert_same_process_id_reused(
+                    processor,
+                    checkpoints[processor],
+                    baseline_process_ids[processor]
+                )
+        else:
+            for processor in processors:
+                checkpoint = self._line_count(processor, processor.LOG_FILE)
+
+                verify_stopped(processor, self.stopped_message)
+                verify_running(processor, self.running_message)
+
+                self.assert_same_process_id_reused(
+                    processor,
+                    checkpoint,
+                    baseline_process_ids[processor]
+                )
+
+        self.verify_processing(processors)
+
+        for node in self.kafka.nodes:
+            self.kafka.restart_node(node, clean_shutdown=True, timeout_sec=120)
+            assert not self.fenced_processors(processors), (
+                "Static Streams member unexpectedly failed after broker rolling bounce"
+            )
+            self.verify_processing(processors)
+
+        stop_processors(processors, self.stopped_message)
+
+        self.producer.stop()
+        self.kafka.stop(timeout_sec=120)
+
+    @cluster(num_nodes=9)
+    @matrix(
+        fencing_stage=["stable", "all"],
+        metadata_quorum=[quorum.isolated_kraft]
+    )
+    def test_fencing_static_streams_member(self, fencing_stage, metadata_quorum):
+        self.kafka.start()
+
+        processors = self.create_processors(
+            self.num_threads,
+            group_protocol=self.streams_group_protocol
+        )
+        conflict_processor = StaticMemberTestService(
+            self.test_context,
+            self.kafka,
+            processors[0].GROUP_INSTANCE_ID,
+            self.num_threads,
+            self.streams_group_protocol
+        )
+
+        self.producer.start()
+
+        if fencing_stage == "stable":
+            for processor in processors:
+                self.set_topics(processor)
+                verify_running(processor, self.running_message)
+
+            self.verify_processing(processors)
+
+            checkpoints = {
+                processor: self._line_count(processor, processor.LOG_FILE)
+                for processor in processors
+            }
+
+            self.set_topics(conflict_processor)
+            with conflict_processor.node.account.monitor_log(conflict_processor.LOG_FILE) as monitor:
+                conflict_processor.start()
+                monitor.wait_until(
+                    "terminal ERROR state",
+                    timeout_sec=60,
+                    err_msg="Never saw the conflicting static Streams member fail"
+                )
+
+            conflict_processor.wait(timeout_sec=60)
+
+            for processor in processors:
+                self.assert_survivor_was_unaffected(processor, checkpoints[processor])
+
+            self.verify_processing(processors)
+
+            stop_processors(processors, self.stopped_message)
+
+            verify_running(conflict_processor, self.running_message)
+            self.verify_processing([conflict_processor])
+            verify_stopped(conflict_processor, self.stopped_message)
+        else:
+            duplicate_processors = [processors[0], conflict_processor]
+            all_processors = duplicate_processors + processors[1:]
+
+            for processor in all_processors:
+                self.set_topics(processor)
+                processor.start()
+
+            wait_until(
+                lambda: len(self.fenced_processors(duplicate_processors)) >= 1,
+                timeout_sec=60,
+                err_msg="Timed out waiting for one duplicate static Streams member to fail"
+            )
+
+            fenced_processors = self.fenced_processors(duplicate_processors)
+            assert len(fenced_processors) == 1, (
+                "Expected exactly one duplicate static Streams member to fail, but saw %d"
+                % len(fenced_processors)
+            )
+
+            for processor in fenced_processors:
+                processor.wait(timeout_sec=60)
+
+            active_processors = [
+                processor for processor in processors + [conflict_processor]
+                if processor not in fenced_processors
+            ]
+
+            for processor in active_processors:
+                self.wait_for_file_contains(
+                    processor,
+                    processor.STDOUT_FILE,
+                    self.running_message,
+                    "Never saw running state for active static Streams member %s"
+                    % processor.GROUP_INSTANCE_ID
+                )
+
+            self.verify_processing(active_processors)
+
+            stop_processors(active_processors, self.stopped_message)
+
+        self.producer.stop()
+        self.kafka.stop(timeout_sec=120)
+
     def create_processors(self, num_threads, group_protocol="classic", persistent_process_id_store_enabled=False):
         return [
             StaticMemberTestService(self.test_context, self.kafka, "consumer-A", num_threads, group_protocol,
@@ -174,6 +349,22 @@ class StreamsStaticMembershipTest(Test):
     def set_topics(self, processor):
         processor.INPUT_TOPIC = self.input_topic
 
+    def wait_for_file_contains(self, processor, path, text, err_msg):
+        wait_until(
+            lambda: self.file_contains(processor, path, text),
+            timeout_sec=60,
+            err_msg=err_msg
+        )
+
+    def file_contains(self, processor, path, text):
+        return text in "".join(self._read_lines_since(processor, path, 0))
+
+    def fenced_processors(self, processors):
+        return [
+            processor for processor in processors
+            if self.file_contains(processor, processor.LOG_FILE, "terminal ERROR state")
+        ]
+
     def thread_instance_ids(self, processor):
         return ["%s-%d" % (processor.GROUP_INSTANCE_ID, thread_id)
                 for thread_id in range(1, self.num_threads + 1)]
@@ -184,7 +375,10 @@ class StreamsStaticMembershipTest(Test):
         )
         if not output:
             return 0
-        return int(output[0].strip() or 0)
+        try:
+            return int(output[0].strip() or 0)
+        except ValueError:
+            return 0
 
     def _read_lines_since(self, processor, path, line_number):
         first_line = max(1, line_number + 1)
