@@ -4528,6 +4528,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             topologyMetadata,
+            Map::of,
             Map::of
         );
 
@@ -4551,6 +4552,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Optional.empty(),
             topologyMetadata,
+            Map::of,
             Map::of
         );
 
