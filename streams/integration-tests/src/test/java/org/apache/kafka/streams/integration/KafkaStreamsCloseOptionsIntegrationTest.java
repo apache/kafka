@@ -217,7 +217,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
             .withTimeout(Duration.ofSeconds(30)));
 
-        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
     }
 
     @Test
@@ -232,7 +232,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.DEFAULT)
             .withTimeout(Duration.ofSeconds(30)));
 
-        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
     }
 
     @Test
@@ -286,11 +286,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         streams.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP)
             .withTimeout(Duration.ofSeconds(30)));
 
-        waitForEmptyStreamGroup(
-            adminClient,
-            streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
-            0
-        );
+        waitForEmptyStreamGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), TestUtils.DEFAULT_MAX_WAIT_MS);
     }
 
     protected Topology setupTopologyWithoutIntermediateUserTopic() {
@@ -341,5 +337,4 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
                         member.memberEpoch() == expectedEpoch);
         }, "Static streams group members did not reach expected member epoch " + expectedEpoch);
     }
-
 }

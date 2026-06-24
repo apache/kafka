@@ -651,7 +651,15 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             case STREAMS_INVALID_TOPOLOGY:
             case STREAMS_INVALID_TOPOLOGY_EPOCH:
             case STREAMS_TOPOLOGY_FENCED:
+            case UNRELEASED_INSTANCE_ID:
                 logger.error("StreamsGroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
+                break;
+
+            case FENCED_INSTANCE_ID:
+                logger.error("StreamsGroupHeartbeatRequest failed because instance id {} is fenced: {}. " +
+                        "Check for another Streams instance using the same group instance id.",
+                    membershipManager.groupInstanceId().orElse("null"), errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;
 
@@ -677,11 +685,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 membershipManager.onFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
-                break;
-
-            case UNRELEASED_INSTANCE_ID:
-                logger.error("StreamsGroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
-                handleFatalFailure(error.exception(errorMessage));
                 break;
 
             case UNSUPPORTED_VERSION:

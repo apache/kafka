@@ -1380,6 +1380,47 @@ class StreamsGroupHeartbeatRequestManagerTest {
         }
     }
 
+    @Test
+    public void testFencedInstanceIdErrorResponse() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction =
+                mockConstruction(StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+                heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final String errorMessage = "message";
+            final ClientResponse response = buildClientErrorResponse(Errors.FENCED_INSTANCE_ID, errorMessage);
+
+            networkRequest.handler().onComplete(response);
+
+            assertTrue(logAppender.getMessages("ERROR").stream()
+                .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed because instance id " +
+                    INSTANCE_ID + " is fenced: " + errorMessage + ". Check for another Streams instance using " +
+                    "the same group instance id.")));
+            verify(heartbeatState).reset();
+
+            ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertEquals(errorMessage, errorEvent.getValue().error().getMessage());
+            assertInstanceOf(Errors.FENCED_INSTANCE_ID.exception().getClass(), errorEvent.getValue().error());
+
+            verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
+        }
+    }
+    
     @ParameterizedTest
     @EnumSource(
         value = Errors.class,
@@ -1457,6 +1498,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Errors.INVALID_REQUEST,
             Errors.GROUP_MAX_SIZE_REACHED,
             Errors.FENCED_MEMBER_EPOCH,
+            Errors.FENCED_INSTANCE_ID,
             Errors.UNKNOWN_MEMBER_ID,
             Errors.UNRELEASED_INSTANCE_ID,
             Errors.UNSUPPORTED_VERSION,
