@@ -1461,9 +1461,8 @@ public class StreamsMembershipManagerTest {
                 streamsRebalanceData, subscriptionState, backgroundEventHandler,
                 new LogContext("test"), time, localMetrics
             );
-            assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH, staticMember.leaveGroupEpoch());    
+            assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH, staticMember.leaveGroupEpoch());
         }
-        
     }
 
     @Test
@@ -1492,7 +1491,7 @@ public class StreamsMembershipManagerTest {
             );
             staticMember.registerStateListener(memberStateListener);
             staticMember.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
-            assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH, staticMember.leaveGroupEpoch());    
+            assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH, staticMember.leaveGroupEpoch());
         }
     }
 

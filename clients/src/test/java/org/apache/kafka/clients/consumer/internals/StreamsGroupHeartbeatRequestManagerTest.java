@@ -1420,7 +1420,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             verify(membershipManager).onFatalHeartbeatFailure();
         }
     }
-    
+
     @ParameterizedTest
     @EnumSource(
         value = Errors.class,

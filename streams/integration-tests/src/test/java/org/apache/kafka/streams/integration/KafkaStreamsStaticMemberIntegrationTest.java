@@ -155,6 +155,7 @@ public class KafkaStreamsStaticMemberIntegrationTest {
     public void after() throws Exception {
         if (streams != null) {
             streams.close(Duration.ofSeconds(30));
+            streams = null;
         }
         Utils.delete(testFolder);
     }
@@ -372,7 +373,7 @@ public class KafkaStreamsStaticMemberIntegrationTest {
             Utils.delete(restartedStateDir);
         }
     }
-    
+
     @Test
     public void testStaticMemberRemainingInGroupExpiresAndTriggersRebalanceStreamsProtocol() throws Exception {
         final int sessionTimeoutMs = 1000;
@@ -487,8 +488,8 @@ public class KafkaStreamsStaticMemberIntegrationTest {
                 conflictStreams.start();
 
                 TestUtils.waitForCondition(
-                    () -> conflictStreams.state().hasCompletedShutdown(),
-                    "Conflicting static streams member did not fail to join"
+                    () -> conflictStreams.state() == KafkaStreams.State.ERROR,
+                    "Conflicting static streams member did not transition to ERROR after duplicate static instance id"
                 );
 
                 final StreamsGroupDescription groupDescriptionAfterConflict = describeStreamsGroup(applicationId);
@@ -517,7 +518,7 @@ public class KafkaStreamsStaticMemberIntegrationTest {
         input.to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.String()));
         return builder.build();
     }
-    
+
     private void add10InputElements() {
         final List<KeyValue<Long, String>> records = Arrays.asList(KeyValue.pair(0L, "aaa"),
             KeyValue.pair(1L, "bbb"),
@@ -534,28 +535,6 @@ public class KafkaStreamsStaticMemberIntegrationTest {
             mockTime.sleep(10);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.milliseconds());
         }
-    }
-
-    private void waitForStaticStreamsGroupMembersEpoch(
-        final String applicationId,
-        final String baseInstanceId,
-        final int expectedEpoch,
-        final int expectedMemberCount
-    ) throws Exception {
-        TestUtils.waitForCondition(() -> {
-            final StreamsGroupDescription groupDescription =
-                adminClient.describeStreamsGroups(Collections.singletonList(applicationId))
-                    .describedGroups()
-                    .get(applicationId)
-                    .get();
-
-            return groupDescription.members().size() == expectedMemberCount &&
-                groupDescription.members().stream().allMatch(member ->
-                    member.instanceId()
-                        .filter(instanceId -> instanceId.startsWith(baseInstanceId + "-"))
-                        .isPresent() &&
-                        member.memberEpoch() == expectedEpoch);
-        }, "Static streams group members did not reach expected member epoch " + expectedEpoch);
     }
 
     private Properties staticStreamsConfig(final String groupInstanceId, final File stateDir) {
