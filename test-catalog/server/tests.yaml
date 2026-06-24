@@ -87,6 +87,18 @@ org.apache.kafka.server.AssignmentsManagerTest:
 - testStartAndShutdown
 - testSuccessfulAssignment
 - testUnSuccessfulRequestCausesRetransmission
+org.apache.kafka.server.AuthHelperTest:
+- testAuthorize
+- testComputeDescribeClusterResponseSuccess
+- testComputeDescribeClusterResponseV0WithUnexpectedEndpointType
+- testComputeDescribeClusterResponseV0WithUnknownEndpointType
+- testComputeDescribeClusterResponseV1WithUnexpectedEndpointType
+- testComputeDescribeClusterResponseV1WithUnknownEndpointType
+- testComputeDescribeClusterResponseWhereControllerIsNotFound
+- testFilterByAuthorized
+- testFilterByAuthorizedIsResilientToMismatchedAuthorizeResults
+- testPartitionByAuthorized
+- testPartitionByAuthorizedWithoutAuthorizer
 org.apache.kafka.server.BootstrapControllersIntegrationTest:
 - testAcls
 - testAclsByControllers

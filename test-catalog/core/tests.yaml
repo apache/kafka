@@ -1210,15 +1210,6 @@ kafka.server.ApiVersionsRequestTest:
 kafka.server.ApiVersionsResponseIntegrationTest:
 - testSendV3ApiVersionsRequest
 - testSendV4ApiVersionsRequest
-kafka.server.AuthHelperTest:
-- testAuthorize
-- testComputeDescribeClusterResponseSuccess
-- testComputeDescribeClusterResponseV0WithUnexpectedEndpointType
-- testComputeDescribeClusterResponseV0WithUnknownEndpointType
-- testComputeDescribeClusterResponseV1WithUnexpectedEndpointType
-- testComputeDescribeClusterResponseV1WithUnknownEndpointType
-- testComputeDescribeClusterResponseWhereControllerIsNotFound
-- testFilterByAuthorized
 kafka.server.BrokerLifecycleManagerTest:
 - testAlwaysSendsAccumulatedOfflineDirs
 - testControlledShutdown
