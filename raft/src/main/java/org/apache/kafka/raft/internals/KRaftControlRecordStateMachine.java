@@ -55,7 +55,6 @@ public final class KRaftControlRecordStateMachine {
     private final LogContext logContext;
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
-    private final BufferSupplier bufferSupplier;
     private final Logger logger;
     private final int maxBatchSizeBytes;
 
@@ -82,7 +81,6 @@ public final class KRaftControlRecordStateMachine {
      * @param staticVoterSet the set of voter statically configured
      * @param log the on disk topic partition
      * @param serde the record decoder for data records
-     * @param bufferSupplier the supplier of byte buffers
      * @param maxBatchSizeBytes the maximum size of record batch
      * @param logContext the log context
      */
@@ -90,7 +88,6 @@ public final class KRaftControlRecordStateMachine {
         VoterSet staticVoterSet,
         ReplicatedLog log,
         RecordSerde<?> serde,
-        BufferSupplier bufferSupplier,
         int maxBatchSizeBytes,
         LogContext logContext,
         KafkaRaftMetrics kafkaRaftMetrics,
@@ -100,7 +97,6 @@ public final class KRaftControlRecordStateMachine {
         this.log = log;
         this.voterSetHistory = new VoterSetHistory(staticVoterSet, logContext);
         this.serde = serde;
-        this.bufferSupplier = bufferSupplier;
         this.maxBatchSizeBytes = maxBatchSizeBytes;
         this.logger = logContext.logger(getClass());
         this.kafkaRaftMetrics = kafkaRaftMetrics;
@@ -232,21 +228,23 @@ public final class KRaftControlRecordStateMachine {
     }
 
     private void maybeLoadLog() {
-        while (log.endOffset().offset() > nextOffset) {
-            LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
-            try (RecordsIterator<?> iterator = new RecordsIterator<>(
-                    info.records,
-                    serde,
-                    bufferSupplier,
-                    maxBatchSizeBytes,
-                    true, // Validate batch CRC
-                    logContext
-                )
-            ) {
-                while (iterator.hasNext()) {
-                    Batch<?> batch = iterator.next();
-                    handleBatch(batch, OptionalLong.empty());
-                    nextOffset = batch.lastOffset() + 1;
+        try (BufferSupplier bufferSupplier = BufferSupplier.create()) {
+            while (log.endOffset().offset() > nextOffset) {
+                LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
+                try (RecordsIterator<?> iterator = new RecordsIterator<>(
+                        info.records,
+                        serde,
+                        bufferSupplier,
+                        maxBatchSizeBytes,
+                        true, // Validate batch CRC
+                        logContext
+                    )
+                ) {
+                    while (iterator.hasNext()) {
+                        Batch<?> batch = iterator.next();
+                        handleBatch(batch, OptionalLong.empty());
+                        nextOffset = batch.lastOffset() + 1;
+                    }
                 }
             }
         }
@@ -267,7 +265,7 @@ public final class KRaftControlRecordStateMachine {
             try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
                     rawSnapshot,
                     serde,
-                    bufferSupplier,
+                    BufferSupplier.create(),
                     maxBatchSizeBytes,
                     true, // Validate batch CRC
                     logContext
