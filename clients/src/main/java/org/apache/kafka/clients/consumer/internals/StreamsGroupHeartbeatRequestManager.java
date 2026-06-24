@@ -185,7 +185,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return data;
         }
 
-        private List<StreamsGroupHeartbeatRequestData.TaskOffset> convertToList(Map<StreamsRebalanceData.TaskId, Long> offsetsMap) {
+        private static List<StreamsGroupHeartbeatRequestData.TaskOffset> convertToList(Map<StreamsRebalanceData.TaskId, Long> offsetsMap) {
             return offsetsMap.entrySet().stream().map(
                     entry -> new StreamsGroupHeartbeatRequestData.TaskOffset()
                         .setSubtopologyId(entry.getKey().subtopologyId())
