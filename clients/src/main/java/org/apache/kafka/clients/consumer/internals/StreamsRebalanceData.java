@@ -341,6 +341,8 @@ public class StreamsRebalanceData {
 
     private final Supplier<Map<TaskId, Long>> taskOffsetSum;
 
+    private final Supplier<Map<TaskId, Long>> taskEndOffsetSum;
+
     private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
     private final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
@@ -364,13 +366,15 @@ public class StreamsRebalanceData {
                                 final Optional<String> rackId,
                                 final Map<String, Subtopology> subtopologies,
                                 final Map<String, String> clientTags,
-                                final Supplier<Map<TaskId, Long>> taskOffsetSum) {
+                                final Supplier<Map<TaskId, Long>> taskOffsetSum,
+                                final Supplier<Map<TaskId, Long>> taskEndOffsetSum) {
         this.processId = Objects.requireNonNull(processId, "Process ID cannot be null");
         this.endpoint = Objects.requireNonNull(endpoint, "Endpoint cannot be null");
         this.rackId = Objects.requireNonNull(rackId, "Rack ID cannot be null");
         this.subtopologies = Map.copyOf(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null"));
         this.clientTags = Map.copyOf(Objects.requireNonNull(clientTags, "Client tags cannot be null"));
         this.taskOffsetSum = Objects.requireNonNull(taskOffsetSum, "Task offset sum supplier cannot be null");
+        this.taskEndOffsetSum = Objects.requireNonNull(taskEndOffsetSum, "Task end offset sum supplier cannot be null");
     }
 
     public UUID processId() {
@@ -395,6 +399,10 @@ public class StreamsRebalanceData {
 
     public Map<TaskId, Long> taskOffsetSum() {
         return taskOffsetSum.get();
+    }
+
+    public Map<TaskId, Long> taskEndOffsetSum() {
+        return taskEndOffsetSum.get();
     }
 
     public int topologyEpoch() {
