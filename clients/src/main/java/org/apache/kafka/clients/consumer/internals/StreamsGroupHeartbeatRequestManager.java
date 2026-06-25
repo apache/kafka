@@ -572,6 +572,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         streamsRebalanceData.setAcceptableRecoveryLag(data.acceptableRecoveryLag());
 
         if (data.topologyDescriptionRequired() && streamsRebalanceData.wireTopologyDescription() != null) {
+            logger.info("Broker requested topology description push");
             streamsRebalanceData.setTopologyPushRequired(true);
         }
 
