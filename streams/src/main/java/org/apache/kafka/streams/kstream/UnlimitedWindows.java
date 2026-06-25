@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -80,6 +81,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     @Override
+    @SuppressKafkaInternalApiUsage("KIP-1265: public method's signature exposes internal UnlimitedWindow — pending KIP review to promote the type or refactor the API")
     public Map<Long, UnlimitedWindow> windowsFor(final long timestamp) {
         // always return the single unlimited window
 

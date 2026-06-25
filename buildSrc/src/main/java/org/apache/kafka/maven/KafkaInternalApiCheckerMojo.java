@@ -68,6 +68,16 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
     private boolean failOnViolation;
 
     /**
+     * Fail the build when no {@code org.apache.kafka:*} artifact is on the project's
+     * classpath. The default is {@code false} for back-compat (the mojo warns and skips),
+     * but on a project that's expected to depend on Kafka, turning this on catches
+     * classpath/config mistakes that would otherwise produce a meaningless "0 violations"
+     * report.
+     */
+    @Parameter(property = "kafka.internal-api-checker.failOnNoKafkaDependency", defaultValue = "false")
+    private boolean failOnNoKafkaDependency;
+
+    /**
      * Compiled-class directories to scan. Defaults to the project's main and test build output
      * directories. Each entry may be a directory of {@code .class} files, an individual
      * {@code .class} file, or a {@code .jar} archive.
@@ -103,7 +113,14 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
             List<File> kafkaJars = getKafkaJarsFromDependencies();
 
             if (kafkaJars.isEmpty()) {
-                getLog().warn("No Kafka dependencies found in project. Skipping internal API check.");
+                String msg = "No org.apache.kafka:* dependencies found on the project classpath. "
+                        + "The checker cannot derive an API surface and would produce a meaningless "
+                        + "'0 violations' report — likely a classpath or configuration issue.";
+                if (failOnNoKafkaDependency) {
+                    throw new MojoFailureException(msg);
+                }
+                getLog().warn(msg + " Skipping internal API check. "
+                        + "Set <failOnNoKafkaDependency>true</failOnNoKafkaDependency> to make this fatal.");
                 return;
             }
 
@@ -154,21 +171,19 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
         }
     }
 
+    /**
+     * Default to the project's main compiled output, matching the Gradle plugin's behaviour
+     * (which feeds {@code sourceSets.main.output.classesDirs}). Test code legitimately uses
+     * internal/test utilities, so including it by default would create noise that isn't a
+     * real consumer-side concern. Users who want to scan test code can opt in by setting
+     * {@code <classesDirectories>} explicitly.
+     */
     private List<File> getDefaultClassesDirectories() {
         List<File> dirs = new ArrayList<>();
-
-        // Main compiled output
         File mainClasses = new File(project.getBuild().getOutputDirectory());
         if (mainClasses.exists()) {
             dirs.add(mainClasses);
         }
-
-        // Test compiled output
-        File testClasses = new File(project.getBuild().getTestOutputDirectory());
-        if (testClasses.exists()) {
-            dirs.add(testClasses);
-        }
-
         return dirs;
     }
 
@@ -196,6 +211,10 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
 
     public void setFailOnViolation(boolean failOnViolation) {
         this.failOnViolation = failOnViolation;
+    }
+
+    public void setFailOnNoKafkaDependency(boolean failOnNoKafkaDependency) {
+        this.failOnNoKafkaDependency = failOnNoKafkaDependency;
     }
 
     public void setClassesDirectories(List<File> classesDirectories) {

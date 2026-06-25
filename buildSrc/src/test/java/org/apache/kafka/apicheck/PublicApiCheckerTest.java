@@ -64,14 +64,17 @@ class PublicApiCheckerTest {
     }
 
     @Test
-    void isPublicApi_deprecated_returnsTrueOutOfScope() throws IOException {
-        // @Deprecated is out of scope on every side of the checker; isPublicApi returns true so
-        // consumers don't get flagged for using a deprecated-but-soon-removed type.
+    void isPublicApi_deprecatedInternal_isStillFlagged() throws IOException {
+        // Consumer side: @Deprecated does NOT make an internal class out-of-scope.
+        // Deprecated-internal types are the most likely to be removed in the next release, so
+        // a consumer reference to one is exactly the kind of break the checker exists to catch.
+        // (The cascade validator still has its own deprecation bypass for the producer-side
+        // leak check, which is a separate policy.)
         PublicApiChecker checker = checkerFor(
                 AsmClassFactory.klass("org.apache.kafka.api.Old")
                         .access(Opcodes.ACC_PUBLIC).privateApi().deprecated());
-        assertTrue(checker.isPublicApi("org.apache.kafka.api.Old"),
-                "@Deprecated overrides audience: even @Private classes are out-of-scope when deprecated");
+        assertFalse(checker.isPublicApi("org.apache.kafka.api.Old"),
+                "consumer predicate must flag @Deprecated @Private — those are the highest-risk references");
     }
 
     @Test

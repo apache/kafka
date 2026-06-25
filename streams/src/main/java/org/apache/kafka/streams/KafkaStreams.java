@@ -172,6 +172,7 @@ public class KafkaStreams implements AutoCloseable {
     protected final String clientId;
     private final Metrics metrics;
     protected final StreamsConfig applicationConfigs;
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected field's generic signature exposes internal StreamThread for subclass access — pending KIP review to promote the type or refactor")
     protected final List<StreamThread> threads;
     @SuppressKafkaInternalApiUsage("KIP-1265: protected field exposes internal StreamsMetadataState for subclass access — pending KIP review to promote the type or refactor")
     protected final StreamsMetadataState streamsMetadataState;
@@ -1896,6 +1897,7 @@ public class KafkaStreams implements AutoCloseable {
      * threads lock when looping threads.
      * @param consumer handler
      */
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected method's signature exposes internal StreamThread for subclass access — pending KIP review to promote the type or refactor")
     protected int processStreamThread(final Consumer<StreamThread> consumer) {
         final List<StreamThread> copy = new ArrayList<>(threads);
         for (final StreamThread thread : copy) consumer.accept(thread);
@@ -2068,6 +2070,7 @@ public class KafkaStreams implements AutoCloseable {
         return allLocalStorePartitionLags(allTasks);
     }
 
+    @SuppressKafkaInternalApiUsage("KIP-1265: protected method's signature exposes internal Task for subclass access — pending KIP review to promote the type or refactor")
     protected Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags(final List<Task> tasksToCollectLagFor) {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
         final Collection<TopicPartition> allPartitions = new LinkedList<>();

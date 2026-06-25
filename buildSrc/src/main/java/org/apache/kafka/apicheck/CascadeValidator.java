@@ -23,6 +23,8 @@ import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.signature.SignatureReader;
+import org.objectweb.asm.signature.SignatureVisitor;
 
 import java.io.File;
 import java.io.IOException;
@@ -118,6 +120,12 @@ final class CascadeValidator {
                                         cls.binaryName(), name, surface, buffered);
                             }
                         }
+                        // Generic type arguments (e.g. Map<String, InternalFoo>) live in the
+                        // signature, not the erased descriptor — walk them too so the cascade
+                        // catches leaks the type-erasure layer would otherwise hide.
+                        collectSignatureRefs(signature, "INVALID_PARAMETER_TYPE",
+                                "Public method signature exposes non-public API type",
+                                cls.binaryName(), name, surface, buffered);
 
                         return new MethodVisitor(Opcodes.ASM9) {
                             /** Reason from a method-level {@code @SuppressKafkaInternalApiUsage}, or null. */
@@ -160,6 +168,11 @@ final class CascadeValidator {
                         checkAsmType(Type.getType(descriptor), "INVALID_FIELD_TYPE",
                                 "Public field exposes non-public API type",
                                 cls.binaryName(), name, surface, buffered);
+                        // Walk the generic field signature too — `List<InternalFoo>` etc. is
+                        // erased to plain List in the descriptor.
+                        collectSignatureRefs(signature, "INVALID_FIELD_TYPE",
+                                "Public field signature exposes non-public API type",
+                                cls.binaryName(), name, surface, buffered);
 
                         return new FieldVisitor(Opcodes.ASM9) {
                             /** Reason from a field-level {@code @SuppressKafkaInternalApiUsage}, or null. */
@@ -190,6 +203,24 @@ final class CascadeValidator {
                 }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             }
         }
+    }
+
+    /**
+     * Walk a generic JVM signature and route each referenced class type through the cascade
+     * check. {@code signature} is the optional generic descriptor ASM hands to
+     * {@code visitMethod}/{@code visitField}; it's null for non-generic members.
+     */
+    private static void collectSignatureRefs(String signature, String violationType, String message,
+                                             String owner, String memberName, ApiSurface surface,
+                                             List<PublicApiViolation> violations) {
+        if (signature == null) return;
+        new SignatureReader(signature).accept(new SignatureVisitor(Opcodes.ASM9) {
+            @Override
+            public void visitClassType(String name) {
+                checkBinaryReference(name.replace('/', '.'),
+                        violationType, message, owner, memberName, surface, violations);
+            }
+        });
     }
 
     /** Recurse through array element types to find the concrete reference type, then check it. */

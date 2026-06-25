@@ -52,6 +52,7 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
 
     private final Property<Boolean> enabled = getProject().getObjects().property(Boolean.class);
     private final Property<Boolean> failOnViolation = getProject().getObjects().property(Boolean.class);
+    private final Property<Boolean> failOnNoKafkaDependency = getProject().getObjects().property(Boolean.class);
     private final Property<FileCollection> classDirs = getProject().getObjects().property(FileCollection.class);
     private final ConfigurableFileCollection kafkaDependencyJars = getProject().getObjects().fileCollection();
     private final RegularFileProperty reportFile = getProject().getObjects().fileProperty();
@@ -63,6 +64,7 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
         // Set default values
         enabled.convention(true);
         failOnViolation.convention(true);
+        failOnNoKafkaDependency.convention(false);
         classDirs.convention(getProject().files("build/classes"));
         reportFile.convention(getProject().getLayout().getBuildDirectory().file("reports/kafka-internal-api-usage.txt"));
     }
@@ -86,7 +88,15 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
             List<File> kafkaJars = new ArrayList<>(kafkaDependencyJars.getFiles());
 
             if (kafkaJars.isEmpty()) {
-                getLogger().warn("No Kafka dependencies found in project. Skipping internal API check.");
+                String msg = "No org.apache.kafka:* dependencies found on the configured "
+                        + "kafkaDependencyJars. The checker cannot derive an API surface and would "
+                        + "produce a meaningless '0 violations' report — likely a classpath or "
+                        + "configuration issue.";
+                if (failOnNoKafkaDependency.get()) {
+                    throw new GradleException(msg);
+                }
+                getLogger().warn("{} Skipping internal API check. "
+                        + "Set kafkaInternalApiChecker.failOnNoKafkaDependency = true to make this fatal.", msg);
                 return;
             }
 
@@ -146,6 +156,11 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
     @Input
     public Property<Boolean> getFailOnViolation() {
         return failOnViolation;
+    }
+
+    @Input
+    public Property<Boolean> getFailOnNoKafkaDependency() {
+        return failOnNoKafkaDependency;
     }
 
     @InputFiles

@@ -83,19 +83,23 @@ public class PublicApiChecker {
     }
 
     /**
-     * @return true if the binary class name (e.g. {@code org.apache.kafka.clients.producer.KafkaProducer}
-     *         or {@code org.apache.kafka.clients.admin.OffsetSpec$LatestSpec}) is effectively
-     *         {@code @InterfaceAudience.Public} — either via a direct annotation or by inheritance
-     *         from an enclosing class. A direct {@code @InterfaceAudience.Private} overrides an
-     *         inherited Public. Non-{@code org.apache.kafka.*} types and deprecated types are
-     *         treated as Public (out of scope for this check).
+     * Consumer-side predicate: true if the binary class name (e.g.
+     * {@code org.apache.kafka.clients.producer.KafkaProducer} or
+     * {@code org.apache.kafka.clients.admin.OffsetSpec$LatestSpec}) is effectively
+     * {@code @InterfaceAudience.Public} — either via a direct annotation or by inheritance
+     * from an enclosing class. A direct {@code @InterfaceAudience.Private} overrides an
+     * inherited Public. Non-{@code org.apache.kafka.*} types are treated as out of scope.
+     *
+     * <p>Deprecation is intentionally <em>not</em> a bypass on the consumer side:
+     * {@code @Deprecated} internal types are exactly the ones most likely to be removed in
+     * the next release, so consumer references to them deserve a violation. The cascade
+     * validator has its own deprecation bypass for the producer-side leak check, which is
+     * fine — that side is just asking "did we expose this in the API surface?", whereas the
+     * consumer side is asking "am I going to break when Kafka removes this?".
      */
     public boolean isPublicApi(String binaryClassName) {
         if (!binaryClassName.startsWith("org.apache.kafka.")) {
             return true; // not in scope
-        }
-        if (surface.isDeprecated(binaryClassName)) {
-            return true; // deprecated is out of scope, mirroring the original semantic
         }
         return surface.isEffectivelyPublic(binaryClassName);
     }

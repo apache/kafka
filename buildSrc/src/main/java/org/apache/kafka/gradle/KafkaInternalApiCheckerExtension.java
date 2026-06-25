@@ -30,6 +30,7 @@ import java.io.File;
 public class KafkaInternalApiCheckerExtension {
     private final Property<Boolean> enabled;
     private final Property<Boolean> failOnViolation;
+    private final Property<Boolean> failOnNoKafkaDependency;
     private final ConfigurableFileCollection classDirs;
     private final ConfigurableFileCollection kafkaDependencyJars;
     private final RegularFileProperty reportFile;
@@ -40,6 +41,13 @@ public class KafkaInternalApiCheckerExtension {
 
         this.failOnViolation = project.getObjects().property(Boolean.class);
         this.failOnViolation.convention(true);
+
+        // Safety net for misconfigured projects. By default the task warns when it can't find
+        // any org.apache.kafka:* artifact on the classpath and proceeds with an empty surface
+        // (back-compat). Setting this to true turns that warning into a hard failure so a
+        // classpath or configuration mistake doesn't silently produce a "0 violations" report.
+        this.failOnNoKafkaDependency = project.getObjects().property(Boolean.class);
+        this.failOnNoKafkaDependency.convention(false);
 
         this.classDirs = project.getObjects().fileCollection();
         // Intentionally empty at construction. KafkaInternalApiCheckerPlugin reacts to the
@@ -74,6 +82,14 @@ public class KafkaInternalApiCheckerExtension {
 
     public void setFailOnViolation(boolean failOnViolation) {
         this.failOnViolation.set(failOnViolation);
+    }
+
+    public Property<Boolean> getFailOnNoKafkaDependency() {
+        return failOnNoKafkaDependency;
+    }
+
+    public void setFailOnNoKafkaDependency(boolean failOnNoKafkaDependency) {
+        this.failOnNoKafkaDependency.set(failOnNoKafkaDependency);
     }
 
     public ConfigurableFileCollection getClassDirs() {

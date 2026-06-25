@@ -72,6 +72,7 @@ public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
             .register("kafkaInternalApiChecker", KafkaInternalApiCheckerTask.class, task -> {
                 task.getCheckerEnabled().set(extension.getEnabled());
                 task.getFailOnViolation().set(extension.getFailOnViolation());
+                task.getFailOnNoKafkaDependency().set(extension.getFailOnNoKafkaDependency());
                 task.getClassDirs().set(extension.getClassDirs());
                 task.getKafkaDependencyJars().from(extension.getKafkaDependencyJars());
                 task.getReportFile().set(extension.getReportFile());
