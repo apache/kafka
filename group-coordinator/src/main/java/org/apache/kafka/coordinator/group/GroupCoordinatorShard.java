@@ -1039,6 +1039,23 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Batched form of {@link #clearStoredDescriptionTopologyEpoch}: emits one conditional clear
+     * record per entry in {@code expectedStoredEpochByGroupId} in a single
+     * {@link CoordinatorResult}, so the cycle issues one {@code scheduleWriteOperation} per
+     * shard instead of one per group. Groups whose stored epoch no longer matches yield no
+     * record (the GMM-level method returns an empty list for those), matching the single-group
+     * variant's silent skip.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpochBatch(
+        Map<String, Integer> expectedStoredEpochByGroupId
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>(expectedStoredEpochByGroupId.size());
+        expectedStoredEpochByGroupId.forEach((groupId, expectedStoredEpoch) ->
+            records.addAll(groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch).records()));
+        return new CoordinatorResult<>(records);
+    }
+
+    /**
      * Handles a ShareGroupDescribe request.
      *
      * @param groupIds      The IDs of the groups to describe.

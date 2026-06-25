@@ -115,6 +115,7 @@ import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1662,6 +1663,53 @@ public class GroupCoordinatorShardTest {
 
         assertSame(expected, coordinator.clearStoredDescriptionTopologyEpoch("group-id", 7));
         verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("group-id", 7);
+    }
+
+    @Test
+    public void testClearStoredDescriptionTopologyEpochBatchConcatenatesGMMRecords() {
+        // The batch shard method must invoke the GMM's single-group clear once per entry and
+        // fold the resulting records into one CoordinatorResult. The cycle relies on this so a
+        // partition with N eligible groups produces one scheduleWriteOperation carrying N
+        // conditional clear records, not N separate writes.
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
+        when(config.offsetsRetentionCheckIntervalMs()).thenReturn(60 * 60 * 1000L);
+        MockTime mockTime = new MockTime();
+        MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            config,
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        CoordinatorRecord recordA = mock(CoordinatorRecord.class);
+        CoordinatorRecord recordB = mock(CoordinatorRecord.class);
+        // "matched" group: GMM returns one record. "mismatched" group: GMM returns empty, so
+        // the batched result still contains only the matched group's record.
+        when(groupMetadataManager.clearStoredDescriptionTopologyEpoch("matched", 3))
+            .thenReturn(new CoordinatorResult<>(List.of(recordA)));
+        when(groupMetadataManager.clearStoredDescriptionTopologyEpoch("mismatched", 5))
+            .thenReturn(new CoordinatorResult<>(List.of()));
+        when(groupMetadataManager.clearStoredDescriptionTopologyEpoch("matched-2", 4))
+            .thenReturn(new CoordinatorResult<>(List.of(recordB)));
+
+        Map<String, Integer> input = new LinkedHashMap<>();
+        input.put("matched", 3);
+        input.put("mismatched", 5);
+        input.put("matched-2", 4);
+
+        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.clearStoredDescriptionTopologyEpochBatch(input);
+
+        assertEquals(List.of(recordA, recordB), result.records());
+        verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("matched", 3);
+        verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("mismatched", 5);
+        verify(groupMetadataManager).clearStoredDescriptionTopologyEpoch("matched-2", 4);
     }
 
     @Test
