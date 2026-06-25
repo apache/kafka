@@ -1222,21 +1222,6 @@ kafka.server.BrokerLifecycleManagerTest:
 - testSuccessfulRegistration
 kafka.server.BrokerMetricNamesTest:
 - testMetrics
-kafka.server.ClientQuotaManagerTest:
-- testClientIdNotSanitized
-- testExpireQuotaSensors
-- testExpireThrottleTimeSensor
-- testMaxValueInQuotaWindowWithNonDefaultQuotaWindow
-- testQuotaConfigPrecedence
-- testQuotaTypesEnabledUpdatesWithCustomCallback
-- testQuotaTypesEnabledUpdatesWithDefaultCallback
-- testQuotaViolation
-- testSetAndRemoveDefaultUserQuota
-- testSetAndRemoveUserClientQuota
-- testSetAndRemoveUserQuota
-- testUserQuotaParsingWithDefaultClientIdQuota
-kafka.server.ClientRequestQuotaManagerTest:
-- testRequestPercentageQuotaViolation
 kafka.server.ConfigAdminManagerTest:
 - testContainsDuplicates
 - testCopyWithoutPreprocessedForIncremental
@@ -1406,13 +1391,6 @@ kafka.server.ControllerConfigurationValidatorTest:
 - testValidClientMetricsConfig
 - testValidGroupConfig
 - testValidTopicConfig
-kafka.server.ControllerMutationQuotaManagerTest:
-- testControllerMutationQuotaViolation
-- testNewPermissiveQuotaForReturnsStrictQuotaWhenQuotaIsEnabled
-- testNewPermissiveQuotaForReturnsUnboundedQuotaWhenQuotaIsDisabled
-- testNewStrictQuotaForReturnsStrictQuotaWhenQuotaIsEnabled
-- testNewStrictQuotaForReturnsUnboundedQuotaWhenQuotaIsDisabled
-- testThrottleTime
 kafka.server.ControllerMutationQuotaTest:
 - testPermissiveCreatePartitionsRequest
 - testPermissiveCreateTopicsRequest
@@ -2085,8 +2063,6 @@ kafka.server.OffsetFetchRequestTest:
 kafka.server.OffsetsForLeaderEpochRequestTest:
 - testCurrentEpochValidation
 - testOffsetsForLeaderEpochErrorCodes
-kafka.server.PermissiveControllerMutationQuotaTest:
-- testControllerMutationQuotaViolation
 kafka.server.RemoteLeaderEndPointTest:
 - testBrokerEpochSupplier
 - testFetchEarliestLocalOffset
@@ -2345,8 +2321,6 @@ kafka.server.StreamsGroupHeartbeatRequestTest$WithAssignmentBatchingDisabledTest
 - testStreamsGroupHeartbeatIsInaccessibleWhenDisabledByStaticGroupCoordinatorProtocolConfig
 - testStreamsGroupHeartbeatIsInaccessibleWhenOffsetTopicNotExist
 - testStreamsGroupHeartbeatWithInvalidAPIVersion
-kafka.server.StrictControllerMutationQuotaTest:
-- testControllerMutationQuotaViolation
 kafka.server.SyncGroupRequestTest:
 - testSyncGroupWithOldConsumerGroupProtocol
 kafka.server.TierStateMachineTest:
@@ -2913,7 +2887,6 @@ kafka.utils.LoggingTest:
 - testLog4jControllerIsRegistered
 - testLogName
 - testLogNameOverride
-- testLoggerLevelIsResolved
 unit.kafka.server.AllocateProducerIdsRequestTest:
 - testAllocateProducersIdSentToController
 - testAllocateProducersIdSentToNonController

@@ -401,6 +401,8 @@ org.apache.kafka.server.config.DynamicConfigTest:
 - testGroupIsRemovedWhenDynamicConfigsAreRemoved
 org.apache.kafka.server.config.MinInSyncReplicasConfigTest:
 - testDefaultKafkaConfig
+org.apache.kafka.server.logger.LoggingControllerTest:
+- testLoggerLevelIsResolved
 org.apache.kafka.server.metrics.BrokerServerMetricsTest:
 - testIgnoredStaticVoters
 - testLastAppliedRecordOffset
@@ -470,6 +472,19 @@ org.apache.kafka.server.purgatory.DelayedProduceTest:
 - testTryCompleteWhenAllPartitionsHaveEnoughReplicas
 - testTryCompleteWhenReplicasNotCaughtUp
 - testTryCompleteWhenValidationReturnsError
+org.apache.kafka.server.quota.ClientQuotaManagerTest:
+- testClientIdNotSanitized
+- testExpireQuotaSensors
+- testExpireThrottleTimeSensor
+- testMaxValueInQuotaWindowWithNonDefaultQuotaWindow
+- testQuotaConfigPrecedence
+- testQuotaTypesEnabledUpdatesWithCustomCallback
+- testQuotaTypesEnabledUpdatesWithDefaultCallback
+- testQuotaViolation
+- testSetAndRemoveDefaultUserQuota
+- testSetAndRemoveUserClientQuota
+- testSetAndRemoveUserQuota
+- testUserQuotaParsingWithDefaultClientIdQuota
 org.apache.kafka.server.quota.ClientQuotasRequestTest:
 - testAlterClientQuotasBadIp
 - testAlterClientQuotasInvalidEntityCombination
@@ -483,6 +498,8 @@ org.apache.kafka.server.quota.ClientQuotasRequestTest:
 - testDescribeClientQuotasInvalidFilterCombination
 - testDescribeClientQuotasMatchExact
 - testDescribeClientQuotasMatchPartial
+org.apache.kafka.server.quota.ClientRequestQuotaManagerTest:
+- testRequestPercentageQuotaViolation
 org.apache.kafka.server.quota.ClientSensorsTest:
 - testConstructorPreservesInputOrder
 - testConstructorThrowsExceptionWhenBothSensorsAreNull
@@ -490,6 +507,15 @@ org.apache.kafka.server.quota.ClientSensorsTest:
 - testConstructorThrowsExceptionWhenThrottleTimeSensorIsNull
 - testConstructorWithEmptyMap
 - testConstructorWithValidParameters
+org.apache.kafka.server.quota.ControllerMutationQuotaManagerTest:
+- testControllerMutationQuotaViolation
+- testNewPermissiveQuotaForReturnsStrictQuotaWhenQuotaIsEnabled
+- testNewPermissiveQuotaForReturnsUnboundedQuotaWhenQuotaIsDisabled
+- testNewStrictQuotaForReturnsStrictQuotaWhenQuotaIsEnabled
+- testNewStrictQuotaForReturnsUnboundedQuotaWhenQuotaIsDisabled
+- testPermissiveControllerMutationQuotaViolation
+- testStrictControllerMutationQuotaViolation
+- testThrottleTime
 org.apache.kafka.server.quota.ReplicationQuotaManagerTest:
 - shouldExceedQuotaThenReturnBackBelowBoundAsTimePasses
 - shouldSupportWildcardThrottledReplicas

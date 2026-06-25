@@ -3982,14 +3982,18 @@ org.apache.kafka.streams.state.internals.AbstractTransactionBufferTest:
 - commitClearsPendingWritesAndBytes
 - commitFlushesTombstoneToBase
 - commitFlushesWritesToBase
+- concurrentOwnerWritesAndNonOwnerReadsAreConsistent
 - getStagedTombstoneReturnsEmptyOptional
 - getStagedValueReturnsOptionalOfValue
 - getUnstaggedKeyReturnsNull
 - isEmptyAndZeroBytesOnFreshBuffer
 - isNotEmptyAfterStage
 - nonOwnerAllSnapshotsAtCreationTime
+- nonOwnerAllSurvivesConcurrentOwnerCommit
 - nonOwnerRangeSnapshotsAtCreationTime
 - nonOwnerThreadCanReadStagedEntry
+- ownerStageDuringOwnAllIterationDoesNotThrow
+- ownerStageDuringOwnRangeIterationDoesNotThrow
 - rangeExclusiveUpperBound
 - rangeInclusiveUpperBound
 - rangeNullBothBoundsWithReverseReturnsSameAsAllReverse
@@ -6283,6 +6287,7 @@ org.apache.kafka.streams.state.internals.RocksDBTransactionBufferTest:
 - shouldCommitRangeDeleteWithOverridingPut
 - shouldCommitStagedWritesToRocksDB
 - shouldCommitWritesAcrossCFsAtomically
+- shouldHandleConcurrentStageDeleteRangeAndNonOwnerReads
 - shouldHideDeletedRangeFromPointReads
 - shouldHideDeletedRangeFromScans
 - shouldMergeStagedWritesInAllScan
