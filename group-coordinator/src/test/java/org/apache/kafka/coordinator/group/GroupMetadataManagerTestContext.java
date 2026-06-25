@@ -537,6 +537,7 @@ public class GroupMetadataManagerTestContext {
                 GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
                 List.of(new MockPartitionAssignor("range"))
             );
+            config.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
 
             GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfigContext.fromProps(config);
 
