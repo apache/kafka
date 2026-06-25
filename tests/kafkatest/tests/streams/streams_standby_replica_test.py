@@ -49,11 +49,18 @@ class StreamsStandbyTask(BaseStreamsTest):
     @cluster(num_nodes=10)
     @matrix(metadata_quorum=[quorum.combined_kraft],
             group_protocol=["classic", "streams"],
-            enable_assignment_batching=[True])
+            enable_assignment_batching=[True],
+            enable_assignment_offload=[True])
+    # Pick a limited set of configurations to test with assignment batching and/or offloading disabled.
     @matrix(metadata_quorum=[quorum.combined_kraft],
             group_protocol=["streams"],
-            enable_assignment_batching=[False])
-    def test_standby_tasks_rebalance(self, metadata_quorum, group_protocol, enable_assignment_batching):
+            enable_assignment_batching=[False],
+            enable_assignment_offload=[False, True])
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["streams"],
+            enable_assignment_batching=[True],
+            enable_assignment_offload=[False])
+    def test_standby_tasks_rebalance(self, metadata_quorum, group_protocol, enable_assignment_batching=True, enable_assignment_offload=True):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
             group_protocol=group_protocol,

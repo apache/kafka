@@ -528,6 +528,7 @@ public class GroupMetadataManagerTestContext {
             );
             config.putIfAbsent(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
             config.putIfAbsent(GroupCoordinatorConfig.SHARE_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
+            config.putIfAbsent(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, false);
 
             GroupCoordinatorConfig groupCoordinatorConfig = GroupCoordinatorConfigContext.fromProps(config);
 
