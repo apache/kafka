@@ -52,7 +52,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
 import static org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ClusterTestDefaults(
     types = {Type.CO_KRAFT},
@@ -101,9 +101,7 @@ public class ConsumerGroupCommandAuthorizationTest {
         };
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
         try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = new ConsumerGroupCommand.ConsumerGroupService(opts, Map.of())) {
-            consumerGroupService.describeGroups();
-            fail("Non-existent group should throw an exception");
-        } catch (ExecutionException e) {
+            ExecutionException e = assertThrows(ExecutionException.class, consumerGroupService::describeGroups);
             assertInstanceOf(GroupIdNotFoundException.class, e.getCause(),
                 "Non-existent group should throw GroupIdNotFoundException");
         }
