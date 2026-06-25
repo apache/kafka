@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.AbstractConfigurableStoreFactory;
@@ -133,7 +134,7 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
             final KeyValue<TimestampedKeyAndJoinSide<K>, V> kv = inner.next();
             final AggregationWithHeaders<V> lifted = kv.value == null
                 ? null
-                : AggregationWithHeaders.makeAllowNullable(kv.value, null);
+                : AggregationWithHeaders.makeAllowNullable(kv.value, new RecordHeaders());
             return KeyValue.pair(kv.key, lifted);
         }
     }
