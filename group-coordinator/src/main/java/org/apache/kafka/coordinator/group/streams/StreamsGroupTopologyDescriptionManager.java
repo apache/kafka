@@ -74,6 +74,8 @@ public class StreamsGroupTopologyDescriptionManager implements AutoCloseable {
     private final Logger log;
     private final Optional<StreamsGroupTopologyDescriptionPlugin> plugin;
     private final StreamsGroupTopologyDescriptionBackoff backoff;
+    // Get sensors are recorded here, not in GroupCoordinatorService like set/delete:
+    // the get outcome is only finally classified inside applyGetTopologyOutcome, so the metric lives next to that single source of truth.
     private final GroupCoordinatorMetrics metrics;
 
     /**

@@ -76,7 +76,6 @@ import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1439,7 +1438,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(runtime.scheduleWriteOperation(eq("streams-group-set-stored-topology-epoch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         service.streamsGroupTopologyDescriptionUpdate(
@@ -1462,7 +1461,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(runtime.scheduleWriteOperation(eq("streams-group-set-failed-topology-epoch"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         service.streamsGroupTopologyDescriptionUpdate(
@@ -1482,7 +1481,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
         when(runtime.scheduleReadOperation(eq("streams-group-topology-description-validate"), eq(GROUP_TP), any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         service.streamsGroupTopologyDescriptionUpdate(
@@ -1509,7 +1508,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(
                 new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         service.streamsGroupDescribe(
@@ -1531,7 +1530,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(
                 new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         service.streamsGroupDescribe(
@@ -1552,7 +1551,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(
                 new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         service.streamsGroupDescribe(
@@ -1574,7 +1573,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(
                 new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         service.streamsGroupDescribe(
@@ -1596,7 +1595,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(
                 new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         service.streamsGroupDescribe(
@@ -1626,7 +1625,7 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
             .thenReturn(CompletableFuture.completedFuture(
                 new StreamsGroupDescribeResult(List.of(describedGroupWithTopology("foo", 5)), Map.of("foo", 5))));
 
-        GroupCoordinatorMetrics metrics = spy(new GroupCoordinatorMetrics());
+        GroupCoordinatorMetrics metrics = mock(GroupCoordinatorMetrics.class);
         GroupCoordinatorService service = buildService(runtime, Optional.of(plugin), true, new MockTimer(), metrics);
 
         // CALLS_REAL_METHODS so only toDescribeResponse is overridden; any other converter call

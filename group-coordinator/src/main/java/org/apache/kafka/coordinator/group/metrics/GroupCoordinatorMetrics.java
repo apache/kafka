@@ -471,7 +471,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         streamsGroupTopologyDescriptionGetSuccessSensor.add(new Meter(
             metrics.metricName("streams-group-topology-description-get-success-rate",
                 METRICS_GROUP,
-                "The rate of successful plugin.getTopology calls (a call returning null counts as success)"),
+                "The rate of successful getTopology calls (a call returning null counts as success)"),
             metrics.metricName("streams-group-topology-description-get-success-count",
                 METRICS_GROUP,
                 "The total number of successful plugin.getTopology calls (a call returning null counts as success)")));
