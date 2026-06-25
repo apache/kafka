@@ -73,9 +73,11 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
             if (cmp != 0) {
                 return cmp;
             }
-            cmp = this.key.compareTo(other.key);
-            if (cmp != 0) {
-                return cmp;
+            if (this.key != null && other.key != null) {
+                cmp = this.key.compareTo(other.key);
+                if (cmp != 0) {
+                    return cmp;
+                }
             }
             return Long.compare(this.startTime, other.startTime);
         }

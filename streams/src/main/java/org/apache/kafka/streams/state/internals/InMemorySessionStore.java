@@ -565,15 +565,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
             this.latestSessionStartTime = latestSessionStartTime;
 
             final InMemorySessionTransactionBuffer.SessionEntryKey from =
-                new InMemorySessionTransactionBuffer.SessionEntryKey(
-                    earliestSessionEndTime,
-                    keyFrom != null ? keyFrom : Bytes.wrap(new byte[0]),
-                    0);
+                new InMemorySessionTransactionBuffer.SessionEntryKey(earliestSessionEndTime, keyFrom, 0);
             final InMemorySessionTransactionBuffer.SessionEntryKey to =
-                new InMemorySessionTransactionBuffer.SessionEntryKey(
-                    latestSessionEndTime,
-                    keyTo != null ? keyTo : Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF}),
-                    Long.MAX_VALUE);
+                new InMemorySessionTransactionBuffer.SessionEntryKey(latestSessionEndTime, keyTo, Long.MAX_VALUE);
 
             this.delegate = buffer.range(from, to, forward, true);
         }
