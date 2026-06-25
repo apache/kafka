@@ -21,11 +21,12 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -45,10 +46,13 @@ public class ViolationReporter {
         List<PublicApiViolation> safeSuppressions =
                 suppressions == null ? Collections.emptyList() : suppressions;
 
+        // Report contents must be reproducible: any two runs over the same inputs should produce
+        // byte-identical reports so CI diff tooling and reviewers can compare cleanly. That rules
+        // out a wall-clock timestamp (omitted) and HashMap-order grouping (replaced with TreeMap
+        // + a stable per-list sort by class then member).
         try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(reportFile.toPath(), StandardCharsets.UTF_8))) {
             writer.println("Apache Kafka Public API Violation Report");
             writer.println("========================================");
-            writer.println("Generated: " + LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             writer.println("Total violations: " + violations.size());
             writer.println("Total suppressions: " + safeSuppressions.size());
             writer.println();
@@ -56,14 +60,11 @@ public class ViolationReporter {
             if (violations.isEmpty()) {
                 writer.println("No violations found.");
             } else {
-                // Group violations by type
-                Map<String, List<PublicApiViolation>> violationsByType = violations.stream()
-                    .collect(Collectors.groupingBy(PublicApiViolation::getViolationType));
-
+                Map<String, List<PublicApiViolation>> violationsByType = groupSorted(
+                        violations, PublicApiViolation::getViolationType);
                 for (Map.Entry<String, List<PublicApiViolation>> entry : violationsByType.entrySet()) {
                     writer.println("## " + entry.getKey() + " (" + entry.getValue().size() + " violations)");
                     writer.println();
-
                     for (PublicApiViolation violation : entry.getValue()) {
                         writer.println("- " + violation.toString());
                     }
@@ -72,11 +73,8 @@ public class ViolationReporter {
 
                 writer.println("## Summary by Class");
                 writer.println();
-
-                // Group by class name
-                Map<String, List<PublicApiViolation>> violationsByClass = violations.stream()
-                    .collect(Collectors.groupingBy(PublicApiViolation::getClassName));
-
+                Map<String, List<PublicApiViolation>> violationsByClass = groupSorted(
+                        violations, PublicApiViolation::getClassName);
                 for (Map.Entry<String, List<PublicApiViolation>> entry : violationsByClass.entrySet()) {
                     writer.println("### " + entry.getKey() + " (" + entry.getValue().size() + " violations)");
                     for (PublicApiViolation violation : entry.getValue()) {
@@ -91,12 +89,29 @@ public class ViolationReporter {
                 writer.println("Checks skipped due to @SuppressKafkaInternalApiUsage.");
                 writer.println("Each line shows the reason supplied to the annotation; review periodically.");
                 writer.println();
-                for (PublicApiViolation suppression : safeSuppressions) {
+                List<PublicApiViolation> sortedSuppressions = new ArrayList<>(safeSuppressions);
+                sortedSuppressions.sort(VIOLATION_ORDER);
+                for (PublicApiViolation suppression : sortedSuppressions) {
                     writer.println("- " + suppression.getDescription());
                 }
                 writer.println();
             }
         }
+    }
+
+    /** Stable sort key for any list of violations: class, then member, then description. */
+    private static final Comparator<PublicApiViolation> VIOLATION_ORDER =
+            Comparator.comparing(PublicApiViolation::getClassName, Comparator.nullsFirst(String::compareTo))
+                    .thenComparing(PublicApiViolation::getMemberName, Comparator.nullsFirst(String::compareTo))
+                    .thenComparing(PublicApiViolation::getDescription, Comparator.nullsFirst(String::compareTo));
+
+    private static <K extends Comparable<? super K>> Map<K, List<PublicApiViolation>> groupSorted(
+            List<PublicApiViolation> violations,
+            java.util.function.Function<PublicApiViolation, K> keyFn) {
+        Map<K, List<PublicApiViolation>> grouped = violations.stream()
+                .collect(Collectors.groupingBy(keyFn, TreeMap::new, Collectors.toList()));
+        grouped.values().forEach(list -> list.sort(VIOLATION_ORDER));
+        return grouped;
     }
 
     /** Back-compat overload — call sites that don't yet pass suppressions. */

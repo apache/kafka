@@ -153,6 +153,11 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
 
             getLog().info("Internal API usage check completed. Report written to: " + reportFile.getAbsolutePath());
 
+            long unjustified = suppressions.stream().filter(PublicApiViolation::lacksReason).count();
+            if (unjustified > 0) {
+                getLog().warn(unjustified + " suppression(s) carry no reason — KIP-1265 requires a justification on every @SuppressKafkaInternalApiUsage");
+            }
+
             if (!violations.isEmpty()) {
                 String message = String.format("Found %d internal API usage violations. See report: %s",
                     violations.size(), reportFile.getAbsolutePath());

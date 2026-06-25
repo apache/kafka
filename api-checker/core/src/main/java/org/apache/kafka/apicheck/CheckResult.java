@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.apicheck;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -35,8 +34,8 @@ public final class CheckResult {
     private final List<PublicApiViolation> suppressions;
 
     public CheckResult(List<PublicApiViolation> violations, List<PublicApiViolation> suppressions) {
-        this.violations = violations == null ? Collections.emptyList() : violations;
-        this.suppressions = suppressions == null ? Collections.emptyList() : suppressions;
+        this.violations = violations == null ? List.of() : List.copyOf(violations);
+        this.suppressions = suppressions == null ? List.of() : List.copyOf(suppressions);
     }
 
     public List<PublicApiViolation> violations() {

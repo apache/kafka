@@ -17,8 +17,10 @@
 package org.apache.kafka.common.annotation;
 
 import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
  * Annotation to inform users of the intended audience of a particular package, class or method.
@@ -39,6 +41,7 @@ public class InterfaceAudience {
      */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
     public @interface Public { }
 
     /**
@@ -48,5 +51,6 @@ public class InterfaceAudience {
      */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.TYPE)
     public @interface Private { }
 }

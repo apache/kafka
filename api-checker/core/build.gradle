@@ -24,6 +24,12 @@ apply plugin: 'java-test-fixtures'
 
 dependencies {
     // ASM is the entire production dependency footprint. No Gradle, no Maven.
+    //
+    // ASM versions cap the JDK class-file major version they can parse. 9.6 covers up to
+    // Java 21 (class-file 65). If Kafka starts compiling against a newer JDK whose major
+    // exceeds what this ASM release knows about, the scanner will throw
+    // `IllegalArgumentException: Unsupported class file major version N` on encountering
+    // a fresh bytecode file. Bump in lockstep with the project's max-supported compile JDK.
     api 'org.ow2.asm:asm:9.6'
     api 'org.slf4j:slf4j-api:2.0.16'
 

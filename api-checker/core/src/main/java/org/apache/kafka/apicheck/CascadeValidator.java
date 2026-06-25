@@ -255,7 +255,7 @@ final class CascadeValidator {
      * annotation is appended so reviewers can audit every escape hatch on every build.
      */
     private static PublicApiViolation asSuppression(PublicApiViolation original, String reason) {
-        String prettyReason = reason.isEmpty() ? "(no reason given)" : reason;
+        String prettyReason = reason.isEmpty() ? PublicApiViolation.NO_REASON_MARKER : reason;
         String description = "Suppressed " + original.getViolationType() + " in "
                 + original.getClassName() + "#" + original.getMemberName()
                 + " — " + original.getDescription()

@@ -130,6 +130,11 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
 
             getLogger().info("Internal API usage check completed. Report written to: {}", report.getAbsolutePath());
 
+            long unjustified = suppressions.stream().filter(PublicApiViolation::lacksReason).count();
+            if (unjustified > 0) {
+                getLogger().warn("{} suppression(s) carry no reason — KIP-1265 requires a justification on every @SuppressKafkaInternalApiUsage", unjustified);
+            }
+
             if (!violations.isEmpty()) {
                 String message = String.format("Found %d internal API usage violations. See report: %s",
                     violations.size(), report.getAbsolutePath());

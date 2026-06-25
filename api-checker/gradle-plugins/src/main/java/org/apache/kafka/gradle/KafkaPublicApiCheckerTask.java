@@ -104,6 +104,10 @@ public class KafkaPublicApiCheckerTask extends DefaultTask {
 
             if (!suppressions.isEmpty()) {
                 getLogger().lifecycle("{} suppression(s) honoured — see report for justifications.", suppressions.size());
+                long unjustified = suppressions.stream().filter(PublicApiViolation::lacksReason).count();
+                if (unjustified > 0) {
+                    getLogger().warn("{} suppression(s) carry no reason — KIP-1265 requires a justification on every @SuppressKafkaInternalApiUsage", unjustified);
+                }
             }
             if (!violations.isEmpty()) {
                 String message = String.format("Found %d public API violations. See report: %s",

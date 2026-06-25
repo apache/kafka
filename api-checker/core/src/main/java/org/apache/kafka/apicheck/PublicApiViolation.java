@@ -20,6 +20,13 @@ package org.apache.kafka.apicheck;
  * Represents a violation of the public API rules.
  */
 public class PublicApiViolation {
+    /**
+     * Rendered into a suppression's description when the {@code @SuppressKafkaInternalApiUsage}
+     * annotation carried no {@code value()}. Stable marker so the reporter and the build tasks
+     * can surface unjustified suppressions consistently.
+     */
+    public static final String NO_REASON_MARKER = "(no reason given)";
+
     private final String className;
     private final String violationType;
     private final String description;
@@ -68,6 +75,16 @@ public class PublicApiViolation {
         if (!violationType.equals(that.violationType)) return false;
         if (!description.equals(that.description)) return false;
         return memberName != null ? memberName.equals(that.memberName) : that.memberName == null;
+    }
+
+    /**
+     * @return true iff this suppression's description ends with {@link #NO_REASON_MARKER} —
+     *         i.e. the {@code @SuppressKafkaInternalApiUsage} annotation carried no
+     *         {@code value()}. KIP-1265 describes the reason as required, so the checker warns
+     *         on unjustified suppressions.
+     */
+    public boolean lacksReason() {
+        return description != null && description.endsWith("reason: " + NO_REASON_MARKER);
     }
 
     @Override

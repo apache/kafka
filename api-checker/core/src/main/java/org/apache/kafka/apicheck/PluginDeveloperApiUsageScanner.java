@@ -58,7 +58,7 @@ public class PluginDeveloperApiUsageScanner {
     /** Descriptor of {@code @SuppressKafkaInternalApiUsage} — honoured when present on the enclosing class or member. */
     private static final String SUPPRESS_DESCRIPTOR =
             "Lorg/apache/kafka/common/annotation/SuppressKafkaInternalApiUsage;";
-    private static final String NO_REASON_GIVEN = "(no reason given)";
+    private static final String NO_REASON_GIVEN = PublicApiViolation.NO_REASON_MARKER;
 
     private final Predicate<String> isPublicApi;
 
