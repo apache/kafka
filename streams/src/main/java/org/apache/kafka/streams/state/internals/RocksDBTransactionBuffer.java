@@ -39,8 +39,12 @@ import java.util.TreeMap;
 /**
  * A {@link TransactionBuffer} implementation for RocksDB-backed stores.
  * Uses a {@link WriteBatch} (without index) to accumulate writes for atomic commit.
- * Reads are handled entirely by the shared {@code ConcurrentSkipListMap} in
+ * Reads are handled entirely by the shared staging map in
  * {@link AbstractTransactionBuffer}, so a {@code WriteBatchWithIndex} is not needed.
+ * <p>
+ * Follows the base class locking discipline: structural mutations of the staging map
+ * ({@link #stage}, {@link #stageDeleteRange}) hold the {@code snapshotLock} write lock; owner
+ * reads/scan-copies are lock-free; non-owner (IQ) reads hold the read lock.
  * <p>
  * Range deletions ({@link #stageDeleteRange}) are only supported by RocksDB-backed stores
  * and are owned entirely by this class; {@link AbstractTransactionBuffer} carries no
@@ -82,16 +86,21 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
      * under {@code cf}, so every staged CF is committed atomically on {@link #commit()}.
      */
     void stage(final ColumnFamilyHandle cf, final Bytes key, final byte[] value) {
-        pendingWrites.put(key, Optional.ofNullable(value));
-        pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
+        snapshotLock.writeLock().lock();
         try {
-            if (value != null) {
-                writeBatch.put(cf, key.get(), value);
-            } else {
-                writeBatch.delete(cf, key.get());
+            pendingWrites.put(key, Optional.ofNullable(value));
+            pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
+            try {
+                if (value != null) {
+                    writeBatch.put(cf, key.get(), value);
+                } else {
+                    writeBatch.delete(cf, key.get());
+                }
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error staging write in transaction buffer for store " + storeName, e);
             }
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error staging write in transaction buffer for store " + storeName, e);
+        } finally {
+            snapshotLock.writeLock().unlock();
         }
     }
 
@@ -102,21 +111,49 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
      * {@link WriteBatch} under {@code cf}.
      */
     void stageDeleteRange(final ColumnFamilyHandle cf, final Bytes from, final Bytes to) {
-        pendingWrites.subMap(from, true, to, false).clear();
-        final TreeMap<Bytes, List<Bytes>> copy = new TreeMap<>(rangeTombstones);
-        copy.computeIfAbsent(from, k -> new ArrayList<>()).add(to);
-        rangeTombstones = copy;
-        pendingWritesBytes += estimateKeySize(from) + estimateKeySize(to);
+        snapshotLock.writeLock().lock();
         try {
-            writeBatch.deleteRange(cf, from.get(), to.get());
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error staging delete range in transaction buffer for store " + storeName, e);
+            // Multi-node subMap().clear() on the (non-thread-safe) TreeMap staging buffer must hold
+            // the write lock; doing it together with the rangeTombstones swap also makes the two
+            // updates atomic with respect to a non-owner snapshot scan.
+            pendingWrites.subMap(from, true, to, false).clear();
+            // Copy-on-write: clone the map AND the affected key's list, so a non-owner iterator
+            // holding the previous rangeTombstones map (and its lists) is never mutated underneath
+            // it. A shallow map copy alone would share the List<Bytes> values and corrupt in-flight
+            // iterators when the same `from` is deleted twice.
+            final TreeMap<Bytes, List<Bytes>> copy = new TreeMap<>(rangeTombstones);
+            final List<Bytes> existing = copy.get(from);
+            final List<Bytes> updated = existing == null ? new ArrayList<>() : new ArrayList<>(existing);
+            updated.add(to);
+            copy.put(from, updated);
+            rangeTombstones = copy;
+            pendingWritesBytes += estimateKeySize(from) + estimateKeySize(to);
+            try {
+                writeBatch.deleteRange(cf, from.get(), to.get());
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error staging delete range in transaction buffer for store " + storeName, e);
+            }
+        } finally {
+            snapshotLock.writeLock().unlock();
         }
     }
 
     @Override
     public Optional<byte[]> get(final Bytes key) {
-        final Optional<byte[]> staged = pendingWrites.get(key);
+        // Owner reads lock-free (sole, single-threaded mutator); non-owner (IQ) reads take the read
+        // lock to exclude a concurrent owner write on the TreeMap. The volatile rangeTombstones
+        // reference is read lock-free either way.
+        final Optional<byte[]> staged;
+        if (Thread.currentThread() == ownerThread) {
+            staged = pendingWrites.get(key);
+        } else {
+            snapshotLock.readLock().lock();
+            try {
+                staged = pendingWrites.get(key);
+            } finally {
+                snapshotLock.readLock().unlock();
+            }
+        }
         if (staged != null) {
             return staged;
         }
@@ -133,8 +170,11 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
 
     ManagedKeyValueIterator<Bytes, byte[]> all(final ColumnFamilyHandle cf, final boolean forward) {
         if (Thread.currentThread() == ownerThread) {
+            // Eager copy of the staging layer (lock-free for the sole mutator) so a later owner
+            // stage cannot invalidate this iterator; the base store is iterated live.
+            final NavigableMap<Bytes, Optional<byte[]>> stagingSnapshot = new TreeMap<>(pendingWrites);
             final ManagedKeyValueIterator<Bytes, byte[]> baseIter = newBaseIterator(cf, null, null, forward, true);
-            return new StagedMergeIterator<>(pendingWrites, baseIter, forward);
+            return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         }
         return snapshotScan(cf, null, null, forward, true);
     }
@@ -143,9 +183,9 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
                                                  final Bytes from, final Bytes to,
                                                  final boolean forward, final boolean toInclusive) {
         if (Thread.currentThread() == ownerThread) {
-            final NavigableMap<Bytes, Optional<byte[]>> stagingView = boundStaging(from, to, toInclusive);
+            final NavigableMap<Bytes, Optional<byte[]>> stagingSnapshot = new TreeMap<>(boundStaging(from, to, toInclusive));
             final ManagedKeyValueIterator<Bytes, byte[]> baseIter = newBaseIterator(cf, from, to, forward, toInclusive);
-            return new StagedMergeIterator<>(stagingView, baseIter, forward);
+            return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         }
         return snapshotScan(cf, from, to, forward, toInclusive);
     }
@@ -182,6 +222,8 @@ class RocksDBTransactionBuffer extends AbstractTransactionBuffer<Bytes> {
         final boolean forward,
         final boolean toInclusive
     ) {
+        // A RocksDB iterator already exposes a point-in-time consistent view of the base store
+        // as of its creation, so no extra snapshotting is required beyond the live base iterator.
         return newBaseIterator(cfHandle, from, to, forward, toInclusive);
     }
 

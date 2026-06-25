@@ -628,6 +628,16 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Non-throwing variant of {@link #group(String, long)}: returns {@code null} if no group
+     * with the given id exists at {@code committedOffset}. Used by scans (e.g. the topology-
+     * description cleanup cycle) where a missing group is a normal continue-the-scan condition
+     * rather than an error worth a {@link GroupIdNotFoundException} cost per iteration.
+     */
+    public Group maybeGroup(String groupId, long committedOffset) {
+        return groups.get(groupId, committedOffset);
+    }
+
+    /**
      * Get the Group List.
      *
      * @param statesFilter      The states of the groups we want to list.
@@ -8501,6 +8511,37 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Clear {@code StoredDescriptionTopologyEpoch} to {@code -1} only when the group's stored
+     * epoch still equals {@code expectedStoredEpoch} (the value observed at the start of the
+     * cleanup cycle). A concurrent {@code setTopology} that advanced the epoch in the
+     * meantime is preserved — the next cycle will pick up the new state. Missing groups,
+     * non-streams groups, and mismatched epochs all yield an empty record list so the cycle's
+     * downstream tombstone pass treats them as no-ops rather than errors.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpoch(
+        String groupId,
+        int expectedStoredEpoch
+    ) {
+        Group group = groups.get(groupId);
+        if (!(group instanceof StreamsGroup streamsGroup)) {
+            return new CoordinatorResult<>(List.of());
+        }
+        if (streamsGroup.storedDescriptionTopologyEpoch() != expectedStoredEpoch) {
+            return new CoordinatorResult<>(List.of());
+        }
+        CoordinatorRecord record = newStreamsGroupMetadataRecord(
+            groupId,
+            streamsGroup.groupEpoch(),
+            streamsGroup.metadataHash(),
+            streamsGroup.validatedTopologyEpoch(),
+            streamsGroup.lastAssignmentConfigs(),
+            -1,
+            streamsGroup.failedDescriptionTopologyEpoch()
+        );
+        return new CoordinatorResult<>(List.of(record), null);
+    }
+
+    /**
      * Validates that (1) the instance id exists and is mapped to the member id
      * if the group instance id is provided; and (2) the member id exists in the group.
      *
@@ -9293,6 +9334,16 @@ public class GroupMetadataManager {
      */
     public Set<String> groupIds() {
         return Collections.unmodifiableSet(this.groups.keySet());
+    }
+
+    /**
+     * Snapshot-aware counterpart to {@link #groupIds()}: returns the set of group ids
+     * present at {@code committedOffset}. Used by read operations whose entire eligibility
+     * decision must be reproducible from a single committed snapshot (e.g. the topology
+     * cleanup scan in {@link GroupCoordinatorShard}).
+     */
+    public Set<String> groupIds(long committedOffset) {
+        return Collections.unmodifiableSet(this.groups.keySet(committedOffset));
     }
 
     // Visible for testing

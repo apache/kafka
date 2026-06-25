@@ -53,6 +53,9 @@ public class BuiltInPartitioner {
      *
      * @param topic The topic
      * @param stickyBatchSize How much to produce to partition before switch
+     * @param rackAware Whether the partitioner is rack-aware,
+     *                  i.e. prioritizes partitions whose leaders are in the same rack as the producer
+     * @param rack The rack of the producer (needed for the rack-aware mode)
      */
     public BuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize, boolean rackAware, String rack) {
         this.log = logContext.logger(BuiltInPartitioner.class);

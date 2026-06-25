@@ -17,8 +17,12 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+<<<<<<< ashwinpankaj/KIP-1265
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
+=======
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+>>>>>>> trunk
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -146,7 +150,9 @@ public class Heartbeat {
     }
 
     private static Schema valueSchema(short version) {
-        assert version == 0;
+        if (version != VERSION) {
+            throw new UnsupportedVersionException("Unsupported version " + version);
+        }
         return VALUE_SCHEMA_V0;
     }
 }
