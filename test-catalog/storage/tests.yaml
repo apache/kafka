@@ -427,6 +427,40 @@ org.apache.kafka.storage.internals.log.LogCleanerTest:
 org.apache.kafka.storage.internals.log.LogConcurrencyTest:
 - testUncommittedDataNotConsumed
 - testUncommittedDataNotConsumedFrequentSegmentRolls
+org.apache.kafka.storage.internals.log.LogLoaderTest:
+- testBogusIndexSegmentsAreRemoved
+- testCleanShutdownFile
+- testCorruptIndexRebuild
+- testCorruptLog
+- testCorruptedLogRecoveryDoesNotDeleteProducerStateSnapshotsPostRecovery
+- testFullTransactionIndexRecovery
+- testIndexRebuild
+- testLoadProducersAfterDeleteRecordsMidSegment
+- testLoadProducersAfterDeleteRecordsOnSegment
+- testLoadingLogKeepsLargestStrayProducerStateSnapshot
+- testLogEndLessThanStartAfterReopen
+- testLogRecoversForLeaderEpoch
+- testLogRecoversToCorrectOffset
+- testLogRecoveryIsCalledUponBrokerCrash
+- testLogStartOffsetWhenRemoteStorageIsEnabled
+- testOpenDeletesObsoleteFiles
+- testOverCompactedLogRecovery
+- testOverCompactedLogRecoveryMultiRecord
+- testOverCompactedLogRecoveryMultiRecordV1
+- testProducerSnapshotsRecoveryAfterUncleanShutdown
+- testRecoverAfterNonMonotonicCoordinatorEpochWrite
+- testRecoverLastSegmentWithNoSnapshots
+- testRecoverOnlyLastSegment
+- testRecoverWithEmptyActiveSegment
+- testRecoveryAfterCrashDuringSplitPhase1
+- testRecoveryAfterCrashDuringSplitPhase2
+- testRecoveryAfterCrashDuringSplitPhase3
+- testRecoveryAfterCrashDuringSplitPhase4
+- testRecoveryAfterCrashDuringSplitPhase5
+- testRecoveryOfSegmentWithOffsetOverflow
+- testReopenThenTruncate
+- testSkipLoadingIfEmptyProducerStateBeforeTruncation
+- testSkipTruncateAndReloadIfNewMessageFormatAndCleanShutdown
 org.apache.kafka.storage.internals.log.LogManagerTest:
 - testBrokerConfigChangeDeliveredToAllLogs
 - testCheckpointForOnlyAffectedLogs

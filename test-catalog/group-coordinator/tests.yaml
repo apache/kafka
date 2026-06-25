@@ -1610,3 +1610,19 @@ org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationExceptionTes
 - testIncorrectlyPartitionedTopics
 - testMissingInternalTopics
 - testMissingSourceTopics
+org.apache.kafka.coordinator.group.util.OverlayMapTest:
+- testClear
+- testContainsKey
+- testEntrySet
+- testEntrySetIterator
+- testEntrySetIteratorOverEmptyMap
+- testEntrySetSize
+- testGet
+- testIsEmptyWhenAllBaseEntriesRemoved
+- testIsEmptyWithEmptyBase
+- testPut
+- testPutExistingKey
+- testPutNewKey
+- testRemove
+- testRemoveExistingKey
+- testSize
