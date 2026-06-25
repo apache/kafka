@@ -3902,6 +3902,177 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStaticMemberCanRejoinWhenConsumerGroupIsFull() {
+        String groupId = "fooup";
+        String instanceId = "instance-id";
+        String oldMemberId = "old-member-id";
+        String newMemberId = "new-member-id";
+        int groupMaxSize = 1;
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .buildCoordinatorMetadataImage();
+        
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            newMemberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+        )));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, groupMaxSize)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(oldMemberId)
+                    .setState(MemberState.STABLE)
+                    .setInstanceId(instanceId)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(9)
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0)), 10))
+                    .build())
+                .withAssignment(oldMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)))))
+            .build();
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setInstanceId(instanceId)
+                .setMemberId(newMemberId)
+                .setMemberEpoch(0)
+                .setServerAssignor("range")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo"))
+                .setTopicPartitions(List.of()));
+
+        assertResponseEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setMemberId(newMemberId)
+                .setMemberEpoch(11)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                    .setTopicPartitions(List.of(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(List.of(0))
+                    ))),
+            result.response()
+        );
+    }
+
+    @Test
+    public void testStaticMemberRejoinWithUnreleasedInstanceIdFailsWhenConsumerGroupIsFull() {
+        String groupId = "fooup";
+        String instanceId = "instance-id";
+        String oldMemberId = "old-member-id";
+        String newMemberId = "new-member-id";
+        int groupMaxSize = 1;
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .buildCoordinatorMetadataImage();
+        
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            oldMemberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+        )));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, groupMaxSize)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(oldMemberId)
+                    .setState(MemberState.STABLE)
+                    .setInstanceId(instanceId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0)), 10))
+                    .build())
+                .withAssignment(oldMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)))))
+            .build();
+        
+        assertThrows(UnreleasedInstanceIdException.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setInstanceId(instanceId)
+                .setMemberId(newMemberId)
+                .setMemberEpoch(0)
+                .setServerAssignor("range")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo"))
+                .setTopicPartitions(List.of())));
+    }
+
+    @Test
+    public void testNewStaticMemberIsRejectedWhenConsumerGroupIsFull() {
+        String groupId = "fooup";
+        String instanceId = "instance-id";
+        String otherInstanceId = "other-instance-id";
+        String oldMemberId = "old-member-id";
+        String newMemberId = "new-member-id";
+        int groupMaxSize = 1;
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .buildCoordinatorMetadataImage();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of(
+            oldMemberId, new MemberAssignmentImpl(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+        )));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, groupMaxSize)
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(oldMemberId)
+                    .setState(MemberState.STABLE)
+                    .setInstanceId(instanceId)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setServerAssignorName("range")
+                    .setAssignedPartitions(toAssignmentWithEpochs(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0)), 10))
+                    .build())
+                .withAssignment(oldMemberId, mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+                .withAssignmentEpoch(10)
+                .withMetadataHash(computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage)))))
+            .build();
+
+        assertThrows(GroupMaxSizeReachedException.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setInstanceId(otherInstanceId)
+                .setMemberId(newMemberId)
+                .setMemberEpoch(0)
+                .setServerAssignor("range")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(List.of("foo"))
+                .setTopicPartitions(List.of())));
+    }
+
+    @Test
     public void testConsumerGroupStates() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
@@ -10742,6 +10913,55 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testClearStoredDescriptionTopologyEpochClearsWhenEpochMatches() {
+        // the cleanup cycle echoes the storedEpoch it observed at scan time into
+        // the conditional clear. When the persisted value still matches, the write emits a
+        // metadata record setting StoredDescriptionTopologyEpoch back to -1 while preserving
+        // the other tagged fields (FailedDescriptionTopologyEpoch in particular).
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), 7, 3));
+
+        CoordinatorResult<Void, CoordinatorRecord> result =
+            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, 7);
+
+        assertEquals(1, result.records().size());
+        // Apply the record and verify storedEpoch is cleared and failedEpoch preserved.
+        context.replay(result.records().get(0));
+        StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(groupId);
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(3, group.failedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testClearStoredDescriptionTopologyEpochNoOpsWhenEpochMismatches() {
+        // A concurrent setTopology has advanced storedEpoch between the cycle's scan and this
+        // write. The clear must be a no-op to preserve the newer push instead of silently
+        // undoing it.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), 9, -1));
+
+        CoordinatorResult<Void, CoordinatorRecord> result =
+            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, 7);
+
+        assertEquals(List.of(), result.records());
+    }
+
+    @Test
+    public void testClearStoredDescriptionTopologyEpochNoOpsForMissingGroup() {
+        // Missing groups must not throw — the next cycle will simply not see them again.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        CoordinatorResult<Void, CoordinatorRecord> result =
+            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch("missing-group", 7);
+
+        assertEquals(List.of(), result.records());
+    }
+
+    @Test
     public void testStreamsGroupMetadataReplayRoundTripsTopologyDescriptionEpochs() {
         // KIP-1331: replay must read storedDescriptionTopologyEpoch and failedDescriptionTopologyEpoch from the record
         // and apply them to the in-memory streams group.
@@ -10820,19 +11040,19 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testValidateStreamsGroupMemberThrowsWhenGroupAbsent() {
-        // KIP-1331: validateStreamsGroupMember surfaces GROUP_ID_NOT_FOUND for the upcoming
-        // StreamsGroupTopologyDescriptionUpdate handler.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateThrowsWhenGroupAbsent() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate surfaces GROUP_ID_NOT_FOUND for
+        // the StreamsGroupTopologyDescriptionUpdate handler.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         assertThrows(GroupIdNotFoundException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(
-                "nonexistent", "m1", context.lastCommittedOffset));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                "nonexistent", "m1", 0, context.lastCommittedOffset));
     }
 
     @Test
-    public void testValidateStreamsGroupMemberThrowsWhenMemberAbsent() {
-        // KIP-1331: validateStreamsGroupMember surfaces UNKNOWN_MEMBER_ID for the upcoming
-        // StreamsGroupTopologyDescriptionUpdate handler.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateThrowsWhenMemberAbsent() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate surfaces UNKNOWN_MEMBER_ID for
+        // the StreamsGroupTopologyDescriptionUpdate handler.
         String groupId = "streams-group";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
         // Replaying a metadata record materializes a streams group with no members; commit so the
@@ -10842,14 +11062,38 @@ public class GroupMetadataManagerTest {
         context.commit();
 
         assertThrows(UnknownMemberIdException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(
-                groupId, "stranger", context.lastCommittedOffset));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, "stranger", -1, context.lastCommittedOffset));
     }
 
     @Test
-    public void testValidateStreamsGroupMemberDoesNotSeeUncommittedFence() {
-        // KIP-1331: validateStreamsGroupMember reads at committedOffset, so an uncommitted fence
-        // (member tombstone) must not make a still-committed member appear unknown.
+    public void testValidateStreamsGroupTopologyDescriptionUpdateRejectsStaleEpoch() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate must reject a pushedEpoch that
+        // does not match the group's current topology epoch with INVALID_REQUEST. Without this
+        // check, a stale push could regress storedDescriptionTopologyEpoch and the heartbeat
+        // gate would never converge.
+        String groupId = "streams-group";
+        String memberId = "m1";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId).build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), -1, -1));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
+        context.commit();
+
+        // No topology has been pushed via heartbeat, so currentTopologyEpoch() returns -1.
+        // A push claiming epoch 4 must be rejected.
+        assertThrows(InvalidRequestException.class,
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, memberId, 4, context.lastCommittedOffset));
+    }
+
+    @Test
+    public void testValidateStreamsGroupTopologyDescriptionUpdateDoesNotSeeUncommittedFence() {
+        // KIP-1331: validateStreamsGroupTopologyDescriptionUpdate reads at committedOffset, so an
+        // uncommitted fence (member tombstone) must not make a still-committed member appear unknown.
         String groupId = "streams-group";
         String memberId = "m1";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
@@ -10870,13 +11114,15 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId, memberId));
 
         // Validating at the still-committed offset must succeed; the uncommitted tombstone is invisible.
-        StreamsGroupMember resolved = context.groupMetadataManager.validateStreamsGroupMember(
-            groupId, memberId, committedWithMember);
+        // currentTopologyEpoch() is -1 since no topology has been pushed via heartbeat.
+        StreamsGroupMember resolved = context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+            groupId, memberId, -1, committedWithMember);
         assertEquals(memberId, resolved.memberId());
 
         // Latest in-memory state, by contrast, sees the tombstone — verify by querying with Long.MAX_VALUE.
         assertThrows(UnknownMemberIdException.class,
-            () -> context.groupMetadataManager.validateStreamsGroupMember(groupId, memberId, Long.MAX_VALUE));
+            () -> context.groupMetadataManager.validateStreamsGroupTopologyDescriptionUpdate(
+                groupId, memberId, -1, Long.MAX_VALUE));
     }
 
     @Test
@@ -12449,7 +12695,7 @@ public class GroupMetadataManagerTest {
             .setSessionTimeoutMs(5000)
             .setRebalanceTimeoutMs(45000);
 
-        IllegalStateException ex = assertThrows(IllegalStateException.class,
+        InconsistentGroupProtocolException ex = assertThrows(InconsistentGroupProtocolException.class,
             () -> context.sendClassicGroupJoin(joinRequest));
         assertEquals("Malformed embedded consumer protocol in subscription deserialization.", ex.getMessage());
     }
@@ -14293,6 +14539,74 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStaticMemberCanRejoinConsumerGroupWithClassicProtocolWhenGroupIsFull() throws Exception {
+        String groupId = "group-id";
+        String oldMemberId = "old-member";
+        String instanceId = "instance-id";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(oldMemberId)
+                    .setInstanceId(instanceId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(9)
+                    .build())
+                .withAssignmentEpoch(10))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, 1)
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
+            .build();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withGroupInstanceId(instanceId)
+            .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(List.of(), List.of()))
+            .build();
+
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request, true, true);
+        joinResult.appendFuture.complete(null);
+        assertTrue(joinResult.joinFuture.isDone());
+
+        JoinGroupResponseData response = joinResult.joinFuture.get();
+        assertEquals(Errors.NONE.code(), response.errorCode());
+        assertNotEquals(UNKNOWN_MEMBER_ID, response.memberId());
+        assertNotEquals(oldMemberId, response.memberId());
+        assertEquals(response.memberId(), context.groupMetadataManager.consumerGroup(groupId).staticMemberId(instanceId));
+    }
+
+    @Test
+    public void testNewStaticMemberClassicGroupJoinThrowsGroupMaxSizeReachedExceptionWhenConsumerGroupIsFull() throws Exception {
+        String groupId = "group-id";
+        String oldMemberId = "old-member";
+        String instanceId = "instance-id";
+        String newInstanceId = "new-instance-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(oldMemberId)
+                    .setInstanceId(instanceId)
+                    .setState(MemberState.STABLE)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setPreviousMemberEpoch(9)
+                    .build())
+                .withAssignmentEpoch(10))
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SIZE_CONFIG, 1)
+            .build();
+
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withGroupInstanceId(newInstanceId)
+            .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(List.of(), List.of()))
+            .build();
+
+        assertThrows(GroupMaxSizeReachedException.class, 
+            () -> context.sendClassicGroupJoin(request, true, true)
+        );
+    }
+    
+
+    @Test
     public void testJoiningConsumerGroupThrowsExceptionIfProtocolIsNotSupported() {
         String groupId = "group-id";
         String memberId = Uuid.randomUuid().toString();
@@ -14327,6 +14641,77 @@ public class GroupMetadataManagerTest {
             .withDefaultProtocolTypeAndProtocols()
             .build();
         assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(requestWithInvalidProtocolType));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testClassicMemberJoinToConsumerGroupWithDisabledMigrationPolicy(boolean isStatic) {
+        String groupId = "group-id";
+        String classicMemberId = Uuid.randomUuid().toString();
+        String classicInstanceId = "classic-instance-id";
+        String consumerMemberId = Uuid.randomUuid().toString();
+        String consumerInstanceId = "consumer-instance-id";
+        String errorMessage = String.format(
+            "Cannot join the consumer group %s with the classic protocol because the group migration is disabled.", groupId);
+
+        // The group already contains a classic member. For the static case it also contains a
+        // consumer-protocol static member that a classic member could try to replace.
+        ConsumerGroupBuilder groupBuilder = new ConsumerGroupBuilder(groupId, 10)
+            .withMember(new ConsumerGroupMember.Builder(classicMemberId)
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(10)
+                .setPreviousMemberEpoch(10)
+                .setInstanceId(isStatic ? classicInstanceId : null)
+                .setClassicMemberMetadata(
+                    new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSessionTimeoutMs(5000)
+                        .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                            GroupMetadataManagerTestContext.toProtocols("range"))))
+                .build());
+        if (isStatic) {
+            groupBuilder.withMember(new ConsumerGroupMember.Builder(consumerMemberId)
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(10)
+                .setPreviousMemberEpoch(10)
+                .setInstanceId(consumerInstanceId)
+                .build());
+        }
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.toString())
+            .withConsumerGroup(groupBuilder)
+            .build();
+
+        // A new classic member cannot join
+        JoinGroupRequestData newMemberRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withGroupInstanceId(isStatic ? "new-instance-id" : null)
+            .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
+            .build();
+        assertEquals(errorMessage,
+            assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(newMemberRequest, isStatic)).getMessage());
+
+        // The existing classic member cannot rejoin.
+        JoinGroupRequestData rejoinRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(groupId)
+            .withMemberId(isStatic ? UNKNOWN_MEMBER_ID : classicMemberId)
+            .withGroupInstanceId(isStatic ? classicInstanceId : null)
+            .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
+            .build();
+        assertEquals(errorMessage,
+            assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(rejoinRequest, isStatic)).getMessage());
+
+        if (isStatic) {
+            // A classic member cannot replace an existing consumer-protocol static member.
+            JoinGroupRequestData replaceRequest = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withGroupInstanceId(consumerInstanceId)
+                .withProtocols(GroupMetadataManagerTestContext.toProtocols("range"))
+                .build();
+            assertEquals(errorMessage,
+                assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupJoin(replaceRequest, true)).getMessage());
+        }
     }
 
     @Test
@@ -14637,7 +15022,7 @@ public class GroupMetadataManagerTest {
         String memberId = Uuid.randomUuid().toString();
         String instanceId = "instance-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.DISABLED.toString())
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, ConsumerGroupMigrationPolicy.UPGRADE.toString())
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new NoOpPartitionAssignor()))
             .withMetadataImage(metadataImage)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -30,12 +31,14 @@ import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQMetadataCacheHelper.TopicPartitionData;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.util.MockTime;
@@ -43,6 +46,8 @@ import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.storage.internals.log.FetchDataInfo;
+import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -51,8 +56,11 @@ import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -72,6 +80,7 @@ import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.Produc
 import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_OFFSET;
 import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_PARTITION;
 import static org.apache.kafka.server.share.dlq.ShareGroupDLQStateManager.ProduceRequestHandler.HEADER_DLQ_ERRORS_TOPIC;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -82,6 +91,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -100,6 +110,7 @@ class ShareGroupDLQStateManagerTest {
     private static final Uuid DLQ_TOPIC_ID = Uuid.randomUuid();
     private static final Uuid SOURCE_TOPIC_ID = Uuid.randomUuid();
     private static final Node DEFAULT_LEADER = new Node(0, HOST, PORT);
+    private static final LogReader MOCK_LOG_READER = mock(LogReader.class);
 
     private final MockTimer mockTimer = new MockTimer(MOCK_TIME);
     private final ShareGroupMetrics mockMetrics = mock(ShareGroupMetrics.class);
@@ -118,6 +129,7 @@ class ShareGroupDLQStateManagerTest {
         private Timer timer;
         private ShareGroupDLQMetadataCacheHelper cacheHelper;
         private ShareGroupMetrics shareGroupMetrics;
+        private LogReader logReader;
 
         Builder withClient(KafkaClient client) {
             this.client = client;
@@ -144,15 +156,21 @@ class ShareGroupDLQStateManagerTest {
             return this;
         }
 
+        Builder withLogReader(LogReader logReader) {
+            this.logReader = logReader;
+            return this;
+        }
+
         ShareGroupDLQStateManager build() {
             // Default to the test-class mockMetrics field so tests can verify interactions
             // without having to thread a custom metrics mock through the builder.
             return new ShareGroupDLQStateManager(
                 client != null ? client : new MockClient(MOCK_TIME),
-                cacheHelper != null ? cacheHelper : happyCacheHelper(DEFAULT_LEADER),
+                cacheHelper != null ? cacheHelper : cacheHelper(DEFAULT_LEADER),
                 time,
                 timer != null ? timer : mockTimer,
-                shareGroupMetrics != null ? shareGroupMetrics : mockMetrics
+                shareGroupMetrics != null ? shareGroupMetrics : mockMetrics,
+                logReader == null ? MOCK_LOG_READER : logReader
             );
         }
     }
@@ -172,7 +190,13 @@ class ShareGroupDLQStateManagerTest {
         );
     }
 
-    private static ShareGroupDLQMetadataCacheHelper happyCacheHelper(Node leader) {
+    /**
+     * Util method to populate DLQ metadata cache with sensible defaults.
+     *
+     * @param leader Node representing leader node for DLQ partition.
+     * @return Populated DLQ cache helper object.
+     */
+    private static ShareGroupDLQMetadataCacheHelper cacheHelper(Node leader) {
         ShareGroupDLQMetadataCacheHelper helper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(helper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.of(DLQ_TOPIC));
         when(helper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
@@ -187,6 +211,7 @@ class ShareGroupDLQStateManagerTest {
             Optional.of(DLQ_TOPIC_ID),
             List.of(leader)
         ));
+        when(helper.isShareGroupDlqCopyRecordEnabled(GROUP_ID)).thenReturn(false);
         return helper;
     }
 
@@ -208,7 +233,8 @@ class ShareGroupDLQStateManagerTest {
      * request. {@code sharedHeaders} are expected to be identical on every record in that partition;
      * the offset header is built per-record from {@code firstOffset}..{@code lastOffset}.
      */
-    private record ExpectedDlqPartition(long firstOffset, long lastOffset, Map<String, String> sharedHeaders) {
+    private record ExpectedDlqPartition(long firstOffset, long lastOffset, Map<String, String> sharedHeaders,
+                                        List<byte[]> keys, List<byte[]> values) {
     }
 
     /**
@@ -243,11 +269,50 @@ class ShareGroupDLQStateManagerTest {
                 expectedHeaders.put(HEADER_DLQ_ERRORS_OFFSET, Long.toString(expectedOffset));
                 assertEquals(expectedHeaders, actualHeaders,
                     "Partition " + partition.index() + " record at offset " + expectedOffset + " has unexpected headers");
+
+                if (!expected.keys().isEmpty()) {
+                    assertKeyValue(record, expected.keys.get(recordCount), true);
+                } else {
+                    assertFalse(record.hasKey());
+                }
+
+                if (!expected.values().isEmpty()) {
+                    assertKeyValue(record, expected.values.get(recordCount), false);
+                } else {
+                    assertFalse(record.hasValue());
+                }
+
                 expectedOffset++;
                 recordCount++;
             }
             assertEquals((int) (expected.lastOffset() - expected.firstOffset() + 1), recordCount,
                 "Partition " + partition.index() + " has unexpected number of records");
+        }
+    }
+
+    private static void assertKeyValue(Record record, byte[] expectedData, boolean isKey) {
+        if (expectedData == null) {
+            if (isKey) {
+                assertFalse(record.hasKey());
+            } else {
+                assertFalse(record.hasValue());
+            }
+        } else {
+            if (isKey && !record.hasValue()) {
+                fail("record key not found");
+            }
+
+            if (!isKey && !record.hasValue()) {
+                fail("record value not found");
+            }
+
+            byte[] actualChunk = new byte[expectedData.length];
+            if (isKey) {
+                record.key().get(actualChunk);
+            } else {
+                record.value().get(actualChunk);
+            }
+            assertArrayEquals(expectedData, actualChunk);
         }
     }
 
@@ -257,14 +322,14 @@ class ShareGroupDLQStateManagerTest {
     public void testConstructorRejectsNullClient() {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(null, cacheHelper, MOCK_TIME, mockTimer, mockMetrics));
+            () -> new ShareGroupDLQStateManager(null, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER));
     }
 
     @Test
     public void testConstructorRejectsNullCacheHelper() {
         KafkaClient client = mock(KafkaClient.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, null, MOCK_TIME, mockTimer, mockMetrics));
+            () -> new ShareGroupDLQStateManager(client, null, MOCK_TIME, mockTimer, mockMetrics, MOCK_LOG_READER));
     }
 
     @Test
@@ -272,7 +337,7 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, null, mockTimer, mockMetrics));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, null, mockTimer, mockMetrics, MOCK_LOG_READER));
     }
 
     @Test
@@ -280,7 +345,7 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, null, mockMetrics));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, null, mockMetrics, MOCK_LOG_READER));
     }
 
     @Test
@@ -288,7 +353,15 @@ class ShareGroupDLQStateManagerTest {
         KafkaClient client = mock(KafkaClient.class);
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         assertThrows(IllegalArgumentException.class,
-            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, null));
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, null, MOCK_LOG_READER));
+    }
+
+    @Test
+    public void testConstructorRejectsNullLogReader() {
+        KafkaClient client = mock(KafkaClient.class);
+        ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ShareGroupDLQStateManager(client, cacheHelper, MOCK_TIME, mockTimer, mockMetrics, null));
     }
 
     // ---- Lifecycle tests ----
@@ -310,7 +383,33 @@ class ShareGroupDLQStateManagerTest {
         verifyNoInteractions(mockMetrics);
     }
 
-    // ---- DLQ topic validation tests (no thread start required) ----
+    @Test
+    public void testDlqBeforeStartFailsWithIllegalState() {
+        stateManager = builder().build();
+        // dlq() is invoked without a prior start(); the lifecycle guard must reject it with a
+        // failed future rather than enqueueing onto a sender thread that is not running.
+        CompletableFuture<Void> result = stateManager.dlq(param());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertInstanceOf(IllegalStateException.class, getCause(result));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    @Test
+    public void testDlqAfterStopFailsWithIllegalState() throws Exception {
+        stateManager = builder().build();
+        stateManager.start();
+        stateManager.stop();
+        // Once stopped, dlq() must fail fast rather than enqueueing onto a shut-down sender thread
+        // where the future would never complete.
+        CompletableFuture<Void> result = stateManager.dlq(param());
+        assertTrue(result.isDone());
+        assertTrue(result.isCompletedExceptionally());
+        assertInstanceOf(IllegalStateException.class, getCause(result));
+        verifyNoInteractions(mockMetrics);
+    }
+
+    // ---- DLQ topic validation tests ----
 
     @Test
     public void testDlqEmptyTopicNameFailsValidation() throws Exception {
@@ -319,6 +418,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("empty"));
@@ -332,6 +432,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("__"));
@@ -347,6 +448,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(false);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("DLQ is not enabled"));
@@ -362,6 +464,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.isDlqAutoTopicCreateEnabled()).thenReturn(false);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("auto create is disabled"));
@@ -377,6 +480,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.isDlqEnabledOnTopic(DLQ_TOPIC)).thenReturn(true);
 
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         assertTrue(cause.getMessage().contains("does not comply with the DLQ topic prefix"));
@@ -384,17 +488,20 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
-    public void testDlqValidationFailureCompletesFutureBeforeStart() throws Exception {
+    public void testDlqValidationFailureCompletesFutureSynchronously() throws Exception {
         ShareGroupDLQMetadataCacheHelper cacheHelper = mock(ShareGroupDLQMetadataCacheHelper.class);
         when(cacheHelper.shareGroupDlqTopic(GROUP_ID)).thenReturn(Optional.empty());
         when(cacheHelper.shareGroupDlqTopicPrefix()).thenReturn(Optional.empty());
 
-        // validateDlqTopic runs synchronously inside dlq(), so it should fail without the sender thread.
+        // validateDlqTopic runs synchronously inside dlq() on the calling thread, so a validation
+        // failure completes the returned future before dlq() returns - no sender-thread round trip.
         stateManager = builder().withCacheHelper(cacheHelper).build();
+        stateManager.start();
         CompletableFuture<Void> result = stateManager.dlq(param());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
         assertFalse(result.isCancelled());
+        assertInstanceOf(ConfigException.class, getCause(result));
         verifyNoInteractions(mockMetrics);
     }
 
@@ -428,7 +535,7 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                 HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-            ))
+            ), List.of(), List.of())
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
@@ -481,7 +588,7 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                 HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-            ))
+            ), List.of(), List.of())
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
@@ -539,7 +646,7 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                 HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                 HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-            ))
+            ), List.of(), List.of())
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
@@ -694,7 +801,7 @@ class ShareGroupDLQStateManagerTest {
                     HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                     HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                     HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-                ))
+                ), List.of(), List.of())
             ));
             // CreateTopics retried, but produce only ran once (after the eventual create success).
             verify(mockMetrics).recordDLQProduce(GROUP_ID);
@@ -742,7 +849,7 @@ class ShareGroupDLQStateManagerTest {
                     HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
                     HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
                     HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
-                ))
+                ), List.of(), List.of())
             );
             for (ProduceRequest pr : capturedProduces) {
                 assertDlqProduceRecordHeaders(pr, expectedByPartition);
@@ -991,12 +1098,12 @@ class ShareGroupDLQStateManagerTest {
             HEADER_DLQ_ERRORS_TOPIC, "source-topic",
             HEADER_DLQ_ERRORS_PARTITION, "0",
             HEADER_DLQ_ERRORS_GROUP, GROUP_ID
-        ));
+        ), List.of(), List.of());
         ExpectedDlqPartition expectedDlqPartition1 = new ExpectedDlqPartition(0L, 0L, Map.of(
             HEADER_DLQ_ERRORS_TOPIC, "source-topic",
             HEADER_DLQ_ERRORS_PARTITION, "1",
             HEADER_DLQ_ERRORS_GROUP, GROUP_ID
-        ));
+        ), List.of(), List.of());
         if (capturedProduces.size() == 1) {
             assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
                 0, expectedDlqPartition0,
@@ -1054,7 +1161,7 @@ class ShareGroupDLQStateManagerTest {
                 HEADER_DLQ_ERRORS_TOPIC, "source-topic",
                 HEADER_DLQ_ERRORS_PARTITION, "0",
                 HEADER_DLQ_ERRORS_GROUP, GROUP_ID
-            ))
+            ), List.of(), List.of())
         ));
         verify(mockMetrics).recordDLQProduce(GROUP_ID);
         verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 1);
@@ -1182,7 +1289,7 @@ class ShareGroupDLQStateManagerTest {
 
         client.prepareResponseFrom(body -> true, null, DEFAULT_LEADER);
 
-        stateManager = builder().withClient(client).withCacheHelper(happyCacheHelper(DEFAULT_LEADER)).build();
+        stateManager = builder().withClient(client).withCacheHelper(cacheHelper(DEFAULT_LEADER)).build();
 
         Future<Boolean> done = executor.submit(() -> {
             long start = System.currentTimeMillis();
@@ -1296,6 +1403,79 @@ class ShareGroupDLQStateManagerTest {
     }
 
     @Test
+    public void testCoalesceProduceRequestsMergesRecordsForSameDlqPartition() throws Exception {
+        // One share group with two source topics, two partitions each (four source topic-partitions). The DLQ
+        // topic has a single partition (default cache helper), so all four handlers target the same DLQ
+        // (topic, partition). Their records must be merged into a single partition entry / single record batch,
+        // preserving every record - rather than producing duplicate partition entries that the broker would
+        // collapse, dropping records.
+        Uuid sourceTopicAId = Uuid.randomUuid();
+        Uuid sourceTopicBId = Uuid.randomUuid();
+        List<TopicIdPartition> sources = List.of(
+            new TopicIdPartition(sourceTopicAId, 0, "source-topic-a"),
+            new TopicIdPartition(sourceTopicAId, 1, "source-topic-a"),
+            new TopicIdPartition(sourceTopicBId, 0, "source-topic-b"),
+            new TopicIdPartition(sourceTopicBId, 1, "source-topic-b"));
+
+        stateManager = builder().build();
+        List<ShareGroupDLQStateManager.ProduceRequestHandler> handlers = new ArrayList<>();
+        for (TopicIdPartition source : sources) {
+            ShareGroupDLQStateManager.ProduceRequestHandler handler =
+                newHandlerForCoalesceTest(stateManager, GROUP_ID, source);
+            handler.populateDLQTopicData();
+            handlers.add(handler);
+        }
+
+        ShareGroupDLQStateManager.CoalesceResults result =
+            ShareGroupDLQStateManager.coalesceProduceRequests(handlers);
+
+        assertEquals(handlers, result.liveHandlers());
+
+        ProduceRequest request = ((ProduceRequest.Builder) result.request()).build();
+        assertEquals(1, request.data().topicData().size(), "All records target the single DLQ topic");
+        ProduceRequestData.TopicProduceData topic = request.data().topicData().iterator().next();
+        assertEquals(DLQ_TOPIC_ID, topic.topicId());
+        assertEquals(1, topic.partitionData().size(),
+            "All four handlers target the same DLQ partition and must merge into a single partition entry");
+        ProduceRequestData.PartitionProduceData partition = topic.partitionData().get(0);
+        assertEquals(0, partition.index());
+
+        // The single merged batch must contain one record per source topic-partition, with each record's
+        // source topic + partition headers intact.
+        MemoryRecords records = (MemoryRecords) partition.records();
+        assertEquals(sources.size(), recordCount(records));
+        Set<String> headers = new HashSet<>();
+        for (Record record : records.records()) {
+            headers.add(headerValue(record, HEADER_DLQ_ERRORS_TOPIC)
+                + "-" + headerValue(record, HEADER_DLQ_ERRORS_PARTITION));
+        }
+        assertEquals(
+            Set.of("source-topic-a-0", "source-topic-a-1", "source-topic-b-0", "source-topic-b-1"),
+            headers);
+
+        verify(mockMetrics, times(sources.size())).recordDLQProduce(GROUP_ID);
+    }
+
+    private static int recordCount(MemoryRecords records) {
+        int count = 0;
+        Iterator<Record> iterator = records.records().iterator();
+        while (iterator.hasNext()) {
+            count++;
+            iterator.next();
+        }
+        return count;
+    }
+
+    private static String headerValue(Record record, String key) {
+        for (Header header : record.headers()) {
+            if (header.key().equals(key)) {
+                return new String(header.value(), StandardCharsets.UTF_8);
+            }
+        }
+        return null;
+    }
+
+    @Test
     public void testCoalesceProduceRequestsKeepsDifferentDlqTopicsSeparate() throws Exception {
         String groupA = "group-a";
         String groupB = "group-b";
@@ -1389,14 +1569,268 @@ class ShareGroupDLQStateManagerTest {
         assertEquals(DLQ_TOPIC_ID, request.data().topicData().iterator().next().topicId());
     }
 
+    // --- DLQ record with copy record enabled ---
+
+    @Test
+    public void testDLQRecordCopyEnabled() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+        LogReader logReader = mock(LogReader.class);
+        LogReadResult readResult = mock(LogReadResult.class);
+        when(readResult.error()).thenReturn(Errors.NONE);
+        when(readResult.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
+            )
+        ));
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+        readResultMap.put(param.topicIdPartition(), readResult);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(readResultMap);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), List.of(keyData1, keyData2, keyData3), List.of(valueData1, valueData2, valueData3))
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledWithPartialLogReaderRecords() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();   // 3 offset requested
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
+        LogReader logReader = mock(LogReader.class);
+        LogReadResult readResult1 = mock(LogReadResult.class);
+        when(readResult1.error()).thenReturn(Errors.NONE);
+        // Return 2 records only
+        when(readResult1.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)
+            )
+        ));
+        LogReadResult readResult2 = mock(LogReadResult.class);
+        when(readResult2.error()).thenReturn(Errors.NONE);
+        // Next read contains the 3rd offset as well
+        when(readResult2.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)
+            )
+        ));
+
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap1 = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap2 = new LinkedHashMap<>();
+        readResultMap1.put(param.topicIdPartition(), readResult1);
+        readResultMap2.put(param.topicIdPartition(), readResult2);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(readResultMap1)
+            .thenReturn(readResultMap2);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), Arrays.asList(keyData1, keyData2, keyData3), Arrays.asList(valueData1, valueData2, valueData3))
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledWithMultipleLogReaderIterations() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();   // 3 offsets requested
+        byte[] keyData1 = "key1".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData1 = "value1".getBytes(StandardCharsets.UTF_8);
+        byte[] keyData2 = "key2".getBytes(StandardCharsets.UTF_8);
+        byte[] valueData2 = "value2".getBytes(StandardCharsets.UTF_8);
+        LogReader logReader = mock(LogReader.class);
+        LogReadResult readResult = mock(LogReadResult.class);
+        when(readResult.error()).thenReturn(Errors.NONE);
+        // Return 2 records only
+        when(readResult.info()).thenReturn(new FetchDataInfo(
+            null,
+            MemoryRecords.withRecords(
+                Compression.NONE,
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
+                new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)
+            )
+        ));
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+        readResultMap.put(param.topicIdPartition(), readResult);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(readResultMap);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), Arrays.asList(keyData1, keyData2, null), Arrays.asList(valueData1, valueData2, null))
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
+    @Test
+    public void testDLQRecordCopyEnabledWithErrorOnLogRead() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+        List<ProduceRequest> capturedProduces = new ArrayList<>();
+        client.prepareResponseFrom(
+            body -> {
+                if (body instanceof ProduceRequest pr) {
+                    capturedProduces.add(pr);
+                    return true;
+                }
+                return false;
+            },
+            successfulProduceResponse(0),
+            DEFAULT_LEADER
+        );
+
+        ShareGroupDLQRecordParameter param = param();
+        LogReader logReader = mock(LogReader.class);
+        LogReadResult readResult = mock(LogReadResult.class);
+        when(readResult.error()).thenReturn(Errors.UNKNOWN_SERVER_ERROR);
+        LinkedHashMap<TopicIdPartition, LogReadResult> readResultMap = new LinkedHashMap<>();
+        readResultMap.put(param.topicIdPartition(), readResult);
+        when(logReader.read(any(), anySet(), any(), any()))
+            .thenReturn(readResultMap);
+
+        ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
+        when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
+        stateManager = builder().withClient(client).withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
+        assertNull(stateManager.dlq(param).get(10, TimeUnit.SECONDS));
+
+        assertEquals(1, capturedProduces.size());
+        assertDlqProduceRecordHeaders(capturedProduces.get(0), Map.of(
+            0, new ExpectedDlqPartition(0L, 2L, Map.of(
+                HEADER_DLQ_ERRORS_TOPIC, "source-topic",
+                HEADER_DLQ_ERRORS_PARTITION, "0",
+                HEADER_DLQ_ERRORS_GROUP, GROUP_ID,
+                HEADER_DLQ_ERRORS_DELIVERY_COUNT, "1",
+                HEADER_DLQ_ERRORS_MESSAGE, "simulated cause"
+            ), List.of(), List.of())
+        ));
+        verify(mockMetrics).recordDLQProduce(GROUP_ID);
+        verify(mockMetrics).recordDLQRecordWrite(GROUP_ID, 3);
+        verify(mockMetrics, never()).recordDLQProduceFailed(any());
+    }
+
     private static ShareGroupDLQStateManager.ProduceRequestHandler newHandlerForCoalesceTest(
         ShareGroupDLQStateManager manager,
         String groupId,
         int sourcePartition
     ) {
+        return newHandlerForCoalesceTest(manager, groupId,
+            new TopicIdPartition(SOURCE_TOPIC_ID, sourcePartition, "source-topic"));
+    }
+
+    private static ShareGroupDLQStateManager.ProduceRequestHandler newHandlerForCoalesceTest(
+        ShareGroupDLQStateManager manager,
+        String groupId,
+        TopicIdPartition source
+    ) {
         ShareGroupDLQRecordParameter param = new ShareGroupDLQRecordParameter(
             groupId,
-            new TopicIdPartition(SOURCE_TOPIC_ID, sourcePartition, "source-topic"),
+            source,
             0L, 0L,
             Optional.empty(), Optional.empty());
         return manager.new ProduceRequestHandler(
@@ -1406,7 +1840,6 @@ class ShareGroupDLQStateManagerTest {
             ShareGroupDLQStateManager.REQUEST_BACKOFF_MAX_MS,
             3);
     }
-
 
     // ---- Response builder helpers ----
 

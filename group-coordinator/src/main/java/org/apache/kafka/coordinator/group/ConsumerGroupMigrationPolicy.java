@@ -33,7 +33,7 @@ public enum ConsumerGroupMigrationPolicy {
     /** Only downgrade is enabled.*/
     DOWNGRADE("downgrade", false, true),
 
-    /** Neither upgrade nor downgrade is enabled.*/
+    /** Neither upgrade nor downgrade is enabled; a classic member cannot join or rejoin a consumer group.*/
     DISABLED("disabled", false, false);
 
     private final String name;

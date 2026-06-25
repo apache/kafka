@@ -2617,7 +2617,7 @@ public class TransactionManagerTest {
                         .setErrorCode(Errors.NONE.code())))));
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(true), txnRequest.version());
+            assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(), txnRequest.version());
             assertEquals(1, txnRequest.data().topics().size());
             assertEquals(TOPIC_ID, txnRequest.data().topics().get(0).topicId());
             return true;
@@ -2687,7 +2687,7 @@ public class TransactionManagerTest {
                     .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code())))));
         client.prepareResponse(request -> {
             TxnOffsetCommitRequest txnRequest = (TxnOffsetCommitRequest) request;
-            assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(true), txnRequest.version());
+            assertEquals(ApiKeys.TXN_OFFSET_COMMIT.latestVersion(), txnRequest.version());
             return true;
         }, new TxnOffsetCommitResponse(unknownTopicId));
 

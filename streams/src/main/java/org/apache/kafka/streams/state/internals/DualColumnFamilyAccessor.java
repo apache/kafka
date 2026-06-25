@@ -262,6 +262,11 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
         return oldColumnFamily;
     }
 
+    @Override
+    public ColumnFamilyHandle dataColumnFamily() {
+        return newColumnFamily;
+    }
+
     // Visible for testing
     ColumnFamilyHandle newColumnFamily() {
         return newColumnFamily;
