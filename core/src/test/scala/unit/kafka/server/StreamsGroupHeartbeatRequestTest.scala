@@ -42,6 +42,31 @@ object StreamsGroupHeartbeatRequestTest {
   )
   class WithAssignmentBatchingDisabledTest(cluster: ClusterInstance) extends StreamsGroupHeartbeatRequestTest(cluster) {
   }
+
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )
+  )
+  class WithAssignorOffloadDisabledTest(cluster: ClusterInstance) extends StreamsGroupHeartbeatRequestTest(cluster) {
+  }
+
+  @ClusterTestDefaults(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
+      new ClusterConfigProperty(key = GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, value = "false")
+    )
+  )
+  class WithAssignmentBatchingAndAssignorOffloadDisabledTest(cluster: ClusterInstance) extends StreamsGroupHeartbeatRequestTest(cluster) {
+  }
 }
 
 @ClusterTestDefaults(
