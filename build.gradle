@@ -42,6 +42,11 @@ plugins {
   id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '9.4.1' apply false
   id 'com.diffplug.spotless' version "8.4.0"
+
+  // Pre-register the KIP-1265 checker so `apply plugin:` resolves it inside subprojects { }.
+  // The plugin itself ships from the `:api-checker` included build (see settings.gradle's
+  // pluginManagement block).
+  id 'org.apache.kafka.public-api-checker' apply false
 }
 
 ext {

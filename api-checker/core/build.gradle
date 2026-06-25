@@ -1,0 +1,73 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Shared scanner + validator + reporter for the KIP-1265 API checkers. Both the Gradle
+// plugin and the Maven plugin depend on this module — neither carries the bytecode
+// scanner classes themselves any more, so the published Gradle jar no longer drags Maven
+// classes (and vice versa).
+
+apply plugin: 'java-test-fixtures'
+
+dependencies {
+    // ASM is the entire production dependency footprint. No Gradle, no Maven.
+    api 'org.ow2.asm:asm:9.6'
+    api 'org.slf4j:slf4j-api:2.0.16'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+    testImplementation 'org.junit.platform:junit-platform-launcher:1.9.2'
+
+    // ASM-based class-file builders used by every checker test in the included build.
+    // Exposed as test-fixtures so the gradle-plugins module's tests can pull them in via
+    // `testImplementation(testFixtures(project(':core')))` without us re-publishing them
+    // as a separate "tests" classifier artifact.
+    testFixturesImplementation 'org.ow2.asm:asm:9.6'
+}
+
+publishing {
+    publications {
+        coreJar(MavenPublication) {
+            artifactId = 'kafka-api-checker-core'
+            from components.java
+
+            pom {
+                name = 'Apache Kafka API Checker Core'
+                description = 'Bytecode scanner and reporter shared by the KIP-1265 Gradle and Maven plugins'
+                url = 'https://kafka.apache.org'
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'apache-kafka'
+                        name = 'Apache Kafka Team'
+                        email = 'dev@kafka.apache.org'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:https://github.com/apache/kafka.git'
+                    developerConnection = 'scm:git:https://github.com/apache/kafka.git'
+                    url = 'https://github.com/apache/kafka'
+                }
+            }
+        }
+    }
+}
