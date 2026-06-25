@@ -52,6 +52,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.function.Consumer;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 
@@ -75,6 +76,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap = new ConcurrentSkipListMap<>();
     private final Set<InMemorySessionStoreIterator> openIterators  = ConcurrentHashMap.newKeySet();
+    private final Set<TransactionalSessionIterator> openTransactionalIterators = ConcurrentHashMap.newKeySet();
 
     private volatile boolean open = false;
 
@@ -484,15 +486,20 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
             transactionBuffer.rollback();
         }
 
-        if (openIterators.size() != 0) {
-            LOG.warn("Closing {} open iterators for store {}", openIterators.size(), name);
+        final int openCount = openIterators.size() + openTransactionalIterators.size();
+        if (openCount != 0) {
+            LOG.warn("Closing {} open iterators for store {}", openCount, name);
             for (final InMemorySessionStoreIterator it : openIterators) {
+                it.close();
+            }
+            for (final TransactionalSessionIterator it : openTransactionalIterators) {
                 it.close();
             }
         }
 
         endTimeMap.clear();
         openIterators.clear();
+        openTransactionalIterators.clear();
         open = false;
     }
 
@@ -520,10 +527,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
             final long earliestSessionEndTime,
             final long latestSessionEndTime,
             final boolean forward) {
-        return new TransactionalSessionIterator(
+        final TransactionalSessionIterator iterator = new TransactionalSessionIterator(
             transactionBuffer, keyFrom, keyTo, latestSessionStartTime,
-            earliestSessionEndTime, latestSessionEndTime, forward
+            earliestSessionEndTime, latestSessionEndTime,
+            observedStreamTime - retentionPeriod, forward, openTransactionalIterators::remove
         );
+        openTransactionalIterators.add(iterator);
+        return iterator;
     }
 
     private InMemorySessionStoreIterator registerNewIterator(final Bytes keyFrom,
@@ -554,7 +564,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         private final Bytes keyFrom;
         private final Bytes keyTo;
         private final long latestSessionStartTime;
+        private final long oldestRetainedEndTime;
+        private final Consumer<TransactionalSessionIterator> deregister;
         private KeyValue<Windowed<Bytes>, byte[]> prefetched;
+        private boolean closed = false;
 
         TransactionalSessionIterator(
                 final InMemorySessionTransactionBuffer buffer,
@@ -563,10 +576,14 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                 final long latestSessionStartTime,
                 final long earliestSessionEndTime,
                 final long latestSessionEndTime,
-                final boolean forward) {
+                final long oldestRetainedEndTime,
+                final boolean forward,
+                final Consumer<TransactionalSessionIterator> deregister) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.latestSessionStartTime = latestSessionStartTime;
+            this.oldestRetainedEndTime = oldestRetainedEndTime;
+            this.deregister = deregister;
 
             // startTime sorts descending, so the lower bound carries the largest startTime and the
             // upper bound the smallest. A null key leaves the key dimension open (see SessionEntryKey).
@@ -588,6 +605,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
         @Override
         public boolean hasNext() {
+            if (closed) {
+                return false;
+            }
             if (prefetched != null) {
                 return true;
             }
@@ -607,15 +627,24 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
 
         @Override
         public void close() {
-            delegate.close();
+            closed = true;
+            prefetched = null;
+            try {
+                delegate.close();
+            } finally {
+                deregister.accept(this);
+            }
         }
 
         private KeyValue<Windowed<Bytes>, byte[]> computeNext() {
             while (delegate.hasNext()) {
                 final KeyValue<InMemorySessionTransactionBuffer.SessionEntryKey, byte[]> entry = delegate.next();
-                // The staged scan is bounded only by endTime, so filter the key range and
-                // latestSessionStartTime here to drop any staged entries outside the query.
-                if (entry.key.startTime() <= latestSessionStartTime && keyInRange(entry.key.key())) {
+                // The committed side is already pruned by removeExpiredSegments, but the staged side is
+                // not; drop expired entries here. The staged scan is also bounded only by endTime, so
+                // filter the key range and latestSessionStartTime too.
+                if (entry.key.endTime() > oldestRetainedEndTime
+                    && entry.key.startTime() <= latestSessionStartTime
+                    && keyInRange(entry.key.key())) {
                     final SessionWindow sessionWindow = new SessionWindow(entry.key.startTime(), entry.key.endTime());
                     final Windowed<Bytes> windowedKey = new Windowed<>(entry.key.key(), sessionWindow);
                     return new KeyValue<>(windowedKey, entry.value);
