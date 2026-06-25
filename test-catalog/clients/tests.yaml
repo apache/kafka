@@ -2529,6 +2529,12 @@ org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerT
 - testFencedInstanceIdErrorResponse
 - testFencedMemberOrUnknownMemberIdErrorResponse
 - testGroupAuthorizationFailedErrorResponse
+- testHotWarmupTaskDisabledWhenAcceptableRecoveryLagIsNegative
+- testHotWarmupTaskDisabledWhenEndOffsetMissing
+- testHotWarmupTaskDisabledWhenLagAboveThreshold
+- testHotWarmupTaskDisabledWhenOffsetMissing
+- testHotWarmupTaskDisabledWhenOffsetOrEndOffsetOverflowed
+- testHotWarmupTaskTriggersSendWhenLagAtOrBelowThreshold
 - testKnownFatalErrorResponse
 - testMaximumTimeToWaitPollTimerExpired
 - testMaximumTimeToWaitSelectingMinimumWaitTime
@@ -2559,6 +2565,7 @@ org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManagerT
 - testStreamsRebalanceDataHeartbeatIntervalMsUpdatedOnSuccess
 - testStreamsRebalanceDataTopologyPushRequiredNotClearedOnRequiredFalse
 - testStreamsRebalanceDataTopologyPushRequiredSetOnRequiredTrue
+- testTaskOffsetsForAllWarmupsAreReportedWhenAtLeastOneIsHot
 - testTopicAuthorizationFailedErrorResponse
 - testUnsupportedVersionFailureWhileSending
 org.apache.kafka.clients.consumer.internals.StreamsGroupTopologyDescriptionRequestManagerTest:
@@ -4694,6 +4701,9 @@ org.apache.kafka.common.requests.RequestResponseTest:
 - verifyFetchResponseFullWrites
 org.apache.kafka.common.requests.RequestUtilsTest:
 - testIsFatalException
+org.apache.kafka.common.requests.StreamsGroupHeartbeatRequestTest:
+- testBuildClearsTaskOffsetsForVersion0
+- testBuildKeepsTaskOffsetsForVersion1
 org.apache.kafka.common.requests.StreamsGroupHeartbeatResponseTest:
 - testAcceptableRecoveryLagFieldVersionCompatibility
 - testAcceptableRecoveryLagWithMaxValue

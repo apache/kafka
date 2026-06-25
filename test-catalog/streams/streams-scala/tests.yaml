@@ -1,3 +1,5 @@
+org.apache.kafka.streams.scala.StreamToTableJoinTest:
+- testShouldCountClicksPerRegionWithImplicitSerdes
 org.apache.kafka.streams.scala.TopologyTest:
 - shouldBuildIdenticalTopologyInJavaNScalaAggregate
 - shouldBuildIdenticalTopologyInJavaNScalaCogroup
