@@ -985,26 +985,27 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     /**
      * Return the streams groups on this shard eligible for plugin-side topology cleanup: empty
-     * (no live members), every committed offset already past {@code offsets.retention.ms}, and a
+     * (no live members), no committed offsets and no pending transactional offsets, and a
      * {@code StoredDescriptionTopologyEpoch != -1}. Keyed by group id, valued by the
      * {@code StoredDescriptionTopologyEpoch} observed at {@code committedOffset} — the cleanup
      * cycle echoes that epoch back to {@link #clearStoredDescriptionTopologyEpoch} so a
      * concurrent {@code setTopology} that has since advanced the field cannot be silently undone
      * by a stale plugin delete.
      *
+     * <p>This sweep relies on the regular offset-expiration cycle to have already tombstoned
+     * expired offsets, so the eligibility check itself only asks "does this group still have any
+     * offsets at all?" — see {@link OffsetMetadataManager#groupHasNoOffsets}. Three independent
+     * cycles thus compose cleanly: offset expiration, topology cleanup (here), and group
+     * tombstoning on the next sweep once the stored epoch is cleared.
+     *
      * <p>Every state lookup goes through the snapshot at {@code committedOffset}: the iterated
      * group-id set, the per-group resolution, the {@code EMPTY}-state check, the stored
-     * topology epoch, and the per-offset retention check inside
-     * {@link OffsetMetadataManager#allOffsetsExpired}. The only non-snapshot input is
-     * {@code now} from the wall clock, which is unavoidable for "offset has aged past
-     * retention" and is captured once at the top of the scan so every group is compared
-     * against the same instant.
+     * topology epoch, and the no-offsets check.
      *
      * <p>Non-streams and missing groups are silently skipped. Per-group errors are logged and
      * the scan continues so one bad group cannot stall the cycle.
      */
     public Map<String, Integer> listStreamsGroupsNeedingTopologyCleanup(long committedOffset) {
-        long now = time.milliseconds();
         Map<String, Integer> eligible = new HashMap<>();
         for (String groupId : groupMetadataManager.groupIds(committedOffset)) {
             try {
@@ -1014,7 +1015,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 if (!streamsGroup.isEmpty(committedOffset)) continue;
                 int storedEpoch = streamsGroup.storedDescriptionTopologyEpoch(committedOffset);
                 if (storedEpoch == -1) continue;
-                if (!offsetMetadataManager.allOffsetsExpired(groupId, now, committedOffset)) continue;
+                if (!offsetMetadataManager.groupHasNoOffsets(groupId, committedOffset)) continue;
                 eligible.put(groupId, storedEpoch);
             } catch (Throwable t) {
                 // One bad group must not abort the whole scan; the next cycle retries.

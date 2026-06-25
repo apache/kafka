@@ -1525,8 +1525,9 @@ public class GroupCoordinatorShardTest {
         //   - type() != STREAMS   -> skip
         //   - !isEmpty()          -> skip (live members still on the group)
         //   - storedEpoch == -1   -> skip (no plugin state to clean)
-        //   - !allOffsetsExpired  -> skip (offsets still in retention)
-        //   - empty + stored != -1 + all expired -> include, value = observed storedEpoch
+        //   - !groupHasNoOffsets  -> skip (offsets still present; the regular expiration
+        //     cycle will tombstone them and the next sweep here will pick the group up)
+        //   - empty + stored != -1 + no offsets -> include, value = observed storedEpoch
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         GroupCoordinatorConfig config = mock(GroupCoordinatorConfig.class);
@@ -1576,7 +1577,7 @@ public class GroupCoordinatorShardTest {
         when(unexpired.isEmpty(committedOffset)).thenReturn(true);
         when(unexpired.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(5);
         when(groupMetadataManager.maybeGroup("unexpired-offsets", committedOffset)).thenReturn(unexpired);
-        when(offsetMetadataManager.allOffsetsExpired(eq("unexpired-offsets"), anyLong(), anyLong())).thenReturn(false);
+        when(offsetMetadataManager.groupHasNoOffsets(eq("unexpired-offsets"), anyLong())).thenReturn(false);
 
         // eligible: passes every predicate; storedEpoch=7 must appear in the result map.
         StreamsGroup eligible = mock(StreamsGroup.class);
@@ -1584,7 +1585,7 @@ public class GroupCoordinatorShardTest {
         when(eligible.isEmpty(committedOffset)).thenReturn(true);
         when(eligible.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(7);
         when(groupMetadataManager.maybeGroup("eligible", committedOffset)).thenReturn(eligible);
-        when(offsetMetadataManager.allOffsetsExpired(eq("eligible"), anyLong(), anyLong())).thenReturn(true);
+        when(offsetMetadataManager.groupHasNoOffsets(eq("eligible"), anyLong())).thenReturn(true);
 
         Map<String, Integer> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
 
@@ -1626,7 +1627,7 @@ public class GroupCoordinatorShardTest {
         when(good.isEmpty(committedOffset)).thenReturn(true);
         when(good.storedDescriptionTopologyEpoch(committedOffset)).thenReturn(3);
         when(groupMetadataManager.maybeGroup("good", committedOffset)).thenReturn(good);
-        when(offsetMetadataManager.allOffsetsExpired(eq("good"), anyLong(), anyLong())).thenReturn(true);
+        when(offsetMetadataManager.groupHasNoOffsets(eq("good"), anyLong())).thenReturn(true);
 
         Map<String, Integer> result = coordinator.listStreamsGroupsNeedingTopologyCleanup(committedOffset);
 
