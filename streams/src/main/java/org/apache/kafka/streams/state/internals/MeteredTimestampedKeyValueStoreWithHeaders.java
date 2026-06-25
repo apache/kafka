@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -404,18 +405,32 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         if (rawResult.isSuccess()) {
             final Function<byte[], ValueTimestampHeaders<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final ValueTimestampHeaders<V> valueTimestampHeaders = deserializer.apply(rawResult.getResult());
-            // Surface the result as a ReadOnlyRecord (implemented by Record), keeping the headers.
-            // A null wrapper means the key is absent or tombstoned, which we surface as a null result.
-            final ReadOnlyRecord<K, V> record = valueTimestampHeaders == null
-                ? null
-                : new Record<>(
-                    typedKeyQuery.key(),
-                    valueTimestampHeaders.value(),
-                    valueTimestampHeaders.timestamp(),
-                    valueTimestampHeaders.headers());
-            final QueryResult<ReadOnlyRecord<K, V>> typedQueryResult =
-                InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, record);
-            result = (QueryResult<R>) typedQueryResult;
+            if (valueTimestampHeaders != null && valueTimestampHeaders.timestamp() < 0) {
+                // The result is modeled as a Record, whose constructor rejects negative timestamps. A
+                // negative stored timestamp cannot arise from the normal record-driven flow (the PAPI
+                // Record a processor stores already forbids it), so it indicates corrupted/unexpected
+                // store state; surface it as a failed result rather than letting `new Record<>` throw
+                // out of query().
+                final QueryResult<ReadOnlyRecord<K, V>> failure = QueryResult.forFailure(
+                    FailureReason.STORE_EXCEPTION,
+                    "Stored record for the queried key has a negative timestamp ("
+                        + valueTimestampHeaders.timestamp() + "); cannot construct a ReadOnlyRecord.");
+                failure.setPosition(rawResult.getPosition());
+                result = (QueryResult<R>) failure;
+            } else {
+                // Surface the result as a ReadOnlyRecord (implemented by Record), keeping the headers.
+                // A null wrapper means the key is absent or tombstoned, which we surface as a null result.
+                final ReadOnlyRecord<K, V> record = valueTimestampHeaders == null
+                    ? null
+                    : new Record<>(
+                        typedKeyQuery.key(),
+                        valueTimestampHeaders.value(),
+                        valueTimestampHeaders.timestamp(),
+                        valueTimestampHeaders.headers());
+                final QueryResult<ReadOnlyRecord<K, V>> typedQueryResult =
+                    InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, record);
+                result = (QueryResult<R>) typedQueryResult;
+            }
         } else {
             // the generic type doesn't matter, since failed queries have no result set.
             result = (QueryResult<R>) rawResult;

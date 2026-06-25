@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ReadOnlyRecord;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -338,6 +339,27 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // Headers must round-trip on both the persistent path and the cache path.
             assertEquals(headers, record.headers());
             assertNotNull(result.getPosition(), "Expected position to be set");
+        } finally {
+            store.close();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldFailTimestampedKeyWithHeadersQueryForNegativeStoredTimestamp(final boolean cachingEnabled) {
+        // A negative stored timestamp can't arise from the normal record-driven flow, but a caller can
+        // store one directly. Because the result is modeled as a Record (whose constructor rejects
+        // negative timestamps), the query must surface a failed result rather than throw out of query().
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, cachingEnabled);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", -1L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecord<String, String>> result =
+                store.query(TimestampedKeyWithHeadersQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertFalse(result.isSuccess(), "A negative stored timestamp should yield a failed result, not throw");
+            assertEquals(FailureReason.STORE_EXCEPTION, result.getFailureReason());
+            assertNotNull(result.getPosition(), "Expected the failure to preserve the queried partition's position");
         } finally {
             store.close();
         }
