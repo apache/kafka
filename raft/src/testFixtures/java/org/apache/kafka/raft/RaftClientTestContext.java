@@ -126,6 +126,7 @@ public final class RaftClientTestContext {
     private int electionTimeoutMs;
     private int requestTimeoutMs;
     private int appendLingerMs;
+    private long pollIntervalMs;
 
     private final MockQuorumStateStore quorumStateStore;
     final String clusterId;
@@ -179,6 +180,7 @@ public final class RaftClientTestContext {
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
+        private long pollIntervalMs = TestUtils.DEFAULT_POLL_INTERVAL_MS;
         private MemoryPool memoryPool = MemoryPool.NONE;
         private Optional<List<InetSocketAddress>> bootstrapServers = Optional.empty();
         private RaftProtocol raftProtocol = RaftProtocol.KIP_595_PROTOCOL;
@@ -291,6 +293,11 @@ public final class RaftClientTestContext {
 
         Builder withElectionTimeoutMs(int electionTimeoutMs) {
             this.electionTimeoutMs = electionTimeoutMs;
+            return this;
+        }
+
+        Builder withPollIntervalMs(long pollIntervalMs) {
+            this.pollIntervalMs = pollIntervalMs;
             return this;
         }
 
@@ -517,6 +524,7 @@ public final class RaftClientTestContext {
             context.electionTimeoutMs = electionTimeoutMs;
             context.requestTimeoutMs = requestTimeoutMs;
             context.appendLingerMs = appendLingerMs;
+            context.pollIntervalMs = pollIntervalMs;
 
             return context;
         }
@@ -727,7 +735,7 @@ public final class RaftClientTestContext {
         TestUtils.waitForCondition(() -> {
             poll();
             return condition.conditionMet();
-        }, 5000, "Condition failed to be satisfied before timeout");
+        }, 5000, pollIntervalMs, () -> "Condition failed to be satisfied before timeout");
     }
 
     void pollUntilResponse() throws InterruptedException {

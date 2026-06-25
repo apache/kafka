@@ -19,7 +19,9 @@ package org.apache.kafka.jmh.raft;
 import org.apache.kafka.raft.RaftClientBenchmarkContext;
 
 import org.openjdk.jmh.annotations.AuxCounters;
+import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 
 /**
@@ -27,12 +29,13 @@ import org.openjdk.jmh.annotations.State;
  * score, as {@code benchmark:counter} rows.
  *
  * <p>Each benchmark calls {@link #drainFrom} every invocation to accumulate the work deltas drained
- * from {@link RaftClientBenchmarkContext}. {@code Type.EVENTS} reports the total accumulated over the
- * iteration (not normalized to time), which scales with throughput and so isn't directly comparable
- * across runs. To get the stable per-operation value, divide any counter by {@link #operations} (the
- * count of benchmark invocations in the same iteration): e.g. {@code logReads / operations}. This
- * works uniformly for every benchmark, including the single-shot election where no work counter
- * equals the operation count.
+ * from {@link RaftClientBenchmarkContext}. JMH reads the public numeric methods at the end of each
+ * measurement iteration. The public fields are raw totals intended for JSON post-processing; divide
+ * them by {@link #operations} to get the exact per-operation value. The public methods return
+ * per-operation values for each iteration, so the per-iteration console output shows stable values
+ * such as {@code logReadsPerOp = 1.0}. JMH aggregates {@code Type.EVENTS} secondary results with
+ * {@code SUM}, so the final summary row will add per-iteration method values together when more
+ * than one measurement iteration is used.
  *
  * <p>The per-operation values are integer-exact and should be stable across a correct refactor of
  * {@code KafkaRaftClient}: a flush count moving from 1 to 2 per operation is a behavioral diff, not
@@ -42,33 +45,64 @@ import org.openjdk.jmh.annotations.State;
 @State(Scope.Thread)
 @AuxCounters(AuxCounters.Type.EVENTS)
 public class ProtocolCounters {
-    public long logFlushes;
-    public long logReads;
-    public long rpcRequestsSent;
-    public long rpcResponsesSent;
-    public long quorumStateWrites;
-
-    /** Number of benchmark invocations in the iteration; the divisor for the per-operation values. */
+    public long logFlushesTotal;
+    public long logReadsTotal;
+    public long logTruncationsTotal;
+    public long rpcRequestsSentTotal;
+    public long rpcResponsesSentTotal;
+    public long quorumStateWritesTotal;
     public long operations;
 
-    public long totalLogFlushes;
-    public long totalLogReads;
+    @Setup(Level.Iteration)
+    public void reset() {
+        logFlushesTotal = 0;
+        logReadsTotal = 0;
+        logTruncationsTotal = 0;
+        rpcRequestsSentTotal = 0;
+        rpcResponsesSentTotal = 0;
+        quorumStateWritesTotal = 0;
+        operations = 0;
+    }
 
     /** Accumulates this invocation's work deltas drained from {@code context} into these counters. */
     public void drainFrom(RaftClientBenchmarkContext context) {
-        logFlushes += context.drainLogFlushes();
-        logReads += context.drainLogReads();
-        rpcRequestsSent += context.drainRpcRequestsSent();
-        rpcResponsesSent += context.drainRpcResponsesSent();
-        quorumStateWrites += context.drainQuorumStateWrites();
+        logFlushesTotal += context.drainLogFlushes();
+        logReadsTotal += context.drainLogReads();
+        logTruncationsTotal += context.drainLogTruncations();
+        rpcRequestsSentTotal += context.drainRpcRequestsSent();
+        rpcResponsesSentTotal += context.drainRpcResponsesSent();
+        quorumStateWritesTotal += context.drainQuorumStateWrites();
         operations += 1;
     }
 
-    public void logFlushesPerOp() {
-        totalLogFlushes += (long) logFlushes / operations;
+    public double logFlushesPerOp() {
+        return perOperation(logFlushesTotal);
     }
 
-    public void logReadsPerOp() {
-         totalLogReads += (long) logReads / operations;
+    public double logReadsPerOp() {
+        return perOperation(logReadsTotal);
+    }
+
+    public double logTruncationsPerOp() {
+        return perOperation(logTruncationsTotal);
+    }
+
+    public double rpcRequestsSentPerOp() {
+        return perOperation(rpcRequestsSentTotal);
+    }
+
+    public double rpcResponsesSentPerOp() {
+        return perOperation(rpcResponsesSentTotal);
+    }
+
+    public double quorumStateWritesPerOp() {
+        return perOperation(quorumStateWritesTotal);
+    }
+
+    private double perOperation(long counter) {
+        if (operations == 0) {
+            return 0.0;
+        }
+        return (double) counter / operations;
     }
 }

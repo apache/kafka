@@ -73,6 +73,7 @@ public class MockLog implements RaftLog {
     // log; benchmarks read them as drainable deltas (see RaftClientBenchmarkContext).
     private int flushCount = 0;
     private int readCount = 0;
+    private int truncationCount = 0;
 
     public MockLog(
         TopicPartition topicPartition,
@@ -86,6 +87,7 @@ public class MockLog implements RaftLog {
 
     @Override
     public void truncateTo(long offset) {
+        truncationCount++;
         if (offset < highWatermark.offset()) {
             throw new IllegalArgumentException("Illegal attempt to truncate to offset " + offset +
                 " which is below the current high watermark " + highWatermark);
@@ -114,6 +116,7 @@ public class MockLog implements RaftLog {
                 flush(false);
 
                 truncated.set(true);
+                truncationCount++;
             }
         });
 
@@ -398,11 +401,12 @@ public class MockLog implements RaftLog {
         return flushCount;
     }
 
-    /**
-     * Cumulative number of {@link #read(long, Isolation, int)} calls since this log was created.
-     */
     public int readCount() {
         return readCount;
+    }
+
+    public int truncationCount() {
+        return truncationCount;
     }
 
     /**

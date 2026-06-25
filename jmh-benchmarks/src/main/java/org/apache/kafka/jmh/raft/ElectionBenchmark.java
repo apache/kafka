@@ -33,34 +33,26 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Thread)
-@BenchmarkMode(Mode.AverageTime)
+@BenchmarkMode(Mode.SingleShotTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Warmup(iterations = 5)
 @Measurement(iterations = 10)
 @Fork(3)
-public class LeaderBenchmark {
+public class ElectionBenchmark {
     private static final int LOCAL_ID = 0;
     private static final int VOTER_COUNT = 3;
 
     private RaftClientBenchmarkContext context;
 
-    @Setup(Level.Trial)
+    @Setup(Level.Invocation)
     public void setup() throws Exception {
-        context = RaftClientBenchmarkContext.leader(LOCAL_ID, VOTER_COUNT);
-        context.advanceLeaderHwmToLogEnd();
-        context.resetCounters();
+        context = RaftClientBenchmarkContext.unattached(LOCAL_ID, VOTER_COUNT);
     }
 
-    /**
-     * Leader handles a valid FETCH from a fully caught-up follower (fetch offset == log end offset),
-     * which does not advance the high watermark — the steady-state heartbeat-style fetch.
-     */
+    /** A multi-voter quorum elects the local node as leader. */
     @Benchmark
-    public void leaderHandleFetch(ProtocolCounters counters) throws Exception {
-        int epoch = context.currentEpoch();
-        long endOffset = context.logEndOffset();
-        context.deliverRequest(context.fetchRequest(epoch, context.otherVoter(), endOffset, epoch, 0));
-        context.pollUntilResponse();
+    public void electLeader(ProtocolCounters counters) throws Exception {
+        context.unattachedToLeader();
 
         counters.drainFrom(context);
     }
