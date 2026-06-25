@@ -622,6 +622,12 @@ public class GroupCoordinatorConfigTest {
         configs.clear();
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone, ");
         assertThrows(ConfigException.class, () -> createConfig(configs));
+
+        // duplicate tag keys make the broker refuse to start
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
+        assertEquals("group.streams.rack.aware.assignment.tags must not contain duplicate tag keys.",
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
     }
 
     @Test

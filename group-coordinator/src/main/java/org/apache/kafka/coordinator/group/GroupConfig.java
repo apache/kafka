@@ -476,6 +476,9 @@ public final class GroupConfig extends AbstractConfig {
         ShareGroupConfig shareGroupConfig
     ) {
         validateNames(newGroupConfig);
+        // ConfigDef silently de-duplicates LIST values during parsing, so inspect the raw value to make
+        // sure an alterConfigs request with duplicate rack-aware assignment tags is rejected.
+        validateNoDuplicateRackAwareAssignmentTags(newGroupConfig);
         var parsed = CONFIG_DEF.parse(newGroupConfig);
         parsed.keySet().retainAll(newGroupConfig.keySet());
         validateValues(
@@ -483,6 +486,30 @@ public final class GroupConfig extends AbstractConfig {
             groupCoordinatorConfig,
             shareGroupConfig
         );
+    }
+
+    /**
+     * Rejects an alterConfigs request whose rack-aware assignment tags contain duplicate keys, inspecting the
+     * raw value because {@link ConfigDef} removes duplicates from LIST values before they can be validated.
+     *
+     * @param newGroupConfig The new unparsed group config overrides.
+     */
+    private static void validateNoDuplicateRackAwareAssignmentTags(Map<String, ?> newGroupConfig) {
+        Object rawValue = newGroupConfig.get(STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        if (rawValue == null) {
+            return;
+        }
+        List<String> rawTags;
+        if (rawValue instanceof List) {
+            rawTags = ((List<?>) rawValue).stream().map(Object::toString).toList();
+        } else {
+            String trimmed = rawValue.toString().trim();
+            rawTags = trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
+        }
+        if (Set.copyOf(rawTags).size() != rawTags.size()) {
+            throw new InvalidConfigurationException(
+                STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG + " must not contain duplicate tag keys.");
+        }
     }
 
     /**

@@ -766,6 +766,27 @@ public class GroupCoordinatorConfig {
             String.format("%s must be greater than or equal to %s", STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG));
         require(streamsGroupNumWarmupReplicas <= streamsGroupMaxWarmupReplicas,
             String.format("%s must be less than or equal to %s", STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG));
+
+        // ConfigDef silently de-duplicates LIST values during parsing, so inspect the raw value to make
+        // sure a broker configured with duplicate rack-aware assignment tags refuses to start.
+        List<String> rawRackAwareAssignmentTags = rawRackAwareAssignmentTags();
+        require(Set.copyOf(rawRackAwareAssignmentTags).size() == rawRackAwareAssignmentTags.size(),
+            String.format("%s must not contain duplicate tag keys.", STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
+    }
+
+    /**
+     * Returns the rack-aware assignment tags exactly as configured, before {@link ConfigDef} removes duplicates.
+     */
+    private List<String> rawRackAwareAssignmentTags() {
+        Object rawValue = config.originals().get(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        if (rawValue == null) {
+            return List.of();
+        }
+        if (rawValue instanceof List) {
+            return ((List<?>) rawValue).stream().map(Object::toString).collect(Collectors.toList());
+        }
+        String trimmed = rawValue.toString().trim();
+        return trimmed.isEmpty() ? List.of() : List.of(trimmed.split("\\s*,\\s*", -1));
     }
 
     /**

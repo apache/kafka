@@ -350,6 +350,19 @@ public class GroupConfigTest {
         doTestInvalidProps(props, ConfigException.class);
     }
 
+    @Test
+    public void testStreamsRackAwareAssignmentTagsValidation() {
+        // Duplicate rack-aware assignment tags are rejected rather than silently de-duplicated.
+        Map<String, String> props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,zone");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+
+        // Distinct rack-aware assignment tags are accepted.
+        props = createValidGroupConfig();
+        props.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
+        doTestValidProps(props);
+    }
+
     private void doTestInvalidProps(Map<String, String> props, Class<? extends Exception> exceptionClassName) {
         assertThrows(exceptionClassName, () -> GroupConfig.validate(props, createGroupCoordinatorConfig(), createShareGroupConfig()));
     }
