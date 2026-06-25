@@ -62,11 +62,18 @@ class StreamsStaticMembershipTest(Test):
                                            acks=1)
 
     @cluster(num_nodes=8)
-    @matrix(metadata_quorum=[quorum.isolated_kraft])
-    def test_rolling_bounces_will_not_trigger_rebalance_under_static_membership(self, metadata_quorum):
+    @matrix(
+        group_protocol=["classic", "streams"],
+        metadata_quorum=[quorum.isolated_kraft]
+    )
+    def test_rolling_bounces_will_not_trigger_rebalance_under_static_membership(self, group_protocol, metadata_quorum):
         self.kafka.start()
 
-        processors = self.create_processors(self.num_threads)
+        processors = self.create_processors(
+            self.num_threads,
+            group_protocol=group_protocol,
+            persistent_process_id_store_enabled=group_protocol == self.streams_group_protocol
+        )
 
         self.producer.start()
 
@@ -77,25 +84,42 @@ class StreamsStaticMembershipTest(Test):
 
         self.verify_processing(processors)
 
-        # do several rolling bounces
-        for i in range(0, self.num_bounces):
+        if group_protocol == self.streams_group_protocol:
+            for _ in range(0, self.num_bounces):
+                for bounced in processors:
+                    survivors = [processor for processor in processors if processor is not bounced]
+
+                    with ExitStack() as stack:
+                        survivor_monitors = {
+                            survivor: stack.enter_context(survivor.node.account.monitor_log(survivor.LOG_FILE))
+                            for survivor in survivors
+                        }
+
+                        verify_stopped(bounced, self.stopped_message)
+                        verify_running(bounced, self.running_message)
+
+                        for survivor in survivors:
+                            self.assert_survivor_was_unaffected(survivor, survivor_monitors[survivor])
+        else:
+            # do several rolling bounces
+            for _ in range(0, self.num_bounces):
+                for processor in processors:
+                    verify_stopped(processor, self.stopped_message)
+                    verify_running(processor, self.running_message)
+
+            stable_generation = -1
             for processor in processors:
-                verify_stopped(processor, self.stopped_message)
-                verify_running(processor, self.running_message)
+                generations = extract_generation_from_logs(processor)
+                num_bounce_generations = self.num_bounces * self.num_threads
+                assert num_bounce_generations <= len(generations), \
+                    "Smaller than minimum expected %d generation messages, actual %d" % (num_bounce_generations, len(generations))
 
-        stable_generation = -1
-        for processor in processors:
-            generations = extract_generation_from_logs(processor)
-            num_bounce_generations = self.num_bounces * self.num_threads
-            assert num_bounce_generations <= len(generations), \
-                "Smaller than minimum expected %d generation messages, actual %d" % (num_bounce_generations, len(generations))
-
-            for generation in generations[-num_bounce_generations:]:
-                generation = extract_generation_id(generation)
-                if stable_generation == -1:
-                    stable_generation = generation
-                assert stable_generation == generation, \
-                    "Stream rolling bounce have caused unexpected generation bump %d" % generation
+                for generation in generations[-num_bounce_generations:]:
+                    generation = extract_generation_id(generation)
+                    if stable_generation == -1:
+                        stable_generation = generation
+                    assert stable_generation == generation, \
+                        "Stream rolling bounce have caused unexpected generation bump %d" % generation
 
         self.verify_processing(processors)
 
