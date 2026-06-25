@@ -164,7 +164,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG,
             false);
         if (transactional) {
-            this.transactionBuffer = new InMemoryWindowTransactionBuffer(segmentMap);
+            this.transactionBuffer = new InMemoryWindowTransactionBuffer(segmentMap, retainDuplicates);
         }
     }
 
@@ -563,13 +563,43 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
         return iterator;
     }
 
+    private static Bytes lowerBoundKey(final Bytes keyFrom) {
+        // The staged composite scan needs a non-null lower bound; empty bytes is the natural minimum.
+        return keyFrom != null ? keyFrom : Bytes.wrap(new byte[0]);
+    }
+
+    private static Bytes unwrapBound(final Bytes wrappedBound, final boolean retainDuplicates) {
+        if (wrappedBound == null) {
+            return null;
+        }
+        return retainDuplicates ? getKey(wrappedBound) : wrappedBound;
+    }
+
     /**
-     * A WindowStoreIterator backed by a transactional buffer's merge scan.
-     * Converts WindowEntryKey/byte[] pairs into Long/byte[] pairs (timestamp/value).
+     * Whether a stored (possibly seqnum-wrapped) key falls within the original key range. Needed
+     * because the staged composite scan is bounded only by timestamp (and, at the boundary
+     * timestamps, by wrapped-key order, which can admit out-of-range keys); the committed base
+     * iterator is already correctly bounded.
+     */
+    private static boolean keyInRange(final Bytes storedKey,
+                                      final Bytes unwrappedFrom,
+                                      final Bytes unwrappedTo,
+                                      final boolean retainDuplicates) {
+        final Bytes key = retainDuplicates ? getKey(storedKey) : storedKey;
+        return (unwrappedFrom == null || key.compareTo(unwrappedFrom) >= 0)
+            && (unwrappedTo == null || key.compareTo(unwrappedTo) <= 0);
+    }
+
+    /**
+     * A WindowStoreIterator over the transaction buffer's merge scan, exposing each entry's
+     * timestamp/value, filtered to the requested key.
      */
     private static class TransactionalWindowStoreIterator implements WindowStoreIterator<byte[]> {
         private final KeyValueIterator<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> delegate;
+        private final Bytes unwrappedFrom;
+        private final Bytes unwrappedTo;
         private final boolean retainDuplicates;
+        private KeyValue<Long, byte[]> prefetched;
 
         TransactionalWindowStoreIterator(
                 final InMemoryWindowTransactionBuffer buffer,
@@ -580,10 +610,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                 final boolean forward,
                 final boolean retainDuplicates) {
             this.retainDuplicates = retainDuplicates;
+            this.unwrappedFrom = unwrapBound(keyFrom, retainDuplicates);
+            this.unwrappedTo = unwrapBound(keyTo, retainDuplicates);
             final InMemoryWindowTransactionBuffer.WindowEntryKey from =
-                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeFrom, keyFrom != null ? keyFrom : Bytes.wrap(new byte[0]));
+                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeFrom, lowerBoundKey(keyFrom));
             final InMemoryWindowTransactionBuffer.WindowEntryKey to =
-                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeTo, keyTo != null ? keyTo : Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF}));
+                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeTo, keyTo);
 
             this.delegate = buffer.range(from, to, forward, true);
         }
@@ -593,34 +625,55 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            return delegate.peekNextKey().timestamp();
+            return prefetched.key;
         }
 
         @Override
         public boolean hasNext() {
-            return delegate.hasNext();
+            if (prefetched != null) {
+                return true;
+            }
+            prefetched = computeNext();
+            return prefetched != null;
         }
 
         @Override
         public KeyValue<Long, byte[]> next() {
-            final KeyValue<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> entry = delegate.next();
-            return new KeyValue<>(entry.key.timestamp(), entry.value);
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            final KeyValue<Long, byte[]> result = prefetched;
+            prefetched = null;
+            return result;
         }
 
         @Override
         public void close() {
             delegate.close();
         }
+
+        private KeyValue<Long, byte[]> computeNext() {
+            while (delegate.hasNext()) {
+                final KeyValue<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> entry = delegate.next();
+                if (keyInRange(entry.key.key(), unwrappedFrom, unwrappedTo, retainDuplicates)) {
+                    return new KeyValue<>(entry.key.timestamp(), entry.value);
+                }
+            }
+            return null;
+        }
     }
 
     /**
-     * A Windowed KeyValueIterator backed by a transactional buffer's merge scan.
-     * Converts WindowEntryKey/byte[] pairs into Windowed<Bytes>/byte[] pairs.
+     * A Windowed KeyValueIterator over the transaction buffer's merge scan, filtered to the key
+     * range and with the stored (possibly seqnum-wrapped) key unwrapped.
      */
     private static class TransactionalWindowedKeyValueIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
         private final KeyValueIterator<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> delegate;
+        private final Bytes unwrappedFrom;
+        private final Bytes unwrappedTo;
         private final boolean retainDuplicates;
         private final long windowSize;
+        private KeyValue<Windowed<Bytes>, byte[]> prefetched;
 
         TransactionalWindowedKeyValueIterator(
                 final InMemoryWindowTransactionBuffer buffer,
@@ -633,10 +686,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                 final long windowSize) {
             this.retainDuplicates = retainDuplicates;
             this.windowSize = windowSize;
+            this.unwrappedFrom = unwrapBound(keyFrom, retainDuplicates);
+            this.unwrappedTo = unwrapBound(keyTo, retainDuplicates);
             final InMemoryWindowTransactionBuffer.WindowEntryKey from =
-                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeFrom, keyFrom != null ? keyFrom : Bytes.wrap(new byte[0]));
+                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeFrom, lowerBoundKey(keyFrom));
             final InMemoryWindowTransactionBuffer.WindowEntryKey to =
-                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeTo, keyTo != null ? keyTo : Bytes.wrap(new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF}));
+                new InMemoryWindowTransactionBuffer.WindowEntryKey(timeTo, keyTo);
 
             this.delegate = buffer.range(from, to, forward, true);
         }
@@ -646,23 +701,41 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            return toWindowed(delegate.peekNextKey());
+            return prefetched.key;
         }
 
         @Override
         public boolean hasNext() {
-            return delegate.hasNext();
+            if (prefetched != null) {
+                return true;
+            }
+            prefetched = computeNext();
+            return prefetched != null;
         }
 
         @Override
         public KeyValue<Windowed<Bytes>, byte[]> next() {
-            final KeyValue<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> entry = delegate.next();
-            return new KeyValue<>(toWindowed(entry.key), entry.value);
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            final KeyValue<Windowed<Bytes>, byte[]> result = prefetched;
+            prefetched = null;
+            return result;
         }
 
         @Override
         public void close() {
             delegate.close();
+        }
+
+        private KeyValue<Windowed<Bytes>, byte[]> computeNext() {
+            while (delegate.hasNext()) {
+                final KeyValue<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> entry = delegate.next();
+                if (keyInRange(entry.key.key(), unwrappedFrom, unwrappedTo, retainDuplicates)) {
+                    return new KeyValue<>(toWindowed(entry.key), entry.value);
+                }
+            }
+            return null;
         }
 
         private Windowed<Bytes> toWindowed(final InMemoryWindowTransactionBuffer.WindowEntryKey entryKey) {
@@ -889,6 +962,61 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
 
             final TimeWindow timeWindow = new TimeWindow(super.currentTime, endTime);
             return new Windowed<>(key, timeWindow);
+        }
+    }
+
+    /**
+     * Yields each entry as an {@link InMemoryWindowTransactionBuffer.WindowEntryKey} keyed by the
+     * stored (possibly seqnum-wrapped) key. Reused by {@link InMemoryWindowTransactionBuffer} as the
+     * committed-side base iterator, so it merges in lock-step with the staged composite map; the
+     * store's transactional read wrappers unwrap the key afterwards.
+     */
+    static final class WindowEntryKeyIterator extends InMemoryWindowStoreIteratorWrapper
+        implements ManagedKeyValueIterator<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> {
+
+        private Runnable closeCallback;
+
+        WindowEntryKeyIterator(final Bytes keyFrom,
+                               final Bytes keyTo,
+                               final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+                               final boolean retainDuplicates,
+                               final boolean forward) {
+            super(keyFrom, keyTo, segmentIterator, ignored -> { }, retainDuplicates, forward);
+        }
+
+        @Override
+        public InMemoryWindowTransactionBuffer.WindowEntryKey peekNextKey() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return new InMemoryWindowTransactionBuffer.WindowEntryKey(super.currentTime, super.next.key);
+        }
+
+        @Override
+        public KeyValue<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            final KeyValue<InMemoryWindowTransactionBuffer.WindowEntryKey, byte[]> result =
+                new KeyValue<>(new InMemoryWindowTransactionBuffer.WindowEntryKey(super.currentTime, super.next.key), super.next.value);
+            super.next = null;
+            return result;
+        }
+
+        @Override
+        public void onClose(final Runnable closeCallback) {
+            this.closeCallback = closeCallback;
+        }
+
+        @Override
+        public void close() {
+            try {
+                super.close();
+            } finally {
+                if (closeCallback != null) {
+                    closeCallback.run();
+                }
+            }
         }
     }
 }

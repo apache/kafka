@@ -19,10 +19,9 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
-import java.util.Iterator;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -79,7 +78,9 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
                     return cmp;
                 }
             }
-            return Long.compare(this.startTime, other.startTime);
+            // Descending startTime, matching the order the reused InMemorySessionStoreIterator emits,
+            // so the staged map and the base iterator merge in lock-step.
+            return Long.compare(other.startTime, this.startTime);
         }
 
         @Override
@@ -137,10 +138,7 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
             timeRange = endTimeMap;
         }
 
-        return new FlattenedSessionIterator(
-            forward ? timeRange : timeRange.descendingMap(),
-            from, to, forward, toInclusive
-        );
+        return baseIterator(forward ? timeRange : timeRange.descendingMap(), from, to, forward);
     }
 
     /**
@@ -171,10 +169,29 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
             copy.put(endTimeEntry.getKey(), keyCopy);
         }
 
-        return new FlattenedSessionIterator(
-            forward ? copy : copy.descendingMap(),
-            from, to, forward, toInclusive
-        );
+        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+    }
+
+    /**
+     * Builds the committed-side base iterator by reusing the non-transactional
+     * {@link InMemorySessionStore.InMemorySessionStoreIterator}, which bounds keys at every endTime and
+     * emits in the same (endTime, key, descending-startTime) order as the staged map. The
+     * latestSessionStartTime bound is left open here (the store's {@code TransactionalSessionIterator}
+     * applies it); a null from/to key leaves the key dimension open.
+     */
+    private static ManagedKeyValueIterator<SessionEntryKey, byte[]> baseIterator(
+            final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> timeRange,
+            final SessionEntryKey from,
+            final SessionEntryKey to,
+            final boolean forward) {
+        return new SessionEntryKeyIterator(
+            new InMemorySessionStore.InMemorySessionStoreIterator(
+                from != null ? from.key() : null,
+                to != null ? to.key() : null,
+                Long.MAX_VALUE,
+                timeRange.entrySet().iterator(),
+                ignored -> { },
+                forward));
     }
 
     @Override
@@ -211,150 +228,31 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
     }
 
     /**
-     * Iterator that flattens the three-level endTimeMap structure into a stream of
-     * SessionEntryKey/byte[] pairs, respecting key bounds and direction.
+     * Adapts the non-transactional session iterator's {@code Windowed<Bytes>} output to the
+     * {@link SessionEntryKey} space the staged-merge consumes.
      */
-    private static class FlattenedSessionIterator implements ManagedKeyValueIterator<SessionEntryKey, byte[]> {
-        private final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
-        private final SessionEntryKey from;
-        private final SessionEntryKey to;
-        private final boolean forward;
-        private final boolean toInclusive;
-
-        private Iterator<Map.Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>>> keyIterator;
-        private Iterator<Map.Entry<Long, byte[]>> startTimeIterator;
-        private long currentEndTime;
-        private Bytes currentKey;
-        private KeyValue<SessionEntryKey, byte[]> prefetched;
-        private boolean closed = false;
+    private static final class SessionEntryKeyIterator implements ManagedKeyValueIterator<SessionEntryKey, byte[]> {
+        private final KeyValueIterator<Windowed<Bytes>, byte[]> delegate;
         private Runnable closeCallback;
 
-        FlattenedSessionIterator(
-                final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> timeRange,
-                final SessionEntryKey from,
-                final SessionEntryKey to,
-                final boolean forward,
-                final boolean toInclusive) {
-            this.from = from;
-            this.to = to;
-            this.forward = forward;
-            this.toInclusive = toInclusive;
-            this.endTimeIterator = timeRange.entrySet().iterator();
-            advanceToNextRecord();
-        }
-
-        private void advanceToNextRecord() {
-            // Try advancing within current startTimeIterator
-            if (startTimeIterator != null && startTimeIterator.hasNext()) {
-                return;
-            }
-            // Try advancing within current keyIterator
-            if (advanceWithinKeyIterator()) {
-                return;
-            }
-            // Advance to next endTime segment
-            advanceToNextEndTimeSegment();
-        }
-
-        private boolean advanceWithinKeyIterator() {
-            if (keyIterator == null) {
-                return false;
-            }
-            while (keyIterator.hasNext()) {
-                final Map.Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyEntry = keyIterator.next();
-                currentKey = keyEntry.getKey();
-                startTimeIterator = getStartTimeIterator(keyEntry.getValue());
-                if (startTimeIterator.hasNext()) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private void advanceToNextEndTimeSegment() {
-            while (endTimeIterator.hasNext()) {
-                final Map.Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeEntry =
-                    endTimeIterator.next();
-                currentEndTime = endTimeEntry.getKey();
-
-                final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> subMap =
-                    boundKeyMap(endTimeEntry.getValue());
-                keyIterator = (forward ? subMap : subMap.descendingMap()).entrySet().iterator();
-                if (advanceWithinKeyIterator()) {
-                    return;
-                }
-            }
-            startTimeIterator = null;
-        }
-
-        private ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> boundKeyMap(
-                final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> kvMap) {
-            final Bytes keyFrom = (from != null && currentEndTime == from.endTime()) ? from.key() : null;
-            final Bytes keyTo = (to != null && currentEndTime == to.endTime()) ? to.key() : null;
-            if (keyFrom != null && keyTo != null) {
-                return kvMap.subMap(keyFrom, true, keyTo, true);
-            } else if (keyFrom != null) {
-                return kvMap.tailMap(keyFrom, true);
-            } else if (keyTo != null) {
-                return kvMap.headMap(keyTo, true);
-            } else {
-                return kvMap;
-            }
-        }
-
-        private Iterator<Map.Entry<Long, byte[]>> getStartTimeIterator(
-                final ConcurrentNavigableMap<Long, byte[]> startTimeMap) {
-            final ConcurrentNavigableMap<Long, byte[]> subMap = boundStartTimeMap(startTimeMap);
-            return (forward ? subMap : subMap.descendingMap()).entrySet().iterator();
-        }
-
-        private ConcurrentNavigableMap<Long, byte[]> boundStartTimeMap(
-                final ConcurrentNavigableMap<Long, byte[]> startTimeMap) {
-            final Long startFrom = (from != null && currentEndTime == from.endTime()
-                && currentKey.equals(from.key())) ? from.startTime() : null;
-            final Long startTo = (to != null && currentEndTime == to.endTime()
-                && currentKey.equals(to.key())) ? to.startTime() : null;
-            final boolean startToInclusive = (startTo != null) ? toInclusive : true;
-
-            if (startFrom != null && startTo != null) {
-                return startTimeMap.subMap(startFrom, true, startTo, startToInclusive);
-            } else if (startFrom != null) {
-                return startTimeMap.tailMap(startFrom, true);
-            } else if (startTo != null) {
-                return startTimeMap.headMap(startTo, startToInclusive);
-            } else {
-                return startTimeMap;
-            }
+        SessionEntryKeyIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> delegate) {
+            this.delegate = delegate;
         }
 
         @Override
         public boolean hasNext() {
-            if (closed) {
-                throw new IllegalStateException("Iterator has already been closed.");
-            }
-            if (prefetched != null) {
-                return true;
-            }
-            prefetched = computeNext();
-            return prefetched != null;
+            return delegate.hasNext();
         }
 
         @Override
         public KeyValue<SessionEntryKey, byte[]> next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            final KeyValue<SessionEntryKey, byte[]> result = prefetched;
-            prefetched = null;
-            return result;
+            final KeyValue<Windowed<Bytes>, byte[]> entry = delegate.next();
+            return new KeyValue<>(toKey(entry.key), entry.value);
         }
 
         @Override
         public SessionEntryKey peekNextKey() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return prefetched.key;
+            return toKey(delegate.peekNextKey());
         }
 
         @Override
@@ -364,31 +262,17 @@ class InMemorySessionTransactionBuffer extends AbstractTransactionBuffer<InMemor
 
         @Override
         public void close() {
-            closed = true;
-            if (closeCallback != null) {
-                closeCallback.run();
+            try {
+                delegate.close();
+            } finally {
+                if (closeCallback != null) {
+                    closeCallback.run();
+                }
             }
         }
 
-        private KeyValue<SessionEntryKey, byte[]> computeNext() {
-            if (startTimeIterator == null) {
-                return null;
-            }
-            if (!startTimeIterator.hasNext()) {
-                advanceToNextRecord();
-                if (startTimeIterator == null || !startTimeIterator.hasNext()) {
-                    return null;
-                }
-            }
-            final Map.Entry<Long, byte[]> entry = startTimeIterator.next();
-            final KeyValue<SessionEntryKey, byte[]> result =
-                new KeyValue<>(new SessionEntryKey(currentEndTime, currentKey, entry.getKey()), entry.getValue());
-
-            // Pre-advance so hasNext() works correctly
-            if (!startTimeIterator.hasNext()) {
-                advanceToNextRecord();
-            }
-            return result;
+        private static SessionEntryKey toKey(final Windowed<Bytes> windowed) {
+            return new SessionEntryKey(windowed.window().end(), windowed.key(), windowed.window().start());
         }
     }
 }

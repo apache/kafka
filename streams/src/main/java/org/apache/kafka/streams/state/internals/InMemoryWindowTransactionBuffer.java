@@ -17,11 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 
-import java.util.Iterator;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -34,10 +31,13 @@ import java.util.concurrent.ConcurrentSkipListMap;
 class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemoryWindowTransactionBuffer.WindowEntryKey> {
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap;
+    private final boolean retainDuplicates;
 
     InMemoryWindowTransactionBuffer(
-            final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap) {
+            final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap,
+            final boolean retainDuplicates) {
         this.segmentMap = segmentMap;
+        this.retainDuplicates = retainDuplicates;
     }
 
     /**
@@ -65,6 +65,11 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
             final int cmp = Long.compare(this.timestamp, other.timestamp);
             if (cmp != 0) {
                 return cmp;
+            }
+            // A null key is an unbounded upper-bound marker used only in range scans; it sorts after
+            // every real key at the same timestamp. (The lower bound uses empty bytes, the natural minimum.)
+            if (this.key == null || other.key == null) {
+                return Boolean.compare(this.key == null, other.key == null);
             }
             return this.key.compareTo(other.key);
         }
@@ -124,10 +129,7 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
             timeRange = segmentMap;
         }
 
-        return new FlattenedSegmentIterator(
-            forward ? timeRange : timeRange.descendingMap(),
-            from, to, forward, toInclusive
-        );
+        return baseIterator(forward ? timeRange : timeRange.descendingMap(), from, to, forward);
     }
 
     /**
@@ -154,10 +156,24 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
             copy.put(segment.getKey(), new ConcurrentSkipListMap<>(segment.getValue()));
         }
 
-        return new FlattenedSegmentIterator(
-            forward ? copy : copy.descendingMap(),
-            from, to, forward, toInclusive
-        );
+        return baseIterator(forward ? copy : copy.descendingMap(), from, to, forward);
+    }
+
+    /**
+     * Builds the committed-side base iterator by reusing the non-transactional segment iterator
+     * ({@link InMemoryWindowStore.WindowEntryKeyIterator}), which bounds keys at every timestamp and
+     * emits in the same (timestamp, stored-key) order as the staged map. A null from/to key (and the
+     * empty-bytes lower-bound placeholder) leaves that side of the key dimension open.
+     */
+    private ManagedKeyValueIterator<WindowEntryKey, byte[]> baseIterator(
+            final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> timeRange,
+            final WindowEntryKey from,
+            final WindowEntryKey to,
+            final boolean forward) {
+        final Bytes keyFrom = (from != null && from.key() != null && from.key().get().length > 0) ? from.key() : null;
+        final Bytes keyTo = (to != null) ? to.key() : null;
+        return new InMemoryWindowStore.WindowEntryKeyIterator(
+            keyFrom, keyTo, timeRange.entrySet().iterator(), retainDuplicates, forward);
     }
 
     @Override
@@ -184,120 +200,4 @@ class InMemoryWindowTransactionBuffer extends AbstractTransactionBuffer<InMemory
         // no-op — no backend batch to discard
     }
 
-    /**
-     * Iterator that flattens the two-level segmentMap structure into a stream of
-     * WindowEntryKey/byte[] pairs, respecting key bounds and direction.
-     */
-    private static class FlattenedSegmentIterator implements ManagedKeyValueIterator<WindowEntryKey, byte[]> {
-        private final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator;
-        private final WindowEntryKey from;
-        private final WindowEntryKey to;
-        private final boolean forward;
-        private final boolean toInclusive;
-
-        private Iterator<Map.Entry<Bytes, byte[]>> currentKeyIterator;
-        private long currentTimestamp;
-        private KeyValue<WindowEntryKey, byte[]> prefetched;
-        private boolean closed = false;
-        private Runnable closeCallback;
-
-        FlattenedSegmentIterator(
-                final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> timeRange,
-                final WindowEntryKey from,
-                final WindowEntryKey to,
-                final boolean forward,
-                final boolean toInclusive) {
-            this.from = from;
-            this.to = to;
-            this.forward = forward;
-            this.toInclusive = toInclusive;
-            this.segmentIterator = timeRange.entrySet().iterator();
-            advanceSegment();
-        }
-
-        private void advanceSegment() {
-            currentKeyIterator = null;
-            while (segmentIterator.hasNext()) {
-                final Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>> segment = segmentIterator.next();
-                currentTimestamp = segment.getKey();
-
-                final ConcurrentNavigableMap<Bytes, byte[]> subMap = boundKeyMap(segment.getValue());
-                final ConcurrentNavigableMap<Bytes, byte[]> orderedMap = forward ? subMap : subMap.descendingMap();
-                currentKeyIterator = orderedMap.entrySet().iterator();
-                if (currentKeyIterator.hasNext()) {
-                    return;
-                }
-            }
-        }
-
-        private ConcurrentNavigableMap<Bytes, byte[]> boundKeyMap(final ConcurrentNavigableMap<Bytes, byte[]> kvMap) {
-            final Bytes keyFrom = (from != null && currentTimestamp == from.timestamp()) ? from.key() : null;
-            final Bytes keyTo = (to != null && currentTimestamp == to.timestamp()) ? to.key() : null;
-            final boolean keyToInclusive = (to != null && currentTimestamp == to.timestamp()) ? toInclusive : true;
-
-            if (keyFrom != null && keyTo != null) {
-                return kvMap.subMap(keyFrom, true, keyTo, keyToInclusive);
-            } else if (keyFrom != null) {
-                return kvMap.tailMap(keyFrom, true);
-            } else if (keyTo != null) {
-                return kvMap.headMap(keyTo, keyToInclusive);
-            } else {
-                return kvMap;
-            }
-        }
-
-        @Override
-        public boolean hasNext() {
-            if (closed) {
-                throw new IllegalStateException("Iterator has already been closed.");
-            }
-            if (prefetched != null) {
-                return true;
-            }
-            prefetched = computeNext();
-            return prefetched != null;
-        }
-
-        @Override
-        public KeyValue<WindowEntryKey, byte[]> next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            final KeyValue<WindowEntryKey, byte[]> result = prefetched;
-            prefetched = null;
-            return result;
-        }
-
-        @Override
-        public WindowEntryKey peekNextKey() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return prefetched.key;
-        }
-
-        @Override
-        public void onClose(final Runnable closeCallback) {
-            this.closeCallback = closeCallback;
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-            if (closeCallback != null) {
-                closeCallback.run();
-            }
-        }
-
-        private KeyValue<WindowEntryKey, byte[]> computeNext() {
-            while (currentKeyIterator != null) {
-                if (currentKeyIterator.hasNext()) {
-                    final Map.Entry<Bytes, byte[]> entry = currentKeyIterator.next();
-                    return new KeyValue<>(new WindowEntryKey(currentTimestamp, entry.getKey()), entry.getValue());
-                }
-                advanceSegment();
-            }
-            return null;
-        }
-    }
 }

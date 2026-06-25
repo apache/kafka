@@ -551,6 +551,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
      */
     private static class TransactionalSessionIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
         private final KeyValueIterator<InMemorySessionTransactionBuffer.SessionEntryKey, byte[]> delegate;
+        private final Bytes keyFrom;
+        private final Bytes keyTo;
         private final long latestSessionStartTime;
         private KeyValue<Windowed<Bytes>, byte[]> prefetched;
 
@@ -562,12 +564,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                 final long earliestSessionEndTime,
                 final long latestSessionEndTime,
                 final boolean forward) {
+            this.keyFrom = keyFrom;
+            this.keyTo = keyTo;
             this.latestSessionStartTime = latestSessionStartTime;
 
+            // startTime sorts descending, so the lower bound carries the largest startTime and the
+            // upper bound the smallest. A null key leaves the key dimension open (see SessionEntryKey).
             final InMemorySessionTransactionBuffer.SessionEntryKey from =
-                new InMemorySessionTransactionBuffer.SessionEntryKey(earliestSessionEndTime, keyFrom, 0);
+                new InMemorySessionTransactionBuffer.SessionEntryKey(earliestSessionEndTime, keyFrom, Long.MAX_VALUE);
             final InMemorySessionTransactionBuffer.SessionEntryKey to =
-                new InMemorySessionTransactionBuffer.SessionEntryKey(latestSessionEndTime, keyTo, Long.MAX_VALUE);
+                new InMemorySessionTransactionBuffer.SessionEntryKey(latestSessionEndTime, keyTo, 0);
 
             this.delegate = buffer.range(from, to, forward, true);
         }
@@ -607,8 +613,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
         private KeyValue<Windowed<Bytes>, byte[]> computeNext() {
             while (delegate.hasNext()) {
                 final KeyValue<InMemorySessionTransactionBuffer.SessionEntryKey, byte[]> entry = delegate.next();
-                // Filter by latestSessionStartTime
-                if (entry.key.startTime() <= latestSessionStartTime) {
+                // The staged scan is bounded only by endTime, so filter the key range and
+                // latestSessionStartTime here to drop any staged entries outside the query.
+                if (entry.key.startTime() <= latestSessionStartTime && keyInRange(entry.key.key())) {
                     final SessionWindow sessionWindow = new SessionWindow(entry.key.startTime(), entry.key.endTime());
                     final Windowed<Bytes> windowedKey = new Windowed<>(entry.key.key(), sessionWindow);
                     return new KeyValue<>(windowedKey, entry.value);
@@ -616,13 +623,18 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
             }
             return null;
         }
+
+        private boolean keyInRange(final Bytes key) {
+            return (keyFrom == null || key.compareTo(keyFrom) >= 0)
+                && (keyTo == null || key.compareTo(keyTo) <= 0);
+        }
     }
 
     interface ClosingCallback {
         void deregisterIterator(final InMemorySessionStoreIterator iterator);
     }
 
-    private static class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
+    static class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
         private final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
         private Iterator<Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>>> keyIterator;
