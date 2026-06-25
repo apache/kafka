@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import re
+from contextlib import ExitStack
 
+from ducktape.errors import TimeoutError
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
@@ -37,10 +40,10 @@ class StreamsStaticMembershipTest(Test):
     num_threads = 3
     num_bounces = 3
     streams_group_protocol = "streams"
+    streams_application_id = "StaticMemberTestClient"
 
-    initial_process_id_pattern = re.compile(r"No process id found on disk, got fresh process id ([0-9a-fA-F-]+)")
-    random_process_id_pattern = re.compile(r"Created new process id: ([0-9a-fA-F-]+)")
-    reused_process_id_pattern = re.compile(r"Reading UUID from process file: ([0-9a-fA-F-]+)")
+    fresh_process_id_pattern = r"No process id found on disk, got fresh process id"
+    random_process_id_pattern = r"Created new process id:"
 
     def __init__(self, test_context):
         super(StreamsStaticMembershipTest, self).__init__(test_context)
@@ -114,39 +117,39 @@ class StreamsStaticMembershipTest(Test):
 
         self.producer.start()
 
-        initial_log_checkpoints = {}
+        baseline_process_ids = {}
         for processor in processors:
             processor.CLEAN_NODE_ENABLED = False
             self.set_topics(processor)
-            initial_log_checkpoints[processor] = self._line_count(processor, processor.LOG_FILE)
             verify_running(processor, self.running_message)
+            baseline_process_ids[processor] = self.read_process_id(processor)
 
         self.verify_processing(processors)
 
-        baseline_process_ids = {
-            processor: self.assert_initial_process_id_persisted(processor, initial_log_checkpoints[processor])
-            for processor in processors
-        }
-
         for _ in range(self.num_bounces):
             for bounced in processors:
-                checkpoints = {
-                    processor: self._line_count(processor, processor.LOG_FILE)
-                    for processor in processors
-                }
+                survivors = [processor for processor in processors if processor is not bounced]
 
-                verify_stopped(bounced, self.stopped_message)
-                verify_running(bounced, self.running_message)
+                with ExitStack() as stack:
+                    reused_monitor = stack.enter_context(bounced.node.account.monitor_log(bounced.LOG_FILE))
+                    bounced_forbidden_monitor = stack.enter_context(bounced.node.account.monitor_log(bounced.LOG_FILE))
+                    survivor_monitors = {
+                        survivor: stack.enter_context(survivor.node.account.monitor_log(survivor.LOG_FILE))
+                        for survivor in survivors
+                    }
 
-                self.assert_same_process_id_reused(
-                    bounced,
-                    checkpoints[bounced],
-                    baseline_process_ids[bounced]
-                )
+                    verify_stopped(bounced, self.stopped_message)
+                    verify_running(bounced, self.running_message)
 
-                for survivor in processors:
-                    if survivor is not bounced:
-                        self.assert_survivor_was_unaffected(survivor, checkpoints[survivor])
+                    self.assert_same_process_id_reused(
+                        bounced,
+                        reused_monitor,
+                        bounced_forbidden_monitor,
+                        baseline_process_ids[bounced]
+                    )
+
+                    for survivor in survivors:
+                        self.assert_survivor_was_unaffected(survivor, survivor_monitors[survivor])
 
         self.verify_processing(processors)
 
@@ -171,50 +174,54 @@ class StreamsStaticMembershipTest(Test):
 
         self.producer.start()
 
-        initial_log_checkpoints = {}
+        baseline_process_ids = {}
         for processor in processors:
             processor.CLEAN_NODE_ENABLED = False
             self.set_topics(processor)
-            initial_log_checkpoints[processor] = self._line_count(processor, processor.LOG_FILE)
             verify_running(processor, self.running_message)
+            baseline_process_ids[processor] = self.read_process_id(processor)
 
         self.verify_processing(processors)
 
-        baseline_process_ids = {
-            processor: self.assert_initial_process_id_persisted(processor, initial_log_checkpoints[processor])
-            for processor in processors
-        }
-
         if bounce_mode == "all":
-            checkpoints = {
-                processor: self._line_count(processor, processor.LOG_FILE)
-                for processor in processors
-            }
+            with ExitStack() as stack:
+                reused_monitors = {
+                    processor: stack.enter_context(processor.node.account.monitor_log(processor.LOG_FILE))
+                    for processor in processors
+                }
+                forbidden_monitors = {
+                    processor: stack.enter_context(processor.node.account.monitor_log(processor.LOG_FILE))
+                    for processor in processors
+                }
 
-            for processor in processors:
-                verify_stopped(processor, self.stopped_message)
+                for processor in processors:
+                    verify_stopped(processor, self.stopped_message)
 
-            for processor in processors:
-                verify_running(processor, self.running_message)
+                for processor in processors:
+                    verify_running(processor, self.running_message)
 
-            for processor in processors:
-                self.assert_same_process_id_reused(
-                    processor,
-                    checkpoints[processor],
-                    baseline_process_ids[processor]
-                )
+                for processor in processors:
+                    self.assert_same_process_id_reused(
+                        processor,
+                        reused_monitors[processor],
+                        forbidden_monitors[processor],
+                        baseline_process_ids[processor]
+                    )
         else:
             for processor in processors:
-                checkpoint = self._line_count(processor, processor.LOG_FILE)
+                with ExitStack() as stack:
+                    reused_monitor = stack.enter_context(processor.node.account.monitor_log(processor.LOG_FILE))
+                    forbidden_monitor = stack.enter_context(processor.node.account.monitor_log(processor.LOG_FILE))
 
-                verify_stopped(processor, self.stopped_message)
-                verify_running(processor, self.running_message)
+                    verify_stopped(processor, self.stopped_message)
+                    verify_running(processor, self.running_message)
 
-                self.assert_same_process_id_reused(
-                    processor,
-                    checkpoint,
-                    baseline_process_ids[processor]
-                )
+                    self.assert_same_process_id_reused(
+                        processor,
+                        reused_monitor,
+                        forbidden_monitor,
+                        baseline_process_ids[processor]
+                    )
 
         self.verify_processing(processors)
 
@@ -259,13 +266,14 @@ class StreamsStaticMembershipTest(Test):
 
             self.verify_processing(processors)
 
-            checkpoints = {
-                processor: self._line_count(processor, processor.LOG_FILE)
-                for processor in processors
-            }
-
             self.set_topics(conflict_processor)
-            with conflict_processor.node.account.monitor_log(conflict_processor.LOG_FILE) as monitor:
+            with ExitStack() as stack:
+                survivor_monitors = {
+                    processor: stack.enter_context(processor.node.account.monitor_log(processor.LOG_FILE))
+                    for processor in processors
+                }
+                monitor = stack.enter_context(conflict_processor.node.account.monitor_log(conflict_processor.LOG_FILE))
+
                 conflict_processor.start()
                 monitor.wait_until(
                     "terminal ERROR state",
@@ -273,10 +281,10 @@ class StreamsStaticMembershipTest(Test):
                     err_msg="Never saw the conflicting static Streams member fail"
                 )
 
-            conflict_processor.wait(timeout_sec=60)
+                conflict_processor.wait(timeout_sec=60)
 
-            for processor in processors:
-                self.assert_survivor_was_unaffected(processor, checkpoints[processor])
+                for processor in processors:
+                    self.assert_survivor_was_unaffected(processor, survivor_monitors[processor])
 
             self.verify_processing(processors)
 
@@ -357,7 +365,10 @@ class StreamsStaticMembershipTest(Test):
         )
 
     def file_contains(self, processor, path, text):
-        return text in "".join(self._read_lines_since(processor, path, 0))
+        return processor.node.account.ssh(
+            "grep -F --max-count 1 '%s' %s" % (text, path),
+            allow_fail=True
+        ) == 0
 
     def fenced_processors(self, processors):
         return [
@@ -369,79 +380,64 @@ class StreamsStaticMembershipTest(Test):
         return ["%s-%d" % (processor.GROUP_INSTANCE_ID, thread_id)
                 for thread_id in range(1, self.num_threads + 1)]
 
-    def _line_count(self, processor, path):
-        output = list(
-            processor.node.account.ssh_capture("awk 'END {print NR}' %s" % path, allow_fail=True)
+    def process_id_file(self, processor):
+        return "%s/%s/kafka-streams-process-metadata" % (processor.state_dir, self.streams_application_id)
+
+    def read_process_id(self, processor):
+        output = "".join(
+            processor.node.account.ssh_capture(
+                "cat %s" % self.process_id_file(processor),
+                allow_fail=True
+            )
         )
-        if not output:
-            return 0
+        assert output, (
+            "Did not find persisted process id file for %s"
+            % processor.GROUP_INSTANCE_ID
+        )
+        return json.loads(output)["processId"]
+
+    def assert_not_logged(self, monitor, pattern, err_msg):
         try:
-            return int(output[0].strip() or 0)
-        except ValueError:
-            return 0
+            monitor.wait_until(pattern, timeout_sec=.5, backoff_sec=.1, err_msg=err_msg)
+        except TimeoutError:
+            return
+        raise AssertionError(err_msg)
 
-    def _read_lines_since(self, processor, path, line_number):
-        first_line = max(1, line_number + 1)
-        return list(
-            processor.node.account.ssh_capture("sed -n '%d,$p' %s" % (first_line, path), allow_fail=True)
+    def assert_same_process_id_reused(self, processor, reused_monitor, forbidden_monitor, expected_process_id):
+        reused_monitor.wait_until(
+            r"Reading UUID from process file: %s" % re.escape(expected_process_id),
+            timeout_sec=60,
+            err_msg="Did not see reused process id %s for %s"
+            % (expected_process_id, processor.GROUP_INSTANCE_ID)
         )
 
-    def assert_initial_process_id_persisted(self, processor, log_checkpoint):
-        log = "".join(self._read_lines_since(processor, processor.LOG_FILE, log_checkpoint))
-
-        fresh_matches = self.initial_process_id_pattern.findall(log)
-        random_matches = self.random_process_id_pattern.findall(log)
-
-        assert fresh_matches, (
-            "Did not see initial persisted process id creation for %s"
-            % processor.GROUP_INSTANCE_ID
-        )
-        assert not random_matches, (
-            "Unexpected non-persistent process id creation for %s: %s"
-            % (processor.GROUP_INSTANCE_ID, random_matches)
-        )
-
-        return fresh_matches[-1]
-
-    def assert_same_process_id_reused(self, processor, log_checkpoint, expected_process_id):
-        log = "".join(
-            self._read_lines_since(processor, processor.LOG_FILE, log_checkpoint)
-        )
-
-        reused_matches = self.reused_process_id_pattern.findall(log)
-
-        assert expected_process_id in reused_matches, (
-            "Did not see reused process id %s for %s. saw=%s"
-            % (expected_process_id, processor.GROUP_INSTANCE_ID, reused_matches)
-        )
-        assert "Created new process id:" not in log, (
-            "Unexpected random process id creation after restart for %s"
-            % processor.GROUP_INSTANCE_ID
-        )
-        assert "No process id found on disk, got fresh process id" not in log, (
-            "Unexpected fresh process id creation after restart for %s"
+        self.assert_not_logged(
+            forbidden_monitor,
+            r"%s|%s" % (self.random_process_id_pattern, self.fresh_process_id_pattern),
+            "Unexpected fresh/random process id creation after restart for %s"
             % processor.GROUP_INSTANCE_ID
         )
 
-    def assert_survivor_was_unaffected(self, processor, log_checkpoint):
-        log = "".join(
-            self._read_lines_since(processor, processor.LOG_FILE, log_checkpoint)
+        actual_process_id = self.read_process_id(processor)
+        assert actual_process_id == expected_process_id, (
+            "Expected persisted process id %s for %s, but found %s"
+            % (expected_process_id, processor.GROUP_INSTANCE_ID, actual_process_id)
         )
 
+    def assert_survivor_was_unaffected(self, processor, monitor):
         forbidden_patterns = [
             r"transitioned from STABLE to RECONCILING",
             r"Target assignment updated from",
             r"Assigned tasks with local epoch",
         ]
 
-        for thread_instance_id in self.thread_instance_ids(processor):
-            for pattern in forbidden_patterns:
-                full_pattern = r"instanceId=%s.*%s" % (
-                    re.escape(thread_instance_id),
-                    pattern
-                )
-                assert not re.search(full_pattern, log), (
-                    "Surviving static member %s unexpectedly logged forbidden pattern '%s' "
-                    "during another member's bounce"
-                    % (thread_instance_id, pattern)
-                )
+        full_pattern = r"instanceId=(?:%s).*(?:%s)" % (
+            "|".join(re.escape(thread_instance_id) for thread_instance_id in self.thread_instance_ids(processor)),
+            "|".join(forbidden_patterns)
+        )
+        self.assert_not_logged(
+            monitor,
+            full_pattern,
+            "Surviving static member %s unexpectedly reconciled during another member's bounce"
+            % processor.GROUP_INSTANCE_ID
+        )
