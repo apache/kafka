@@ -131,17 +131,27 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
                     synchronized (position) {
+                        long expiredRecords = 0;
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
-                            put(
-                                Bytes.wrap(extractStoreKeyBytes(record.key())),
-                                record.value(),
-                                extractStoreTimestamp(record.key())
-                            );
+                            final Bytes key = Bytes.wrap(extractStoreKeyBytes(record.key()));
+                            final long windowStartTimestamp = extractStoreTimestamp(record.key());
+                            observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
+                            if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
+                                expiredRecords++;
+                            } else {
+                                // Write directly to the committed map: restored records are already committed.
+                                putInternal(key, record.value(), windowStartTimestamp);
+                            }
                             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                                 record,
                                 consistencyEnabled,
                                 position
                             );
+                        }
+                        removeExpiredSegments();
+                        if (expiredRecords > 0) {
+                            expiredRecordSensor.record(expiredRecords, internalProcessorContext.currentSystemTimeMs());
+                            LOG.warn("Skipping {} records for expired segments.", expiredRecords);
                         }
                     }
                 }
@@ -172,33 +182,38 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]>, WithRete
             if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
                 expiredRecordSensor.record(1.0d, internalProcessorContext.currentSystemTimeMs());
                 LOG.warn("Skipping record for expired segment.");
-            } else {
+            } else if (transactionBuffer != null) {
                 if (value != null) {
                     maybeUpdateSeqnumForDups();
                     final Bytes keyBytes = retainDuplicates ? wrapForDups(key, seqnum) : key;
-                    if (transactionBuffer != null) {
-                        transactionBuffer.stage(windowStartTimestamp, keyBytes, value);
-                    } else {
-                        segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
-                        segmentMap.get(windowStartTimestamp).put(keyBytes, value);
-                    }
+                    transactionBuffer.stage(windowStartTimestamp, keyBytes, value);
                 } else if (!retainDuplicates) {
                     // Skip if value is null and duplicates are allowed since this delete is a no-op
-                    if (transactionBuffer != null) {
-                        transactionBuffer.stage(windowStartTimestamp, key, null);
-                    } else {
-                        segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
-                            kvMap.remove(key);
-                            if (kvMap.isEmpty()) {
-                                segmentMap.remove(windowStartTimestamp);
-                            }
-                            return kvMap;
-                        });
-                    }
+                    transactionBuffer.stage(windowStartTimestamp, key, null);
                 }
+            } else {
+                putInternal(key, value, windowStartTimestamp);
             }
 
             StoreQueryUtils.updatePosition(position, internalProcessorContext);
+        }
+    }
+
+    private void putInternal(final Bytes key, final byte[] value, final long windowStartTimestamp) {
+        if (value != null) {
+            maybeUpdateSeqnumForDups();
+            final Bytes keyBytes = retainDuplicates ? wrapForDups(key, seqnum) : key;
+            segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
+            segmentMap.get(windowStartTimestamp).put(keyBytes, value);
+        } else if (!retainDuplicates) {
+            // Skip if value is null and duplicates are allowed since this delete is a no-op
+            segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
+                kvMap.remove(key);
+                if (kvMap.isEmpty()) {
+                    segmentMap.remove(windowStartTimestamp);
+                }
+                return kvMap;
+            });
         }
     }
 

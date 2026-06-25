@@ -135,13 +135,29 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
                     synchronized (position) {
+                        long expiredRecords = 0;
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
-                            put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
+                            final Windowed<Bytes> sessionKey = SessionKeySchema.from(Bytes.wrap(record.key()));
+                            final long windowEndTimestamp = sessionKey.window().end();
+                            observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
+                            if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
+                                expiredRecords++;
+                            } else {
+                                // Write directly to the committed map: restored records are already committed.
+                                putInternal(sessionKey, record.value());
+                            }
                             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                                 record,
                                 consistencyEnabled,
                                 position
                             );
+                        }
+                        removeExpiredSegments();
+                        if (expiredRecords > 0) {
+                            if (expiredRecordSensor != null && context != null) {
+                                expiredRecordSensor.record(expiredRecords, context.currentSystemTimeMs());
+                            }
+                            LOG.warn("Skipping {} records for expired segments.", expiredRecords);
                         }
                     }
                 }
@@ -178,22 +194,25 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]>, WithRe
                     expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
                 }
                 LOG.warn("Skipping record for expired segment.");
+            } else if (transactionBuffer != null) {
+                transactionBuffer.stage(sessionKey, aggregate);
             } else {
-                if (transactionBuffer != null) {
-                    transactionBuffer.stage(sessionKey, aggregate);
-                } else {
-                    if (aggregate != null) {
-                        endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());
-                        final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(windowEndTimestamp);
-                        keyMap.computeIfAbsent(sessionKey.key(), t -> new ConcurrentSkipListMap<>());
-                        keyMap.get(sessionKey.key()).put(sessionKey.window().start(), aggregate);
-                    } else {
-                        remove(sessionKey);
-                    }
-                }
+                putInternal(sessionKey, aggregate);
             }
 
             StoreQueryUtils.updatePosition(position, stateStoreContext);
+        }
+    }
+
+    private void putInternal(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
+        if (aggregate != null) {
+            final long windowEndTimestamp = sessionKey.window().end();
+            endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());
+            final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(windowEndTimestamp);
+            keyMap.computeIfAbsent(sessionKey.key(), t -> new ConcurrentSkipListMap<>());
+            keyMap.get(sessionKey.key()).put(sessionKey.window().start(), aggregate);
+        } else {
+            removeFromBase(sessionKey);
         }
     }
 
