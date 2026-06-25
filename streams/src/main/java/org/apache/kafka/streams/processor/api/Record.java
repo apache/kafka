@@ -35,7 +35,7 @@ import java.util.Objects;
  * @param <K> The type of the key
  * @param <V> The type of the value
  */
-public class Record<K, V> {
+public class Record<K, V> implements ReadOnlyRecord<K, V> {
     private final K key;
     private final V value;
     private final long timestamp;
