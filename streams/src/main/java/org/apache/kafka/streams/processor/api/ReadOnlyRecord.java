@@ -25,7 +25,7 @@ import org.apache.kafka.common.header.Headers;
  * transform-and-forward builders ({@code withKey}/{@code withValue}/{@code withTimestamp}/{@code withHeaders}),
  * while an Interactive Query (IQv2) result is exactly this read-only snapshot and exposes nothing more.
  * It is the result type returned by the headers-aware IQv2 query types (e.g.
- * {@link org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery}), which surface the record headers
+ * {@code TimestampedKeyWithHeadersQuery}), which surface the record headers
  * persisted by header-aware state stores.
  *
  * @param <K> The type of the key
