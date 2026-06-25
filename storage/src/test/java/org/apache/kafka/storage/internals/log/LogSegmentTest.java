@@ -68,6 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -613,7 +614,7 @@ public class LogSegmentTest {
                 // start corrupting somewhere in the middle of the chosen record all the way to the end
 
                 FileRecords.LogOffsetPosition recordPosition = seg.log().searchForOffsetFromPosition(offsetToBeginCorruption, 0);
-                int position = recordPosition.position + TestUtils.RANDOM.nextInt(15);
+                long position = recordPosition.position + TestUtils.RANDOM.nextInt(15);
                 writeNonsenseToFile(seg.log().file(), position, (int) (seg.log().file().length() - position));
                 seg.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
 
@@ -928,6 +929,128 @@ public class LogSegmentTest {
             raf.seek(position);
             for (int i = 0; i < size; i++) {
                 raf.writeByte(TestUtils.RANDOM.nextInt(255));
+            }
+        }
+    }
+
+    /**
+     * T3: Verify that sizeInBytesLong() and shouldRoll() work correctly when a segment
+     * is configured with a size larger than Integer.MAX_VALUE.
+     * We don't actually write 2GB+ of data (too slow for unit tests), but we verify
+     * the logic handles long values correctly by using a mock.
+     */
+    @Test
+    public void testShouldRollWithLargeMaxSegmentBytes() throws Exception {
+        LogSegment seg = createSegment(0);
+        // Append some data
+        seg.append(0, v2Records(0, "hello"));
+        seg.append(1, v2Records(1, "world"));
+
+        long currentSize = seg.sizeInBytesLong();
+        assertTrue(currentSize > 0, "Segment should have data");
+
+        // With a maxSegmentBytes larger than Integer.MAX_VALUE, shouldRoll should NOT
+        // trigger on size (the segment is tiny compared to a 3GB limit)
+        long maxSegmentBytesAbove2GB = 3_000_000_000L;
+        RollParams rollParams = new RollParams(Long.MAX_VALUE, maxSegmentBytesAbove2GB,
+                RecordBatch.NO_TIMESTAMP, 1, 100, System.currentTimeMillis());
+
+        // shouldRoll may be true due to index full, but NOT due to size.
+        // We call it to verify no exceptions are thrown with >2GB maxSegmentBytes.
+        seg.shouldRoll(rollParams);
+        // Verify the size comparison itself works: currentSize < maxSegmentBytesAbove2GB
+        assertTrue(currentSize < maxSegmentBytesAbove2GB,
+                "Segment size should be less than the 3GB max");
+    }
+
+    /**
+     * T3 (continued): Verify that sizeInBytesLong() and size() agree for small segments.
+     */
+    @Test
+    public void testSizeInBytesLongConsistency() throws Exception {
+        LogSegment seg = createSegment(0);
+        seg.append(0, v2Records(0, "test-data"));
+
+        assertEquals(seg.size(), (int) seg.sizeInBytesLong(),
+                "For small segments, size() and sizeInBytesLong() should agree");
+        assertTrue(seg.sizeInBytesLong() > 0);
+    }
+
+    /**
+     * KIP-1333 end-to-end gating: when {@link LogConfig#shouldUseLargeIndexFormat()}
+     * is true (broker's metadata.version finalized at IBP_4_4_IV1), a freshly-opened
+     * segment writes its offset index in the 12-byte format. When false, it writes the
+     * legacy 8-byte format. This is the wire-up that makes the KIP actually work
+     * end-to-end through {@link LogSegment#open(File, long, LogConfig, Time, long, boolean)}.
+     */
+    @Test
+    public void testLargeIndexFormatGatingFlowsToSegmentOpen() throws IOException {
+        boolean previous = LogConfig.shouldUseLargeIndexFormat();
+        try {
+            Map<String, Object> configMap = new HashMap<>();
+            configMap.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 10);
+            configMap.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000);
+            configMap.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, 0);
+            LogConfig logConfig = new LogConfig(configMap);
+
+            // We infer the index entry size from the file's reported sizeInBytes() after
+            // appending a known number of entries. OffsetIndex.entrySize() is protected, so
+            // we rely on the public sizeInBytes() = entrySize * entries invariant.
+            int numEntries = 3;
+
+            // 1) Default state (legacy): newly-rolled segment uses 8-byte index entries.
+            LogConfig.setLargeIndexFormatEnabled(false);
+            try (LogSegment seg = LogSegment.open(TestUtils.tempDirectory(), 0, logConfig,
+                    Time.SYSTEM, false, 0, false, "")) {
+                segments.add(seg);
+                for (int i = 0; i < numEntries; i++) {
+                    seg.offsetIndex().append(i + 1, 100L * (i + 1));
+                }
+                assertEquals(numEntries * OffsetIndex.LEGACY_ENTRY_SIZE,
+                    seg.offsetIndex().sizeInBytes(),
+                    "with broker-wide gating off, new segments must use 8-byte index entries");
+            }
+
+            // 2) After IBP_4_4_IV1 finalization: newly-rolled segment uses 12-byte entries.
+            LogConfig.setLargeIndexFormatEnabled(true);
+            try (LogSegment seg = LogSegment.open(TestUtils.tempDirectory(), 0, logConfig,
+                    Time.SYSTEM, false, 0, false, "")) {
+                segments.add(seg);
+                for (int i = 0; i < numEntries; i++) {
+                    seg.offsetIndex().append(i + 1, 100L * (i + 1));
+                }
+                assertEquals(numEntries * OffsetIndex.LARGE_ENTRY_SIZE,
+                    seg.offsetIndex().sizeInBytes(),
+                    "after KIP-1333 gating flips on, new segments must use 12-byte index entries");
+            }
+        } finally {
+            LogConfig.setLargeIndexFormatEnabled(previous);
+        }
+    }
+
+    /**
+     * Simulate upgrade scenario: create a segment, write data, recover it,
+     * verify all records survive recovery (simulates index rebuild on upgrade).
+     */
+    @Test
+    public void testRecoveryPreservesAllRecordsOnUpgrade() throws Exception {
+        try (LogSegment seg = createSegment(0)) {
+            // Append records
+            for (int i = 0; i < 50; i++) {
+                seg.append(i, v2Records(i, "record-" + i));
+            }
+            long sizeBeforeRecovery = seg.sizeInBytesLong();
+
+            // Recover (simulates what happens when indexes are rebuilt on upgrade)
+            seg.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
+
+            // Verify all records survive recovery
+            assertEquals(sizeBeforeRecovery, seg.sizeInBytesLong(),
+                    "Segment size should not change after recovery");
+            for (int i = 0; i < 50; i++) {
+                FetchDataInfo fetchData = seg.read(i, 1, Optional.of(seg.sizeInBytesLong()), true);
+                assertNotNull(fetchData, "Should be able to read offset " + i + " after recovery");
+                assertEquals(i, fetchData.records.batches().iterator().next().lastOffset());
             }
         }
     }

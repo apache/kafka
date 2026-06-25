@@ -282,11 +282,11 @@ public class FileRecordsTest {
     @Test
     public void testIteratorWithLimits() {
         RecordBatch batch = batches(fileRecords).get(1);
-        int start = fileRecords.searchForOffsetFromPosition(1, 0).position;
+        long start = fileRecords.searchForOffsetFromPosition(1, 0).position;
         int size = batch.sizeInBytes();
-        Records slice = fileRecords.slice(start, size);
+        Records slice = fileRecords.sliceLong(start, size);
         assertEquals(Collections.singletonList(batch), batches(slice));
-        Records slice2 = fileRecords.slice(start, size - 1);
+        Records slice2 = fileRecords.sliceLong(start, size - 1);
         assertEquals(Collections.emptyList(), batches(slice2));
     }
 
@@ -296,8 +296,8 @@ public class FileRecordsTest {
     @Test
     public void testTruncate() throws IOException {
         RecordBatch batch = batches(fileRecords).get(0);
-        int end = fileRecords.searchForOffsetFromPosition(1, 0).position;
-        fileRecords.truncateTo(end);
+        long end = fileRecords.searchForOffsetFromPosition(1, 0).position;
+        fileRecords.truncateToLong(end);
         assertEquals(Collections.singletonList(batch), batches(fileRecords));
         assertEquals(batch.sizeInBytes(), fileRecords.sizeInBytes());
     }
@@ -777,6 +777,46 @@ public class FileRecordsTest {
         FileRecords fileRecords = FileRecords.open(tempFile());
         append(fileRecords, values);
         return fileRecords;
+    }
+
+    /**
+     * T2: Verify that sizeInBytesLong() returns the true size when it exceeds Integer.MAX_VALUE,
+     * while sizeInBytes() clamps at Integer.MAX_VALUE.
+     */
+    @Test
+    public void testSizeInBytesLongExceedsIntMax() throws Exception {
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        long largeSize = Integer.MAX_VALUE + 1000L;
+        when(fileChannelMock.size()).thenReturn(largeSize);
+
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, Long.MAX_VALUE);
+        assertEquals(largeSize, records.sizeInBytesLong(),
+                "sizeInBytesLong() should return the true size beyond Integer.MAX_VALUE");
+        assertEquals(Integer.MAX_VALUE, records.sizeInBytes(),
+                "sizeInBytes() should clamp at Integer.MAX_VALUE");
+    }
+
+    /**
+     * T5: Verify that truncateToLong() correctly handles truncation amounts exceeding Integer.MAX_VALUE.
+     */
+    @Test
+    public void testTruncateToLongLargeFile() throws Exception {
+        File fileMock = mock(File.class);
+        when(fileMock.getAbsolutePath()).thenReturn("/test/large-segment.log");
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        long largeSize = 3_000_000_000L;
+        when(fileChannelMock.size()).thenReturn(largeSize);
+
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, Long.MAX_VALUE);
+        assertEquals(largeSize, records.sizeInBytesLong());
+
+        long targetSize = 1_000_000_000L;
+        long truncated = records.truncateToLong(targetSize);
+        assertEquals(largeSize - targetSize, truncated,
+                "truncateToLong() should return the correct number of bytes truncated for >2GB truncation");
+        assertEquals(targetSize, records.sizeInBytesLong(),
+                "size should be updated to the target size after truncation");
     }
 
     private void append(FileRecords fileRecords, byte[][] values) throws IOException {

@@ -1236,7 +1236,7 @@ public class UnifiedLog implements AutoCloseable {
                             LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(
                                     appendInfo.firstOrLastOffsetOfFirstBatch(),
                                     segment.baseOffset(),
-                                    segment.size());
+                                    segment.sizeInBytesLong());
 
                             // now that we have valid records, offsets assigned, and timestamps updated, we need to
                             // validate the idempotent/transactional state of the producers and collect some metadata
@@ -1392,7 +1392,7 @@ public class UnifiedLog implements AutoCloseable {
                                                                                   short transactionVersion) {
         Map<Long, ProducerAppendInfo> updatedProducers = new HashMap<>();
         List<CompletedTxn> completedTxns = new ArrayList<>();
-        int relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment;
+        long relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment;
 
         for (MutableRecordBatch batch : records.batches()) {
             if (batch.hasProducerId()) {
@@ -1887,7 +1887,7 @@ public class UnifiedLog implements AutoCloseable {
             while (segmentOpt.isPresent()) {
                 LogSegment segment = segmentOpt.get();
                 Optional<LogSegment> nextSegmentOpt = nextOption(segmentsIterator);
-                boolean isLastSegmentAndEmpty = nextSegmentOpt.isEmpty() && segment.size() == 0;
+                boolean isLastSegmentAndEmpty = nextSegmentOpt.isEmpty() && segment.sizeInBytesLong() == 0;
                 long upperBoundOffset = nextSegmentOpt.map(LogSegment::baseOffset).orElseGet(this::logEndOffset);
                 // We don't delete segments with offsets at or beyond the high watermark to ensure that the log start
                 // offset can never exceed it.
@@ -1895,7 +1895,7 @@ public class UnifiedLog implements AutoCloseable {
 
                 // Roll the active segment when it breaches the configured retention policy. The rolled segment will be
                 // eligible for deletion and gets removed in the next iteration.
-                if (predicateResult && remoteLogEnabled() && nextSegmentOpt.isEmpty() && segment.size() > 0) {
+                if (predicateResult && remoteLogEnabled() && nextSegmentOpt.isEmpty() && segment.sizeInBytesLong() > 0) {
                     shouldRoll = true;
                 }
                 if (predicateResult && !isLastSegmentAndEmpty && isSegmentEligibleForDeletion(nextSegmentOpt, upperBoundOffset)) {
@@ -2044,7 +2044,7 @@ public class UnifiedLog implements AutoCloseable {
         final AtomicLong diff = new AtomicLong(logSize - retentionSize);
 
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
-            int segmentSize = segment.size();
+            long segmentSize = segment.sizeInBytesLong();
             boolean delete = diff.get() - segmentSize >= 0;
             logger.debug("{} retentionSize breached: {}, log size before delete segment={}, after delete segment={}",
                     segment, delete, diff.get(), diff.get() - segmentSize);
@@ -2056,7 +2056,7 @@ public class UnifiedLog implements AutoCloseable {
         return deleteOldSegments(shouldDelete, toDelete -> {
             long size = size();
             for (LogSegment segment : toDelete) {
-                size -= segment.size();
+                size -= segment.sizeInBytesLong();
                 if (remoteLogEnabledAndRemoteCopyEnabled()) {
                     logger.info("Deleting segment {} due to local log retention size {} breach. Local log size after deletion will be {}.",
                             segment, UnifiedLog.localRetentionSize(config(), true), size);
@@ -2155,7 +2155,7 @@ public class UnifiedLog implements AutoCloseable {
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
-                        segment.size(), config().segmentSize(),
+                        segment.sizeInBytesLong(), config().segmentSize(),
                         segment.offsetIndex().entries(), segment.offsetIndex().maxEntries(),
                         segment.timeIndex().entries(), segment.timeIndex().maxEntries(),
                         segment.timeWaitedForRoll(now, maxTimestampInMessages), config().segmentMs - segment.rollJitterMs());
@@ -2590,10 +2590,10 @@ public class UnifiedLog implements AutoCloseable {
                     if (offsetsToSnapshot.contains(segment.baseOffset())) {
                         producerStateManager.takeSnapshot();
                     }
-                    int maxPosition = segment.size();
+                    long maxPosition = segment.sizeInBytesLong();
                     if (segmentOfLastOffset.isPresent() && segmentOfLastOffset.get() == segment) {
                         FileRecords.LogOffsetPosition lop = segment.translateOffset(lastOffset);
-                        maxPosition = lop != null ? lop.position : segment.size();
+                        maxPosition = lop != null ? lop.position : segment.sizeInBytesLong();
                     }
 
                     FetchDataInfo fetchDataInfo = segment.read(startOffset, Integer.MAX_VALUE, maxPosition);

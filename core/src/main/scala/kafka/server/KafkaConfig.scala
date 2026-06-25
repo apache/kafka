@@ -600,7 +600,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
    */
   def extractLogConfigMap: java.util.Map[String, Object] = {
     val logProps = new java.util.HashMap[String, Object]()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, logSegmentBytes)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, logSegmentBytes: java.lang.Long)
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, logRollTimeMillis)
     logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, logRollTimeJitterMillis)
     logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, logIndexSizeMaxBytes)

@@ -41,8 +41,8 @@ import static org.apache.kafka.common.record.internal.Records.SIZE_OFFSET;
  * A log input stream which is backed by a {@link FileChannel}.
  */
 public class FileLogInputStream implements LogInputStream<FileLogInputStream.FileChannelRecordBatch> {
-    private int position;
-    private final int end;
+    private long position;
+    private final long end;
     private final FileRecords fileRecords;
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(HEADER_SIZE_UP_TO_MAGIC);
 
@@ -53,8 +53,8 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
      * @param end Position in the file channel not to read past
      */
     FileLogInputStream(FileRecords records,
-                       int start,
-                       int end) {
+                       long start,
+                       long end) {
         this.fileRecords = records;
         this.position = start;
         this.end = end;
@@ -102,7 +102,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         protected final long offset;
         protected final byte magic;
         protected final FileRecords fileRecords;
-        protected final int position;
+        protected final long position;
         protected final int batchSize;
 
         private RecordBatch fullBatch;
@@ -111,7 +111,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         FileChannelRecordBatch(long offset,
                                byte magic,
                                FileRecords fileRecords,
-                               int position,
+                               long position,
                                int batchSize) {
             this.offset = offset;
             this.magic = magic;
@@ -140,7 +140,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             return loadBatchHeader().maxTimestamp();
         }
 
-        public int position() {
+        public long position() {
             return position;
         }
 
@@ -245,7 +245,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
             int result = Long.hashCode(offset);
             result = 31 * result + (channel != null ? channel.hashCode() : 0);
-            result = 31 * result + position;
+            result = 31 * result + Long.hashCode(position);
             result = 31 * result + batchSize;
             return result;
         }

@@ -247,7 +247,7 @@ public class LogLoader {
         return new LoadedLogOffsets(
                 newLogStartOffset,
                 recoveryOffsets.newRecoveryPoint,
-                new LogOffsetMetadata(recoveryOffsets.nextOffset, activeSegment.baseOffset(), activeSegment.size()));
+                new LogOffsetMetadata(recoveryOffsets.nextOffset, activeSegment.baseOffset(), activeSegment.sizeInBytesLong()));
     }
 
     /**
@@ -397,7 +397,7 @@ public class LogLoader {
      * @return The number of bytes truncated from the segment
      * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
      */
-    private int recoverSegment(LogSegment segment) throws IOException {
+    private long recoverSegment(LogSegment segment) throws IOException {
         ProducerStateManager producerStateManager = new ProducerStateManager(
                 topicPartition,
                 dir,
@@ -412,7 +412,7 @@ public class LogLoader {
                 time,
                 false,
                 logPrefix);
-        int bytesTruncated = segment.recover(producerStateManager, leaderEpochCache);
+        long bytesTruncated = segment.recover(producerStateManager, leaderEpochCache);
         // once we have recovered the segment's data, take a snapshot to ensure that we won't
         // need to reload the same segment again while recovering another segment.
         producerStateManager.takeSnapshot();
@@ -467,7 +467,7 @@ public class LogLoader {
             while (unflushedIter.hasNext() && !truncated) {
                 LogSegment segment = unflushedIter.next();
                 logger.info("Recovering unflushed segment {}. {} recovered for {}.", segment.baseOffset(), numFlushed / numUnflushed, topicPartition);
-                int truncatedBytes;
+                long truncatedBytes;
                 try {
                     truncatedBytes = recoverSegment(segment);
                 } catch (InvalidOffsetException | IOException ioe) {

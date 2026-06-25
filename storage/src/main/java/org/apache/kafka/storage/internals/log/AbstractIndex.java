@@ -63,6 +63,7 @@ public abstract class AbstractIndex implements Closeable {
     private final long baseOffset;
     private final int maxIndexSize;
     private final boolean writable;
+    private final int entrySize;
 
     private volatile File file;
 
@@ -86,15 +87,34 @@ public abstract class AbstractIndex implements Closeable {
      */
     @SuppressWarnings("this-escape")
     public AbstractIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
+        this(file, baseOffset, maxIndexSize, writable, -1);
+    }
+
+    /**
+     * @param entrySizeOverride The size of each index entry in bytes. If -1, uses entrySize()
+     *                          (for subclasses with a fixed entry size like TimeIndex).
+     */
+    @SuppressWarnings("this-escape")
+    public AbstractIndex(File file, long baseOffset, int maxIndexSize, boolean writable, int entrySizeOverride) throws IOException {
         Objects.requireNonNull(file);
         this.file = file;
         this.baseOffset = baseOffset;
         this.maxIndexSize = maxIndexSize;
         this.writable = writable;
+        // Store the override; if -1, entrySize() will be used by subclasses
+        this.entrySize = entrySizeOverride;
 
         createAndAssignMmap();
-        this.maxEntries = mmap.limit() / entrySize();
-        this.entries = mmap.position() / entrySize();
+        int es = effectiveEntrySize();
+        this.maxEntries = mmap.limit() / es;
+        this.entries = mmap.position() / es;
+    }
+
+    /**
+     * Returns the effective entry size: the override if set, or the subclass-provided value.
+     */
+    private int effectiveEntrySize() {
+        return entrySize > 0 ? entrySize : entrySize();
     }
 
     private void createAndAssignMmap() throws IOException {
@@ -108,13 +128,14 @@ public abstract class AbstractIndex implements Closeable {
         try {
             /* pre-allocate the file if necessary */
             if (newlyCreated) {
-                if (maxIndexSize < entrySize())
+                int es = effectiveEntrySize();
+                if (maxIndexSize < es)
                     throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize);
-                raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize()));
+                raf.setLength(roundDownToExactMultiple(maxIndexSize, es));
             }
 
             long length = raf.length();
-            MappedByteBuffer mmap = createMappedBuffer(raf, newlyCreated, length, writable, entrySize());
+            MappedByteBuffer mmap = createMappedBuffer(raf, newlyCreated, length, writable, effectiveEntrySize());
 
             this.length = length;
             this.mmap = mmap;
@@ -200,7 +221,7 @@ public abstract class AbstractIndex implements Closeable {
     public boolean resize(int newSize) throws IOException {
         return inLock(() ->
                 inRemapWriteLock(() -> {
-                    int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
+                    int roundedNewSize = roundDownToExactMultiple(newSize, effectiveEntrySize());
 
                     if (length == roundedNewSize) {
                         log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
@@ -214,7 +235,7 @@ public abstract class AbstractIndex implements Closeable {
                             raf.setLength(roundedNewSize);
                             this.length = roundedNewSize;
                             mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
-                            this.maxEntries = mmap.limit() / entrySize();
+                            this.maxEntries = mmap.limit() / effectiveEntrySize();
                             mmap.position(position);
                             log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
                                     mmap.position(), mmap.limit());
@@ -267,7 +288,7 @@ public abstract class AbstractIndex implements Closeable {
     public void trimToValidSize() throws IOException {
         inLock(() -> {
             if (mmap != null) {
-                resize(entrySize() * entries);
+                resize(effectiveEntrySize() * entries);
             }
         });
     }
@@ -276,7 +297,7 @@ public abstract class AbstractIndex implements Closeable {
      * The number of bytes actually used by this index
      */
     public int sizeInBytes() {
-        return entrySize() * entries;
+        return effectiveEntrySize() * entries;
     }
 
     public void close() throws IOException {
@@ -367,7 +388,7 @@ public abstract class AbstractIndex implements Closeable {
      * lookups should go to the 1st branch. We call the last N entries the "warm" section. As we frequently look up in this
      * relatively small section, the pages containing this section are more likely to be in the page cache.
      *
-     * We set N (_warmEntries) to 8192, because
+     * We set N (_warmEntries) to fit in 8192 bytes for legacy 8-byte entries, because
      * 1. This number is small enough to guarantee all the pages of the "warm" section is touched in every warm-section
      *    lookup. So that, the entire warm section is really "warm".
      *    When doing warm-section lookup, following 3 entries are always touched: indexEntry(end), indexEntry(end-N),
@@ -377,15 +398,24 @@ public abstract class AbstractIndex implements Closeable {
      * 2. This number is large enough to guarantee most of the in-sync lookups are in the warm-section. With default Kafka
      *    settings, 8KB index corresponds to about 4MB (offset index) or 2.7MB (time index) log messages.
      *
-     *  We can't set make N (_warmEntries) to be larger than 8192, as there is no simple way to guarantee all the "warm"
-     *  section pages are really warm (touched in every lookup) on a typical 4KB-page host.
+     * For the large-format OffsetIndex (12-byte entries, KIP-1333), we keep the same target of 1024 warm entries
+     * by allowing the warm section to span up to 12 KiB. Three 12-byte coordinate touches still cover at most three
+     * 4 KiB pages, so the touched-page guarantee holds. The warm section still corresponds to ~4 MiB of log data,
+     * preserving the lookup-locality property described above.
      *
-     * In there future, we may use a backend thread to periodically touch the entire warm section. So that, we can
+     *  We can't set make N (_warmEntries) larger than 1024 (which is 8 KiB at 8 B/entry or 12 KiB at 12 B/entry),
+     *  as there is no simple way to guarantee all the "warm" section pages are really warm (touched in every lookup)
+     *  on a typical 4KB-page host.
+     *
+     * In the future, we may use a backend thread to periodically touch the entire warm section. So that, we can
      * 1) support larger warm section
      * 2) make sure the warm section of low QPS topic-partitions are really warm.
      */
     protected final int warmEntries() {
-        return 8192 / entrySize();
+        // Target a fixed number of entries (1024) so the warm-section log coverage is constant across
+        // legacy and large index formats. With page size >= 4096 bytes, the three coordinate-touches
+        // in warm-section lookup still cover at most three pages.
+        return 1024;
     }
 
     protected void safeForceUnmap() {
@@ -417,7 +447,7 @@ public abstract class AbstractIndex implements Closeable {
 
     protected void truncateToEntries0(int entries) {
         this.entries = entries;
-        mmap.position(entries * entrySize());
+        mmap.position(entries * effectiveEntrySize());
     }
 
     protected final <T, E extends Exception> T inLock(LockUtils.ThrowingSupplier<T, E> action) throws E {

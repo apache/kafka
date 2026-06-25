@@ -223,7 +223,7 @@ public class DumpLogSegments {
                     return;
                 }
 
-                FileRecords slice = fileRecords.slice(entry.position(), maxMessageSize);
+                FileRecords slice = fileRecords.sliceLong(entry.position(), maxMessageSize);
                 long firstBatchLastOffset = slice.batches().iterator().next().lastOffset();
                 if (firstBatchLastOffset != entry.offset()) {
                     Map<Long, Long> mismatchesByOffset = misMatchesForIndexFilesMap
@@ -273,7 +273,7 @@ public class DumpLogSegments {
                 }
 
                 OffsetPosition offsetPosition = index.lookup(entry.offset());
-                FileRecords partialFileRecords = fileRecords.slice(offsetPosition.position(), Integer.MAX_VALUE);
+                FileRecords partialFileRecords = fileRecords.sliceLong(offsetPosition.position(), Long.MAX_VALUE);
                 List<FileLogInputStream.FileChannelRecordBatch> batches = new ArrayList<>();
                 partialFileRecords.batches().forEach(batches::add);
 

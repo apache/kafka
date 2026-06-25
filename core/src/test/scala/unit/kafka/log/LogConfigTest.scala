@@ -114,6 +114,31 @@ class LogConfigTest {
     assertFalse(isValid("* ,100:10"))
   }
 
+  /**
+   * KIP-1333: verify the broker-wide static flag controlling large-index format is reflected
+   * by {@link LogConfig#shouldUseLargeIndexFormat}. This is the gating that the broker's
+   * metadata publisher flips when metadata.version reaches IBP_4_4_IV1.
+   */
+  @Test
+  def testLargeIndexFormatStaticGating(): Unit = {
+    val previous = LogConfig.shouldUseLargeIndexFormat
+    try {
+      LogConfig.setLargeIndexFormatEnabled(false)
+      assertFalse(LogConfig.shouldUseLargeIndexFormat,
+        "default broker state should use legacy 8-byte index format")
+
+      LogConfig.setLargeIndexFormatEnabled(true)
+      assertTrue(LogConfig.shouldUseLargeIndexFormat,
+        "after IBP_4_4_IV1 finalization, broker should use large 12-byte index format")
+
+      LogConfig.setLargeIndexFormatEnabled(false)
+      assertFalse(LogConfig.shouldUseLargeIndexFormat,
+        "flag must be reversible (defensive: downgrade or test teardown)")
+    } finally {
+      LogConfig.setLargeIndexFormatEnabled(previous)
+    }
+  }
+
   /* Sanity check that toHtmlTable produces one of the expected configs */
   @Test
   def testToHtmlTable(): Unit = {

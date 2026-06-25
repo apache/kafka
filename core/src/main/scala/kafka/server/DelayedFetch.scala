@@ -68,7 +68,7 @@ class DelayedFetch(
    * Upon completion, should return whatever data is available for each valid partition
    */
   override def tryComplete(): Boolean = {
-    var accumulatedSize = 0
+    var accumulatedSize = 0L
     fetchPartitionStatus.forEach { (topicIdPartition, fetchStatus) =>
       val fetchOffset = fetchStatus.startOffsetMetadata
       val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch

@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -260,6 +261,466 @@ public class OffsetIndexTest {
         File file = TestUtils.tempFile();
         Files.deleteIfExists(file.toPath());
         return file;
+    }
+
+    /**
+     * T4: Verify that OffsetIndex correctly stores and retrieves positions exceeding Integer.MAX_VALUE.
+     */
+    @Test
+    public void testAppendAndLookupWithLargePositions() throws IOException {
+        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * OffsetIndex.LARGE_ENTRY_SIZE, true, true)) {
+            long posAbove2GB = Integer.MAX_VALUE + 1000L;
+            idx.append(1, posAbove2GB);
+            idx.append(2, posAbove2GB + 4096);
+            idx.append(3, posAbove2GB + 8192);
+
+            // Verify round-trip: lookup should return the exact large positions
+            OffsetPosition result1 = idx.lookup(1);
+            assertEquals(1, result1.offset());
+            assertEquals(posAbove2GB, result1.position(),
+                    "Position exceeding Integer.MAX_VALUE should be stored and retrieved correctly");
+
+            OffsetPosition result2 = idx.lookup(2);
+            assertEquals(2, result2.offset());
+            assertEquals(posAbove2GB + 4096, result2.position());
+
+            // Verify entry() accessor
+            OffsetPosition entry0 = idx.entry(0);
+            assertEquals(1, entry0.offset());
+            assertEquals(posAbove2GB, entry0.position());
+
+            OffsetPosition entry2 = idx.entry(2);
+            assertEquals(3, entry2.offset());
+            assertEquals(posAbove2GB + 8192, entry2.position());
+        }
+    }
+
+    /**
+     * T4 (continued): Verify reopen of index file with positions exceeding Integer.MAX_VALUE.
+     */
+    @Test
+    public void testReopenWithLargePositions() throws IOException {
+        File indexFile = nonExistentTempFile();
+        OffsetIndex largeIndex = new OffsetIndex(indexFile, BASE_OFFSET, 30 * OffsetIndex.LARGE_ENTRY_SIZE, true, true);
+        long posAbove2GB = 3_000_000_000L;
+        OffsetPosition first = new OffsetPosition(BASE_OFFSET + 6, posAbove2GB);
+        OffsetPosition second = new OffsetPosition(BASE_OFFSET + 7, posAbove2GB + 100);
+        largeIndex.append(first.offset(), first.position());
+        largeIndex.append(second.offset(), second.position());
+        largeIndex.close();
+
+        OffsetIndex reopened = new OffsetIndex(indexFile, BASE_OFFSET, 30 * OffsetIndex.LARGE_ENTRY_SIZE, false, true);
+        assertEquals(first, reopened.lookup(first.offset()),
+                "Large position should survive close/reopen");
+        assertEquals(second, reopened.lookup(second.offset()));
+        assertEquals(second.offset(), reopened.lastOffset());
+        assertEquals(2, reopened.entries());
+        reopened.close();
+    }
+
+    /**
+     * T1: Verify that legacy 8-byte format indexes can be read correctly when
+     * useLargeFormat=false (before MetadataVersion finalization).
+     */
+    @Test
+    public void testLegacyFormatReadWrite() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // Create an index in legacy 8-byte format
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 10 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 100);
+            legacyIdx.append(2, 200);
+            legacyIdx.append(3, 300);
+
+            assertEquals(new OffsetPosition(1, 100), legacyIdx.lookup(1));
+            assertEquals(new OffsetPosition(2, 200), legacyIdx.lookup(2));
+            assertEquals(new OffsetPosition(3, 300), legacyIdx.lookup(3));
+            assertEquals(3, legacyIdx.entries());
+
+            // Verify file size is multiple of 8 (legacy format)
+            legacyIdx.trimToValidSize();
+            assertEquals(0, legacyIdx.sizeInBytes() % OffsetIndex.LEGACY_ENTRY_SIZE,
+                    "Legacy format index should have entries as multiples of 8 bytes");
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * T1 (continued): Verify migration from legacy to large format via reset+rebuild.
+     * This simulates what happens when MetadataVersion is finalized:
+     * indexes are rebuilt from .log files in the new 12-byte format.
+     */
+    @Test
+    public void testLegacyToLargeFormatMigration() throws IOException {
+        // Create a legacy-format index
+        File indexFile = nonExistentTempFile();
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 10 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 100);
+            legacyIdx.append(2, 200);
+            legacyIdx.append(3, 300);
+        }
+
+        // Phase 2: Simulate MetadataVersion finalization -- delete old index and recreate
+        // in large format. This is what LogSegment.recover() does: it calls
+        // offsetIndex().reset() which truncates the file to 0, then rebuilds.
+        // After reset, the file is empty so the next open uses the requested format.
+        Files.deleteIfExists(indexFile.toPath());
+        try (OffsetIndex largeIdx = new OffsetIndex(indexFile, 0L, 10 * OffsetIndex.LARGE_ENTRY_SIZE, true, true)) {
+            // Rebuild in new format with positions > 2GB
+            long posAbove2GB = 3_000_000_000L;
+            largeIdx.append(1, posAbove2GB);
+            largeIdx.append(2, posAbove2GB + 4096);
+
+            assertEquals(new OffsetPosition(1, posAbove2GB), largeIdx.lookup(1));
+            assertEquals(new OffsetPosition(2, posAbove2GB + 4096), largeIdx.lookup(2));
+            assertEquals(2, largeIdx.entries());
+            largeIdx.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * Simulate upgrade: write entries in legacy format, then read them with legacy format
+     * (before MetadataVersion finalization). Verify data integrity is preserved.
+     */
+    @Test
+    public void testUpgradeReadLegacyFormatWithNewCode() throws IOException {
+        File indexFile = nonExistentTempFile();
+
+        // Write entries using legacy format (simulates old broker)
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            for (int i = 0; i < 10; i++) {
+                legacyIdx.append(i, i * 1000);
+            }
+        }
+
+        // Read with new code but still in legacy mode (MetadataVersion not finalized)
+        try (OffsetIndex reopened = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, false, false)) {
+            assertEquals(10, reopened.entries());
+            for (int i = 0; i < 10; i++) {
+                OffsetPosition pos = reopened.entry(i);
+                assertEquals(i, pos.offset());
+                assertEquals(i * 1000, pos.position());
+            }
+            // Sanity check should pass since format matches
+            reopened.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * Simulate downgrade: write entries in legacy format with new code,
+     * then verify they can be read by old code (also legacy format).
+     * This proves the new broker doesn't break existing indexes when
+     * MetadataVersion is not finalized.
+     */
+    @Test
+    public void testDowngradeCompatibility() throws IOException {
+        File indexFile = nonExistentTempFile();
+
+        // Write with new code in legacy mode
+        try (OffsetIndex newCodeLegacy = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            newCodeLegacy.append(1, 100);
+            newCodeLegacy.append(2, 200);
+            newCodeLegacy.append(3, 300);
+        }
+
+        // Verify file is in old 8-byte format
+        long fileSize = indexFile.length();
+        assertEquals(0, fileSize % OffsetIndex.LEGACY_ENTRY_SIZE,
+                "File should be a multiple of 8 bytes (legacy format)");
+
+        // Read with legacy format (simulates old broker reading)
+        try (OffsetIndex oldBrokerRead = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, false, false)) {
+            assertEquals(3, oldBrokerRead.entries());
+            assertEquals(new OffsetPosition(1, 100), oldBrokerRead.entry(0));
+            assertEquals(new OffsetPosition(2, 200), oldBrokerRead.entry(1));
+            assertEquals(new OffsetPosition(3, 300), oldBrokerRead.entry(2));
+            oldBrokerRead.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * Simulate full migration: legacy → large format via reset + rebuild.
+     * This is what happens when MetadataVersion is finalized and indexes
+     * are rebuilt from .log files.
+     */
+    @Test
+    public void testFormatMigrationViaReset() throws IOException {
+        File indexFile = nonExistentTempFile();
+
+        // Phase 1: Create legacy index with positions < 2GB
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 1000);
+            legacyIdx.append(2, 2000);
+            legacyIdx.append(3, 3000);
+        }
+
+        // Phase 2: Delete old index and recreate in large format
+        // (simulates MetadataVersion finalization + LogSegment.recover())
+        Files.deleteIfExists(indexFile.toPath());
+        try (OffsetIndex largeIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LARGE_ENTRY_SIZE, true, true)) {
+            // Rebuild with positions > 2GB (the whole point of the format change)
+            long posAbove2GB = 3_000_000_000L;
+            largeIdx.append(1, posAbove2GB);
+            largeIdx.append(2, posAbove2GB + 4096);
+            largeIdx.append(3, posAbove2GB + 8192);
+
+            // Verify round-trip
+            assertEquals(new OffsetPosition(1, posAbove2GB), largeIdx.lookup(1));
+            assertEquals(new OffsetPosition(3, posAbove2GB + 8192), largeIdx.entry(2));
+            assertEquals(3, largeIdx.entries());
+            largeIdx.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    // === Format auto-detection tests (mb-1) ===
+
+    /**
+     * Verify that opening a legacy 8-byte file with useLargeFormat=true auto-detects the
+     * legacy format and reads correctly. This is the key mb-1 scenario: after MetadataVersion
+     * finalization, old index files must still be read correctly.
+     */
+    @Test
+    public void testAutoDetectLegacyFormatWhenLargeRequested() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // Write 5 entries in legacy format (40 bytes, mod12 != 0 -> unambiguous)
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            for (int i = 0; i < 5; i++) {
+                legacyIdx.append(i, i * 1000);
+            }
+        }
+
+        // Open with useLargeFormat=true -- should auto-detect as legacy
+        try (OffsetIndex reopened = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LARGE_ENTRY_SIZE, false, true)) {
+            assertEquals(5, reopened.entries());
+            for (int i = 0; i < 5; i++) {
+                assertEquals(new OffsetPosition(i, i * 1000), reopened.entry(i));
+            }
+            reopened.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * Verify auto-detection with an ambiguous file size (divisible by both 8 and 12).
+     * 3 legacy entries = 24 bytes, which is also 2 * 12.
+     * The validator should detect it as legacy because reading as 12-byte produces wrong data.
+     */
+    @Test
+    public void testAutoDetectAmbiguousFileSizeLegacy() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // Write 3 entries in legacy format (24 bytes = divisible by both 8 and 12)
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 100);
+            legacyIdx.append(2, 200);
+            legacyIdx.append(3, 300);
+        }
+
+        // Open with useLargeFormat=true -- should auto-detect as legacy via validation
+        try (OffsetIndex reopened = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LARGE_ENTRY_SIZE, false, true)) {
+            assertEquals(3, reopened.entries());
+            assertEquals(new OffsetPosition(1, 100), reopened.entry(0));
+            assertEquals(new OffsetPosition(2, 200), reopened.entry(1));
+            assertEquals(new OffsetPosition(3, 300), reopened.entry(2));
+            reopened.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * Verify auto-detection for a large-format file opened with useLargeFormat=false.
+     * After MetadataVersion is finalized and then hypothetically un-finalized (or reading
+     * a large-format file with legacy request), it should still auto-detect correctly.
+     */
+    @Test
+    public void testAutoDetectLargeFormatWhenLegacyRequested() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // Write entries in large format with positions > Integer.MAX_VALUE
+        try (OffsetIndex largeIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LARGE_ENTRY_SIZE, true, true)) {
+            long pos = 3_000_000_000L;
+            largeIdx.append(1, pos);
+            largeIdx.append(2, pos + 4096);
+        }
+
+        // Open with useLargeFormat=false -- should auto-detect as large format
+        // because 24 bytes / 8 = 3 entries would produce invalid data (negative positions)
+        try (OffsetIndex reopened = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LARGE_ENTRY_SIZE, false, false)) {
+            assertEquals(2, reopened.entries());
+            assertEquals(new OffsetPosition(1, 3_000_000_000L), reopened.entry(0));
+            assertEquals(new OffsetPosition(2, 3_000_000_000L + 4096), reopened.entry(1));
+            reopened.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * Verify detectEntrySize static method directly.
+     */
+    @Test
+    public void testDetectEntrySizeNewFile() throws IOException {
+        File nonExistent = nonExistentTempFile();
+        nonExistent.delete(); // ensure it doesn't exist
+        assertEquals(OffsetIndex.LEGACY_ENTRY_SIZE,
+                OffsetIndex.detectEntrySize(nonExistent, OffsetIndex.LEGACY_ENTRY_SIZE));
+        assertEquals(OffsetIndex.LARGE_ENTRY_SIZE,
+                OffsetIndex.detectEntrySize(nonExistent, OffsetIndex.LARGE_ENTRY_SIZE));
+    }
+
+    @Test
+    public void testDetectEntrySizeEmptyFile() throws IOException {
+        File emptyFile = nonExistentTempFile();
+        emptyFile.createNewFile();
+        assertEquals(OffsetIndex.LEGACY_ENTRY_SIZE,
+                OffsetIndex.detectEntrySize(emptyFile, OffsetIndex.LEGACY_ENTRY_SIZE));
+        Files.deleteIfExists(emptyFile.toPath());
+    }
+
+    /**
+     * Cross-check against the companion .log file size disambiguates ~all real cases:
+     * legacy-read-as-large produces positions > 2^32 for segments < 2GiB; the .log
+     * length cross-check rejects those impossible positions.
+     */
+    @Test
+    public void testDetectEntrySizeCrossChecksLogFileSize() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // Write 3 legacy entries (24 bytes, ambiguous size)
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 100);
+            legacyIdx.append(2, 200);
+            legacyIdx.append(3, 300);
+        }
+
+        // Create a companion .log file that is too small for any large-format positions
+        // to be valid (positions would have to be <= 1024).
+        String indexPath = indexFile.getAbsolutePath();
+        File logFile = new File(indexPath.substring(0, indexPath.lastIndexOf('.')) + ".log");
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(logFile, "rw")) {
+            raf.setLength(1024);
+        }
+
+        // Detection should pick legacy thanks to the .log cross-check.
+        try (OffsetIndex reopened = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LARGE_ENTRY_SIZE, false, true)) {
+            assertEquals(3, reopened.entries());
+            assertEquals(new OffsetPosition(1, 100), reopened.entry(0));
+        }
+
+        Files.deleteIfExists(logFile.toPath());
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * P0-1 (revised v2): when format is genuinely ambiguous (strict monotonicity passes for both
+     * formats AND no .log cross-check disambiguates) for a non-trivially-short file, detection
+     * throws {@link CorruptIndexException} so recovery rebuilds from the .log file. Silently
+     * picking the wrong format would risk consumer-visible read corruption.
+     */
+    @Test
+    public void testDetectEntrySizeAmbiguousThrowsForNonTrivialFiles() throws IOException {
+        File indexFile = nonExistentTempFile();
+        ByteBuffer buf = ByteBuffer.allocate(24);
+        // Bytes 1,2,3,4,5,6 pass strict monotonicity under both formats.
+        buf.putInt(1);
+        buf.putInt(2);
+        buf.putInt(3);
+        buf.putInt(4);
+        buf.putInt(5);
+        buf.putInt(6);
+        Files.write(indexFile.toPath(), buf.array());
+
+        // No companion .log file. Both formats pass strict validation.
+        // Detection must throw so recovery rebuilds from .log.
+        assertThrows(CorruptIndexException.class,
+            () -> OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
+        assertThrows(CorruptIndexException.class,
+            () -> OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LEGACY_ENTRY_SIZE));
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * P0-1 (corner case): for very short files (fewer than two large-format entries) the
+     * monotonicity check has no power to disambiguate. Detection returns the requested format
+     * because the file will be rewritten on the next append anyway.
+     */
+    @Test
+    public void testDetectEntrySizeShortFileFallsBackToRequested() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // 8 bytes: exactly one legacy entry, less than one large entry (12 bytes).
+        // Both formats trivially "validate" but we cannot tell them apart.
+        ByteBuffer buf = ByteBuffer.allocate(8);
+        buf.putInt(1);
+        buf.putInt(100);
+        Files.write(indexFile.toPath(), buf.array());
+
+        // For a single-entry file, fall back to requested format.
+        assertEquals(OffsetIndex.LEGACY_ENTRY_SIZE,
+            OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LEGACY_ENTRY_SIZE));
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * P0-1 (legitimate-migration case): a non-empty index that fails strict validation under both
+     * formats (e.g. corruption, partial-write tail) throws {@link CorruptIndexException}. This is
+     * the safer behaviour than silently picking the requested format and mmaping garbage.
+     */
+    @Test
+    public void testDetectEntrySizeCorruptThrows() throws IOException {
+        File indexFile = nonExistentTempFile();
+        // 24 bytes that fail monotonicity under both 8-byte and 12-byte readings
+        // (decreasing relative offsets).
+        ByteBuffer buf = ByteBuffer.allocate(24);
+        buf.putInt(10);
+        buf.putInt(1000);
+        buf.putInt(5);  // decreases -- breaks legacy monotonicity at slot 1
+        buf.putInt(900);
+        buf.putInt(0);  // decreases again
+        buf.putInt(800);
+        Files.write(indexFile.toPath(), buf.array());
+
+        assertThrows(CorruptIndexException.class,
+            () -> OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * P0-1 (cross-check disambiguation): when both formats would pass strict monotonicity in
+     * isolation but the companion .log file's size rules out one of them, detection picks the
+     * other one cleanly. This exercises the LCM(8,12)=24-byte boundary -- one of the realistic
+     * migration shapes.
+     */
+    @Test
+    public void testDetectEntrySizeLogSizeCrossCheckPicksLegacy() throws IOException {
+        // The index file's name is "<prefix>.index"; companionLogFileSize replaces
+        // ".index" with ".log" in the name to find the sibling log file.
+        File indexFile = TestUtils.tempFile("offset-idx-cross-check", ".index");
+        String idxName = indexFile.getName();
+        String logName = idxName.substring(0, idxName.lastIndexOf(".index")) + ".log";
+        File logFile = new File(indexFile.getParentFile(), logName);
+
+        // Legacy data: three entries (offset, position) = (1,100),(2,200),(3,300)
+        ByteBuffer buf = ByteBuffer.allocate(24);
+        buf.putInt(1);
+        buf.putInt(100);
+        buf.putInt(2);
+        buf.putInt(200);
+        buf.putInt(3);
+        buf.putInt(300);
+        Files.write(indexFile.toPath(), buf.array());
+        // Companion .log file that is large enough to hold all legacy positions but smaller
+        // than what reading the same bytes as large format would imply.
+        // Large-format reading of these bytes would produce position=(100L<<32)|2 etc.,
+        // astronomically larger than any realistic .log size.
+        Files.write(logFile.toPath(), new byte[500]);
+
+        try {
+            // Even when caller requests LARGE, the .log cross-check rules it out.
+            assertEquals(OffsetIndex.LEGACY_ENTRY_SIZE,
+                OffsetIndex.detectEntrySize(indexFile, OffsetIndex.LARGE_ENTRY_SIZE));
+        } finally {
+            Files.deleteIfExists(indexFile.toPath());
+            Files.deleteIfExists(logFile.toPath());
+        }
     }
 
     private void assertWriteFails(String message, OffsetIndex idx, int offset) {

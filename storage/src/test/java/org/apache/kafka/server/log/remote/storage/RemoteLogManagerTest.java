@@ -513,6 +513,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -627,6 +628,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -722,6 +724,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -809,6 +812,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -889,6 +893,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -1009,6 +1014,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -1276,6 +1282,7 @@ public class RemoteLogManagerTest {
         when(oldSegment.log()).thenReturn(fileRecords);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
@@ -1727,7 +1734,7 @@ public class RemoteLogManagerTest {
         // startOffset   , ts-1
         // startOffset+1 , ts+1
         // startOffset+2 , ts+2
-        when(remoteStorageManager.fetchLogSegment(segmentMetadata, 0))
+        when(remoteStorageManager.fetchLogSegment(segmentMetadata, 0L))
                 .thenAnswer(a -> new ByteArrayInputStream(records(ts, startOffset, targetLeaderEpoch).buffer().array()));
 
         when(mockLog.logEndOffset()).thenReturn(600L);
@@ -2666,6 +2673,7 @@ public class RemoteLogManagerTest {
         FileRecords fileRecords = mock(FileRecords.class);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
 
         when(oldSegment.log()).thenReturn(fileRecords);
         when(oldSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
@@ -3500,7 +3508,7 @@ public class RemoteLogManagerTest {
         LeaderEpochFileCache cache = mock(LeaderEpochFileCache.class);
         when(cache.epochForOffset(anyLong())).thenReturn(OptionalInt.of(1));
 
-        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
+        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyLong()))
                 .thenAnswer(a -> fileInputStream);
         when(mockLog.leaderEpochCache()).thenReturn(cache);
 
@@ -3548,7 +3556,7 @@ public class RemoteLogManagerTest {
             }
 
             @Override
-            int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+            long lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
             }
 
@@ -3577,7 +3585,7 @@ public class RemoteLogManagerTest {
         LeaderEpochFileCache cache = mock(LeaderEpochFileCache.class);
         when(cache.epochForOffset(anyLong())).thenReturn(OptionalInt.of(1));
 
-        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
+        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyLong()))
                 .thenAnswer(a -> fileInputStream);
         when(mockLog.leaderEpochCache()).thenReturn(cache);
 
@@ -3619,7 +3627,7 @@ public class RemoteLogManagerTest {
                 return Optional.of(segmentMetadata);
             }
             @Override
-            int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+            long lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
             }
             @Override
@@ -3668,7 +3676,7 @@ public class RemoteLogManagerTest {
                 Uuid.randomUuid(), fetchOffset, 0, fetchMaxBytes, Optional.empty()
         );
 
-        when(rsmManager.fetchLogSegment(any(), anyInt())).thenReturn(fileInputStream);
+        when(rsmManager.fetchLogSegment(any(), anyLong())).thenReturn(fileInputStream);
         when(segmentMetadata.topicIdPartition()).thenReturn(new TopicIdPartition(Uuid.randomUuid(), tp));
         // Fetching first time  FirstBatch return null because of log compaction.
         // Fetching second time  FirstBatch return data.
@@ -3711,7 +3719,7 @@ public class RemoteLogManagerTest {
                 return remoteLogInputStream;
             }
             @Override
-            int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+            long lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
             }
         }) {
@@ -3818,7 +3826,7 @@ public class RemoteLogManagerTest {
             // Verify quota check was performed
             verify(rlmCopyQuotaManager, times(1)).getThrottleTimeMs();
             // Verify bytes to copy was recorded with the quota manager
-            verify(rlmCopyQuotaManager, times(1)).record(10);
+            verify(rlmCopyQuotaManager, times(1)).record(10L);
 
             Map<org.apache.kafka.common.MetricName, KafkaMetric> allMetrics = metrics.metrics();
             KafkaMetric avgMetric = allMetrics.get(metrics.metricName("remote-copy-throttle-time-avg", "RemoteLogManager"));
@@ -3879,6 +3887,7 @@ public class RemoteLogManagerTest {
         FileRecords fileRecords = mock(FileRecords.class);
         when(fileRecords.file()).thenReturn(tempFile);
         when(fileRecords.sizeInBytes()).thenReturn(10);
+        when(fileRecords.sizeInBytesLong()).thenReturn(10L);
 
         // Set up the segment that is eligible for copy
         when(oldSegment.log()).thenReturn(fileRecords);
@@ -4106,7 +4115,7 @@ public class RemoteLogManagerTest {
         File segmentFile = tempFile();
         appendRecordsToFile(segmentFile, 100, 3);
         FileInputStream fileInputStream = new FileInputStream(segmentFile);
-        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
+        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyLong()))
                 .thenReturn(fileInputStream);
 
         RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
@@ -4122,7 +4131,7 @@ public class RemoteLogManagerTest {
                 return remoteLogMetadataManager;
             }
             @Override
-            int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+            long lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 0;
             }
         };

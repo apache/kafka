@@ -464,7 +464,7 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
-    public int lookupOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+    public long lookupOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
         lock.readLock().lock();
         try {
             return getIndexEntry(remoteLogSegmentMetadata).lookupOffset(offset).position();
@@ -473,7 +473,7 @@ public class RemoteIndexCache implements Closeable {
         }
     }
 
-    public int lookupTimestamp(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long timestamp, long startingOffset) {
+    public long lookupTimestamp(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long timestamp, long startingOffset) {
         lock.readLock().lock();
         try {
             return getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position();

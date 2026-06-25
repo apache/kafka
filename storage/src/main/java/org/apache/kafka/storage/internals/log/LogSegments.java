@@ -343,6 +343,6 @@ public class LogSegments implements Closeable {
      * @return Sum of the log segments' sizes (in bytes)
      */
     public static long sizeInBytes(Collection<LogSegment> segments) {
-        return segments.stream().mapToLong(LogSegment::size).sum();
+        return segments.stream().mapToLong(LogSegment::sizeInBytesLong).sum();
     }
 }

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-public record SegmentPosition(long baseOffset, int relativePosition) implements OffsetMetadata {
+public record SegmentPosition(long baseOffset, long relativePosition) implements OffsetMetadata {
 
     @Override
     public String toString() {

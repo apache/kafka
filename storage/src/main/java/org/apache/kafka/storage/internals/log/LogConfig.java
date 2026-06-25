@@ -34,6 +34,9 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -44,6 +47,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -61,6 +65,46 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 public class LogConfig extends AbstractConfig {
+
+    private static final Logger LOG = LoggerFactory.getLogger(LogConfig.class);
+
+    /**
+     * Broker-wide flag that controls whether newly-created offset indexes use the 12-byte
+     * large-index format (KIP-1333). This is set from the finalized {@code metadata.version}
+     * by the broker's metadata publisher; see {@code BrokerMetadataPublisher}. It is a
+     * cluster-wide property because {@code MetadataVersion} is cluster-wide, so a static
+     * flag is the correct shape (per-topic differentiation is not supported by KIP-1333).
+     *
+     * <p>Default {@code false} preserves the legacy 8-byte format on a broker that has not
+     * yet received its first metadata image (e.g. before {@code finishInitializingReplicaManager}
+     * runs). Tests that need the large format should set this flag explicitly or pass
+     * {@code useLargeFormat=true} into the {@link OffsetIndex} / {@link LazyIndex} constructors
+     * directly.
+     */
+    private static final AtomicBoolean LARGE_INDEX_FORMAT_ENABLED = new AtomicBoolean(false);
+
+    /**
+     * Update the broker-wide large-index-format flag. Called by the metadata publisher when
+     * the finalized {@code metadata.version} advances past {@code IBP_4_4_IV1}. Logs the
+     * transition so operators can correlate it with segment-roll behaviour.
+     */
+    public static void setLargeIndexFormatEnabled(boolean enabled) {
+        boolean previous = LARGE_INDEX_FORMAT_ENABLED.getAndSet(enabled);
+        if (previous != enabled) {
+            LOG.info("Large offset-index format (12-byte entries) is now {}. " +
+                "Segments rolled after this point will use the {} index format.",
+                enabled ? "ENABLED" : "DISABLED",
+                enabled ? "large (12-byte)" : "legacy (8-byte)");
+        }
+    }
+
+    /**
+     * @return whether the broker should currently use the 12-byte large-index format for
+     *         newly-created offset indexes.
+     */
+    public static boolean shouldUseLargeIndexFormat() {
+        return LARGE_INDEX_FORMAT_ENABLED.get();
+    }
 
     private static class RemoteLogConfig {
 
@@ -128,7 +172,7 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
 
-    public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
+    public static final long DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
     public static final long DEFAULT_SEGMENT_JITTER_MS = 0;
     public static final long DEFAULT_RETENTION_MS = 24 * 7 * 60 * 60 * 1000L;
@@ -157,7 +201,7 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.LOG_DIR_CONFIG, LIST, ServerLogConfigs.LOG_DIR_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(false, false), HIGH, ServerLogConfigs.LOG_DIR_DOC)
             .define(ServerLogConfigs.LOG_DIRS_CONFIG, LIST, null, ConfigDef.ValidList.anyNonDuplicateValues(false, true), HIGH, ServerLogConfigs.LOG_DIRS_DOC)
             .define(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, LIST, ServerLogConfigs.CORDONED_LOG_DIRS_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, true), MEDIUM, ServerLogConfigs.CORDONED_LOG_DIRS_DOC)
-            .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
+            .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, LONG, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
 
             .define(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, LONG, null, HIGH, ServerLogConfigs.LOG_ROLL_TIME_MILLIS_DOC)
             .define(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, INT, (int) TimeUnit.MILLISECONDS.toHours(DEFAULT_SEGMENT_MS), atLeast(1), HIGH, ServerLogConfigs.LOG_ROLL_TIME_HOURS_DOC)
@@ -195,7 +239,7 @@ public class LogConfig extends AbstractConfig {
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
-                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
+                define(TopicConfig.SEGMENT_BYTES_CONFIG, LONG, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
                         TopicConfig.SEGMENT_BYTES_DOC)
                 .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
                 .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
@@ -261,7 +305,7 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_BYTES, atLeast(-1), MEDIUM, TopicConfig.REMOTE_COPY_LAG_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
                 .define(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC)
-                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
+                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, LONG, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -270,8 +314,8 @@ public class LogConfig extends AbstractConfig {
      * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
      * should also be in `KafkaConfig#extractLogConfigMap`.
      */
-    private final int segmentSize;
-    private final Integer internalSegmentSize;
+    private final long segmentSize;
+    private final Long internalSegmentSize;
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
@@ -315,8 +359,8 @@ public class LogConfig extends AbstractConfig {
         this.props = Collections.unmodifiableMap(props);
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
-        this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
-        this.internalSegmentSize = getInt(INTERNAL_SEGMENT_BYTES_CONFIG);
+        this.segmentSize = getLong(TopicConfig.SEGMENT_BYTES_CONFIG);
+        this.internalSegmentSize = getLong(INTERNAL_SEGMENT_BYTES_CONFIG);
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
@@ -352,6 +396,40 @@ public class LogConfig extends AbstractConfig {
         this.errorsDeadletterqueueGroupEnable = getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);
+
+        warnIfIndexUndersizedForSegment();
+    }
+
+    /**
+     * Warn the operator if {@code segment.bytes} is large enough that the offset index will fill up
+     * before the segment reaches the configured size, causing early segment rolls.
+     *
+     * <p>An offset index entry is added every {@code index.interval.bytes} of log data. With the
+     * large-format 12-byte entries (KIP-1333), an 8 GiB segment with the default 4 KiB index
+     * interval needs ~24 MiB of index space. The default {@code segment.index.bytes} (10 MiB) is
+     * not large enough, so the segment would roll at ~3.4 GiB instead of the configured 8 GiB.
+     *
+     * <p>This check warns rather than failing because the user may intentionally accept early
+     * rolls (e.g., to increase index granularity) or rely on dynamic config updates.
+     */
+    private void warnIfIndexUndersizedForSegment() {
+        long effectiveSegmentSize = internalSegmentSize == null ? segmentSize : internalSegmentSize;
+        if (indexInterval <= 0 || effectiveSegmentSize <= 0) return;
+        boolean largeFormat = shouldUseLargeIndexFormat();
+        int entrySize = largeFormat ? OffsetIndex.LARGE_ENTRY_SIZE : OffsetIndex.LEGACY_ENTRY_SIZE;
+        // Use long arithmetic; required index size = ceil(segmentSize / indexInterval) * entrySize.
+        long requiredEntries = (effectiveSegmentSize + indexInterval - 1) / indexInterval;
+        long requiredIndexBytes = requiredEntries * entrySize;
+        if (requiredIndexBytes > maxIndexSize) {
+            LOG.warn("Segment will roll early on offset-index fullness, not segment size: " +
+                    "segment.bytes={}, index.interval.bytes={}, index entry size={} bytes ({} format), " +
+                    "computed required index bytes={}, but segment.index.bytes={}. " +
+                    "Raise segment.index.bytes to at least {} to allow the segment to fill, " +
+                    "or lower segment.bytes / raise index.interval.bytes if early rolling is intended.",
+                    effectiveSegmentSize, indexInterval, entrySize,
+                    largeFormat ? "large" : "legacy",
+                    requiredIndexBytes, maxIndexSize, requiredIndexBytes);
+        }
     }
 
     private Optional<Compression> getCompression() {
@@ -371,7 +449,7 @@ public class LogConfig extends AbstractConfig {
         };
     }
 
-    public int segmentSize() {
+    public long segmentSize() {
         if (internalSegmentSize == null) return segmentSize;
         return internalSegmentSize;
     }
@@ -395,7 +473,7 @@ public class LogConfig extends AbstractConfig {
             return segmentMs;
     }
 
-    public int initFileSize() {
+    public long initFileSize() {
         if (preallocate)
             return segmentSize();
         else

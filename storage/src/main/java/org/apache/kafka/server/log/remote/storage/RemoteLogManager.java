@@ -640,7 +640,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset)
             throws RemoteStorageException, IOException {
-        int startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset);
+        long startPos = indexCache.lookupTimestamp(rlsMetadata, timestamp, startingOffset);
 
         InputStream remoteSegInputStream = null;
         try {
@@ -1039,7 +1039,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                     boolean ignored = copyQuotaManagerLockCondition.await(quotaTimeout().toMillis(), TimeUnit.MILLISECONDS);
                                     throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
                                 }
-                                rlmCopyQuotaManager.record(candidateLogSegment.logSegment.log().sizeInBytes());
+                                rlmCopyQuotaManager.record(candidateLogSegment.logSegment.log().sizeInBytesLong());
                                 // Signal waiting threads to check the quota again
                                 copyQuotaManagerLockCondition.signalAll();
                             } finally {
@@ -1092,8 +1092,22 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             epochEntries.forEach(entry -> segmentLeaderEpochs.put(entry.epoch(), entry.startOffset()));
 
             boolean isTxnIdxEmpty = segment.txnIndex().isEmpty();
+            long actualSegmentSize = segment.log().sizeInBytesLong();
+            // RemoteLogSegmentMetadata.segmentSizeInBytes is int (schema uses int32).
+            // Until the metadata record schema is evolved to int64, skip tiering of segments >2GiB.
+            // Silently clamping the size would corrupt remote-tier accounting (retention, deletion,
+            // remote-bytes metrics) and could cause incorrect data to be served on fetch.
+            if (actualSegmentSize > Integer.MAX_VALUE) {
+                logger.warn("Skipping tiered-storage copy of segment {} of partition {} because its size ({} bytes) " +
+                    "exceeds the int32 limit of RemoteLogSegmentMetadata.segmentSizeInBytes. " +
+                    "This segment will remain on local storage. The tiered-storage metadata schema must be evolved " +
+                    "to int64 to support segments larger than 2GiB (tracked separately from KIP-1333).",
+                    segment.baseOffset(), topicIdPartition, actualSegmentSize);
+                return;
+            }
+            int segmentSizeForMetadata = (int) actualSegmentSize;
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(segmentId, segment.baseOffset(), endOffset,
-                    segment.largestTimestamp(), brokerId, time.milliseconds(), segment.log().sizeInBytes(),
+                    segment.largestTimestamp(), brokerId, time.milliseconds(), segmentSizeForMetadata,
                     segmentLeaderEpochs, isTxnIdxEmpty);
 
             remoteLogMetadataManagerPlugin.get().addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
@@ -1863,7 +1877,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         EnrichedRecordBatch enrichedRecordBatch = new EnrichedRecordBatch(null, 0);
         InputStream remoteSegInputStream = null;
         try {
-            int startPos = 0;
+            long startPos = 0;
             //  Iteration over multiple RemoteSegmentMetadata is required in case of log compaction.
             //  It may be possible the offset is log compacted in the current RemoteLogSegmentMetadata
             //  And we need to iterate over the next segment metadata to fetch messages higher than the given offset.
@@ -1930,7 +1944,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     // Visible for testing
-    int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+    long lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
         return indexCache.lookupOffset(remoteLogSegmentMetadata, offset);
     }
 
@@ -2075,7 +2089,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     // Visible for testing
     EnrichedRecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
-        int skippedBytes = 0;
+        long skippedBytes = 0;
         RecordBatch nextBatch = null;
         // Look for the batch which has the desired offset
         // We will always have a batch in that segment as it is a non-compacted topic.
@@ -2425,9 +2439,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     static class EnrichedRecordBatch {
         private final RecordBatch batch;
-        private final int skippedBytes;
+        private final long skippedBytes;
 
-        public EnrichedRecordBatch(RecordBatch batch, int skippedBytes) {
+        public EnrichedRecordBatch(RecordBatch batch, long skippedBytes) {
             this.batch = batch;
             this.skippedBytes = skippedBytes;
         }

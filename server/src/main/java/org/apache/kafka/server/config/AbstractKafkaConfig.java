@@ -510,8 +510,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return getInt(ServerLogConfigs.NUM_PARTITIONS_CONFIG);
     }
 
-    public Integer logSegmentBytes() {
-        return getInt(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG);
+    public Long logSegmentBytes() {
+        return getLong(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG);
     }
 
     public Long logFlushIntervalMessages() {

@@ -105,19 +105,62 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
      * starting from the given startPosition. The stream will end at the end of the remote log segment data file/object.
      *
+     * <p><b>Override contract:</b> a {@link RemoteStorageManager} implementation must override either this
+     * int-overload OR the long-overload ({@link #fetchLogSegment(RemoteLogSegmentMetadata, long)}). New plugins
+     * should override the long-overload to support segments larger than 2GiB (KIP-1333). Failing to override
+     * either will cause {@link UnsupportedOperationException} at runtime.
+     *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param startPosition            start position of log segment to be read, inclusive.
      * @return input stream of the requested log segment data.
      * @throws RemoteStorageException          if there are any errors while fetching the desired segment.
      * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
+     * @deprecated Use {@link #fetchLogSegment(RemoteLogSegmentMetadata, long)} instead.
+     *             Slated for removal in a future major release.
      */
-    InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                int startPosition) throws RemoteStorageException;
+    @Deprecated(since = "4.4")
+    default InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                        int startPosition) throws RemoteStorageException {
+        throw new UnsupportedOperationException(
+            "RemoteStorageManager " + getClass().getName() + " has not overridden either " +
+            "fetchLogSegment(RemoteLogSegmentMetadata, int) or fetchLogSegment(RemoteLogSegmentMetadata, long). " +
+            "New plugins must override the long-overload (KIP-1333).");
+    }
+
+    /**
+     * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
+     * starting from the given startPosition. The stream will end at the end of the remote log segment data file/object.
+     * <p>
+     * This overload accepts a {@code long} start position to support segments larger than 2GB.
+     * The default implementation delegates to {@link #fetchLogSegment(RemoteLogSegmentMetadata, int)} when the
+     * position fits in an int, and throws {@link RemoteStorageException} otherwise. Implementations that support
+     * segments larger than 2GiB <b>must</b> override this method to handle the full long range.
+     *
+     * @param remoteLogSegmentMetadata metadata about the remote log segment.
+     * @param startPosition            start position of log segment to be read, inclusive.
+     * @return input stream of the requested log segment data.
+     * @throws RemoteStorageException          if there are any errors while fetching the desired segment, or if
+     *                                         {@code startPosition > Integer.MAX_VALUE} and this method has not been
+     *                                         overridden to support large segments.
+     * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
+     */
+    default InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                        long startPosition) throws RemoteStorageException {
+        if (startPosition > Integer.MAX_VALUE) {
+            throw new RemoteStorageException("Start position " + startPosition +
+                " exceeds Integer.MAX_VALUE but this RemoteStorageManager implementation has not overridden " +
+                "fetchLogSegment(RemoteLogSegmentMetadata, long). Override the long-overload to support " +
+                "segments larger than 2GiB (KIP-1333).");
+        }
+        return fetchLogSegment(remoteLogSegmentMetadata, (int) startPosition);
+    }
 
     /**
      * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
      * starting from the given startPosition. The stream will end at the smaller of endPosition and the end of the
      * remote log segment data file/object.
+     *
+     * <p><b>Override contract:</b> see {@link #fetchLogSegment(RemoteLogSegmentMetadata, int)}.
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param startPosition            start position of log segment to be read, inclusive.
@@ -125,10 +168,52 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return input stream of the requested log segment data.
      * @throws RemoteStorageException          if there are any errors while fetching the desired segment.
      * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
+     * @deprecated Use {@link #fetchLogSegment(RemoteLogSegmentMetadata, long, long)} instead.
+     *             Slated for removal in a future major release.
      */
-    InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                int startPosition,
-                                int endPosition) throws RemoteStorageException;
+    @Deprecated(since = "4.4")
+    default InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                        int startPosition,
+                                        int endPosition) throws RemoteStorageException {
+        throw new UnsupportedOperationException(
+            "RemoteStorageManager " + getClass().getName() + " has not overridden either " +
+            "fetchLogSegment(..., int, int) or fetchLogSegment(..., long, long). " +
+            "New plugins must override the long-overload (KIP-1333).");
+    }
+
+    /**
+     * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
+     * starting from the given startPosition. The stream will end at the smaller of endPosition and the end of the
+     * remote log segment data file/object.
+     * <p>
+     * This overload accepts {@code long} positions to support segments larger than 2GB.
+     * The default implementation delegates to {@link #fetchLogSegment(RemoteLogSegmentMetadata, int, int)} when both
+     * positions fit in an int, and throws {@link RemoteStorageException} otherwise. Implementations that support
+     * segments larger than 2GB <b>must</b> override this method to handle the full long range.
+     * <p>
+     * <b>Plugin implementation contract:</b> see
+     * {@link #fetchLogSegment(RemoteLogSegmentMetadata, long)} for the override contract.
+     *
+     * @param remoteLogSegmentMetadata metadata about the remote log segment.
+     * @param startPosition            start position of log segment to be read, inclusive.
+     * @param endPosition              end position of log segment to be read, inclusive.
+     * @return input stream of the requested log segment data.
+     * @throws RemoteStorageException          if there are any errors while fetching the desired segment, or if
+     *                                         either position exceeds {@code Integer.MAX_VALUE} and this method has
+     *                                         not been overridden to support large segments.
+     * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
+     */
+    default InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                        long startPosition,
+                                        long endPosition) throws RemoteStorageException {
+        if (startPosition > Integer.MAX_VALUE || endPosition > Integer.MAX_VALUE) {
+            throw new RemoteStorageException("Positions (start=" + startPosition + ", end=" + endPosition +
+                ") exceed Integer.MAX_VALUE but this RemoteStorageManager implementation has not overridden " +
+                "fetchLogSegment(RemoteLogSegmentMetadata, long, long). Override the long-overload to support " +
+                "segments larger than 2GiB (KIP-1333).");
+        }
+        return fetchLogSegment(remoteLogSegmentMetadata, (int) startPosition, (int) endPosition);
+    }
 
     /**
      * Returns the index for the respective log segment of {@link RemoteLogSegmentMetadata}.

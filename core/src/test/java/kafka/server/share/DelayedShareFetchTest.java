@@ -302,7 +302,7 @@ public class DelayedShareFetchTest {
         // We are testing the case when the share partition has been fetched before, hence we are mocking positionDiff
         // functionality to give the file position difference as 1 byte, so it doesn't satisfy the minBytes(2).
         LogOffsetMetadata hwmOffsetMetadata = mock(LogOffsetMetadata.class);
-        when(hwmOffsetMetadata.positionDiff(any())).thenReturn(1);
+        when(hwmOffsetMetadata.positionDiff(any())).thenReturn(1L);
         when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(mock(LogOffsetMetadata.class)));
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
 

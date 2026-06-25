@@ -468,8 +468,8 @@ public class Cleaner {
                 // the offset range to exceed Integer.MAX_VALUE.
                 // Always allow the first write to an empty segment to avoid an infinite loop where
                 // a single oversized batch can never make progress.
-                boolean sizeOverflow = dest.size() > 0 && retained.sizeInBytes() > maxCleanedSegmentSize - dest.size();
-                boolean offsetOverflow = dest.size() > 0 && result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
+                boolean sizeOverflow = dest.sizeInBytesLong() > 0 && retained.sizeInBytes() > maxCleanedSegmentSize - dest.sizeInBytesLong();
+                boolean offsetOverflow = dest.sizeInBytesLong() > 0 && result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
                 if (sizeOverflow || offsetOverflow) {
                     return Optional.of(position - result.bytesRead());
                 }
@@ -506,7 +506,7 @@ public class Cleaner {
      * @param memoryRecords The memory records in read buffer
      */
     private void growBuffersOrFail(FileRecords sourceRecords,
-                                   int position,
+                                   long position,
                                    int maxLogMessageSize,
                                    MemoryRecords memoryRecords) throws IOException {
         int maxSize;
@@ -638,29 +638,29 @@ public class Cleaner {
      *
      * @return A list of grouped segments
      */
-    public List<List<LogSegment>> groupSegmentsBySize(List<LogSegment> segments, int maxSize, int maxIndexSize, long firstUncleanableOffset) throws IOException {
+    public List<List<LogSegment>> groupSegmentsBySize(List<LogSegment> segments, long maxSize, int maxIndexSize, long firstUncleanableOffset) throws IOException {
         List<List<LogSegment>> grouped = new ArrayList<>();
 
         while (!segments.isEmpty()) {
             List<LogSegment> group = new ArrayList<>();
             group.add(segments.get(0));
 
-            long logSize = segments.get(0).size();
+            long logSize = segments.get(0).sizeInBytesLong();
             long indexSize = segments.get(0).offsetIndex().sizeInBytes();
             long timeIndexSize = segments.get(0).timeIndex().sizeInBytes();
 
             segments = segments.subList(1, segments.size());
 
             while (!segments.isEmpty() &&
-                    logSize + segments.get(0).size() <= maxSize &&
+                    logSize + segments.get(0).sizeInBytesLong() <= maxSize &&
                     indexSize + segments.get(0).offsetIndex().sizeInBytes() <= maxIndexSize &&
                     timeIndexSize + segments.get(0).timeIndex().sizeInBytes() <= maxIndexSize &&
                     //if first segment size is 0, we don't need to do the index offset range check.
                     //this will avoid empty log left every 2^31 message.
-                    (segments.get(0).size() == 0 ||
+                    (segments.get(0).sizeInBytesLong() == 0 ||
                             lastOffsetForFirstSegment(segments, firstUncleanableOffset) - group.get(group.size() - 1).baseOffset() <= Integer.MAX_VALUE)) {
                 group.add(0, segments.get(0));
-                logSize += segments.get(0).size();
+                logSize += segments.get(0).sizeInBytesLong();
                 indexSize += segments.get(0).offsetIndex().sizeInBytes();
                 timeIndexSize += segments.get(0).timeIndex().sizeInBytes();
                 segments = segments.subList(1, segments.size());
@@ -777,10 +777,10 @@ public class Cleaner {
                                              int maxLogMessageSize,
                                              CleanedTransactionMetadata transactionMetadata,
                                              CleanerStats stats) throws IOException, DigestException {
-        int position = segment.offsetIndex().lookup(startOffset).position();
+        long position = segment.offsetIndex().lookup(startOffset).position();
         int maxDesiredMapSize = (int) (map.slots() * dupBufferLoadFactor);
 
-        while (position < segment.log().sizeInBytes()) {
+        while (position < segment.log().sizeInBytesLong()) {
             checkDone.accept(topicPartition);
             readBuffer.clear();
             try {
@@ -792,7 +792,7 @@ public class Cleaner {
             MemoryRecords records = MemoryRecords.readableRecords(readBuffer);
             throttler.maybeThrottle(records.sizeInBytes());
 
-            int startPosition = position;
+            long startPosition = position;
             for (MutableRecordBatch batch : records.batches()) {
                 if (batch.isControlBatch()) {
                     transactionMetadata.onControlBatchRead(batch);

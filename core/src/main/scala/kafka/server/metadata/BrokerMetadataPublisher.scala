@@ -36,7 +36,7 @@ import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublish
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
 import org.apache.kafka.server.common.{FinalizedFeatures, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
-import org.apache.kafka.storage.internals.log.{UnifiedLog, LogManager => JLogManager}
+import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog, LogManager => JLogManager}
 
 import java.util.concurrent.CompletableFuture
 
@@ -221,6 +221,22 @@ class BrokerMetadataPublisher(
 
       if (_firstPublish) {
         finishInitializingReplicaManager()
+      }
+
+      // KIP-1333: gate the 12-byte offset-index format on the finalized metadata.version.
+      // Applied both on the first publish (to carry the bootstrap MV without waiting for a
+      // features delta) and on every subsequent featuresDelta (to pick up
+      // kafka-features.sh upgrade --metadata 4.4-IV1 without a broker restart). Without the
+      // first-publish branch, a broker that boots at IBP_4_4_IV1 would roll its very first
+      // segment in legacy format and only switch on the next features delta.
+      if (_firstPublish || delta.featuresDelta != null) {
+        try {
+          LogConfig.setLargeIndexFormatEnabled(
+            newImage.features.metadataVersionOrThrow.isLargeIndexFormatSupported)
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault(
+            s"Error updating large-index-format flag from $deltaName", t)
+        }
       }
 
       if (delta.featuresDelta != null) {

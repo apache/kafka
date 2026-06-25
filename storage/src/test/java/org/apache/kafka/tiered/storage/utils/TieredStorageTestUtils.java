@@ -191,11 +191,11 @@ public class TieredStorageTestUtils {
         // Ensure offset and time indexes are generated for every record.
         topicProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1");
         // Leverage the use of the segment index size to create a log-segment accepting one and only one record.
-        // The minimum size of the indexes is that of an entry, which is 8 for the offset index and 12 for the
-        // time index. Hence, since the topic is configured to generate index entries for every record with, for
-        // a "small" number of records (i.e. such that the average record size times the number of records is
-        // much less than the segment size), the number of records which hold in a segment is the multiple of 12
-        // defined below.
+        // The minimum size of the indexes is that of an entry: 8 bytes for the offset index in legacy mode
+        // (4-byte relative offset + 4-byte physical position), 12 bytes in large mode (4-byte relative offset
+        // + 8-byte physical position), and 12 bytes for the time index (8-byte timestamp + 4-byte relative
+        // offset). We use 12 as the per-entry size below since it is the maximum of the two formats,
+        // ensuring the index can hold at least one entry regardless of the active format.
         topicProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, String.valueOf(12 * maxRecordBatchPerSegment));
         // To verify records physically absent from Kafka's storage can be consumed via the second tier storage, we
         // want to delete log segments as soon as possible. When tiered storage is active, an inactive log

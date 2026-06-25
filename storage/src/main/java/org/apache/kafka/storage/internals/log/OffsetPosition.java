@@ -21,7 +21,7 @@ package org.apache.kafka.storage.internals.log;
  * in some log file of the beginning of the message set entry with the
  * given offset.
  */
-public record OffsetPosition(long offset, int position) implements IndexEntry {
+public record OffsetPosition(long offset, long position) implements IndexEntry {
 
     @Override
     public long indexKey() {
