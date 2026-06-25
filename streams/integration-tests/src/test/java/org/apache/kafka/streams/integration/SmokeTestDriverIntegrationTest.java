@@ -71,6 +71,27 @@ public class SmokeTestDriverIntegrationTest {
         }
     }
 
+    public static class WithAssignorOffloadDisabledTest extends SmokeTestDriverIntegrationTest {
+        @Override
+        protected Properties brokerConfig() {
+            final Properties props = new Properties();
+            props.putAll(super.brokerConfig());
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+            return props;
+        }
+    }
+
+    public static class WithAssignmentBatchingAndAssignorOffloadDisabledTest extends SmokeTestDriverIntegrationTest {
+        @Override
+        protected Properties brokerConfig() {
+            final Properties props = new Properties();
+            props.putAll(super.brokerConfig());
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0");
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
+            return props;
+        }
+    }
+
     @BeforeEach
     public void setUp(final TestInfo testInfo) throws IOException {
         this.testInfo = testInfo;
