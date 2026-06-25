@@ -25,22 +25,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-/**
- * A thin, public adapter over {@link RaftClientTestContext} for the JMH raft benchmarks.
- *
- * <p>Benchmarks live in {@code org.apache.kafka.jmh.raft}, a different package from the test
- * fixtures, so they cannot reach the package-private primitives on {@link RaftClientTestContext} the
- * way in-package unit tests (e.g. {@code KafkaRaftClientFetchTest}) can. This adapter re-exposes
- * exactly those primitives as public methods, plus factories that encapsulate the (package-private)
- * builder and the work counters. Benchmarks compose each scenario from these primitives inline,
- * mirroring how the raft unit tests are written.
- *
- * <h2>Work counters</h2>
- * Each counter is exposed as a drainable delta (read-and-reset): the underlying mock totals grow for
- * as long as the context lives, but every benchmark invocation must report only its own work. Call
- * {@link #resetCounters()} at the end of benchmark setup so that work done while preparing the
- * scenario is excluded from the first measured invocation.
- */
 public final class RaftClientBenchmarkContext {
     private final RaftClientTestContext context;
     private final MockLog log;
