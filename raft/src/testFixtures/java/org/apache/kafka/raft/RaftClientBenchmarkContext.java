@@ -75,8 +75,7 @@ public final class RaftClientBenchmarkContext {
 
     /**
      * Builds an unattached node in a KIP-1186 quorum of {@code voterKeys}, whose first entry is the
-     * local node. The local voter's directory id is shared between the voter set and the client so
-     * they agree.
+     * local node.
      */
     private static RaftClientTestContext buildContext(List<ReplicaKey> voterKeys) throws Exception {
         ReplicaKey local = voterKeys.get(0);

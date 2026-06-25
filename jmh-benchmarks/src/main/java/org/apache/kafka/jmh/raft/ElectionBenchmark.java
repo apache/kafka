@@ -35,9 +35,9 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @BenchmarkMode(Mode.SingleShotTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-@Warmup(iterations = 5)
-@Measurement(iterations = 10)
-@Fork(3)
+@Warmup(iterations = 50)
+@Measurement(iterations = 30)
+@Fork(5)
 public class ElectionBenchmark {
     private static final int LOCAL_ID = 0;
     private static final int VOTER_COUNT = 3;

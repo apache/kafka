@@ -67,6 +67,5 @@
     </subpackage>
     <subpackage name="raft">
         <allow pkg="org.apache.kafka.raft"/>
-        <allow pkg="org.apache.kafka.snapshot"/>
     </subpackage>
 </import-control>
