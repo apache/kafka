@@ -628,6 +628,16 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Non-throwing variant of {@link #group(String, long)}: returns {@code null} if no group
+     * with the given id exists at {@code committedOffset}. Used by scans (e.g. the topology-
+     * description cleanup cycle) where a missing group is a normal continue-the-scan condition
+     * rather than an error worth a {@link GroupIdNotFoundException} cost per iteration.
+     */
+    public Group maybeGroup(String groupId, long committedOffset) {
+        return groups.get(groupId, committedOffset);
+    }
+
+    /**
      * Get the Group List.
      *
      * @param statesFilter      The states of the groups we want to list.
@@ -1572,15 +1582,25 @@ public class GroupMetadataManager {
      * Checks whether the consumer group can accept a new member or not based on the
      * max group size defined.
      *
-     * @param group     The consumer group.
-     * @param memberId  The member id.
+     * @param group      The consumer group.
+     * @param memberId   The member id.
+     * @param instanceId The instance id.
      *
      * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
      */
     private void throwIfConsumerGroupIsFull(
         ConsumerGroup group,
-        String memberId
+        String memberId,
+        String instanceId
     ) throws GroupMaxSizeReachedException {
+        // If a static member already exists, we do not enforce the maximum group size check.
+        // An existing static member will fall into one of the following two cases,
+        // and neither affects the group size:
+        // 1. The member is replaced due to the static member rejoining.
+        // 2. 'UnreleasedInstanceIdException' is raised due to an epoch mismatch.
+        if (group.hasStaticMember(instanceId))
+            return;
+
         // If the consumer group has reached its maximum capacity, the member is rejected if it is not
         // already a member of the consumer group.
         if (group.numMembers() >= config.consumerGroupMaxSize() && (memberId.isEmpty() || !group.hasMember(memberId))) {
@@ -2010,7 +2030,7 @@ public class GroupMetadataManager {
                 ByteBuffer.wrap(protocols.iterator().next().metadata())
             );
         } catch (SchemaException e) {
-            throw new IllegalStateException("Malformed embedded consumer protocol in subscription deserialization.");
+            throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception("Malformed embedded consumer protocol in subscription deserialization.");
         }
     }
 
@@ -2464,7 +2484,7 @@ public class GroupMetadataManager {
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
-        throwIfConsumerGroupIsFull(group, memberId);
+        throwIfConsumerGroupIsFull(group, memberId, instanceId);
 
         // Get or create the member.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
@@ -2638,7 +2658,7 @@ public class GroupMetadataManager {
         final boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
         if (isUnknownMember) memberId = Uuid.randomUuid().toString();
 
-        throwIfConsumerGroupIsFull(group, memberId);
+        throwIfConsumerGroupIsFull(group, memberId, instanceId);
         throwIfClassicProtocolIsNotSupported(group, memberId, request.protocolType(), protocols);
 
         if (JoinGroupRequest.requiresKnownMemberId(request, context.requestVersion())) {
@@ -8491,6 +8511,37 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Clear {@code StoredDescriptionTopologyEpoch} to {@code -1} only when the group's stored
+     * epoch still equals {@code expectedStoredEpoch} (the value observed at the start of the
+     * cleanup cycle). A concurrent {@code setTopology} that advanced the epoch in the
+     * meantime is preserved — the next cycle will pick up the new state. Missing groups,
+     * non-streams groups, and mismatched epochs all yield an empty record list so the cycle's
+     * downstream tombstone pass treats them as no-ops rather than errors.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpoch(
+        String groupId,
+        int expectedStoredEpoch
+    ) {
+        Group group = groups.get(groupId);
+        if (!(group instanceof StreamsGroup streamsGroup)) {
+            return new CoordinatorResult<>(List.of());
+        }
+        if (streamsGroup.storedDescriptionTopologyEpoch() != expectedStoredEpoch) {
+            return new CoordinatorResult<>(List.of());
+        }
+        CoordinatorRecord record = newStreamsGroupMetadataRecord(
+            groupId,
+            streamsGroup.groupEpoch(),
+            streamsGroup.metadataHash(),
+            streamsGroup.validatedTopologyEpoch(),
+            streamsGroup.lastAssignmentConfigs(),
+            -1,
+            streamsGroup.failedDescriptionTopologyEpoch()
+        );
+        return new CoordinatorResult<>(List.of(record), null);
+    }
+
+    /**
      * Validates that (1) the instance id exists and is mapped to the member id
      * if the group instance id is provided; and (2) the member id exists in the group.
      *
@@ -9283,6 +9334,16 @@ public class GroupMetadataManager {
      */
     public Set<String> groupIds() {
         return Collections.unmodifiableSet(this.groups.keySet());
+    }
+
+    /**
+     * Snapshot-aware counterpart to {@link #groupIds()}: returns the set of group ids
+     * present at {@code committedOffset}. Used by read operations whose entire eligibility
+     * decision must be reproducible from a single committed snapshot (e.g. the topology
+     * cleanup scan in {@link GroupCoordinatorShard}).
+     */
+    public Set<String> groupIds(long committedOffset) {
+        return Collections.unmodifiableSet(this.groups.keySet(committedOffset));
     }
 
     // Visible for testing

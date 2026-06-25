@@ -29,7 +29,7 @@ import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.utils.internals.LogContext
-import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionConfig, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{InitProducerIdResult, ProducerIdManager, TransactionConfig, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TransactionalIdAndProducerIdEpoch, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -76,11 +76,11 @@ object TransactionCoordinator {
   }
 
   private def initTransactionError(error: Errors): InitProducerIdResult = {
-    InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, error)
+    new InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, error)
   }
 
   private def initTransactionMetadata(txnMetadata: TxnTransitMetadata): InitProducerIdResult = {
-    InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE)
+    new InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE)
   }
 }
 
@@ -126,7 +126,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
       try {
-        responseCallback(InitProducerIdResult(producerIdManager.generateProducerId(), producerEpoch = 0, Errors.NONE))
+        responseCallback(new InitProducerIdResult(producerIdManager.generateProducerId(), 0, Errors.NONE))
       } catch {
         case e: Exception => responseCallback(initTransactionError(Errors.forException(e)))
       }
@@ -1113,5 +1113,3 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     info("Shutdown complete.")
   }
 }
-
-case class InitProducerIdResult(producerId: Long, producerEpoch: Short, error: Errors)

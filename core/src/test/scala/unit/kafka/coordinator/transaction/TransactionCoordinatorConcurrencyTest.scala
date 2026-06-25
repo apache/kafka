@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionConfig, TransactionLog, TransactionMetadata, TransactionState}
+import org.apache.kafka.coordinator.transaction.{InitProducerIdResult, ProducerIdManager, TransactionConfig, TransactionLog, TransactionMetadata, TransactionState}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.storage.log.FetchIsolation

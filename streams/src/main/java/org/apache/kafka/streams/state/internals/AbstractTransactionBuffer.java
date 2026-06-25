@@ -19,23 +19,36 @@ package org.apache.kafka.streams.state.internals;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Base class for {@link TransactionBuffer} implementations. Provides the shared two-layer
- * staging design: a thread-safe {@link ConcurrentSkipListMap} for reads (any thread) and
- * backend-specific write accumulation for atomic commit.
+ * staging design: a {@link TreeMap} staging buffer for uncommitted writes plus backend-specific
+ * write accumulation for atomic commit.
  * <p>
- * Point lookups ({@link #get(Comparable)}) are lock-free. Scan methods automatically detect the
- * owner thread and use a lock-free fast path; non-owner threads acquire a read lock to
- * snapshot the staging map atomically with base iterator creation.
+ * Exactly one thread — the {@link #ownerThread} that constructs the buffer (the StreamThread) —
+ * ever mutates {@code pendingWrites}; Interactive Query (IQ) threads are read-only. The staging
+ * map is therefore a plain (non-thread-safe) {@link TreeMap} guarded by {@link #snapshotLock}:
+ * <ul>
+ *   <li>Owner structural mutations ({@code stage}/{@code commit}/{@code rollback}) hold the
+ *       <b>write</b> lock.</li>
+ *   <li>The owner reads ({@code get}) and scan-copies <b>lock-free</b>: because it is the sole
+ *       mutator and is single-threaded, a read is never concurrent with a structural change, and
+ *       IQ threads never mutate — so the tree is quiescent for the read.</li>
+ *   <li>Non-owner (IQ) reads/snapshots hold the <b>read</b> lock; owner writes become visible to
+ *       them via the write-unlock → read-lock happens-before edge.</li>
+ *   <li>Owner scans eagerly copy the bounded staging range into a private {@link TreeMap} so a
+ *       subsequent owner {@code stage} cannot invalidate an open iterator with a
+ *       {@link java.util.ConcurrentModificationException}.</li>
+ * </ul>
+ * {@code isEmpty()} and {@code approximateNumUncommittedBytes()} read owner-thread-only state and
+ * are not synchronized.
  *
  * @param <K> the key type, must be {@link Comparable}
  */
 abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements TransactionBuffer<K> {
 
-    final ConcurrentSkipListMap<K, Optional<byte[]>> pendingWrites = new ConcurrentSkipListMap<>();
+    final NavigableMap<K, Optional<byte[]>> pendingWrites = new TreeMap<>();
     final ReentrantReadWriteLock snapshotLock = new ReentrantReadWriteLock();
     final Thread ownerThread;
     long pendingWritesBytes;
@@ -58,6 +71,18 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
         return newBaseIterator(from, to);
     }
 
+    /**
+     * Create a base iterator that is isolated from concurrent base-store mutation.
+     * <p>
+     * Called only from the non-owner ({@link #snapshotScan}) path while the {@link #snapshotLock}
+     * read-lock is held. Subclasses must provide mutation isolation appropriate to their backend
+     * (e.g. an eager range copy for in-memory, a native snapshot for RocksDB).
+     * <p>
+     * The owner fast path uses the live {@link #newBaseIterator} and must not use this method.
+     */
+    abstract ManagedKeyValueIterator<K, byte[]> newBaseSnapshotIterator(K from, K to,
+                                                                        boolean forward, boolean toInclusive);
+
     /** Atomically apply the accumulated writes to the base store. */
     abstract void flushToBase();
 
@@ -71,21 +96,40 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
 
     @Override
     public void stage(final K key, final byte[] value) {
-        pendingWrites.put(key, Optional.ofNullable(value));
-        pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
-        stageToBackend(key, value);
+        snapshotLock.writeLock().lock();
+        try {
+            pendingWrites.put(key, Optional.ofNullable(value));
+            pendingWritesBytes += estimateKeySize(key) + (value != null ? value.length : 0);
+            stageToBackend(key, value);
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
     }
 
     @Override
     public Optional<byte[]> get(final K key) {
-        return pendingWrites.get(key);
+        // Owner reads lock-free: it is the sole mutator and single-threaded, so this read is never
+        // concurrent with a structural change. Non-owner (IQ) reads take the read lock to exclude a
+        // concurrent owner write on the non-thread-safe TreeMap.
+        if (Thread.currentThread() == ownerThread) {
+            return pendingWrites.get(key);
+        }
+        snapshotLock.readLock().lock();
+        try {
+            return pendingWrites.get(key);
+        } finally {
+            snapshotLock.readLock().unlock();
+        }
     }
 
     @Override
     public ManagedKeyValueIterator<K, byte[]> all(final boolean forward) {
         if (Thread.currentThread() == ownerThread) {
+            // Eager copy of the staging layer (lock-free for the sole mutator) so a later owner
+            // stage cannot invalidate this iterator; the base store is iterated live.
+            final NavigableMap<K, Optional<byte[]>> stagingSnapshot = new TreeMap<>(pendingWrites);
             final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseIterator(null, null, forward, true);
-            return new StagedMergeIterator<>(pendingWrites, baseIter, forward);
+            return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         }
         return snapshotScan(null, null, forward, true);
     }
@@ -96,9 +140,9 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
     @Override
     public ManagedKeyValueIterator<K, byte[]> range(final K from, final K to, final boolean forward, final boolean toInclusive) {
         if (Thread.currentThread() == ownerThread) {
-            final NavigableMap<K, Optional<byte[]>> stagingView = boundStaging(from, to, toInclusive);
+            final NavigableMap<K, Optional<byte[]>> stagingSnapshot = new TreeMap<>(boundStaging(from, to, toInclusive));
             final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseIterator(from, to, forward, toInclusive);
-            return new StagedMergeIterator<>(stagingView, baseIter, forward);
+            return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         }
         return snapshotScan(from, to, forward, toInclusive);
     }
@@ -117,9 +161,14 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
 
     @Override
     public void rollback() {
-        pendingWrites.clear();
-        pendingWritesBytes = 0;
-        discardPendingBatch();
+        snapshotLock.writeLock().lock();
+        try {
+            pendingWrites.clear();
+            pendingWritesBytes = 0;
+            discardPendingBatch();
+        } finally {
+            snapshotLock.writeLock().unlock();
+        }
     }
 
     @Override
@@ -149,7 +198,7 @@ abstract class AbstractTransactionBuffer<K extends Comparable<K>> implements Tra
         snapshotLock.readLock().lock();
         try {
             final NavigableMap<K, Optional<byte[]>> stagingSnapshot = new TreeMap<>(boundStaging(from, to, toInclusive));
-            final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseIterator(from, to, forward, toInclusive);
+            final ManagedKeyValueIterator<K, byte[]> baseIter = newBaseSnapshotIterator(from, to, forward, toInclusive);
             return new StagedMergeIterator<>(stagingSnapshot, baseIter, forward);
         } finally {
             snapshotLock.readLock().unlock();

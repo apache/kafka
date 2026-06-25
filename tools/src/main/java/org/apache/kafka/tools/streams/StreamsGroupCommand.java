@@ -109,7 +109,7 @@ public class StreamsGroupCommand {
             if (numberOfActions != 1)
                 throw new IllegalArgumentException("Command must include exactly one action: --list, --describe, --delete, --reset-offsets, or --delete-offsets.");
 
-            run(opts);
+            exitCode = run(opts);
         } catch (IllegalArgumentException | OptionException e) {
             System.err.println(e.getMessage());
             if (opts != null) {
@@ -128,12 +128,12 @@ public class StreamsGroupCommand {
         return exitCode;
     }
 
-    public static void run(StreamsGroupCommandOptions opts) throws ExecutionException, InterruptedException {
+    public static int run(StreamsGroupCommandOptions opts) throws ExecutionException, InterruptedException {
         try (StreamsGroupService streamsGroupService = new StreamsGroupService(opts, Map.of())) {
             if (opts.options.has(opts.listOpt)) {
                 streamsGroupService.listGroups();
             } else if (opts.options.has(opts.describeOpt)) {
-                streamsGroupService.describeGroups();
+                return streamsGroupService.describeGroups();
             } else if (opts.options.has(opts.resetOffsetsOpt)) {
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsToReset = streamsGroupService.resetOffsets();
                 if (opts.options.has(opts.exportOpt)) {
@@ -149,6 +149,7 @@ public class StreamsGroupCommand {
                 throw new IllegalArgumentException("Unknown action!");
             }
         }
+        return 0;
     }
 
     static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
@@ -262,15 +263,21 @@ public class StreamsGroupCommand {
             }
         }
 
-        public void describeGroups() throws ExecutionException, InterruptedException {
+        public int describeGroups() throws ExecutionException, InterruptedException {
             List<String> groupIds = opts.options.has(opts.allGroupsOpt)
                 ? new ArrayList<>(listStreamsGroups())
                 : new ArrayList<>(opts.options.valuesOf(opts.groupOpt));
+            int exitCode = 0;
             if (!groupIds.isEmpty()) {
+                boolean topology = opts.options.has(opts.topologyOpt);
                 for (String groupId : groupIds) {
-                    StreamsGroupDescription description = getDescribeGroup(groupId);
+                    StreamsGroupDescription description = getDescribeGroup(groupId, topology);
                     boolean verbose = opts.options.has(opts.verboseOpt);
-                    if (opts.options.has(opts.membersOpt)) {
+                    if (topology) {
+                        if (!printTopology(description)) {
+                            exitCode = 1;
+                        }
+                    } else if (opts.options.has(opts.membersOpt)) {
                         printMembers(description, verbose);
                     } else if (opts.options.has(opts.stateOpt)) {
                         printStates(description, verbose);
@@ -279,14 +286,42 @@ public class StreamsGroupCommand {
                     }
                 }
             }
+            return exitCode;
         }
 
         StreamsGroupDescription getDescribeGroup(String group) throws ExecutionException, InterruptedException {
+            return getDescribeGroup(group, false);
+        }
+
+        StreamsGroupDescription getDescribeGroup(String group, boolean includeTopologyDescription) throws ExecutionException, InterruptedException {
             DescribeStreamsGroupsResult result = adminClient.describeStreamsGroups(
                 List.of(group),
-                withTimeoutMs(new DescribeStreamsGroupsOptions()));
+                withTimeoutMs(new DescribeStreamsGroupsOptions().includeTopologyDescription(includeTopologyDescription)));
             Map<String, StreamsGroupDescription> descriptionMap = result.all().get();
             return descriptionMap.get(group);
+        }
+
+        /**
+         * Prints the topology description for the given group. Returns {@code true} if a description was available and
+         * printed, {@code false} otherwise (so the caller can surface a non-zero exit code).
+         */
+        private boolean printTopology(StreamsGroupDescription description) {
+            switch (description.topologyDescriptionStatus()) {
+                case AVAILABLE:
+                    System.out.println(TopologyDescriptionFormatter.format(description.topologyDescription().orElseThrow()));
+                    return true;
+                case NOT_STORED:
+                    printError("No topology description is stored for streams group '" + description.groupId() + "'.", Optional.empty());
+                    return false;
+                case ERROR:
+                    printError("The broker failed to fetch the topology description for streams group '" + description.groupId()
+                        + "'. See the broker logs for details.", Optional.empty());
+                    return false;
+                default:
+                    printError("No topology description is available for streams group '" + description.groupId()
+                        + "' (status: " + description.topologyDescriptionStatus() + ").", Optional.empty());
+                    return false;
+            }
         }
 
         private void printMembers(StreamsGroupDescription description, boolean verbose) {

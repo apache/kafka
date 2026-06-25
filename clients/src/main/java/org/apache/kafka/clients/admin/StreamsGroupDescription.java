@@ -24,6 +24,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -42,6 +43,8 @@ public class StreamsGroupDescription {
     private final GroupState groupState;
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
+    private final Optional<StreamsGroupTopologyDescription> topologyDescription;
+    private final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus;
 
     public StreamsGroupDescription(
             final String groupId,
@@ -54,6 +57,34 @@ public class StreamsGroupDescription {
             final Node coordinator,
             final Set<AclOperation> authorizedOperations
     ) {
+        this(
+            groupId,
+            groupEpoch,
+            targetAssignmentEpoch,
+            topologyEpoch,
+            subtopologies,
+            members,
+            groupState,
+            coordinator,
+            authorizedOperations,
+            Optional.empty(),
+            StreamsGroupTopologyDescriptionStatus.NOT_REQUESTED
+        );
+    }
+
+    public StreamsGroupDescription(
+            final String groupId,
+            final int groupEpoch,
+            final int targetAssignmentEpoch,
+            final int topologyEpoch,
+            final Collection<StreamsGroupSubtopologyDescription> subtopologies,
+            final Collection<StreamsGroupMemberDescription> members,
+            final GroupState groupState,
+            final Node coordinator,
+            final Set<AclOperation> authorizedOperations,
+            final Optional<StreamsGroupTopologyDescription> topologyDescription,
+            final StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus
+    ) {
         this.groupId = Objects.requireNonNull(groupId, "groupId must be non-null");
         this.groupEpoch = groupEpoch;
         this.targetAssignmentEpoch = targetAssignmentEpoch;
@@ -63,6 +94,8 @@ public class StreamsGroupDescription {
         this.groupState = Objects.requireNonNull(groupState, "groupState must be non-null");
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator must be non-null");
         this.authorizedOperations = authorizedOperations;
+        this.topologyDescription = Objects.requireNonNull(topologyDescription, "topologyDescription must be non-null");
+        this.topologyDescriptionStatus = Objects.requireNonNull(topologyDescriptionStatus, "topologyDescriptionStatus must be non-null");
     }
 
     /**
@@ -128,6 +161,22 @@ public class StreamsGroupDescription {
         return authorizedOperations;
     }
 
+    /**
+     * The full topology description for this group, as recorded by the broker's topology description plugin.
+     * Present if and only if {@link #topologyDescriptionStatus()} is
+     * {@link StreamsGroupTopologyDescriptionStatus#AVAILABLE AVAILABLE}.
+     */
+    public Optional<StreamsGroupTopologyDescription> topologyDescription() {
+        return topologyDescription;
+    }
+
+    /**
+     * The status of the topology description for this group, paired with {@link #topologyDescription()}.
+     */
+    public StreamsGroupTopologyDescriptionStatus topologyDescriptionStatus() {
+        return topologyDescriptionStatus;
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -145,7 +194,9 @@ public class StreamsGroupDescription {
             && Objects.equals(members, that.members)
             && groupState == that.groupState
             && Objects.equals(coordinator, that.coordinator)
-            && Objects.equals(authorizedOperations, that.authorizedOperations);
+            && Objects.equals(authorizedOperations, that.authorizedOperations)
+            && Objects.equals(topologyDescription, that.topologyDescription)
+            && topologyDescriptionStatus == that.topologyDescriptionStatus;
     }
 
     @Override
@@ -159,7 +210,9 @@ public class StreamsGroupDescription {
             members,
             groupState,
             coordinator,
-            authorizedOperations
+            authorizedOperations,
+            topologyDescription,
+            topologyDescriptionStatus
         );
     }
 
@@ -175,6 +228,8 @@ public class StreamsGroupDescription {
             ", groupState=" + groupState +
             ", coordinator=" + coordinator +
             ", authorizedOperations=" + authorizedOperations.stream().map(AclOperation::toString).collect(Collectors.joining(",")) +
+            ", topologyDescription=" + topologyDescription.map(Object::toString).orElse("") +
+            ", topologyDescriptionStatus=" + topologyDescriptionStatus +
             ')';
     }
 }
