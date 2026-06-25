@@ -1425,6 +1425,63 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void readOnlyReverseRangeAndReverseAllShouldRespectIsolationLevel() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        final Bytes k3 = new Bytes(stringSerializer.serialize(null, "k3"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "a"));
+        rocksDBStore.put(k2, stringSerializer.serialize(null, "b"));
+        rocksDBStore.commit(Map.of());
+
+        rocksDBStore.put(k3, stringSerializer.serialize(null, "c"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "a2"));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+        final List<KeyValue<String, String>> uncommittedReverseAll;
+        try (KeyValueIterator<Bytes, byte[]> it = uncommitted.reverseAll()) {
+            uncommittedReverseAll = getDeserializedList(it);
+        }
+        final List<KeyValue<String, String>> committedReverseAll;
+        try (KeyValueIterator<Bytes, byte[]> it = committed.reverseAll()) {
+            committedReverseAll = getDeserializedList(it);
+        }
+        assertEquals(List.of(KeyValue.pair("k3", "c"), KeyValue.pair("k2", "b"), KeyValue.pair("k1", "a2")), uncommittedReverseAll);
+        assertEquals(List.of(KeyValue.pair("k2", "b"), KeyValue.pair("k1", "a")), committedReverseAll);
+
+        final List<KeyValue<String, String>> uncommittedReverseRange;
+        try (KeyValueIterator<Bytes, byte[]> it = uncommitted.reverseRange(k1, k3)) {
+            uncommittedReverseRange = getDeserializedList(it);
+        }
+        final List<KeyValue<String, String>> committedReverseRange;
+        try (KeyValueIterator<Bytes, byte[]> it = committed.reverseRange(k1, k3)) {
+            committedReverseRange = getDeserializedList(it);
+        }
+        assertEquals(List.of(KeyValue.pair("k3", "c"), KeyValue.pair("k2", "b"), KeyValue.pair("k1", "a2")), uncommittedReverseRange);
+        assertEquals(List.of(KeyValue.pair("k2", "b"), KeyValue.pair("k1", "a")), committedReverseRange);
+    }
+
+    @Test
+    public void readOnlyReverseRangeShouldReturnEmptyIteratorWhenFromIsGreaterThanTo() {
+        rocksDBStore.init(context, rocksDBStore);
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "a"));
+        rocksDBStore.put(k2, stringSerializer.serialize(null, "b"));
+
+        try (KeyValueIterator<Bytes, byte[]> it =
+                 rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED).reverseRange(k2, k1)) {
+            assertFalse(it.hasNext());
+        }
+    }
+
+    @Test
     public void readOnlyPrefixScanShouldRespectIsolationLevel() {
         rocksDBStore.close();
         final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
