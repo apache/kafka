@@ -85,6 +85,8 @@ Kafka Streams now persists state store changelog offsets inside each state store
 
 As part of KIP-1035, the per-store changelog offset is written into RocksDB on each commit and is made durable on disk only when RocksDB flushes its memtable to an SST file — either organically once the memtable fills `write_buffer_size` (16 MB by default), or on a clean store close. Earlier releases force-flushed RocksDB on every commit. A consequence is that for a **low-traffic store** whose memtable rarely fills, the on-disk offset can lag the store's actual position until the next clean shutdown. For the durability model and guidance on tuning flush frequency for low-traffic stores, see [Memory Management: RocksDB](/{{version}}/documentation/streams/developer-guide/memory-mgmt.html#rocksdb-offset-durability).  If the process then exits uncleanly (for example SIGKILL/OOM-kill, or a KafkaStreams#close that does not complete within the shutdown grace period) and changelog retention or compaction has since advanced the changelog's log-start offset past that stale offset, the restore consumer seeks out of range on restart — logged as OffsetOutOfRangeException/TaskCorruptedException — and the task is automatically re-initialized from the changelog (no data loss, but a full re-restore).
 
+Kafka Streams now supports static membership with the Streams Rebalance Protocol. Applications using `group.protocol=streams` may configure `group.instance.id`; Kafka Streams derives unique group instance IDs for its stream threads internally.
+
 ### Header-aware state stores for the Processor API (KIP-1271) {#kip-1271-headers-aware-stores}
 
 Kafka Streams adds **header-aware** state stores. Opt in with the new `Stores` suppliers whose names end with `WithHeaders` and the matching `StoreBuilder` factories. For example:
@@ -185,7 +187,7 @@ This Early Access release covers a subset of the functionality detailed in [KIP-
 
 **What's Not Included in Early Access**
 
-  * **Static Membership:** Setting a client `instance.id` will be rejected.
+  * **Static Membership:** Setting `group.instance.id` was rejected in the 4.1 Early Access release. Static membership is supported with the Streams Rebalance Protocol starting in 4.3.0.
   * **Topology Updates:** If a topology is changed significantly (e.g., by adding new source topics or changing the number of sub-topologies), a new streams group must be created.
   * **High Availability Assignor:** Only the sticky assignor is supported.
   * **Regular Expressions:** Pattern-based topic subscription is not supported.

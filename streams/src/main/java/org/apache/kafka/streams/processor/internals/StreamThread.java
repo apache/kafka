@@ -700,7 +700,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         return Optional.of(rackId);
     }
 
-    private static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
+    // visible for testing
+    static StreamsRebalanceData initStreamsRebalanceData(final UUID processId,
                                                                  final StreamsConfig config,
                                                                  final Optional<StreamsRebalanceData.HostInfo> endpoint,
                                                                  final Optional<String> rackId,
@@ -1043,7 +1044,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return true;
     }
 
-    // visible for testing
+    // VisibleForTesting
     void maybeGetClientInstanceIds() {
         // we pass in a timeout of zero into each `clientInstanceId()` call
         // to just trigger the "get instance id" background RPC;

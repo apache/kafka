@@ -31,6 +31,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -336,6 +337,104 @@ public class AbstractTransactionBufferTest {
             assertEquals(List.of(1), drainKeys(iter));
         } finally {
             exec.shutdown();
+        }
+    }
+
+    // -- owner mutate-during-iteration (no CME on the TreeMap staging buffer) --
+
+    @Test
+    void ownerStageDuringOwnAllIterationDoesNotThrow() {
+        buffer.stage(1, new byte[]{1});
+        buffer.stage(3, new byte[]{3});
+
+        final ManagedKeyValueIterator<Integer, byte[]> iter = buffer.all(true);
+        assertEquals(1, iter.next().key);
+
+        // Owner structurally mutates the staging buffer while its own iterator is open.
+        buffer.stage(2, new byte[]{2});
+        buffer.stage(4, new byte[]{4});
+
+        // No ConcurrentModificationException, and the iterator reflects the snapshot at creation
+        // (the keys staged after the iterator was opened are absent).
+        assertEquals(List.of(3), drainKeys(iter));
+    }
+
+    @Test
+    void ownerStageDuringOwnRangeIterationDoesNotThrow() {
+        buffer.stage(1, new byte[]{1});
+        buffer.stage(5, new byte[]{5});
+
+        final ManagedKeyValueIterator<Integer, byte[]> iter = buffer.range(1, 9, true, true);
+        assertEquals(1, iter.next().key);
+
+        buffer.stage(3, new byte[]{3});
+
+        assertEquals(List.of(5), drainKeys(iter));
+    }
+
+    // -- non-owner snapshot survives a concurrent owner commit --
+
+    @Test
+    void nonOwnerAllSurvivesConcurrentOwnerCommit() throws Exception {
+        buffer.base.put(2, new byte[]{2});
+        buffer.stage(1, new byte[]{1});
+
+        final ExecutorService exec = Executors.newSingleThreadExecutor();
+        try {
+            final ManagedKeyValueIterator<Integer, byte[]> iter =
+                exec.submit(() -> buffer.all(true)).get();
+
+            // Owner commits (flushes staging to base and clears pendingWrites) while the non-owner
+            // snapshot iterator is open.
+            buffer.commit();
+
+            // Snapshot captured at creation time: staged key 1 plus base key 2.
+            assertEquals(List.of(1, 2), drainKeys(iter));
+        } finally {
+            exec.shutdown();
+        }
+    }
+
+    // -- concurrency stress: owner writer + non-owner readers on the TreeMap staging buffer --
+
+    @Test
+    void concurrentOwnerWritesAndNonOwnerReadsAreConsistent() throws Exception {
+        final int readerCount = 4;
+        final ExecutorService exec = Executors.newFixedThreadPool(readerCount);
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        final List<Future<?>> readers = new ArrayList<>();
+        try {
+            for (int r = 0; r < readerCount; r++) {
+                readers.add(exec.submit(() -> {
+                    while (!stop.get()) {
+                        buffer.get(7);
+                        // Non-owner scan → snapshotScan: must never throw and must be sorted.
+                        final List<Integer> keys = drainKeys(buffer.all(true));
+                        for (int i = 1; i < keys.size(); i++) {
+                            if (keys.get(i - 1) >= keys.get(i)) {
+                                throw new AssertionError("non-owner scan returned unsorted keys: " + keys);
+                            }
+                        }
+                    }
+                    return null;
+                }));
+            }
+
+            for (int i = 0; i < 10_000; i++) {
+                buffer.stage(i % 64, new byte[]{(byte) i});
+                if (i % 200 == 0) {
+                    buffer.commit();
+                }
+                if (i % 500 == 0) {
+                    buffer.rollback();
+                }
+            }
+            stop.set(true);
+            for (final Future<?> reader : readers) {
+                reader.get(); // surfaces any AssertionError / ConcurrentModificationException
+            }
+        } finally {
+            exec.shutdownNow();
         }
     }
 

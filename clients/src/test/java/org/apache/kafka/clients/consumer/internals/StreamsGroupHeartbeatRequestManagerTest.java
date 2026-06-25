@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupTopologyDescriptionUpdateRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -1332,6 +1333,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         names = {
             "INVALID_REQUEST",
             "GROUP_MAX_SIZE_REACHED",
+            "UNRELEASED_INSTANCE_ID",
             "UNSUPPORTED_VERSION",
             "STREAMS_INVALID_TOPOLOGY",
             "STREAMS_INVALID_TOPOLOGY_EPOCH",
@@ -1377,6 +1379,47 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 assertEquals(errorMessageInResponse, errorEvent.getValue().error().getMessage());
             }
             assertInstanceOf(error.exception().getClass(), errorEvent.getValue().error());
+            verify(membershipManager).transitionToFatal();
+            verify(membershipManager).onFatalHeartbeatFailure();
+        }
+    }
+
+    @Test
+    public void testFencedInstanceIdErrorResponse() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true));
+            final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction =
+                mockConstruction(StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState =
+                heartbeatStateMockedConstruction.constructed().get(0);
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+            assertEquals(1, result.unsentRequests.size());
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final String errorMessage = "message";
+            final ClientResponse response = buildClientErrorResponse(Errors.FENCED_INSTANCE_ID, errorMessage);
+
+            networkRequest.handler().onComplete(response);
+
+            assertTrue(logAppender.getMessages("ERROR").stream()
+                .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed because instance id " +
+                    INSTANCE_ID + " is fenced: " + errorMessage + ". Check for another Streams instance using " +
+                    "the same group instance id.")));
+            verify(heartbeatState).reset();
+
+            ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
+            verify(backgroundEventHandler).add(errorEvent.capture());
+            assertEquals(errorMessage, errorEvent.getValue().error().getMessage());
+            assertInstanceOf(Errors.FENCED_INSTANCE_ID.exception().getClass(), errorEvent.getValue().error());
+
             verify(membershipManager).transitionToFatal();
             verify(membershipManager).onFatalHeartbeatFailure();
         }
@@ -1459,7 +1502,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Errors.INVALID_REQUEST,
             Errors.GROUP_MAX_SIZE_REACHED,
             Errors.FENCED_MEMBER_EPOCH,
+            Errors.FENCED_INSTANCE_ID,
             Errors.UNKNOWN_MEMBER_ID,
+            Errors.UNRELEASED_INSTANCE_ID,
             Errors.UNSUPPORTED_VERSION,
             Errors.STREAMS_INVALID_TOPOLOGY,
             Errors.STREAMS_INVALID_TOPOLOGY_EPOCH,
@@ -1494,6 +1539,30 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(GROUP_ID, streamsRequest.data().groupId());
         assertEquals(MEMBER_ID, streamsRequest.data().memberId());
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, streamsRequest.data().memberEpoch());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = CloseOptions.GroupMembershipOperation.class, names = {"DEFAULT", "REMAIN_IN_GROUP"})
+    public void testPollOnCloseWhenStaticMemberIsLeaving(final CloseOptions.GroupMembershipOperation operation) {
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+        when(membershipManager.isLeavingGroup()).thenReturn(true);
+        when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+        when(membershipManager.groupId()).thenReturn(GROUP_ID);
+        when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+        when(membershipManager.memberEpoch()).thenReturn(LEAVE_GROUP_STATIC_MEMBER_EPOCH);
+
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.pollOnClose(time.milliseconds());
+
+        assertEquals(1, result.unsentRequests.size());
+        final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+        StreamsGroupHeartbeatRequest streamsRequest =
+            (StreamsGroupHeartbeatRequest) networkRequest.requestBuilder().build();
+
+        assertEquals(GROUP_ID, streamsRequest.data().groupId());
+        assertEquals(MEMBER_ID, streamsRequest.data().memberId());
+        assertEquals(LEAVE_GROUP_STATIC_MEMBER_EPOCH, streamsRequest.data().memberEpoch());
+        assertEquals(INSTANCE_ID, streamsRequest.data().instanceId());
     }
 
     @Test
@@ -1642,6 +1711,62 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             // After successful response, heartbeatIntervalMs should be updated
             assertEquals(RECEIVED_HEARTBEAT_INTERVAL_MS, streamsRebalanceData.heartbeatIntervalMs());
+        }
+    }
+
+    @Test
+    public void testStreamsRebalanceDataTopologyPushRequiredSetOnRequiredTrue() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            // Push is enabled (wire description present) so the broker's required=true flips the flag.
+            streamsRebalanceData.setWireTopologyDescription(
+                new StreamsGroupTopologyDescriptionUpdateRequestData.TopologyDescription());
+            assertFalse(streamsRebalanceData.topologyPushRequired());
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            networkRequest.handler().onComplete(buildClientResponseWithTopologyRequired(true));
+
+            assertTrue(streamsRebalanceData.topologyPushRequired());
+        }
+    }
+
+    @Test
+    public void testStreamsRebalanceDataTopologyPushRequiredNotClearedOnRequiredFalse() {
+        try (
+            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            // Pre-set the flag to true to verify it survives a response that doesn't ask for push
+            streamsRebalanceData.setTopologyPushRequired(true);
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            networkRequest.handler().onComplete(buildClientResponseWithTopologyRequired(false));
+
+            assertTrue(streamsRebalanceData.topologyPushRequired());
         }
     }
 
@@ -1860,5 +1985,24 @@ class StreamsGroupHeartbeatRequestManagerTest {
             .sorted(Comparator.comparing(StreamsGroupHeartbeatRequestData.TaskIds::subtopologyId))
             .collect(Collectors.toList());
         assertEquals(sortedExpected, sortedActual);
+    }
+
+    private ClientResponse buildClientResponseWithTopologyRequired(final boolean topologyRequired) {
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.STREAMS_GROUP_HEARTBEAT, (short) 1, "", 1),
+            null,
+            "-1",
+            time.milliseconds(),
+            time.milliseconds(),
+            false,
+            null,
+            null,
+            new StreamsGroupHeartbeatResponse(
+                new StreamsGroupHeartbeatResponseData()
+                    .setPartitionsByUserEndpoint(ENDPOINT_TO_PARTITIONS)
+                    .setHeartbeatIntervalMs((int) RECEIVED_HEARTBEAT_INTERVAL_MS)
+                    .setTopologyDescriptionRequired(topologyRequired)
+            )
+        );
     }
 }

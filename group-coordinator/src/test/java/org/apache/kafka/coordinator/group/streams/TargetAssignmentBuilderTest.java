@@ -839,6 +839,7 @@ public class TargetAssignmentBuilderTest {
             // Create and populate the assignment builder.
             org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder builder = new org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder(
                 groupId, groupEpoch, assignor, Map.of())
+                .withTime(new MockTime(0, assignmentTimestamp, assignmentTimestamp))
                 .withMembers(members)
                 .withTopology(topology)
                 .withStaticMembers(staticMembers)
@@ -855,9 +856,7 @@ public class TargetAssignmentBuilderTest {
             });
 
             // Execute the builder.
-            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = builder
-                .withTime(new MockTime(0, assignmentTimestamp, assignmentTimestamp))
-                .build();
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
 
             // Verify that the assignor was called once with the expected
             // assignment spec.

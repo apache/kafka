@@ -243,6 +243,22 @@ public class StreamsConfigTest {
         assertNull(returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
+    public void shouldAllowStaticMembershipWhenStreamsProtocolUsed(final String prefix) {
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
+
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> mainConsumerConfigs =
+            streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
+
+        assertThat(
+            mainConsumerConfigs.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG),
+            equalTo("static-member-1-" + threadIdx)
+        );
+    }
+
     @Test
     public void consumerConfigMustContainStreamPartitionAssignorConfig() {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 42);
@@ -1862,23 +1878,6 @@ public class StreamsConfigTest {
                     "protocol and will be ignored. Please use the admin client or kafka-configs.sh to set the streams " +
                     "groups's standby replicas.")));
         }
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
-    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership(final String prefix) {
-        final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
-        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
-        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
-
-        final ConfigException exception = assertThrows(
-            ConfigException.class,
-            () -> new StreamsConfig(props)
-        );
-        assertTrue(exception.getMessage().contains("Streams rebalance protocol does not support static membership. " +
-            "Please set group.protocol=classic or remove group.instance.id from the configuration."));
     }
 
     @Test
