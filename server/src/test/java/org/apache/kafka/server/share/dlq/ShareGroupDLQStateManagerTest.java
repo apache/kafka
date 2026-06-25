@@ -1698,6 +1698,7 @@ class ShareGroupDLQStateManagerTest {
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
 
         stateManager = builder().withLogReader(logReader).withCacheHelper(cacheHelper).build();
+        stateManager.start();
         Throwable cause = getCause(stateManager.dlq(param()));
         assertInstanceOf(ConfigException.class, cause);
         // Even though record copy is enabled, an invalid DLQ config fails fast and the source log
