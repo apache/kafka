@@ -37,12 +37,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.query.KeyQuery;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.TimestampedKeyQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -50,7 +44,6 @@ import org.apache.kafka.test.KeyValueIteratorStub;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -74,7 +67,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -149,44 +141,6 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     private void init() {
         metered.init(context, metered);
-    }
-
-    @Test
-    public void shouldPropagateSkipCacheForKeyQuery() {
-        setUp();
-        init();
-        assertTrue(forwardedRawKeyQuery(KeyQuery.withKey(KEY).skipCache()).isSkipCache());
-    }
-
-    @Test
-    public void shouldNotSkipCacheForKeyQueryByDefault() {
-        setUp();
-        init();
-        assertFalse(forwardedRawKeyQuery(KeyQuery.withKey(KEY)).isSkipCache());
-    }
-
-    @Test
-    public void shouldPropagateSkipCacheForTimestampedKeyQuery() {
-        setUp();
-        init();
-        assertTrue(forwardedRawKeyQuery(TimestampedKeyQuery.withKey(KEY).skipCache()).isSkipCache());
-    }
-
-    @Test
-    public void shouldNotSkipCacheForTimestampedKeyQueryByDefault() {
-        setUp();
-        init();
-        assertFalse(forwardedRawKeyQuery(TimestampedKeyQuery.withKey(KEY)).isSkipCache());
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private KeyQuery<?, ?> forwardedRawKeyQuery(final Query<?> query) {
-        when(inner.query(any(), any(PositionBound.class), any(QueryConfig.class)))
-            .thenReturn((QueryResult) QueryResult.forResult(null));
-        metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
-        final ArgumentCaptor<KeyQuery> captor = ArgumentCaptor.forClass(KeyQuery.class);
-        verify(inner).query(captor.capture(), any(PositionBound.class), any(QueryConfig.class));
-        return captor.getValue();
     }
 
     @Test

@@ -337,10 +337,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
 
-        KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.getKey(), internalContext.headers()));
-        if (typedKeyQuery.isSkipCache()) {
-            rawKeyQuery = rawKeyQuery.skipCache();
-        }
+        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.getKey(), internalContext.headers()));
         final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             // value will be `rawValueTimestampHeader`; no need to pass headers explicitly
@@ -366,10 +363,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         final QueryResult<R> result;
         final TimestampedKeyQuery<K, V> typedKeyQuery = (TimestampedKeyQuery<K, V>) query;
 
-        KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
-        if (typedKeyQuery.isSkipCache()) {
-            rawKeyQuery = rawKeyQuery.skipCache();
-        }
+        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key(), internalContext.headers()));
         final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             // value will be `rawValueTimestampHeader`; no need to pass headers explicitly

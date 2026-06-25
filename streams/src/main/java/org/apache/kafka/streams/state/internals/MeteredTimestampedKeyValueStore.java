@@ -170,10 +170,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     ) {
         final QueryResult<R> result;
         final TimestampedKeyQuery<K, V> typedKeyQuery = (TimestampedKeyQuery<K, V>) query;
-        KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key()));
-        if (typedKeyQuery.isSkipCache()) {
-            rawKeyQuery = rawKeyQuery.skipCache();
-        }
+        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.key()));
         final QueryResult<byte[]> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final Function<byte[], ValueAndTimestamp<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
@@ -240,10 +237,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     ) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
-        KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.getKey()));
-        if (typedKeyQuery.isSkipCache()) {
-            rawKeyQuery = rawKeyQuery.skipCache();
-        }
+        final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.getKey()));
         final QueryResult<byte[]> rawResult =
                 wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {

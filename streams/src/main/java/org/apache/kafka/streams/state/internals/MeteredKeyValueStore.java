@@ -323,11 +323,8 @@ public class MeteredKeyValueStore<K, V>
                                             final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
-        KeyQuery<Bytes, byte[]> rawKeyQuery =
+        final KeyQuery<Bytes, byte[]> rawKeyQuery =
             KeyQuery.withKey(serializeKey(typedKeyQuery.getKey()));
-        if (typedKeyQuery.isSkipCache()) {
-            rawKeyQuery = rawKeyQuery.skipCache();
-        }
         final QueryResult<byte[]> rawResult =
             wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {

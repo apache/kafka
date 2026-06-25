@@ -41,7 +41,6 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.TimestampedKeyQuery;
 import org.apache.kafka.streams.query.TimestampedKeyWithHeadersQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -151,36 +150,8 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         metered.init(context, metered);
     }
 
-    // --- skipCache propagation: the metered handlers must forward isSkipCache() onto the raw
-    //     KeyQuery they build, otherwise the caching layer never sees it (it was a no-op before). ---
-
-    @Test
-    public void shouldPropagateSkipCacheForKeyQuery() {
-        setUp();
-        init();
-        assertTrue(forwardedRawKeyQuery(KeyQuery.withKey(KEY).skipCache()).isSkipCache());
-    }
-
-    @Test
-    public void shouldNotSkipCacheForKeyQueryByDefault() {
-        setUp();
-        init();
-        assertFalse(forwardedRawKeyQuery(KeyQuery.withKey(KEY)).isSkipCache());
-    }
-
-    @Test
-    public void shouldPropagateSkipCacheForTimestampedKeyQuery() {
-        setUp();
-        init();
-        assertTrue(forwardedRawKeyQuery(TimestampedKeyQuery.withKey(KEY).skipCache()).isSkipCache());
-    }
-
-    @Test
-    public void shouldNotSkipCacheForTimestampedKeyQueryByDefault() {
-        setUp();
-        init();
-        assertFalse(forwardedRawKeyQuery(TimestampedKeyQuery.withKey(KEY)).isSkipCache());
-    }
+    // --- skipCache propagation: the TimestampedKeyWithHeadersQuery handler must forward isSkipCache()
+    //     onto the raw KeyQuery it builds, otherwise the caching layer never sees it. ---
 
     @Test
     public void shouldPropagateSkipCacheForTimestampedKeyWithHeadersQuery() {
