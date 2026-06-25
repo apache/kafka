@@ -481,7 +481,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         streamsGroupTopologyDescriptionGetErrorSensor.add(new Meter(
             metrics.metricName("streams-group-topology-description-get-error-rate",
                 METRICS_GROUP,
-                "The rate of failed plugin.getTopology calls"),
+                "The rate of failed getTopology operations (plugin errors, SPI contract violations, or conversion failures)"),
             metrics.metricName("streams-group-topology-description-get-error-count",
                 METRICS_GROUP,
                 "The total number of failed plugin.getTopology calls")));
