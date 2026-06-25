@@ -22,18 +22,22 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.AbstractConfigurableStoreFactory;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 /**
  * Wraps the outer-join store used by {@code KStreamKStreamJoin} so the processor only deals
- * with a single value shape: {@code ValueTimestampHeaders<LeftOrRightValue<VLeft, VRight>>}.
+ * with a single value shape: {@code AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>}.
+ * <p>
+ * The value carries no timestamp: the entry timestamp is part of the key
+ * ({@link TimestampedKeyAndJoinSide#timestamp()}), which is what the entries are sorted by, so a
+ * separate value-side timestamp would be redundant.
  * <p>
  * The underlying store is one of:
  * <ul>
  *   <li>plain: {@code KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>>}</li>
- *   <li>headers-aware: {@code KeyValueStore<TimestampedKeyAndJoinSide<K>, ValueTimestampHeaders<LeftOrRightValue<VLeft, VRight>>>}</li>
+ *   <li>headers-aware: {@code KeyValueStore<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>>}</li>
  * </ul>
  * Both variants are wrapped by the same {@link MeteredKeyValueStore} class — they only differ
  * in the value serde and (erased) generic parameter — so the variant cannot be detected by
@@ -44,7 +48,7 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
 
     private final boolean isHeadersStore;
     private KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> plainStore;
-    private KeyValueStore<TimestampedKeyAndJoinSide<K>, ValueTimestampHeaders<LeftOrRightValue<VLeft, VRight>>> headersStore;
+    private KeyValueStore<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>> headersStore;
 
     public OuterJoinStoreWrapper(final ProcessorContext<?, ?> context, final StoreFactory storeFactory) {
         this.isHeadersStore = isHeadersAware(storeFactory);
@@ -68,12 +72,11 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
 
     public void put(final TimestampedKeyAndJoinSide<K> key,
                     final LeftOrRightValue<VLeft, VRight> value,
-                    final Headers headers,
-                    final long timestamp) {
+                    final Headers headers) {
         if (headersStore != null) {
             headersStore.put(key, value == null
                 ? null
-                : ValueTimestampHeaders.makeAllowNullable(value, timestamp, headers));
+                : AggregationWithHeaders.makeAllowNullable(value, headers));
         } else {
             plainStore.put(key, value);
         }
@@ -81,30 +84,28 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
 
     public void putIfAbsent(final TimestampedKeyAndJoinSide<K> key,
                             final LeftOrRightValue<VLeft, VRight> value,
-                            final Headers headers,
-                            final long timestamp) {
+                            final Headers headers) {
         if (headersStore != null) {
             headersStore.putIfAbsent(key, value == null
                 ? null
-                : ValueTimestampHeaders.makeAllowNullable(value, timestamp, headers));
+                : AggregationWithHeaders.makeAllowNullable(value, headers));
         } else {
             plainStore.putIfAbsent(key, value);
         }
     }
 
-    public KeyValueIterator<TimestampedKeyAndJoinSide<K>, ValueTimestampHeaders<LeftOrRightValue<VLeft, VRight>>> all() {
+    public KeyValueIterator<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>> all() {
         if (headersStore != null) {
             return headersStore.all();
         }
-        // The plain store has no per-element timestamp or headers. Callers that need the timestamp
-        // read it from the key (TimestampedKeyAndJoinSide#timestamp). Callers that need the
-        // headers gate on isHeadersStore() — the lifted headers slot here is unused on the plain
-        // path.
+        // The plain store has no per-element headers. Callers that need the timestamp read it from
+        // the key (TimestampedKeyAndJoinSide#timestamp). Callers that need the headers gate on
+        // isHeadersStore() — the lifted headers slot here is unused on the plain path.
         return new LiftingIterator<>(plainStore.all());
     }
 
     private static final class LiftingIterator<K, V>
-        implements KeyValueIterator<TimestampedKeyAndJoinSide<K>, ValueTimestampHeaders<V>> {
+        implements KeyValueIterator<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<V>> {
 
         private final KeyValueIterator<TimestampedKeyAndJoinSide<K>, V> inner;
 
@@ -128,11 +129,11 @@ public class OuterJoinStoreWrapper<K, VLeft, VRight> {
         }
 
         @Override
-        public KeyValue<TimestampedKeyAndJoinSide<K>, ValueTimestampHeaders<V>> next() {
+        public KeyValue<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<V>> next() {
             final KeyValue<TimestampedKeyAndJoinSide<K>, V> kv = inner.next();
-            final ValueTimestampHeaders<V> lifted = kv.value == null
+            final AggregationWithHeaders<V> lifted = kv.value == null
                 ? null
-                : ValueTimestampHeaders.makeAllowNullable(kv.value, 0L, null);
+                : AggregationWithHeaders.makeAllowNullable(kv.value, null);
             return KeyValue.pair(kv.key, lifted);
         }
     }

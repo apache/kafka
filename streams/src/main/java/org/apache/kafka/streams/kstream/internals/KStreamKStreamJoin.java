@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
@@ -102,7 +103,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
     protected abstract class KStreamKStreamJoinProcessor extends ContextualProcessor<K, VThis, K, VOut> {
         private TimestampedWindowStoreWithHeaders<K, VOther> otherWindowStore;
         private Sensor droppedRecordsSensor;
-        private OuterJoinStoreWrapper<K, VLeft, VRight> outerJoinStoreWrapper;
+        private Optional<OuterJoinStoreWrapper<K, VLeft, VRight>> outerJoinStoreWrapper = Optional.empty();
         private boolean isOuterJoinStoreHeadersAware;
         private InternalProcessorContext<K, VOut> internalProcessorContext;
         private TimeTracker sharedTimeTracker;
@@ -119,9 +120,8 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
             if (enableSpuriousResultFix) {
                 outerJoinStoreWrapper = outerJoinWindowStoreFactory
-                    .map(s -> new OuterJoinStoreWrapper<K, VLeft, VRight>(context, s))
-                    .orElse(null);
-                isOuterJoinStoreHeadersAware = outerJoinStoreWrapper != null && outerJoinStoreWrapper.isHeadersStore();
+                    .map(s -> new OuterJoinStoreWrapper<>(context, s));
+                isOuterJoinStoreHeadersAware = outerJoinStoreWrapper.map(OuterJoinStoreWrapper::isHeadersStore).orElse(false);
 
                 sharedTimeTracker.setEmitInterval(
                     StreamsConfig.InternalConfig.getLong(
@@ -149,7 +149,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
             // Emit all non-joined records which window has closed
             if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
-                if (hasOuterJoinStore()) {
+                if (outerJoinStoreWrapper.isPresent()) {
                     emitNonJoinedOuterRecords(record);
                 }
             }
@@ -182,7 +182,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                     //
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
-                    if (!hasOuterJoinStore() || timeTo < sharedTimeTracker.streamTime) {
+                    if (outerJoinStoreWrapper.isEmpty() || timeTo < sharedTimeTracker.streamTime) {
                         context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
@@ -226,13 +226,14 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
             // reset to MAX_VALUE in case the store is empty
             sharedTimeTracker.minTime = Long.MAX_VALUE;
 
-            try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, ValueTimestampHeaders<LeftOrRightValue<VLeft, VRight>>> it = outerJoinStoreWrapper.all()) {
+            final OuterJoinStoreWrapper<K, VLeft, VRight> wrapper = outerJoinStoreWrapper.get();
+            try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>> it = wrapper.all()) {
                 TimestampedKeyAndJoinSide<K> prevKey = null;
 
                 boolean outerJoinLeftWindowOpen = false;
                 boolean outerJoinRightWindowOpen = false;
                 while (it.hasNext()) {
-                    final KeyValue<TimestampedKeyAndJoinSide<K>, ValueTimestampHeaders<LeftOrRightValue<VLeft, VRight>>> nextKeyValue = it.next();
+                    final KeyValue<TimestampedKeyAndJoinSide<K>, AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>>> nextKeyValue = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
                     sharedTimeTracker.minTime = timestampedKeyAndJoinSide.timestamp();
                     if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
@@ -253,7 +254,8 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                         continue;
                     }
 
-                    forwardNonJoinedOuterRecords(record, timestampedKeyAndJoinSide, nextKeyValue.value);
+                    final AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>> outerValue = nextKeyValue.value;
+                    forwardNonJoinedOuterRecords(record, timestampedKeyAndJoinSide, outerValue);
 
                     if (prevKey != null && !prevKey.equals(timestampedKeyAndJoinSide)) {
                         // blind-delete the previous key from the outer window store now it is emitted;
@@ -261,24 +263,24 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                         // and hence if we delete eagerly and then fail, we would miss emitting join results of the later
                         // values in the list.
                         // we do not use delete() calls since it would incur extra get()
-                        outerJoinStoreWrapper.put(prevKey, null, null, 0L);
+                        wrapper.put(prevKey, null, null);
                     }
                     prevKey = timestampedKeyAndJoinSide;
                 }
 
                 // at the end of the iteration, we need to delete the last key
                 if (prevKey != null) {
-                    outerJoinStoreWrapper.put(prevKey, null, null, 0L);
+                    wrapper.put(prevKey, null, null);
                 }
             }
         }
 
         private void forwardNonJoinedOuterRecords(final Record<K, VThis> record,
                                                   final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide,
-                                                  final ValueTimestampHeaders<LeftOrRightValue<VLeft, VRight>> outerValue) {
+                                                  final AggregationWithHeaders<LeftOrRightValue<VLeft, VRight>> outerValue) {
             final K key = timestampedKeyAndJoinSide.key();
             final long timestamp = timestampedKeyAndJoinSide.timestamp();
-            final LeftOrRightValue<VLeft, VRight> storedValue = outerValue.value();
+            final LeftOrRightValue<VLeft, VRight> storedValue = outerValue.aggregation();
             final VThis thisValue = thisValue(storedValue);
             final VOther otherValue = otherValue(storedValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);
@@ -306,14 +308,14 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
         private void emitInnerJoin(final Record<K, VThis> thisRecord, final KeyValue<Long, VOther> otherRecord,
                                    final long inputRecordTimestamp) {
-            if (hasOuterJoinStore()) {
+            if (outerJoinStoreWrapper.isPresent()) {
                 // use putIfAbsent to first read and see if there's any values for the key,
                 // if yes delete the key, otherwise do not issue a put;
                 // we may delete some values with the same key early but since we are going
                 // range over all values of the same key even after failure, since the other window-store
                 // is only cleaned up by stream time, so this is okay for at-least-once.
                 final TimestampedKeyAndJoinSide<K> otherKey = makeOtherKey(thisRecord.key(), otherRecord.key);
-                outerJoinStoreWrapper.putIfAbsent(otherKey, null, null, 0L);
+                outerJoinStoreWrapper.get().putIfAbsent(otherKey, null, null);
             }
 
             context().forward(
@@ -322,16 +324,12 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         }
 
         private void putInOuterJoinStore(final Record<K, VThis> thisRecord) {
-            if (!hasOuterJoinStore()) {
+            if (outerJoinStoreWrapper.isEmpty()) {
                 return;
             }
             final TimestampedKeyAndJoinSide<K> thisKey = makeThisKey(thisRecord.key(), thisRecord.timestamp());
             final LeftOrRightValue<VLeft, VRight> thisValue = makeThisValue(thisRecord.value());
-            outerJoinStoreWrapper.put(thisKey, thisValue, thisRecord.headers(), thisRecord.timestamp());
-        }
-
-        private boolean hasOuterJoinStore() {
-            return outerJoinStoreWrapper != null;
+            outerJoinStoreWrapper.get().put(thisKey, thisValue, thisRecord.headers());
         }
 
         @Override

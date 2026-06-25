@@ -85,6 +85,10 @@ public class ListValueStoreTest {
         } else {
             final KeyValueStore<Integer, ValueTimestampHeaders<String>> store =
                 buildHeadersStore(Serdes.Integer(), Serdes.String(), storeType);
+            // The key/value serdes below are only the context's default (fallback) serdes; they are
+            // not used here because the store is built with its own serdes (see buildHeadersStore).
+            // The value serde is null because the value type is ValueTimestampHeaders<String>, which
+            // has no off-the-shelf Serde and would never be exercised anyway.
             final InternalMockProcessorContext<Integer, ValueTimestampHeaders<String>> context = new InternalMockProcessorContext<>(
                 baseDir,
                 Serdes.Integer(),
