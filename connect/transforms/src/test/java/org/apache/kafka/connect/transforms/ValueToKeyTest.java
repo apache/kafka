@@ -284,6 +284,126 @@ public class ValueToKeyTest {
     }
 
     @Test
+    void schemalessNestedStructToKeyV2() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("fields", "parent.child");
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xform.configure(configs);
+
+        final Map<String, Object> child = new HashMap<>();
+        child.put("k2", "123");
+        final Map<String, Object> parent = new HashMap<>();
+        parent.put("child", child);
+        final Map<String, Object> value = new HashMap<>();
+        value.put("k1", 123);
+        value.put("parent", parent);
+
+        final SinkRecord sinkRecord = new SinkRecord("", 0, null, null, null, value, 0);
+        final SinkRecord transformedRecord = xform.apply(sinkRecord);
+
+        assertNull(transformedRecord.keySchema());
+
+        final HashMap<String, Object> expectedKey = new HashMap<>();
+        expectedKey.put("parent.child", child);
+
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> key = (Map<String, Object>) transformedRecord.key();
+        assertEquals(expectedKey, key);
+    }
+
+    @Test
+    void withSchemaNestedStructToKeyV2() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("fields", "parent.child");
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xform.configure(configs);
+
+        final Schema childSchema = SchemaBuilder.struct()
+                .field("k2", Schema.STRING_SCHEMA)
+                .build();
+        final Schema parentSchema = SchemaBuilder.struct()
+                .field("child", childSchema)
+                .build();
+        final Schema valueSchema = SchemaBuilder.struct()
+                .field("k1", Schema.INT32_SCHEMA)
+                .field("parent", parentSchema)
+                .build();
+        final Struct value = new Struct(valueSchema)
+                .put("k1", 123)
+                .put("parent", new Struct(parentSchema)
+                        .put("child", new Struct(childSchema)
+                                .put("k2", "123")));
+
+        final SinkRecord sinkRecord = new SinkRecord("", 0, null, null, valueSchema, value, 0);
+        final SinkRecord transformedRecord = xform.apply(sinkRecord);
+
+        final Schema expectedKeySchema = SchemaBuilder.struct()
+                .field("parent.child", childSchema)
+                .build();
+
+        assertEquals(expectedKeySchema, transformedRecord.keySchema());
+        final Struct key = (Struct) transformedRecord.key();
+        final Struct childStruct = (Struct) key.get("parent.child");
+        assertEquals("123", childStruct.get("k2"));
+    }
+
+    @Test
+    void schemalessBacktickedFieldNameV2() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("fields", "`parent.child`.k2");
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xform.configure(configs);
+
+        final Map<String, Object> parentChild = new HashMap<>();
+        parentChild.put("k2", "123");
+        final Map<String, Object> value = new HashMap<>();
+        value.put("k1", 123);
+        value.put("parent.child", parentChild);
+
+        final SinkRecord sinkRecord = new SinkRecord("", 0, null, null, null, value, 0);
+        final SinkRecord transformedRecord = xform.apply(sinkRecord);
+
+        assertNull(transformedRecord.keySchema());
+
+        final HashMap<String, String> expectedKey = new HashMap<>();
+        expectedKey.put("`parent.child`.k2", "123");
+
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> key = (Map<String, Object>) transformedRecord.key();
+        assertEquals(expectedKey, key);
+    }
+
+    @Test
+    void withSchemaBacktickedFieldNameV2() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put("fields", "`parent.child`.k2");
+        configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
+        xform.configure(configs);
+
+        final Schema parentChildSchema = SchemaBuilder.struct()
+                .field("k2", Schema.STRING_SCHEMA)
+                .build();
+        final Schema valueSchema = SchemaBuilder.struct()
+                .field("k1", Schema.INT32_SCHEMA)
+                .field("parent.child", parentChildSchema)
+                .build();
+        final Struct value = new Struct(valueSchema)
+                .put("k1", 123)
+                .put("parent.child", new Struct(parentChildSchema)
+                        .put("k2", "123"));
+
+        final SinkRecord sinkRecord = new SinkRecord("", 0, null, null, valueSchema, value, 0);
+        final SinkRecord transformedRecord = xform.apply(sinkRecord);
+
+        final Schema expectedKeySchema = SchemaBuilder.struct()
+                .field("`parent.child`.k2", Schema.STRING_SCHEMA)
+                .build();
+
+        assertEquals(expectedKeySchema, transformedRecord.keySchema());
+        assertEquals("123", ((Struct) transformedRecord.key()).get("`parent.child`.k2"));
+    }
+
+    @Test
     void v1BackwardCompatibilityDottedFieldName() {
         // With V1 (default), a dotted field name is treated as a literal field name
         xform.configure(Map.of("fields", "address.city"));
