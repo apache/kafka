@@ -29,9 +29,7 @@ public final class CidrUtils {
     private CidrUtils() {}
 
     private static InetAddress parseCidrAddress(String cidrPattern) {
-        String ipPart = cidrPattern.contains("/")
-            ? cidrPattern.substring(0, cidrPattern.indexOf('/'))
-            : cidrPattern;
+        String ipPart = cidrPattern.substring(0, cidrPattern.indexOf('/'));
         try {
             return InetAddress.getByName(ipPart);
         } catch (UnknownHostException e) {
