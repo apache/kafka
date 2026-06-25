@@ -205,20 +205,20 @@ final class ApiSurfaceScanner {
     /**
      * Walk the enclosing-class chain (by stripping {@code $}-segments from the binary name) and
      * return the audience of the nearest class with an explicit annotation. Default is
-     * {@code Private} per the KIP.
+     * {@code Private} per the KIP. Uses the same {@link ClassFacts#parentBinaryName} stepping
+     * rule as {@link ApiSurface#findInChain} so the two walks agree on missing intermediates.
      */
     private static DirectAudience resolveEffectiveAudience(String binaryName, Map<String, ClassFacts> byBinaryName) {
         String name = binaryName;
-        while (true) {
+        while (name != null) {
             ClassFacts facts = byBinaryName.get(name);
             if (facts != null) {
                 if (facts.isPublic()) return DirectAudience.PUBLIC;
                 if (facts.isPrivate()) return DirectAudience.PRIVATE;
             }
-            int dollar = name.lastIndexOf('$');
-            if (dollar < 0) return DirectAudience.PRIVATE;
-            name = name.substring(0, dollar);
+            name = ClassFacts.parentBinaryName(name);
         }
+        return DirectAudience.PRIVATE;
     }
 
     private enum DirectAudience { PUBLIC, PRIVATE }

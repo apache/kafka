@@ -83,6 +83,21 @@ class ApiSurfaceTest {
     }
 
     @Test
+    void isEffectivelyPublic_skipsMissingIntermediates() {
+        // Bug #5 regression: an anonymous/synthetic intermediate like Outer$1 is filtered out
+        // of the surface by ApiSurfaceScanner#isSyntheticOrAnonymous, but a named nested class
+        // *inside* the synthetic (Outer$1$Inner) should still inherit Outer's @Public. The walk
+        // has to step past the missing intermediate lexically rather than stopping at the gap.
+        ClassFacts outer = facts("org.apache.kafka.foo.Outer", ClassFacts.Flag.PUBLIC_API);
+        ApiSurface surface = ApiSurface.builder()
+                .recordClass(outer, JAR_A)
+                .build();
+
+        assertTrue(surface.isEffectivelyPublic("org.apache.kafka.foo.Outer$1$Inner"),
+                "anonymous-enclosed nested class must still inherit Outer's @Public");
+    }
+
+    @Test
     void isEffectivelyPublic_falseWhenNotAnnotated() {
         ClassFacts f = facts("org.apache.kafka.foo.Bar");
         ApiSurface surface = ApiSurface.builder().recordClass(f, JAR_A).build();

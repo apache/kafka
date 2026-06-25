@@ -30,7 +30,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
@@ -57,29 +59,36 @@ final class CascadeValidator {
     static CheckResult validate(ApiSurface surface) throws IOException {
         List<PublicApiViolation> violations = new ArrayList<>();
         List<PublicApiViolation> suppressions = new ArrayList<>();
+        // Group by jar so each archive is opened once. Private/package-private nested classes
+        // inherit the audience but their methods and ctors aren't reachable to consumers, so
+        // cascade-walking them would just produce noise on internal helpers — filter them out
+        // before grouping.
+        Map<File, List<ClassFacts>> classesByJar = new LinkedHashMap<>();
         for (ClassFacts cls : surface.effectivePublic()) {
-            // Private/package-private nested classes inherit the audience but their methods
-            // and ctors aren't reachable to consumers, so cascade-walking them would just
-            // produce noise on internal helpers.
             if (!cls.isExternallyVisible()) continue;
-            checkClass(cls, surface, violations, suppressions);
+            File jar = surface.jarOf(cls.binaryName());
+            if (jar == null) continue;
+            classesByJar.computeIfAbsent(jar, j -> new ArrayList<>()).add(cls);
+        }
+        for (Map.Entry<File, List<ClassFacts>> e : classesByJar.entrySet()) {
+            try (JarFile jar = new JarFile(e.getKey())) {
+                for (ClassFacts cls : e.getValue()) {
+                    checkClass(cls, jar, surface, violations, suppressions);
+                }
+            }
         }
         return new CheckResult(violations, suppressions);
     }
 
-    private static void checkClass(ClassFacts cls, ApiSurface surface,
+    private static void checkClass(ClassFacts cls, JarFile jar, ApiSurface surface,
                                    List<PublicApiViolation> violations,
                                    List<PublicApiViolation> suppressions) throws IOException {
-        File jarFile = surface.jarOf(cls.binaryName());
-        if (jarFile == null) return; // class wasn't in any scanned jar
         String entryPath = cls.binaryName().replace('.', '/') + ".class";
-
-        try (JarFile jar = new JarFile(jarFile)) {
-            JarEntry entry = jar.getJarEntry(entryPath);
-            if (entry == null) return;
-            try (InputStream in = jar.getInputStream(entry)) {
-                ClassReader reader = new ClassReader(in);
-                reader.accept(new ClassVisitor(Opcodes.ASM9) {
+        JarEntry entry = jar.getJarEntry(entryPath);
+        if (entry == null) return;
+        try (InputStream in = jar.getInputStream(entry)) {
+            ClassReader reader = new ClassReader(in);
+            reader.accept(new ClassVisitor(Opcodes.ASM9) {
                     /** Reason from a class-level {@code @SuppressKafkaInternalApiUsage}, or null. */
                     String classSuppressionReason;
 
@@ -200,8 +209,7 @@ final class CascadeValidator {
                             }
                         };
                     }
-                }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-            }
+            }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         }
     }
 

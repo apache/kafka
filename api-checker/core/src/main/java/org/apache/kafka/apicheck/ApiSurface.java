@@ -93,19 +93,29 @@ final class ApiSurface {
     }
 
     /**
-     * Walk the enclosing chain (starting at {@code name}, then each enclosing class) and return
-     * the first {@link ClassFacts} for which {@code stopAt} is true, or {@code null} if no class
-     * in the chain (or no class outside the surface at all) matches. The chain ends at the
-     * top-level class or the first link not recorded in this surface — consistent with the
-     * existing per-walk semantics.
+     * Walk the enclosing chain and return the first {@link ClassFacts} for which {@code stopAt}
+     * is true, or {@code null} if nothing matches before we reach the top-level class.
+     *
+     * <p>When the current level resolves to {@link ClassFacts}, stepping uses
+     * {@link ClassFacts#enclosingName} (works for both binary and dotted-form input). When it
+     * doesn't — e.g. an anonymous intermediate like {@code Outer$1} that
+     * {@link ApiSurfaceScanner#isSyntheticOrAnonymous} dropped — we fall back to lexical
+     * {@code $}-stripping so the chain continues past the gap. That fallback matches the
+     * scanner's own {@code resolveEffectiveAudience} so the two walks agree on what counts as
+     * an effective audience.
      */
     private ClassFacts findInChain(String name, Predicate<ClassFacts> stopAt) {
-        ClassFacts current = factsOf(name);
+        String current = name;
         while (current != null) {
-            if (stopAt.test(current)) return current;
-            String enclosing = current.enclosingName();
-            if (enclosing == null) return null;
-            current = factsOf(enclosing);
+            ClassFacts facts = factsOf(current);
+            if (facts != null) {
+                if (stopAt.test(facts)) return facts;
+                current = facts.enclosingName();
+            } else {
+                String parent = ClassFacts.parentBinaryName(current);
+                if (parent == null) return null;
+                current = parent;
+            }
         }
         return null;
     }
