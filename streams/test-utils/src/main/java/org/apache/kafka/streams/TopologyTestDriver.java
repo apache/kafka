@@ -269,7 +269,9 @@ public class TopologyTestDriver implements Closeable {
      * Default test properties are used to initialize the driver instance
      *
      * @param topology the topology to be tested
+     * @deprecated Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology) {
         this(topology, new Properties());
     }
@@ -280,7 +282,9 @@ public class TopologyTestDriver implements Closeable {
      *
      * @param topology the topology to be tested
      * @param config   the configuration for the topology
+     * @deprecated Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Properties config) {
         this(topology, config, null);
@@ -291,7 +295,9 @@ public class TopologyTestDriver implements Closeable {
      *
      * @param topology the topology to be tested
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
+     * @deprecated Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Instant initialWallClockTimeMs) {
         this(topology, new Properties(), initialWallClockTimeMs);
@@ -303,24 +309,27 @@ public class TopologyTestDriver implements Closeable {
      * @param topology               the topology to be tested
      * @param config                 the configuration for the topology
      * @param initialWallClockTime   the initial value of internally mocked wall-clock time
+     * @deprecated Use {@link TopologyTestDriverBuilder} instead.
      */
+    @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final Instant initialWallClockTime) {
         this(
-            topology.internalTopologyBuilder,
-            config,
-            initialWallClockTime == null ? System.currentTimeMillis() : initialWallClockTime.toEpochMilli());
+                topology.internalTopologyBuilder,
+                config,
+                initialWallClockTime == null ? System.currentTimeMillis() : initialWallClockTime.toEpochMilli());
     }
 
     /**
-     * Create a new test diver instance.
+     * Create a new test diver instance. Package-private core constructor shared by the (deprecated)
+     * public constructors and by {@link TopologyTestDriverBuilder}, which is the blessed entry point.
      *
      * @param builder builder for the topology to be tested
      * @param config the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
-    private TopologyTestDriver(final InternalTopologyBuilder builder,
+    TopologyTestDriver(final InternalTopologyBuilder builder,
                                final Properties config,
                                final long initialWallClockTimeMs) {
         final Properties configCopy = new Properties();
@@ -450,7 +459,7 @@ public class TopologyTestDriver implements Closeable {
 
             @SuppressWarnings("deprecation")
             final boolean globalEnabled = streamsConfig.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
-            final ProcessingExceptionHandler processingExceptionHandler = 
+            final ProcessingExceptionHandler processingExceptionHandler =
                 globalEnabled ? streamsConfig.processingExceptionHandler() : null;
 
             globalStateTask = new GlobalStateUpdateTask(
@@ -837,7 +846,9 @@ public class TopologyTestDriver implements Closeable {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
-        return new TestRecord<>(key, value, record.headers(), record.timestamp());
+        final int outputPartition = -1;
+        final Instant ts = record.timestamp() == null ? null : Instant.ofEpochMilli(record.timestamp());
+        return new TestRecord<>(key, value, record.headers(), ts, outputPartition);
     }
 
     <K, V> void pipeRecord(final String topic,
