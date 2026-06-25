@@ -919,7 +919,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * the persisted storedEpoch is still non-default.
      */
     private CompletableFuture<Void> clearStoredDescriptionTopologyEpochAsync(String groupId, int expectedStoredEpoch) {
-        return runtime.<Void>scheduleWriteOperation(
+        return runtime.scheduleWriteOperation(
             "clear-stored-topology-epoch",
             topicPartitionFor(groupId),
             coordinator -> coordinator.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch)
