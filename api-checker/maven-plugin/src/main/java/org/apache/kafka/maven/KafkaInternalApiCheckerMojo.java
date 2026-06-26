@@ -99,81 +99,75 @@ public class KafkaInternalApiCheckerMojo extends AbstractMojo {
             return;
         }
 
-        // Set defaults
         if (classesDirectories == null || classesDirectories.isEmpty()) {
             classesDirectories = getDefaultClassesDirectories();
         }
 
-
         getLog().info("Checking for internal Kafka API usage in compiled bytecode...");
 
+        List<File> kafkaJars = getKafkaJarsFromDependencies();
+        if (kafkaJars.isEmpty()) {
+            handleNoKafkaDependency();
+            return;
+        }
+
+        List<File> classRoots = PublicApiChecker.collectExistingRoots(classesDirectories);
+        if (classRoots.isEmpty()) {
+            getLog().info("No class files found, skipping internal API check");
+            return;
+        }
+
+        runCheck(kafkaJars, classRoots);
+    }
+
+    private void handleNoKafkaDependency() throws MojoFailureException {
+        String msg = "No org.apache.kafka:* dependencies found on the project classpath. "
+                + "The checker cannot derive an API surface and would produce a meaningless "
+                + "'0 violations' report — likely a classpath or configuration issue.";
+        if (failOnNoKafkaDependency) {
+            throw new MojoFailureException(msg);
+        }
+        getLog().warn(msg + " Skipping internal API check. "
+                + "Set <failOnNoKafkaDependency>true</failOnNoKafkaDependency> to make this fatal.");
+    }
+
+    private void runCheck(List<File> kafkaJars, List<File> classRoots)
+            throws MojoExecutionException, MojoFailureException {
         try {
-
-            // Get Kafka JARs from project dependencies
-            List<File> kafkaJars = getKafkaJarsFromDependencies();
-
-            if (kafkaJars.isEmpty()) {
-                String msg = "No org.apache.kafka:* dependencies found on the project classpath. "
-                        + "The checker cannot derive an API surface and would produce a meaningless "
-                        + "'0 violations' report — likely a classpath or configuration issue.";
-                if (failOnNoKafkaDependency) {
-                    throw new MojoFailureException(msg);
-                }
-                getLog().warn(msg + " Skipping internal API check. "
-                        + "Set <failOnNoKafkaDependency>true</failOnNoKafkaDependency> to make this fatal.");
-                return;
-            }
-
-            PublicApiChecker checker = new PublicApiChecker(kafkaJars);
-
-            // Collect class file roots (directories and any explicitly-listed jars).
-            List<File> classRoots = new ArrayList<>();
-            for (File root : classesDirectories) {
-                if (root.exists()) {
-                    classRoots.add(root);
-                }
-            }
-
-            if (classRoots.isEmpty()) {
-                getLog().info("No class files found, skipping internal API check");
-                return;
-            }
-
             getLog().info("Scanning " + classRoots.size() + " class file root(s) for internal API usage");
-            CheckResult result = checker.checkBytecode(classRoots);
-            List<PublicApiViolation> violations = result.violations();
-            List<PublicApiViolation> suppressions = result.suppressions();
-
-            // Generate report
-            ViolationReporter reporter = new ViolationReporter();
-            reporter.writeTextReport(violations, suppressions, reportFile);
-
-            // Print summary to console
-            reporter.printToConsole(violations, suppressions, true);
-
-            getLog().info("Internal API usage check completed. Report written to: " + reportFile.getAbsolutePath());
-
-            long unjustified = suppressions.stream().filter(PublicApiViolation::lacksReason).count();
-            if (unjustified > 0) {
-                getLog().warn(unjustified + " suppression(s) carry no reason — KIP-1265 requires a justification on every @SuppressKafkaInternalApiUsage");
-            }
-
-            if (!violations.isEmpty()) {
-                String message = String.format("Found %d internal API usage violations. See report: %s",
-                    violations.size(), reportFile.getAbsolutePath());
-
-                if (failOnViolation) {
-                    throw new MojoFailureException(message);
-                } else {
-                    getLog().warn(message);
-                }
-            } else {
-                getLog().info("No internal API usage found.");
-            }
-
+            CheckResult result = new PublicApiChecker(kafkaJars).checkBytecode(classRoots);
+            reportResults(result);
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to check internal API usage: " + e.getMessage(), e);
         }
+    }
+
+    private void reportResults(CheckResult result) throws MojoFailureException, IOException {
+        List<PublicApiViolation> violations = result.violations();
+        List<PublicApiViolation> suppressions = result.suppressions();
+
+        ViolationReporter reporter = new ViolationReporter();
+        reporter.writeTextReport(violations, suppressions, reportFile);
+        reporter.printToConsole(violations, suppressions, true);
+
+        getLog().info("Internal API usage check completed. Report written to: " + reportFile.getAbsolutePath());
+
+        long unjustified = suppressions.stream().filter(PublicApiViolation::lacksReason).count();
+        if (unjustified > 0) {
+            getLog().warn(unjustified + " suppression(s) carry no reason — KIP-1265 requires a justification on every @SuppressKafkaInternalApiUsage");
+        }
+
+        if (violations.isEmpty()) {
+            getLog().info("No internal API usage found.");
+            return;
+        }
+
+        String message = String.format("Found %d internal API usage violations. See report: %s",
+                violations.size(), reportFile.getAbsolutePath());
+        if (failOnViolation) {
+            throw new MojoFailureException(message);
+        }
+        getLog().warn(message);
     }
 
     /**

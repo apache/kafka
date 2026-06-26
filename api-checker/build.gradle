@@ -17,7 +17,7 @@
 
 // Shared configuration for the api-checker included build. Lives outside Kafka's main
 // settings tree so its Maven dependencies (in :maven-plugin) don't end up on every
-// developer's buildSrc classpath, and so each published artifact carries only the classes
+// developer's main-build classpath, and so each published artifact carries only the classes
 // its consumers need.
 
 // Default the published version to the same string as the rest of Kafka (gradle.properties
@@ -64,7 +64,7 @@ subprojects {
     checkstyle {
         toolVersion = '12.3.1'
         configDirectory = file("$rootDir/../checkstyle")
-        configProperties = [importControlFile: 'import-control-buildsrc.xml']
+        configProperties = [importControlFile: 'import-control-api-checker.xml']
     }
 
     publishing {

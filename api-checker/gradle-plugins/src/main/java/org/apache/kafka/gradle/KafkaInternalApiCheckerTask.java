@@ -84,73 +84,70 @@ public class KafkaInternalApiCheckerTask extends DefaultTask {
 
         getLogger().info("Checking for internal Kafka API usage in compiled bytecode...");
 
+        List<File> kafkaJars = new ArrayList<>(kafkaDependencyJars.getFiles());
+        if (kafkaJars.isEmpty()) {
+            handleNoKafkaDependency();
+            return;
+        }
+
+        List<File> classRoots = PublicApiChecker.collectExistingRoots(classes.getFiles());
+        if (classRoots.isEmpty()) {
+            getLogger().info("No class files found, skipping internal API check");
+            return;
+        }
+
+        runCheck(kafkaJars, classRoots);
+    }
+
+    private void handleNoKafkaDependency() {
+        String msg = "No org.apache.kafka:* dependencies found on the configured "
+                + "kafkaDependencyJars. The checker cannot derive an API surface and would "
+                + "produce a meaningless '0 violations' report — likely a classpath or "
+                + "configuration issue.";
+        if (failOnNoKafkaDependency.get()) {
+            throw new GradleException(msg);
+        }
+        getLogger().warn("{} Skipping internal API check. "
+                + "Set kafkaInternalApiChecker.failOnNoKafkaDependency = true to make this fatal.", msg);
+    }
+
+    private void runCheck(List<File> kafkaJars, List<File> classRoots) {
         try {
-            List<File> kafkaJars = new ArrayList<>(kafkaDependencyJars.getFiles());
-
-            if (kafkaJars.isEmpty()) {
-                String msg = "No org.apache.kafka:* dependencies found on the configured "
-                        + "kafkaDependencyJars. The checker cannot derive an API surface and would "
-                        + "produce a meaningless '0 violations' report — likely a classpath or "
-                        + "configuration issue.";
-                if (failOnNoKafkaDependency.get()) {
-                    throw new GradleException(msg);
-                }
-                getLogger().warn("{} Skipping internal API check. "
-                        + "Set kafkaInternalApiChecker.failOnNoKafkaDependency = true to make this fatal.", msg);
-                return;
-            }
-
-            PublicApiChecker checker = new PublicApiChecker(kafkaJars);
-
-            // Collect class file roots (directories and any explicitly-listed jars).
-            List<File> classRoots = new ArrayList<>();
-            for (File root : classes.getFiles()) {
-                if (root.exists()) {
-                    classRoots.add(root);
-                }
-            }
-
-            if (classRoots.isEmpty()) {
-                getLogger().info("No class files found, skipping internal API check");
-                return;
-            }
-
             getLogger().info("Scanning {} class file root(s) for internal API usage", classRoots.size());
-            CheckResult result = checker.checkBytecode(classRoots);
-            List<PublicApiViolation> violations = result.violations();
-            List<PublicApiViolation> suppressions = result.suppressions();
-
-            // Generate report
-            ViolationReporter reporter = new ViolationReporter();
-            File report = reportFile.get().getAsFile();
-            reporter.writeTextReport(violations, suppressions, report);
-
-            // Print summary to console
-            reporter.printToConsole(violations, suppressions, true);
-
-            getLogger().info("Internal API usage check completed. Report written to: {}", report.getAbsolutePath());
-
-            long unjustified = suppressions.stream().filter(PublicApiViolation::lacksReason).count();
-            if (unjustified > 0) {
-                getLogger().warn("{} suppression(s) carry no reason — KIP-1265 requires a justification on every @SuppressKafkaInternalApiUsage", unjustified);
-            }
-
-            if (!violations.isEmpty()) {
-                String message = String.format("Found %d internal API usage violations. See report: %s",
-                    violations.size(), report.getAbsolutePath());
-
-                if (failOnViolation.get()) {
-                    throw new GradleException(message);
-                } else {
-                    getLogger().warn(message);
-                }
-            } else {
-                getLogger().info("No internal API usage found.");
-            }
-
+            CheckResult result = new PublicApiChecker(kafkaJars).checkBytecode(classRoots);
+            reportResults(result);
         } catch (IOException e) {
             throw new GradleException("Failed to check internal API usage: " + e.getMessage(), e);
         }
+    }
+
+    private void reportResults(CheckResult result) throws IOException {
+        List<PublicApiViolation> violations = result.violations();
+        List<PublicApiViolation> suppressions = result.suppressions();
+
+        ViolationReporter reporter = new ViolationReporter();
+        File report = reportFile.get().getAsFile();
+        reporter.writeTextReport(violations, suppressions, report);
+        reporter.printToConsole(violations, suppressions, true);
+
+        getLogger().info("Internal API usage check completed. Report written to: {}", report.getAbsolutePath());
+
+        long unjustified = suppressions.stream().filter(PublicApiViolation::lacksReason).count();
+        if (unjustified > 0) {
+            getLogger().warn("{} suppression(s) carry no reason — KIP-1265 requires a justification on every @SuppressKafkaInternalApiUsage", unjustified);
+        }
+
+        if (violations.isEmpty()) {
+            getLogger().info("No internal API usage found.");
+            return;
+        }
+
+        String message = String.format("Found %d internal API usage violations. See report: %s",
+                violations.size(), report.getAbsolutePath());
+        if (failOnViolation.get()) {
+            throw new GradleException(message);
+        }
+        getLogger().warn(message);
     }
 
     @Input

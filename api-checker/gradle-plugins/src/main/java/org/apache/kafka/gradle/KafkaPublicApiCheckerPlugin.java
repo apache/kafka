@@ -111,7 +111,7 @@ public class KafkaPublicApiCheckerPlugin implements Plugin<Project> {
         if (!project.hasProperty(name)) return false;
         Object raw = project.findProperty(name);
         if (raw == null) return true;
-        String s = raw.toString().trim().toLowerCase();
-        return s.isEmpty() || "true".equals(s) || "1".equals(s) || "yes".equals(s);
+        String s = raw.toString().trim();
+        return s.isEmpty() || "true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s);
     }
 }

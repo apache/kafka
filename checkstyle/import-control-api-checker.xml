@@ -18,8 +18,9 @@
  limitations under the License.
 -->
 
-<!-- Permissive import policy for buildSrc — internal build plugins / tasks only,
-     not shipped to consumers, so we allow the standard buildSrc dep set. -->
+<!-- Permissive import policy for the api-checker included build — Gradle/Maven
+     plugins and the ASM-based scanner only, not shipped onto consumer classpaths,
+     so we allow their full runtime dep set. -->
 <import-control pkg="org.apache.kafka">
     <allow pkg="java"/>
     <allow pkg="org.apache.kafka"/>

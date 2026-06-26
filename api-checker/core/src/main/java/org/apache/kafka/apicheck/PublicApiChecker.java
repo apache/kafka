@@ -83,6 +83,21 @@ public class PublicApiChecker {
     }
 
     /**
+     * Filter the supplied class-file roots to those that exist on disk. Both adapters
+     * (Gradle task, Maven mojo) seed the input from build configuration that may include
+     * directories the build hasn't produced yet (e.g. test classes when there are no tests).
+     */
+    public static List<File> collectExistingRoots(Iterable<File> roots) {
+        List<File> existing = new ArrayList<>();
+        for (File root : roots) {
+            if (root.exists()) {
+                existing.add(root);
+            }
+        }
+        return existing;
+    }
+
+    /**
      * Consumer-side predicate: true if the binary class name (e.g.
      * {@code org.apache.kafka.clients.producer.KafkaProducer} or
      * {@code org.apache.kafka.clients.admin.OffsetSpec$LatestSpec}) is effectively

@@ -2,7 +2,7 @@
 
 This is a separate Gradle build (composite-included from the root `settings.gradle` via
 `pluginManagement { includeBuild 'api-checker' }`) that produces the KIP-1265 API checkers.
-Living outside Kafka's main build keeps the Maven runtime dependencies off the buildSrc
+Living outside Kafka's main build keeps the Maven runtime dependencies off the main-build
 classpath and lets each published artifact carry only the classes its consumers need.
 
 | Subproject | Publishes | Audience |
