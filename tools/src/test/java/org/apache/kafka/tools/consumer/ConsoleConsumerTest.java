@@ -45,9 +45,9 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKeyJsonConverter;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValueJsonConverter;
+import org.apache.kafka.coordinator.transaction.TransactionState;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonConverter;
-import org.apache.kafka.coordinator.transaction.TransactionState;
 import org.apache.kafka.server.util.MockTime;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -296,7 +296,7 @@ public class ConsoleConsumerTest {
             admin.createTopics(Set.of(newTopic));
             produceMessagesWithTxn(cluster);
 
-            String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster, 
+            String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster,
                     Topic.TRANSACTION_STATE_TOPIC_NAME, 
                     "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter");
 
