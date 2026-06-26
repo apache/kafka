@@ -344,6 +344,34 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
+    @Test
+    public void shouldReturnEmptyHeadersForTimestampedKeyWithHeadersQueryOnAdapterStore() {
+        // Feeding a non-header supplier into the WithHeaders builder yields an adapter-built store
+        // (TimestampedToHeadersStoreAdapter over a plain timestamped store), which cannot persist
+        // headers. Caching is disabled so the query reads through the adapter to the underlying store:
+        // the query still succeeds and the value/timestamp round-trip, but headers come back empty
+        // (never null) even though the record was written with headers.
+        // (With caching enabled the not-yet-flushed value is still served from the record cache with
+        // its headers intact, so that path is covered by the native/round-trip tests instead.)
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.ADAPTER, false);
+        try {
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+
+            final QueryResult<ReadOnlyRecord<String, String>> result =
+                store.query(TimestampedKeyWithHeadersQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false));
+
+            assertTrue(result.isSuccess(), "Expected TimestampedKeyWithHeadersQuery to succeed on an adapter-built store");
+            final ReadOnlyRecord<String, String> record = result.getResult();
+            assertEquals("k", record.key());
+            assertEquals("v", record.value());
+            assertEquals(123L, record.timestamp());
+            assertEquals(new RecordHeaders(), record.headers());
+            assertNotNull(result.getPosition(), "Expected position to be set");
+        } finally {
+            store.close();
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldFailTimestampedKeyWithHeadersQueryForNegativeStoredTimestamp(final boolean cachingEnabled) {
