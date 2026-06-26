@@ -141,6 +141,7 @@ public final class ConsumerUtils {
                 config.getString(ConsumerConfig.CLIENT_ID_CONFIG), config));
     }
 
+    @SuppressWarnings("deprecation")
     public static Metrics createMetrics(ConsumerConfig config, Time time, List<MetricsReporter> reporters) {
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         Map<String, String> metricsTags = Collections.singletonMap(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);

@@ -89,7 +89,9 @@ public final class Metrics implements Closeable {
     /**
      * Create a metrics repository with no metric reporters and default configuration.
      * Expiration of Sensors is disabled.
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public Metrics(Time time) {
         this(new MetricConfig(), new ArrayList<>(0), time);
     }
@@ -97,7 +99,9 @@ public final class Metrics implements Closeable {
     /**
      * Create a metrics repository with no metric reporters and the given default configuration.
      * Expiration of Sensors is disabled.
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public Metrics(MetricConfig defaultConfig, Time time) {
         this(defaultConfig, new ArrayList<>(0), time);
     }
@@ -118,7 +122,9 @@ public final class Metrics implements Closeable {
      * @param defaultConfig The default config
      * @param reporters The metrics reporters
      * @param time The time instance to use with the metrics
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time) {
         this(defaultConfig, reporters, time, false);
     }
@@ -130,7 +136,9 @@ public final class Metrics implements Closeable {
      * @param reporters The metrics reporters
      * @param time The time instance to use with the metrics
      * @param metricsContext The metricsContext to initialize metrics reporter with
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, MetricsContext metricsContext) {
         this(defaultConfig, reporters, time, false, metricsContext);
     }
@@ -141,7 +149,9 @@ public final class Metrics implements Closeable {
      * @param reporters The metrics reporters
      * @param time The time instance to use with the metrics
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration) {
         this(defaultConfig, reporters, time, enableExpiration, new KafkaMetricsContext(""));
     }
@@ -154,7 +164,9 @@ public final class Metrics implements Closeable {
      * @param time The time instance to use with the metrics
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      * @param metricsContext The metricsContext to initialize metrics reporter with
+     * @deprecated This constructor is intended for internal use only and will be made package-private in version 5.0.
      */
+    @Deprecated(since = "4.4")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
                    MetricsContext metricsContext) {
         this.config = defaultConfig;

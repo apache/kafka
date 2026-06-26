@@ -382,6 +382,7 @@ public class TopologyTestDriver implements Closeable {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private StreamsMetricsImpl setupMetrics(final StreamsConfig streamsConfig) {
         final String threadId = Thread.currentThread().getName();
 

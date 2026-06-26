@@ -664,6 +664,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.positionsValidator = positionsValidator;
     }
 
+    @SuppressWarnings("deprecation")
     AsyncKafkaConsumer(LogContext logContext,
                        Time time,
                        ConsumerConfig config,
