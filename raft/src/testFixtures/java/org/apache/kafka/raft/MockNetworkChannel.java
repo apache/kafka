@@ -35,8 +35,8 @@ public class MockNetworkChannel implements NetworkChannel {
     private final List<RequestEntry> sendQueue = new ArrayList<>();
     private final Map<Integer, CompletableFuture<RaftResponse.Inbound>> awaitingResponse = new HashMap<>();
 
-    // Cumulative count of outbound requests sent, used by the JMH raft benchmarks.
     private int requestsSent = 0;
+    private final Map<Short, Integer> requestsSentByApiKey = new HashMap<>();
 
     public MockNetworkChannel(AtomicInteger correlationIdCounter) {
         this.correlationIdCounter = correlationIdCounter;
@@ -56,6 +56,7 @@ public class MockNetworkChannel implements NetworkChannel {
         var future = new CompletableFuture<RaftResponse.Inbound>();
         sendQueue.add(new RequestEntry(request, future));
         requestsSent++;
+        requestsSentByApiKey.merge(request.data().apiKey(), 1, Integer::sum);
         return future;
     }
 
@@ -64,6 +65,18 @@ public class MockNetworkChannel implements NetworkChannel {
      */
     public int requestsSent() {
         return requestsSent;
+    }
+
+    /**
+     * Cumulative number of outbound requests of the given API key the client has sent since this
+     * channel was created.
+     */
+    public int requestsSent(ApiKeys apiKey) {
+        return requestsSentByApiKey.getOrDefault(apiKey.id, 0);
+    }
+
+    public Map<Short, Integer> requestsSentByApiKey() {
+        return Map.copyOf(requestsSentByApiKey);
     }
 
     @Override

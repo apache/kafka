@@ -17,32 +17,51 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.FetchRequestData;
-import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
 import org.apache.kafka.server.common.KRaftVersion;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public final class RaftClientBenchmarkContext {
+    // Standardized JMH iteration counts, shared by all raft benchmarks so every benchmark of a given
+    // mode is configured identically. SingleShotTime measures a single operation per iteration, so it
+    // needs many iterations to build a stable distribution; AverageTime averages many operations
+    // within each timed iteration, so it needs fewer.
+    public static final int SINGLE_SHOT_WARMUP_ITERATIONS = 50;
+    public static final int SINGLE_SHOT_MEASUREMENT_ITERATIONS = 30;
+    public static final int SINGLE_SHOT_FORKS = 5;
+    public static final int AVERAGE_TIME_WARMUP_ITERATIONS = 5;
+    public static final int AVERAGE_TIME_MEASUREMENT_ITERATIONS = 10;
+    public static final int AVERAGE_TIME_FORKS = 3;
+
+    public static final KRaftVersion DEFAULT_KRAFT_VERSION = KRaftVersion.KRAFT_VERSION_1;
+    public static final RaftProtocol DEFAULT_RAFT_PROTOCOL = RaftProtocol.KIP_1186_PROTOCOL;
+
     private final RaftClientTestContext context;
     private final MockLog log;
     private final MockNetworkChannel channel;
-    private final ReplicaKey otherVoter;
+    private final List<ReplicaKey> voters;
 
     private int lastFlushCount;
     private int lastReadCount;
     private int lastTruncationCount;
     private int lastRequestsSent;
+    private Map<Short, Integer> lastRequestsSentByApiKey = new HashMap<>();
     private int lastQuorumWrites;
+    private int lastQuorumReads;
 
-    private RaftClientBenchmarkContext(RaftClientTestContext context, ReplicaKey otherVoter) {
+    private RaftClientBenchmarkContext(RaftClientTestContext context, List<ReplicaKey> voters) {
         this.context = context;
         this.log = context.log;
         this.channel = context.channel;
-        this.otherVoter = otherVoter;
-        resetCounters();
+        this.voters = List.copyOf(voters);
     }
 
     /**
@@ -51,93 +70,106 @@ public final class RaftClientBenchmarkContext {
      * Unattached &rarr; Leader election. A single-voter quorum is rejected because such a node elects
      * itself at initialization, before any measured poll.
      */
-    public static RaftClientBenchmarkContext unattached(int localId, int voterCount) throws Exception {
+    public static RaftClientBenchmarkContext unattached(int voterCount) throws Exception {
+        return unattached(voterCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
+    }
+
+    public static RaftClientBenchmarkContext unattached(
+        int voterCount,
+        KRaftVersion kraftVersion,
+        RaftProtocol raftProtocol
+    ) throws Exception {
         if (voterCount < 2) {
             throw new IllegalArgumentException("voterCount must be at least 2; a single voter self-elects at init");
         }
-        return new RaftClientBenchmarkContext(buildContext(voterKeys(localId, voterCount)), null);
+        List<ReplicaKey> voterKeys = voterKeys(voterCount);
+        return new RaftClientBenchmarkContext(buildContext(voterKeys, kraftVersion, raftProtocol), voterKeys);
     }
 
-    public static RaftClientBenchmarkContext leader(int localId, int voterCount) throws Exception {
-        List<ReplicaKey> voterKeys = voterKeys(localId, voterCount);
-        RaftClientTestContext context = buildContext(voterKeys);
+    public static RaftClientBenchmarkContext leader(int voterCount) throws Exception {
+        return leader(voterCount, DEFAULT_KRAFT_VERSION, DEFAULT_RAFT_PROTOCOL);
+    }
+
+    public static RaftClientBenchmarkContext leader(
+        int voterCount,
+        KRaftVersion kraftVersion,
+        RaftProtocol raftProtocol
+    ) throws Exception {
+        List<ReplicaKey> voterKeys = voterKeys(voterCount);
+        RaftClientTestContext context = buildContext(voterKeys, kraftVersion, raftProtocol);
         context.unattachedToLeader();
 
-        return new RaftClientBenchmarkContext(context, voterKeys.get(1));
+        return new RaftClientBenchmarkContext(context, voterKeys);
     }
 
-    /** {@code voterCount} voter keys, each with a random directory id, with {@code localId} first. */
-    private static List<ReplicaKey> voterKeys(int localId, int voterCount) {
+    /**
+     * {@code voterCount} voter keys, each with a random directory id, with the local node first.
+     */
+    private static List<ReplicaKey> voterKeys(int voterCount) {
+        int localId = randomReplicaId();
         return IntStream.range(0, voterCount)
             .mapToObj(i -> ReplicaKey.of(localId + i, Uuid.randomUuid()))
             .collect(Collectors.toList());
     }
 
+    private static int randomReplicaId() {
+        return ThreadLocalRandom.current().nextInt(1025);
+    }
+
     /**
-     * Builds an unattached node in a KIP-1186 quorum of {@code voterKeys}, whose first entry is the
-     * local node.
+     * Builds an unattached node in a quorum of {@code voterKeys} (first entry is the local node)
      */
-    private static RaftClientTestContext buildContext(List<ReplicaKey> voterKeys) throws Exception {
+    private static RaftClientTestContext buildContext(
+        List<ReplicaKey> voterKeys,
+        KRaftVersion kraftVersion,
+        RaftProtocol raftProtocol
+    ) throws Exception {
         ReplicaKey local = voterKeys.get(0);
         VoterSet voters = VoterSetTestUtil.voterSet(voterKeys.stream());
 
         return new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
-            .withStartingVoters(voters, KRaftVersion.KRAFT_VERSION_1)
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL)
+            .withStartingVoters(voters, kraftVersion)
+            .withRaftProtocol(raftProtocol)
             .withPollIntervalMs(0)
             .withUnknownLeader(0)
             .build();
     }
 
-    public void unattachedToLeader() throws Exception {
-        context.unattachedToLeader();
+    public RaftClientTestContext testContext() {
+        return context;
     }
 
-    public void advanceLeaderHwmToLogEnd() throws InterruptedException {
-        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
-    }
-
-    public void pollUntilResponse() throws InterruptedException {
-        context.pollUntilResponse();
-    }
-
-    public int currentEpoch() {
-        return context.currentEpoch();
-    }
-
+    /** The local node's log end offset. Kept here because the {@code log} field is package-private. */
     public long logEndOffset() {
         return log.endOffset().offset();
     }
 
-    /** A voter other than the local node, e.g. to deliver a FETCH from on the leader. */
-    public ReplicaKey otherVoter() {
-        if (otherVoter == null) {
-            throw new IllegalStateException("This context was not built with an other-voter key");
-        }
-        return otherVoter;
+    public ReplicaKey localVoter() {
+        return voters.get(0);
     }
 
-    public void deliverRequest(ApiMessage request) {
-        context.deliverRequest(request);
+    /**
+     * The voters other than the local node, in voter-set order. May be empty (single-voter quorum).
+     * Use these as the source of delivered requests, e.g. a FETCH from a follower on the leader.
+     */
+    public List<ReplicaKey> remoteVoters() {
+        return voters.subList(1, voters.size());
     }
 
-    public FetchRequestData fetchRequest(
-        int epoch,
-        ReplicaKey replicaKey,
-        long fetchOffset,
-        int lastFetchedEpoch,
-        int maxWaitMs
-    ) {
-        return context.fetchRequest(epoch, replicaKey, fetchOffset, lastFetchedEpoch, maxWaitMs);
-    }
-
-    /** Re-baselines all counters to the current totals. Call at the end of benchmark setup. */
-    public void resetCounters() {
+    /**
+     * Establishes the counter baseline so that work done before this point (building the context,
+     * driving an election in {@code leader()}, or anything else a benchmark does in its setup) is not
+     * attributed to the measured operation. Call this at the <b>end of benchmark setup</b>, just
+     * before the measured region begins.
+     */
+    public void zeroCountersOnSetup() {
         lastFlushCount = log.flushCount();
         lastReadCount = log.readCount();
         lastTruncationCount = log.truncationCount();
         lastRequestsSent = channel.requestsSent();
+        lastRequestsSentByApiKey = new HashMap<>(channel.requestsSentByApiKey());
         lastQuorumWrites = context.quorumStateWriteCount();
+        lastQuorumReads = context.quorumStateReadCount();
         context.drainAllSentResponses();
     }
 
@@ -162,10 +194,21 @@ public final class RaftClientBenchmarkContext {
         return delta;
     }
 
-    public int drainRpcRequestsSent() {
-        int current = channel.requestsSent();
-        int delta = current - lastRequestsSent;
-        lastRequestsSent = current;
+    /**
+     * Number of requests sent since the last drain. If {@code apiKey} is present, only requests of
+     * that API key are counted; otherwise all requests are counted.
+     */
+    public int drainRpcRequestsSent(Optional<ApiKeys> apiKey) {
+        if (apiKey.isEmpty()) {
+            int current = channel.requestsSent();
+            int delta = current - lastRequestsSent;
+            lastRequestsSent = current;
+            return delta;
+        }
+        short id = apiKey.get().id;
+        int current = channel.requestsSent(apiKey.get());
+        int delta = current - lastRequestsSentByApiKey.getOrDefault(id, 0);
+        lastRequestsSentByApiKey.put(id, current);
         return delta;
     }
 
@@ -176,7 +219,21 @@ public final class RaftClientBenchmarkContext {
         return delta;
     }
 
-    public int drainRpcResponsesSent() {
-        return context.drainAllSentResponses();
+    public int drainQuorumStateReads() {
+        int current = context.quorumStateReadCount();
+        int delta = current - lastQuorumReads;
+        lastQuorumReads = current;
+        return delta;
+    }
+
+    /**
+     * Number of responses sent since the last drain. If {@code apiKey} is present, only responses of
+     * that API key are counted; otherwise all responses are counted.
+     */
+    public int drainRpcResponsesSent(Optional<ApiKeys> apiKey) {
+        if (apiKey.isEmpty()) {
+            return context.drainAllSentResponses();
+        }
+        return context.drainSentResponses(apiKey.get()).size();
     }
 }

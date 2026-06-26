@@ -582,6 +582,13 @@ public final class RaftClientTestContext {
         return quorumStateStore.writeCount();
     }
 
+    /**
+     * Cumulative number of quorum-state-file reads. Used by the JMH raft benchmarks.
+     */
+    int quorumStateReadCount() {
+        return quorumStateStore.readCount();
+    }
+
     int requestTimeoutMs() {
         return requestTimeoutMs;
     }
@@ -658,7 +665,7 @@ public final class RaftClientTestContext {
             deliverResponse(request.correlationId(), request.destination(), voteResponse);
         }
 
-        client.poll();
+        pollUntil(() -> client.quorum().isLeader());
         assertElectedLeader(epoch, localIdOrThrow());
     }
 
@@ -684,8 +691,7 @@ public final class RaftClientTestContext {
             }
         }
 
-        client.poll();
-        assertTrue(client.quorum().isCandidate());
+        pollUntil(() -> client.quorum().isCandidate());
     }
 
     private int localIdOrThrow() {
@@ -738,7 +744,7 @@ public final class RaftClientTestContext {
         }, 5000, pollIntervalMs, () -> "Condition failed to be satisfied before timeout");
     }
 
-    void pollUntilResponse() throws InterruptedException {
+    public void pollUntilResponse() throws InterruptedException {
         pollUntil(() -> !sentResponses.isEmpty());
     }
 
@@ -994,7 +1000,7 @@ public final class RaftClientTestContext {
         return message;
     }
 
-    void deliverRequest(ApiMessage request) {
+    public void deliverRequest(ApiMessage request) {
         short version = raftRequestVersion(request);
         deliverRequest(request, version);
     }
@@ -1898,7 +1904,7 @@ public final class RaftClientTestContext {
         }
     }
 
-    FetchRequestData fetchRequest(
+    public FetchRequestData fetchRequest(
         int epoch,
         ReplicaKey replicaKey,
         long fetchOffset,
@@ -2384,7 +2390,7 @@ public final class RaftClientTestContext {
      * Determines what versions of RPCs are in use. Note, these are ordered from oldest to newest, and are
      * cumulative. E.g. KIP_1186_PROTOCOL includes KIP_996_PROTOCOL, KIP_853_PROTOCOL, and KIP_595_PROTOCOL changes
      */
-    enum RaftProtocol {
+    public enum RaftProtocol {
         // kraft support
         KIP_595_PROTOCOL,
         // dynamic quorum reconfiguration support
