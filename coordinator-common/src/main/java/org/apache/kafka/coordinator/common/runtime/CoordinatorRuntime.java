@@ -580,10 +580,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalStateException("Coordinator must be in loading state");
             }
 
-            loader.load(tp, coordinator).whenComplete((summary, exception) ->
+            loader.load(tp, coordinator).whenComplete((summary, exception) -> {
                 scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + epoch + ")", tp, () -> {
                     CoordinatorContext context = coordinators.get(tp);
-                    if (context != null)  {
+                    if (context != null) {
                         if (context.state != CoordinatorState.LOADING) {
                             log.info("Ignored load completion from {} because context is in {} state.",
                                 context.tp, context.state);
@@ -608,8 +608,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         log.debug("Failed to complete the loading of metadata for {} in epoch {} since the coordinator does not exist.",
                             tp, epoch);
                     }
-                })
-            );
+                });
+            });
         }
 
         /**
@@ -666,7 +666,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * @param expectedBatchEpoch The epoch of the batch to flush.
          */
         private void enqueueAdaptiveFlush(int expectedBatchEpoch) {
-            enqueueLast(new CoordinatorInternalEvent("FlushBatch", tp, () ->
+            enqueueLast(new CoordinatorInternalEvent("FlushBatch", tp, () -> {
                 withActiveContext(tp, context -> {
                     // The batch could have already been flushed because it reached the maximum
                     // batch size or a transactional write came in. When this happens, we want
@@ -682,8 +682,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             log.debug("Failed to flush the pending records to {}: {}.", tp, t.getMessage());
                         }
                     }
-                })
-            ));
+                });
+            }));
         }
 
         /**
@@ -872,9 +872,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
-         * Completes the given event once all pending writes are completed. 
+         * Completes the given event once all pending writes are completed.
          *
-         * @param event             The event to complete once all pending 
+         * @param event             The event to complete once all pending
          *                          writes are completed.
          */
         private void waitForPendingWrites(DeferredEvent event) {
@@ -2463,7 +2463,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         metadataImage = newImage;
 
         // Push an event for each coordinator.
-        coordinators.keySet().forEach(tp ->
+        coordinators.keySet().forEach(tp -> {
             scheduleInternalOperation("UpdateImage(tp=" + tp + ", version=" + newImage.version() + ")", tp, () -> {
                 CoordinatorContext context = coordinators.get(tp);
                 if (context != null) {
@@ -2485,8 +2485,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     log.debug("Ignored new metadata image with version {} for {} because the coordinator does not exist.",
                         newImage.version(), tp);
                 }
-            })
-        );
+            });
+        });
     }
 
     /**
