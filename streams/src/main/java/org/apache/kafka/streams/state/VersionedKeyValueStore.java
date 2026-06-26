@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -134,4 +135,16 @@ public interface VersionedKeyValueStore<K, V> extends StateStore {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     VersionedRecord<V> get(K key, long asOfTimestamp);
+
+    /**
+     * Return a read-only view of this store bound to the given {@link IsolationLevel}.
+     * See {@link ReadOnlyKeyValueStore#readOnly(IsolationLevel)} for semantics.
+     * <p>
+     * Unlike the other store families, versioned stores have no dedicated {@code ReadOnly*}
+     * parent interface — the view is just another {@code VersionedKeyValueStore} whose mutating
+     * operations should not be invoked from interactive-query threads.
+     */
+    default VersionedKeyValueStore<K, V> readOnly(final IsolationLevel isolationLevel) {
+        return this;
+    }
 }

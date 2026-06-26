@@ -750,14 +750,39 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public ReadOnlyKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        return new ReadOnlyView(viewAccessor(isolationLevel));
+    }
+
+    /**
+     * Returns the {@link DBAccessor} that should be used for reads at the given isolation level.
+     * For READ_COMMITTED on a transactional store this is the underlying {@link DirectDBAccessor};
+     * otherwise it is the active {@code dbAccessor} (which may consult the transaction buffer).
+     */
+    DBAccessor viewAccessor(final IsolationLevel isolationLevel) {
         Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
-        final DBAccessor viewAccessor;
         if (isolationLevel == IsolationLevel.READ_COMMITTED && dbAccessor instanceof TransactionalDBAccessor) {
-            viewAccessor = ((TransactionalDBAccessor) dbAccessor).underlying;
-        } else {
-            viewAccessor = dbAccessor;
+            return ((TransactionalDBAccessor) dbAccessor).underlying;
         }
-        return new ReadOnlyView(viewAccessor);
+        return dbAccessor;
+    }
+
+    // Read helpers for isolation-level views that sit above this store (e.g. LogicalKeyValueSegment.readOnly).
+    byte[] get(final Bytes key, final DBAccessor accessor) {
+        validateStoreOpen();
+        try {
+            return cfAccessor.get(accessor, key.get());
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error while getting value for key from store " + name, e);
+        }
+    }
+
+    byte[] get(final Bytes key, final ReadOptions readOptions, final DBAccessor accessor) {
+        validateStoreOpen();
+        try {
+            return cfAccessor.get(accessor, key.get(), readOptions);
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error while getting value for key from store " + name, e);
+        }
     }
 
     /**
