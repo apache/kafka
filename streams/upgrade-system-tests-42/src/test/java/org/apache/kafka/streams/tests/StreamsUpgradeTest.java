@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.utils.Utils;
@@ -34,6 +33,7 @@ import java.util.Properties;
 
 import static org.apache.kafka.streams.tests.SmokeTestUtil.intSerde;
 import static org.apache.kafka.streams.tests.SmokeTestUtil.stringSerde;
+
 
 public class StreamsUpgradeTest {
 

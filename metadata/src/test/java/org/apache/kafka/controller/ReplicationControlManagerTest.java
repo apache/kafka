@@ -162,6 +162,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+
 @Timeout(40)
 public class ReplicationControlManagerTest {
     private static final Logger log = LoggerFactory.getLogger(ReplicationControlManagerTest.class);

@@ -141,6 +141,7 @@ import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
+
 /**
  * The ReplicationControlManager is the part of the controller which deals with topics
  * and partitions. It is responsible for managing the in-sync replica set and leader

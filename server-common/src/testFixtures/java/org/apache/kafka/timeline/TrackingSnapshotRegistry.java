@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.internals.LogContext;
 import java.util.ArrayList;
 import java.util.List;
 
+
 public class TrackingSnapshotRegistry extends SnapshotRegistry {
     private final List<String> operations = new ArrayList<>();
 

@@ -82,6 +82,7 @@ import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.DELETE;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
 
+
 public class MockController implements Controller {
     private static final NotControllerException NOT_CONTROLLER_EXCEPTION =
         new NotControllerException("This is not the correct controller for this cluster.");

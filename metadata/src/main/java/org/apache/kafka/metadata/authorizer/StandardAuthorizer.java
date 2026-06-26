@@ -50,6 +50,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 
+
 /**
  * Built-in authorizer implementation that stores ACLs in the metadata log.
  */

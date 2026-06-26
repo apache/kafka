@@ -43,6 +43,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
+
 /**
  * Reads a log file containing KRaft record batches.
  */

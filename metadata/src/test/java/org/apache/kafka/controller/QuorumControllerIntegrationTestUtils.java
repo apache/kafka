@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+
 /**
  * Utility functions for use in QuorumController integration tests.
  */

@@ -152,6 +152,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
 
+
 /**
  * QuorumController implements the main logic of the KRaft (Kafka Raft Metadata) mode controller.
  *

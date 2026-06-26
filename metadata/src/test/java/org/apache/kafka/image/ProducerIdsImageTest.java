@@ -29,6 +29,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+
 @Timeout(value = 40)
 public class ProducerIdsImageTest {
     public static final ProducerIdsImage IMAGE1 = ProducerIdsImageFixtures.IMAGE1;

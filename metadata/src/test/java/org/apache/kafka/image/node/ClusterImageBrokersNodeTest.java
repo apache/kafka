@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+
 @Timeout(value = 40)
 public class ClusterImageBrokersNodeTest {
     private static final ClusterImage TEST_IMAGE = new ClusterImage(

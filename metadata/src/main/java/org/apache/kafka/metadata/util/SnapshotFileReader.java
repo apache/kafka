@@ -45,6 +45,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
+
 /**
  * Reads Kafka metadata snapshots.
  */

@@ -51,6 +51,7 @@ import java.util.Set;
 
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
+
 /**
  * The AclControlManager manages any ACLs that are stored in the __cluster_metadata topic.
  * If the ACLs are stored externally (such as in ZooKeeper) then there will be nothing for

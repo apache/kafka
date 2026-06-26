@@ -32,6 +32,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+
 @Timeout(value = 40)
 public class DelegationTokenImageTest {
     public static final DelegationTokenImage IMAGE1 = DelegationTokenImageFixtures.IMAGE1;

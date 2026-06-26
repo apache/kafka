@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -64,6 +63,7 @@ import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
+
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,

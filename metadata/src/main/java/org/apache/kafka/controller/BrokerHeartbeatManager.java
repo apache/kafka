@@ -40,6 +40,7 @@ import static org.apache.kafka.controller.BrokerControlState.FENCED;
 import static org.apache.kafka.controller.BrokerControlState.SHUTDOWN_NOW;
 import static org.apache.kafka.controller.BrokerControlState.UNFENCED;
 
+
 /**
  * The BrokerHeartbeatManager manages some of the soft state associated with broker heartbeats.
  * For example, it stores the last metadata offset which each broker reported. It contains the

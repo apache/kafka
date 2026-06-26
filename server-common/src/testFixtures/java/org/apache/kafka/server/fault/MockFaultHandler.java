@@ -20,6 +20,7 @@ package org.apache.kafka.server.fault;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
 /**
  * This is a fault handler suitable for use in JUnit tests. It will store the result of the first
  * call to handleFault that was made.

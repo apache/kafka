@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+
 @Timeout(value = 60)
 public class KafkaEventQueueTest {
     private static class FutureEvent<T> implements EventQueue.Event {

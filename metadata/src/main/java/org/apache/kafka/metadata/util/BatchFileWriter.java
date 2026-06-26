@@ -36,6 +36,7 @@ import java.util.List;
 
 import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
 
+
 /**
  * Write an arbitrary set of metadata records into a Kafka metadata log batch format.
  *

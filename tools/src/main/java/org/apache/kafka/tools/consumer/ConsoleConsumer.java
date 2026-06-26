@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.Consumer;
@@ -45,6 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.regex.Pattern;
+
 
 /**
  * Consumer that dumps messages to standard out.

@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+
 @Timeout(value = 40)
 public class ClientQuotasImageTest {
     public static final ClientQuotasImage IMAGE1 = ClientQuotasImageFixtures.IMAGE1;

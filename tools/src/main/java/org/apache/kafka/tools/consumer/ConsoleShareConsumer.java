@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -41,6 +40,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+
 
 /**
  * Share Consumer that dumps messages to standard out.

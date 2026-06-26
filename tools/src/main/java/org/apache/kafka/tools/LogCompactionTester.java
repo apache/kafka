@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -65,6 +64,7 @@ import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
 import static java.util.stream.Collectors.toCollection;
+
 
 /**
  * This is a torture test that runs against an existing broker
