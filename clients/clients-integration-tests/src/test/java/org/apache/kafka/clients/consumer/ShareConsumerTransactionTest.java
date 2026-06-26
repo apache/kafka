@@ -129,6 +129,59 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
     }
 
     @ClusterTest
+    public void testTransactionalShareAckCommitWithOutputRecordInSameTransaction() throws Exception {
+        String groupId = "txn-share-commit-with-output";
+        String inputTopic = "txn-share-commit-with-output-input";
+        String outputTopic = "txn-share-commit-with-output-output";
+        TopicPartition inputTopicPartition = new TopicPartition(inputTopic, 0);
+        TopicPartition outputTopicPartition = new TopicPartition(outputTopic, 0);
+        String outputValue = "derived-first";
+        createTopic(inputTopic);
+        createTopic(outputTopic);
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-commit-with-output-producer");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 groupId,
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin admin = createAdminClient()) {
+
+            producer.send(record(inputTopicPartition, "first")).get();
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(inputTopic));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+            assertEquals(0L, record.offset());
+            assertEquals("first", new String(record.value(), StandardCharsets.UTF_8));
+
+            ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+            shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+            ShareAcknowledgements acknowledgements = shareConsumer.acknowledgementsForTransaction();
+            assertFalse(acknowledgements.isEmpty());
+            TopicIdPartition acknowledgedPartition = acknowledgements.acknowledgements().keySet().iterator().next();
+            assertEquals(inputTopicPartition, acknowledgedPartition.topicPartition());
+
+            transactionalProducer.initTransactions();
+            transactionalProducer.partitionsFor(inputTopic);
+            transactionalProducer.partitionsFor(outputTopic);
+            transactionalProducer.beginTransaction();
+            transactionalProducer.send(record(outputTopicPartition, outputValue)).get();
+            transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+            transactionalProducer.commitTransaction();
+
+            List<ConsumerRecord<byte[], byte[]>> outputRecords = readCommittedRecords(outputTopicPartition, 1);
+            ConsumerRecord<byte[], byte[]> outputRecord = outputRecords.get(0);
+            assertEquals(0L, outputRecord.offset());
+            assertEquals(outputValue, new String(outputRecord.value(), StandardCharsets.UTF_8));
+            verifySharePartitionLag(admin, groupId, inputTopicPartition, 0L);
+            assertEquals(0, shareConsumer.poll(Duration.ofMillis(500)).count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
     public void testTransactionalShareAckRejectsFencedMemberEpochs() throws Exception {
         assertTransactionalShareAckRejectedForInvalidMemberEpoch("future-member-epoch", 1);
         assertTransactionalShareAckRejectedForInvalidMemberEpoch("stale-member-epoch", -2);
@@ -296,6 +349,59 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
             transactionalProducer.abortTransaction();
 
             verifySharePartitionLag(admin, groupId, tp, 1L);
+            ConsumerRecords<byte[], byte[]> redeliveredRecords = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> redeliveredRecord = redeliveredRecords.iterator().next();
+            assertEquals(0L, redeliveredRecord.offset());
+            assertEquals("first", new String(redeliveredRecord.value(), StandardCharsets.UTF_8));
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testTransactionalShareAckAbortWithOutputRecordInSameTransaction() throws Exception {
+        String groupId = "txn-share-abort-with-output";
+        String inputTopic = "txn-share-abort-with-output-input";
+        String outputTopic = "txn-share-abort-with-output-output";
+        TopicPartition inputTopicPartition = new TopicPartition(inputTopic, 0);
+        TopicPartition outputTopicPartition = new TopicPartition(outputTopic, 0);
+        String outputValue = "derived-first";
+        createTopic(inputTopic);
+        createTopic(outputTopic);
+        alterShareAutoOffsetReset(groupId, "earliest");
+
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Producer<byte[], byte[]> transactionalProducer = createTransactionalProducer("txn-share-abort-with-output-producer");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 groupId,
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin admin = createAdminClient()) {
+
+            producer.send(record(inputTopicPartition, "first")).get();
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(inputTopic));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+            assertEquals(0L, record.offset());
+            assertEquals("first", new String(record.value(), StandardCharsets.UTF_8));
+
+            ShareGroupMetadata groupMetadata = shareConsumer.shareGroupMetadata();
+            shareConsumer.acknowledge(record, AcknowledgeType.ACCEPT);
+            ShareAcknowledgements acknowledgements = shareConsumer.acknowledgementsForTransaction();
+            assertFalse(acknowledgements.isEmpty());
+            TopicIdPartition acknowledgedPartition = acknowledgements.acknowledgements().keySet().iterator().next();
+            assertEquals(inputTopicPartition, acknowledgedPartition.topicPartition());
+
+            transactionalProducer.initTransactions();
+            transactionalProducer.partitionsFor(inputTopic);
+            transactionalProducer.partitionsFor(outputTopic);
+            transactionalProducer.beginTransaction();
+            transactionalProducer.send(record(outputTopicPartition, outputValue)).get();
+            transactionalProducer.sendShareAcknowledgementsToTransaction(acknowledgements, groupMetadata);
+            transactionalProducer.abortTransaction();
+
+            readCommittedRecords(outputTopicPartition, 0);
+            verifySharePartitionLag(admin, groupId, inputTopicPartition, 1L);
             ConsumerRecords<byte[], byte[]> redeliveredRecords = waitedPoll(shareConsumer, 2500L, 1);
             ConsumerRecord<byte[], byte[]> redeliveredRecord = redeliveredRecords.iterator().next();
             assertEquals(0L, redeliveredRecord.offset());
@@ -964,6 +1070,33 @@ public class ShareConsumerTransactionTest extends ShareConsumerTestBase {
     private ProducerRecord<byte[], byte[]> record(TopicPartition topicPartition, String value) {
         byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
         return new ProducerRecord<>(topicPartition.topic(), topicPartition.partition(), null, bytes, bytes);
+    }
+
+    private List<ConsumerRecord<byte[], byte[]>> readCommittedRecords(
+        TopicPartition topicPartition,
+        int expectedCount
+    ) throws InterruptedException {
+        List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        try (Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
+            ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"
+        ))) {
+            consumer.assign(List.of(topicPartition));
+            consumer.seekToBeginning(List.of(topicPartition));
+            if (expectedCount == 0) {
+                consumer.poll(Duration.ofMillis(1000)).records(topicPartition).forEach(records::add);
+            } else {
+                TestUtils.waitForCondition(
+                    () -> {
+                        consumer.poll(Duration.ofMillis(500)).records(topicPartition).forEach(records::add);
+                        return records.size() >= expectedCount;
+                    },
+                    DEFAULT_MAX_WAIT_MS,
+                    DEFAULT_POLL_INTERVAL_MS,
+                    () -> "Timed out waiting for " + expectedCount + " read-committed records from " + topicPartition);
+            }
+        }
+        assertEquals(expectedCount, records.size());
+        return records;
     }
 
     private List<TopicIdPartition> createTopicIdPartitionsMappedToAllShareStatePartitions(
