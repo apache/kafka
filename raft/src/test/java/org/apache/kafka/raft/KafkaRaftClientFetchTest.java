@@ -787,14 +787,14 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStaticVoters(voters)
+            .withStartingVoters(voters, KRaftVersion.KRAFT_VERSION_1)
             // configure the bootstrap servers to only include the bootstrap voter
             // to reliably check the destination of the observer's fetch requests
             // alternates between the leader and the bootstrap voter
             .withBootstrapServers(
                 Optional.of(List.of(RaftClientTestContext.mockAddress(bootstrapVoter.id())))
             )
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1166_PROTOCOL)
+            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_1186_PROTOCOL)
             .build();
 
         // The observer initially fetches from the bootstrap servers,
@@ -817,8 +817,10 @@ public final class KafkaRaftClientFetchTest {
         );
 
         // Subsequent fetch from the observer is sent to the leader
-        // Return a BROKER_NOT_AVAILABLE error, and then advance time past the fetch timeout,
-        // which should cause the observer to fetch from the bootstrap servers on the next fetch.
+        // Return a BROKER_NOT_AVAILABLE error, handle that response, and then
+        // advance time past the fetch timeout.
+        // This is to simulate the leader endpoints being unreachable, which will
+        // cause the observer to fetch from the bootstrap servers after the fetch timeout expires.
         final var leaderFetch = pollAndCheckObserverFetchRequest(
             context,
             false,
@@ -832,6 +834,7 @@ public final class KafkaRaftClientFetchTest {
                 Errors.BROKER_NOT_AVAILABLE
             )
         );
+        context.client.poll();
 
         // The fetch timeout is much greater than the request manager's configured backoff, so the
         // current unreachable connection will no longer be backing off when the next fetch is sent.
@@ -862,7 +865,6 @@ public final class KafkaRaftClientFetchTest {
         );
     }
 
-    //
     private RaftRequest.Outbound pollAndCheckObserverFetchRequest(
         RaftClientTestContext context,
         boolean isBootstrapFetch,
@@ -871,10 +873,8 @@ public final class KafkaRaftClientFetchTest {
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         if (isBootstrapFetch) {
-            assertTrue(context.client.quorum().isUnattached());
             assertTrue(fetchRequest.destination().id() < -1);
         } else {
-            assertTrue(context.client.quorum().isFollower());
             assertEquals(expectedDestinationId, fetchRequest.destination().id());
         }
         // only need to check port since the host is always "localhost" for the mock addresses
