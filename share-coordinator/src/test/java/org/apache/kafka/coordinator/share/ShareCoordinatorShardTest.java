@@ -1384,6 +1384,32 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
+    public void testInitializeStateInvalidStateEpochRequestData() {
+        // invalid stateEpoch
+        int stateEpoch = -1;
+
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStateEpoch(stateEpoch)
+                    .setStartOffset(1)
+                ))
+            ));
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_STATE_EPOCH.getMessage());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+    }
+
+    @Test
     public void testInitializeNullMetadataImage() {
         shard.onMetadataUpdate(null, null);
 

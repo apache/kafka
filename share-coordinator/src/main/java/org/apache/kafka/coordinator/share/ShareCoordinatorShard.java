@@ -656,10 +656,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         int updatesPerSnapshotLimit = config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot();
         ShareGroupOffset currentState = shareStateMap.get(key); // This method assumes containsKey is true.
 
-        int newLeaderEpoch = currentState.leaderEpoch();
-        if (updateLeaderEpoch) {
-            newLeaderEpoch = partitionData.leaderEpoch() != -1 ? partitionData.leaderEpoch() : newLeaderEpoch;
-        }
+        int newLeaderEpoch = updateLeaderEpoch ? partitionData.leaderEpoch() : currentState.leaderEpoch();
 
         if (snapshotUpdateCount.getOrDefault(key, 0) >= updatesPerSnapshotLimit) {
             // shareStateMap will have the entry as containsKey is true
@@ -929,6 +926,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         Uuid topicId = topicData.topicId();
         int partitionId = partitionData.partition();
+        int stateEpoch = partitionData.stateEpoch();
 
         if (topicId == null) {
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.INVALID_REQUEST, NULL_TOPIC_ID, null, partitionId));
@@ -938,8 +936,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.INVALID_REQUEST, NEGATIVE_PARTITION_ID, topicId, partitionId));
         }
 
+        if (stateEpoch < 0) {
+            return Optional.of(getInitializeErrorCoordinatorResult(Errors.INVALID_REQUEST, NEGATIVE_STATE_EPOCH, topicId, partitionId));
+        }
+
         SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicId, partitionId);
-        if (partitionData.stateEpoch() != -1 && stateEpochMap.containsKey(key) && stateEpochMap.get(key) > partitionData.stateEpoch()) {
+        if (stateEpochMap.containsKey(key) && stateEpochMap.get(key) > partitionData.stateEpoch()) {
             log.info("Initialize request state epoch is smaller than last recorded current: {}, requested: {}.", stateEpochMap.get(key), partitionData.stateEpoch());
             return Optional.of(getInitializeErrorCoordinatorResult(Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.exception(), topicId, partitionId));
         }
