@@ -25,7 +25,7 @@ import java.util.Properties;
 /**
  * Fluent builder for a {@link TopologyTestDriver}.
  *
- * <p>This is the recommended entry point for constructing a {@link TopologyTestDriver}.
+ * <p>This is the entry point for constructing a {@link TopologyTestDriver}.
  * Configure the builder, optionally declare topic partition counts, and call {@link #build()}.
  * The {@link TopologyTestDriver} constructors remain functional but are deprecated in favor of
  * this builder.</p>
@@ -41,7 +41,7 @@ public class TopologyTestDriverBuilder {
 
     private final Topology topology;
     private final Map<String, Integer> declaredTopics = new LinkedHashMap<>();
-    private Properties config;
+    private Properties config = new Properties();
     private Instant initialWallClockTime;
 
     /**
@@ -82,10 +82,9 @@ public class TopologyTestDriverBuilder {
      * @return a ready-to-use {@link TopologyTestDriver}
      */
     public TopologyTestDriver build() {
-        final TopologyTestDriver driver = new TopologyTestDriver(
-                topology.internalTopologyBuilder,
-                config != null ? config : new Properties(),
-                initialWallClockTime != null ? initialWallClockTime.toEpochMilli() : System.currentTimeMillis());
-        return driver;
+        return new TopologyTestDriver(
+            topology.internalTopologyBuilder,
+            config,
+            initialWallClockTime != null ? initialWallClockTime.toEpochMilli() : System.currentTimeMillis());
     }
 }

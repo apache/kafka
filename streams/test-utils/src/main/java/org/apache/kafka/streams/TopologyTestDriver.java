@@ -161,7 +161,9 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  * props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
  * props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
  * Topology topology = ...
- * TopologyTestDriver driver = new TopologyTestDriver(topology, props);
+ * TopologyTestDriver driver = new TopologyTestDriverBuilder(topology)
+ *     .withConfig(props)
+ *     .build();
  * }</pre>
  *
  * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
@@ -269,7 +271,7 @@ public class TopologyTestDriver implements Closeable {
      * Default test properties are used to initialize the driver instance
      *
      * @param topology the topology to be tested
-     * @deprecated Use {@link TopologyTestDriverBuilder} instead.
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
     @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology) {
@@ -282,7 +284,7 @@ public class TopologyTestDriver implements Closeable {
      *
      * @param topology the topology to be tested
      * @param config   the configuration for the topology
-     * @deprecated Use {@link TopologyTestDriverBuilder} instead.
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
     @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
@@ -295,7 +297,7 @@ public class TopologyTestDriver implements Closeable {
      *
      * @param topology the topology to be tested
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
-     * @deprecated Use {@link TopologyTestDriverBuilder} instead.
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
     @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
@@ -309,16 +311,16 @@ public class TopologyTestDriver implements Closeable {
      * @param topology               the topology to be tested
      * @param config                 the configuration for the topology
      * @param initialWallClockTime   the initial value of internally mocked wall-clock time
-     * @deprecated Use {@link TopologyTestDriverBuilder} instead.
+     * @deprecated Since 4.4. Use {@link TopologyTestDriverBuilder} instead.
      */
     @Deprecated(since = "4.4")
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final Instant initialWallClockTime) {
         this(
-                topology.internalTopologyBuilder,
-                config,
-                initialWallClockTime == null ? System.currentTimeMillis() : initialWallClockTime.toEpochMilli());
+            topology.internalTopologyBuilder,
+            config,
+            initialWallClockTime == null ? System.currentTimeMillis() : initialWallClockTime.toEpochMilli());
     }
 
     /**
@@ -847,8 +849,7 @@ public class TopologyTestDriver implements Closeable {
         final K key = keyDeserializer.deserialize(record.topic(), record.headers(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.headers(), record.value());
         final int outputPartition = -1;
-        final Instant ts = record.timestamp() == null ? null : Instant.ofEpochMilli(record.timestamp());
-        return new TestRecord<>(key, value, record.headers(), ts, outputPartition);
+        return new TestRecord<>(key, value, record.headers(), Instant.ofEpochMilli(record.timestamp()), outputPartition);
     }
 
     <K, V> void pipeRecord(final String topic,
