@@ -355,8 +355,14 @@ org.apache.kafka.clients.consumer.ShareConsumerCallbackTest:
 - testAcknowledgementCommitCallbackThrowsException
 - testAcknowledgementSentOnSubscriptionChange
 org.apache.kafka.clients.consumer.ShareConsumerDLQTest:
+- testDlqNotTriggeredWhenGatedOff
+- testDlqRecordsRoutedToCorrectDlqPartition
+- testDlqStopsAfterDisablingForGroup
+- testManyRejectedRecordsAllWrittenToDlq
+- testMixedAcknowledgementTypesWrittenToDlq
 - testRejectedRecordsWrittenToAutoCreatedDlq
 - testRejectedRecordsWrittenToDlqWithCopyRecordDisabled
+- testRejectedRecordsWrittenToDlqWithCopyRecordEnabled
 - testReleasedRecordsExceedingDeliveryCountWrittenToDlq
 org.apache.kafka.clients.consumer.ShareConsumerDeliveryTest:
 - testAlterReadCommittedToReadUncommittedIsolationLevelWithRejectAck
