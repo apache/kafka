@@ -204,6 +204,7 @@ public final class AsmClassFactory {
         private String returnDesc = "V";
         private final List<String> paramDescs = new ArrayList<>();
         private final List<String> exceptionInternals = new ArrayList<>();
+        private String signature;
         private boolean hasSuppress;
         private String suppressReason;
 
@@ -231,6 +232,12 @@ public final class AsmClassFactory {
             return this;
         }
 
+        /** Generic signature (JVMS §4.7.9), e.g. {@code "()Ljava/util/Map<Ljava/lang/String;Lorg/apache/kafka/X;>;"}. */
+        public MethodSpec signature(String signature) {
+            this.signature = signature;
+            return this;
+        }
+
         public MethodSpec bridge() {
             this.access |= Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC;
             return this;
@@ -251,7 +258,7 @@ public final class AsmClassFactory {
             String desc = "(" + String.join("", paramDescs) + ")" + returnDesc;
             String[] excs = exceptionInternals.isEmpty()
                     ? null : exceptionInternals.toArray(new String[0]);
-            MethodVisitor mv = cw.visitMethod(access, name, desc, null, excs);
+            MethodVisitor mv = cw.visitMethod(access, name, desc, signature, excs);
             if (hasSuppress) {
                 writeSuppress(mv.visitAnnotation(SUPPRESS_DESC, true), suppressReason);
             }
@@ -266,6 +273,7 @@ public final class AsmClassFactory {
         private final String name;
         private int access = Opcodes.ACC_PUBLIC;
         private String typeDesc = "I";
+        private String signature;
         private boolean hasSuppress;
         private String suppressReason;
 
@@ -283,6 +291,12 @@ public final class AsmClassFactory {
             return this;
         }
 
+        /** Generic signature (JVMS §4.7.9), e.g. {@code "Ljava/util/List<Lorg/apache/kafka/X;>;"}. */
+        public FieldSpec signature(String signature) {
+            this.signature = signature;
+            return this;
+        }
+
         public FieldSpec suppress(String reason) {
             this.hasSuppress = true;
             this.suppressReason = reason;
@@ -290,7 +304,7 @@ public final class AsmClassFactory {
         }
 
         public void write(ClassWriter cw) {
-            FieldVisitor fv = cw.visitField(access, name, typeDesc, null, null);
+            FieldVisitor fv = cw.visitField(access, name, typeDesc, signature, null);
             if (hasSuppress) {
                 writeSuppress(fv.visitAnnotation(SUPPRESS_DESC, true), suppressReason);
             }

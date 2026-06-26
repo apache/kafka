@@ -177,6 +177,7 @@ import java.util.Set;
  * {@link ConsumerPartitionAssignor.RebalanceProtocol} for a detailed explanation of cooperative rebalancing.
  */
 @InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: extends internal AbstractStickyAssignor — pending KIP review to promote the parent or refactor the assignor hierarchy")
 public class StickyAssignor extends AbstractStickyAssignor {
     public static final String STICKY_ASSIGNOR_NAME = "sticky";
 

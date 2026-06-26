@@ -48,6 +48,30 @@ import java.util.jar.JarFile;
  * that are not annotated with {@code @InterfaceAudience.Public}. Catches Java, Scala, Kotlin and
  * any other JVM-language consumer uniformly — unlike a source-level scan, which is regex-bound
  * to .java imports.
+ *
+ * <h2>Known limitations</h2>
+ * A handful of bytecode reference kinds are intentionally not walked. None of these are likely
+ * in practice for plugin/connector code but they're worth knowing about when interpreting a
+ * "0 violations" report:
+ * <ul>
+ *   <li><b>Parameter annotations</b> ({@code MethodVisitor#visitParameterAnnotation}) — the
+ *       annotation TYPE on a parameter, e.g. {@code void foo(@InternalAnno String s)}. The
+ *       method's own header (return / parameter / exception types) is walked, so any usage
+ *       that survives erasure into the method descriptor is still caught.</li>
+ *   <li><b>Type-use annotations</b> (JSR 308, {@code MethodVisitor#visitTypeAnnotation}) —
+ *       annotations attached to type positions like {@code List<@InternalAnno String>}. Used
+ *       almost exclusively by static-analysis tools; the underlying type is still recorded.</li>
+ *   <li><b>Class literals inside annotation element values</b> — e.g.
+ *       {@code @SomeAnnotation(impl = InternalClass.class)}. The annotation type itself is
+ *       recorded but {@code AnnotationVisitor#visit} isn't traversed into for class-typed
+ *       values. {@code InternalClass.class} loaded into a local also shows up via
+ *       {@code visitLdcInsn} from the method body, so a typical "save it then return it"
+ *       pattern is still caught — the gap is only when the class literal exists exclusively
+ *       inside an annotation.</li>
+ *   <li><b>Inlined compile-time constants</b> — Java inlines {@code public static final}
+ *       primitive/String constants at the use site, so {@code InternalClass.SOME_CONSTANT}
+ *       leaves no reference in the consumer's bytecode at all. This is documented in the KIP.</li>
+ * </ul>
  */
 public class PluginDeveloperApiUsageScanner {
     private static final Logger LOG = LoggerFactory.getLogger(PluginDeveloperApiUsageScanner.class);
@@ -554,6 +578,19 @@ public class PluginDeveloperApiUsageScanner {
             @Override
             public void visitMultiANewArrayInsn(String descriptor, int numDimensions) {
                 recordBody(stripDescriptor(descriptor));
+            }
+
+            /**
+             * Exception-handler table entries: {@code catch (InternalKafkaException e)}. The
+             * {@code type} is the internal name of the caught exception (or {@code null} for a
+             * {@code finally} block, which has no exception type to record).
+             */
+            @Override
+            public void visitTryCatchBlock(org.objectweb.asm.Label start, org.objectweb.asm.Label end,
+                                           org.objectweb.asm.Label handler, String type) {
+                if (type != null) {
+                    recordBody(type);
+                }
             }
 
             /**

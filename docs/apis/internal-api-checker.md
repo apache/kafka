@@ -67,6 +67,15 @@ kafkaInternalApiChecker {
 }
 ```
 
+### Skipping the check for one invocation
+
+Pass `-PkafkaInternalApiChecker.skip` (any truthy value, or no value at all) to disable the
+check for that Gradle invocation without editing the build script:
+
+```bash
+./gradlew check -PkafkaInternalApiChecker.skip
+```
+
 ## Maven
 
 ```xml
@@ -148,3 +157,25 @@ A Kafka class is considered public when:
 Classes outside `org.apache.kafka.*` are out of scope; classes carrying `@Deprecated` are
 treated as out of scope on both sides of the check so deprecated public APIs you still
 reference don't appear as violations.
+
+## Known limitations
+
+The bytecode scanner walks every callable instruction, field type, declared exception, and
+generic signature in your compiled classes, but a few reference kinds are intentionally not
+followed. In practice these don't show up in plugin/connector code, but a "0 violations"
+report does not strictly exclude them:
+
+- **Parameter annotations.** A `@InternalAnno`-typed parameter annotation isn't walked
+  (the method header itself still is, so the parameter's type and the method's return /
+  exception types are all caught).
+- **Type-use annotations.** JSR 308 type-use annotations attached to type positions like
+  `List<@InternalAnno String>` aren't walked — these are typically used only by
+  static-analysis tooling, and the underlying type is still recorded.
+- **Class literals exclusively inside annotation element values.** A class literal that
+  *only* appears in an annotation value (e.g. `@SomeAnnotation(impl = InternalClass.class)`)
+  won't be flagged. The same `InternalClass.class` loaded into any local variable or method
+  return *is* caught via `LDC` instructions.
+- **Inlined compile-time constants.** Java inlines `public static final` primitive and
+  `String` constants at the use site, so referencing
+  `InternalKafkaClass.SOME_CONSTANT_STRING` leaves no class reference in your bytecode and
+  cannot be detected. This is documented in the KIP.

@@ -29,11 +29,18 @@ import org.gradle.api.tasks.bundling.Jar;
  */
 public class KafkaPublicApiCheckerPlugin implements Plugin<Project> {
 
+    /** Project property name that disables this checker for the current Gradle invocation. */
+    static final String SKIP_PROPERTY = "kafkaPublicApiChecker.skip";
+
     @Override
     public void apply(Project project) {
         // Create the extension for configuration
         KafkaPublicApiCheckerExtension extension = project.getExtensions()
             .create("kafkaPublicApiChecker", KafkaPublicApiCheckerExtension.class, project);
+
+        if (isPropertyTruthy(project, SKIP_PROPERTY)) {
+            extension.getEnabled().set(false);
+        }
 
         // Register the task
         TaskProvider<KafkaPublicApiCheckerTask> taskProvider = project.getTasks()
@@ -92,16 +99,19 @@ public class KafkaPublicApiCheckerPlugin implements Plugin<Project> {
             });
         });
 
-        // Add helpful task to skip checking
-        project.getTasks().register("skipPublicApiCheck", task -> {
-            task.setGroup("verification");
-            task.setDescription("Disables public API checking for this build");
-            task.doLast(t -> {
-                extension.getEnabled().set(false);
-                project.getLogger().info("Public API checking disabled for this build");
-            });
-        });
+        if (isPropertyTruthy(project, SKIP_PROPERTY)) {
+            project.getLogger().lifecycle("Public API checking disabled via -P{}", SKIP_PROPERTY);
+        }
 
         project.getLogger().debug("Applied KafkaPublicApiChecker plugin to project: {}", project.getName());
+    }
+
+    /** Treat property values "true", "1", "yes" (case-insensitive) — or an empty value (just {@code -PsomeProp}) — as true. */
+    static boolean isPropertyTruthy(Project project, String name) {
+        if (!project.hasProperty(name)) return false;
+        Object raw = project.findProperty(name);
+        if (raw == null) return true;
+        String s = raw.toString().trim().toLowerCase();
+        return s.isEmpty() || "true".equals(s) || "1".equals(s) || "yes".equals(s);
     }
 }

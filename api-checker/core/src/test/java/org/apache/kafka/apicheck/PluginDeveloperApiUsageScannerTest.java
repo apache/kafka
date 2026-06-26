@@ -207,6 +207,151 @@ class PluginDeveloperApiUsageScannerTest {
         assertEquals("org.apache.kafka.Outer$Inner", violations.get(0).getClassName());
     }
 
+    @Test
+    void scan_tryCatchOnInternalException_isFlagged() throws IOException {
+        // `catch (InternalKafkaException ignored)` where the variable is never used leaves the
+        // only reference to the exception type in the exception-handler table — visitTryCatchBlock.
+        // Without that visitor override the scanner would miss it.
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC, "com/example/CatchConsumer", null, "java/lang/Object", null);
+        MethodVisitor ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        ctor.visitCode();
+        ctor.visitVarInsn(Opcodes.ALOAD, 0);
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        ctor.visitInsn(Opcodes.RETURN);
+        ctor.visitMaxs(0, 0);
+        ctor.visitEnd();
+
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "doIt", "()V", null, null);
+        mv.visitCode();
+        org.objectweb.asm.Label start = new org.objectweb.asm.Label();
+        org.objectweb.asm.Label end = new org.objectweb.asm.Label();
+        org.objectweb.asm.Label handler = new org.objectweb.asm.Label();
+        org.objectweb.asm.Label after = new org.objectweb.asm.Label();
+        mv.visitTryCatchBlock(start, end, handler, "org/apache/kafka/internals/Boom");
+        mv.visitLabel(start);
+        // empty try body
+        mv.visitLabel(end);
+        mv.visitJumpInsn(Opcodes.GOTO, after);
+        mv.visitLabel(handler);
+        mv.visitInsn(Opcodes.POP);
+        mv.visitLabel(after);
+        mv.visitInsn(Opcodes.RETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+        cw.visitEnd();
+
+        File classFile = writeClassFile("com/example/CatchConsumer", cw.toByteArray());
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
+
+        assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Boom".equals(v.getClassName())),
+                "exception-table entry must be reported; got: " + violations);
+    }
+
+    @Test
+    void scan_methodHeaderRefBuffering_returnTypeFlushedAtVisitCode() throws IOException {
+        // The method-header ref (return type from the descriptor) is buffered until
+        // visitCode fires — that's when the method-level @SuppressKafkaInternalApiUsage has
+        // been visited and we know the effective reason. A non-suppressed method must still
+        // produce the violation.
+        byte[] bytes = generateMethodWithInternalReturnType("com/example/HeaderRef",
+                "fetch", "Lorg/apache/kafka/internals/Hidden;", null);
+        File classFile = writeClassFile("com/example/HeaderRef", bytes);
+
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
+
+        assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Hidden".equals(v.getClassName())),
+                "method-header return-type ref must flush as a violation; got: " + violations);
+    }
+
+    @Test
+    void scan_abstractMethodHeaderRef_flushedAtVisitEnd() throws IOException {
+        // Abstract methods have no body, so ASM never fires visitCode. The scanner's visitEnd
+        // safety net must flush the buffered header refs anyway, otherwise an abstract method's
+        // internal return/param/exception types would silently slip through.
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT,
+                "com/example/AbstractConsumer", null, "java/lang/Object", null);
+
+        MethodVisitor ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        ctor.visitCode();
+        ctor.visitVarInsn(Opcodes.ALOAD, 0);
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        ctor.visitInsn(Opcodes.RETURN);
+        ctor.visitMaxs(0, 0);
+        ctor.visitEnd();
+
+        // public abstract Hidden fetch();  — no body, no visitCode, no visitMaxs.
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT,
+                "fetch", "()Lorg/apache/kafka/internals/Hidden;", null, null);
+        mv.visitEnd();
+        cw.visitEnd();
+
+        File classFile = writeClassFile("com/example/AbstractConsumer", cw.toByteArray());
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
+        List<PublicApiViolation> violations = scanner.scan(List.of(classFile.getParentFile())).violations();
+
+        assertTrue(violations.stream().anyMatch(v -> "org.apache.kafka.internals.Hidden".equals(v.getClassName())),
+                "abstract-method header ref must be flushed at visitEnd; got: " + violations);
+    }
+
+    @Test
+    void scan_methodHeaderRefBuffering_methodLevelSuppressDivertsToSuppressions() throws IOException {
+        // Same method header as the previous test, but the method carries
+        // @SuppressKafkaInternalApiUsage. visitCode flushes the buffered header refs using the
+        // effective reason (method-level wins over class-level), so they land in suppressions.
+        byte[] bytes = generateMethodWithInternalReturnType("com/example/SuppressedHeader",
+                "fetch", "Lorg/apache/kafka/internals/Hidden;", "header-ref reason");
+        File classFile = writeClassFile("com/example/SuppressedHeader", bytes);
+
+        PluginDeveloperApiUsageScanner scanner = new PluginDeveloperApiUsageScanner(always(false));
+        CheckResult r = scanner.scan(List.of(classFile.getParentFile()));
+
+        assertTrue(r.violations().isEmpty(),
+                "method-level suppress must divert the buffered header ref; got violations: " + r.violations());
+        assertTrue(r.suppressions().stream().anyMatch(s -> s.getDescription().contains("reason: header-ref reason")),
+                "suppression list must carry the method's reason; got: " + r.suppressions());
+    }
+
+    /**
+     * Generate a class with a single method whose return type descriptor names an internal
+     * Kafka type. If {@code suppressReason} is non-null, the method carries
+     * {@code @SuppressKafkaInternalApiUsage(suppressReason)} (or no value when "").
+     */
+    private static byte[] generateMethodWithInternalReturnType(String consumerInternalName,
+                                                               String methodName,
+                                                               String returnDescriptor,
+                                                               String suppressReason) {
+        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        cw.visit(Opcodes.V11, Opcodes.ACC_PUBLIC, consumerInternalName, null, "java/lang/Object", null);
+
+        MethodVisitor ctor = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null);
+        ctor.visitCode();
+        ctor.visitVarInsn(Opcodes.ALOAD, 0);
+        ctor.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        ctor.visitInsn(Opcodes.RETURN);
+        ctor.visitMaxs(0, 0);
+        ctor.visitEnd();
+
+        MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, methodName, "()" + returnDescriptor, null, null);
+        if (suppressReason != null) {
+            AnnotationVisitor av = mv.visitAnnotation(SUPPRESS_DESC, true);
+            if (!suppressReason.isEmpty()) {
+                av.visit("value", suppressReason);
+            }
+            av.visitEnd();
+        }
+        mv.visitCode();  // triggers the header-ref flush in the scanner's visitor
+        mv.visitInsn(Opcodes.ACONST_NULL);
+        mv.visitInsn(Opcodes.ARETURN);
+        mv.visitMaxs(0, 0);
+        mv.visitEnd();
+        cw.visitEnd();
+        return cw.toByteArray();
+    }
+
     /** Build a class with a default ctor and a method that loads a class constant of {@code internalNameOfReferenced}. */
     private static byte[] generateConsumerReferencing(String consumerInternalName, String internalNameOfReferenced) {
         ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);

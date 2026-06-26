@@ -59,11 +59,19 @@ import org.gradle.api.tasks.TaskProvider;
  */
 public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
 
+    /** Project property name that disables this checker for the current Gradle invocation. */
+    static final String SKIP_PROPERTY = "kafkaInternalApiChecker.skip";
+
     @Override
     public void apply(Project project) {
         // Create the extension for configuration
         KafkaInternalApiCheckerExtension extension = project.getExtensions()
             .create("kafkaInternalApiChecker", KafkaInternalApiCheckerExtension.class, project);
+
+        if (KafkaPublicApiCheckerPlugin.isPropertyTruthy(project, SKIP_PROPERTY)) {
+            extension.getEnabled().set(false);
+            project.getLogger().lifecycle("Internal API checking disabled via -P{}", SKIP_PROPERTY);
+        }
 
         // Register the task. classDirs is wired directly to the extension's ConfigurableFileCollection
         // by reference, so anything added to extension.classDirs later (either by the JavaPlugin
@@ -103,16 +111,6 @@ public class KafkaInternalApiCheckerPlugin implements Plugin<Project> {
             // Lifecycle wiring: make `check` depend on our task. The 'check' task itself comes
             // from LifecycleBasePlugin, which JavaPlugin pulls in.
             project.getTasks().named("check").configure(checkTask -> checkTask.dependsOn(taskProvider));
-        });
-
-        // Add helpful task to skip checking
-        project.getTasks().register("skipInternalApiCheck", task -> {
-            task.setGroup("verification");
-            task.setDescription("Disables internal API checking for this build");
-            task.doLast(t -> {
-                extension.getEnabled().set(false);
-                project.getLogger().info("Internal API checking disabled for this build");
-            });
         });
 
         project.getLogger().debug("Applied KafkaInternalApiChecker plugin to project: {}", project.getName());

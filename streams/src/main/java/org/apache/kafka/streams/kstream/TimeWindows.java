@@ -57,6 +57,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
  * @see TimestampExtractor
  */
 @InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: class header signature exposes internal TimeWindow (Windows<TimeWindow>) — pending KIP review to promote the type or refactor")
 public final class TimeWindows extends Windows<TimeWindow> {
 
     /** The size of the windows in milliseconds. */

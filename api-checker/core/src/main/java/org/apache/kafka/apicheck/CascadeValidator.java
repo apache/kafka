@@ -88,128 +88,226 @@ final class CascadeValidator {
         if (entry == null) return;
         try (InputStream in = jar.getInputStream(entry)) {
             ClassReader reader = new ClassReader(in);
-            reader.accept(new ClassVisitor(Opcodes.ASM9) {
-                    /** Reason from a class-level {@code @SuppressKafkaInternalApiUsage}, or null. */
-                    String classSuppressionReason;
+            reader.accept(new CascadeClassVisitor(cls, surface, violations, suppressions),
+                    ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        }
+    }
 
+    /**
+     * Drives the cascade check for a single class: validates the class header (extends/implements
+     * + generic supertype args), then dispatches to per-method and per-field visitors that buffer
+     * findings so a member-level {@code @SuppressKafkaInternalApiUsage} can divert them after the
+     * fact.
+     */
+    private static final class CascadeClassVisitor extends ClassVisitor {
+        private final ClassFacts cls;
+        private final ApiSurface surface;
+        private final List<PublicApiViolation> violations;
+        private final List<PublicApiViolation> suppressions;
+        /** Reason from a class-level {@code @SuppressKafkaInternalApiUsage}, or null. */
+        private String classSuppressionReason;
+        /**
+         * Buffer extends/implements violations until {@link #visitEnd} so the
+         * class-level {@code @SuppressKafkaInternalApiUsage} (visited after the class
+         * header in ASM's event order) can divert them to suppressions if present.
+         */
+        private final List<PublicApiViolation> headerBuffered = new ArrayList<>();
+
+        CascadeClassVisitor(ClassFacts cls, ApiSurface surface,
+                            List<PublicApiViolation> violations,
+                            List<PublicApiViolation> suppressions) {
+            super(Opcodes.ASM9);
+            this.cls = cls;
+            this.surface = surface;
+            this.violations = violations;
+            this.suppressions = suppressions;
+        }
+
+        @Override
+        public void visit(int version, int access, String name, String signature,
+                          String superName, String[] interfaces) {
+            // The class header itself leaks a non-public type if the @Public class
+            // extends or implements an internal Kafka type the consumer can name.
+            if (superName != null && !"java/lang/Object".equals(superName)) {
+                checkSupertype(superName.replace('/', '.'),
+                        "Public class extends non-public API type");
+            }
+            if (interfaces != null) {
+                for (String iface : interfaces) {
+                    checkSupertype(iface.replace('/', '.'),
+                            "Public class implements non-public API type");
+                }
+            }
+            // Generic supertype + interface type arguments live in the signature.
+            // Walk via the supertype-aware path so package-private intermediates are
+            // skipped just like the direct extends/implements check above.
+            if (signature != null) {
+                new SignatureReader(signature).accept(new SignatureVisitor(Opcodes.ASM9) {
                     @Override
-                    public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
-                        if (SUPPRESS_DESCRIPTOR.equals(descriptor)) {
-                            return new ReasonCaptureVisitor(r -> classSuppressionReason = r);
-                        }
-                        return null;
+                    public void visitClassType(String typeName) {
+                        checkSupertype(typeName.replace('/', '.'),
+                                "Public class header signature exposes non-public API type");
                     }
+                });
+            }
+        }
 
-                    @Override
-                    public MethodVisitor visitMethod(int access, String name, String descriptor,
-                                                     String signature, String[] exceptions) {
-                        // KIP-1265: a Public class's externally-visible methods (public + protected,
-                        // since protected members are reachable to subclasses of an extensible Public
-                        // class) must not leak non-public types.
-                        if ((access & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) == 0) return null;
-                        // Bridge/synthetic methods are compiler-generated and never source-level API.
-                        if ((access & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) return null;
+        /**
+         * Supertype cascade is stricter than the method/field cascade: package-private
+         * supertypes aren't a real leak because a consumer can't even <em>name</em>
+         * them from outside the package (no {@code instanceof}, no downcast). Skip
+         * those; otherwise fall through to the same cascade rule as everywhere else.
+         */
+        private void checkSupertype(String binaryName, String message) {
+            ClassFacts target = surface.factsOf(binaryName);
+            if (target != null && !target.isExternallyVisible()) return;
+            checkBinaryReference(binaryName, "INVALID_SUPERTYPE", message,
+                    cls.binaryName(), null, surface, headerBuffered);
+        }
 
-                        // Buffer would-be violations and route them in visitEnd, because the method's
-                        // own @SuppressKafkaInternalApiUsage is visited *after* visitMethod returns.
-                        List<PublicApiViolation> buffered = new ArrayList<>();
-                        checkAsmType(Type.getReturnType(descriptor), "INVALID_RETURN_TYPE",
-                                "Public method returns non-public API type",
-                                cls.binaryName(), name, surface, buffered);
-                        for (Type argType : Type.getArgumentTypes(descriptor)) {
-                            checkAsmType(argType, "INVALID_PARAMETER_TYPE",
-                                    "Public method has non-public API parameter type",
-                                    cls.binaryName(), name, surface, buffered);
-                        }
-                        if (exceptions != null) {
-                            for (String excInternal : exceptions) {
-                                checkBinaryReference(excInternal.replace('/', '.'),
-                                        "INVALID_EXCEPTION_TYPE",
-                                        "Public method declares non-public API exception type",
-                                        cls.binaryName(), name, surface, buffered);
-                            }
-                        }
-                        // Generic type arguments (e.g. Map<String, InternalFoo>) live in the
-                        // signature, not the erased descriptor — walk them too so the cascade
-                        // catches leaks the type-erasure layer would otherwise hide.
-                        collectSignatureRefs(signature, "INVALID_PARAMETER_TYPE",
-                                "Public method signature exposes non-public API type",
-                                cls.binaryName(), name, surface, buffered);
+        @Override
+        public void visitEnd() {
+            if (classSuppressionReason != null) {
+                for (PublicApiViolation original : headerBuffered) {
+                    suppressions.add(asSuppression(original, classSuppressionReason));
+                }
+            } else {
+                violations.addAll(headerBuffered);
+            }
+        }
 
-                        return new MethodVisitor(Opcodes.ASM9) {
-                            /** Reason from a method-level {@code @SuppressKafkaInternalApiUsage}, or null. */
-                            String methodSuppressionReason;
+        @Override
+        public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
+            if (SUPPRESS_DESCRIPTOR.equals(descriptor)) {
+                return new ReasonCaptureVisitor(r -> classSuppressionReason = r);
+            }
+            return null;
+        }
 
-                            @Override
-                            public AnnotationVisitor visitAnnotation(String d, boolean v) {
-                                if (SUPPRESS_DESCRIPTOR.equals(d)) {
-                                    return new ReasonCaptureVisitor(r -> methodSuppressionReason = r);
-                                }
-                                return null;
-                            }
+        @Override
+        public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                         String signature, String[] exceptions) {
+            // KIP-1265: a Public class's externally-visible methods (public + protected,
+            // since protected members are reachable to subclasses of an extensible Public
+            // class) must not leak non-public types.
+            if ((access & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) == 0) return null;
+            // Bridge/synthetic methods are compiler-generated and never source-level API.
+            if ((access & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) return null;
 
-                            @Override
-                            public void visitEnd() {
-                                String reason = methodSuppressionReason != null ? methodSuppressionReason
-                                        : classSuppressionReason;
-                                if (reason != null) {
-                                    for (PublicApiViolation original : buffered) {
-                                        suppressions.add(asSuppression(original, reason));
-                                    }
-                                } else {
-                                    violations.addAll(buffered);
-                                }
-                            }
-                        };
-                    }
+            // Buffer would-be violations and route them in visitEnd, because the method's
+            // own @SuppressKafkaInternalApiUsage is visited *after* visitMethod returns.
+            List<PublicApiViolation> buffered = new ArrayList<>();
+            checkAsmType(Type.getReturnType(descriptor), "INVALID_RETURN_TYPE",
+                    "Public method returns non-public API type",
+                    cls.binaryName(), name, surface, buffered);
+            for (Type argType : Type.getArgumentTypes(descriptor)) {
+                checkAsmType(argType, "INVALID_PARAMETER_TYPE",
+                        "Public method has non-public API parameter type",
+                        cls.binaryName(), name, surface, buffered);
+            }
+            if (exceptions != null) {
+                for (String excInternal : exceptions) {
+                    checkBinaryReference(excInternal.replace('/', '.'),
+                            "INVALID_EXCEPTION_TYPE",
+                            "Public method declares non-public API exception type",
+                            cls.binaryName(), name, surface, buffered);
+                }
+            }
+            // Generic type arguments (e.g. Map<String, InternalFoo>) live in the
+            // signature, not the erased descriptor — walk them too so the cascade
+            // catches leaks the type-erasure layer would otherwise hide.
+            collectSignatureRefs(signature, "INVALID_PARAMETER_TYPE",
+                    "Public method signature exposes non-public API type",
+                    cls.binaryName(), name, surface, buffered);
 
-                    @Override
-                    public FieldVisitor visitField(int access, String name, String descriptor,
-                                                   String signature, Object value) {
-                        // KIP-1265 names field types explicitly: a Public class's externally-visible
-                        // fields (public + protected) must not expose non-public types either.
-                        if ((access & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) == 0) return null;
-                        if ((access & Opcodes.ACC_SYNTHETIC) != 0) return null;
+            return new BufferedMemberVisitor(buffered);
+        }
 
-                        // Buffer the would-be violation and route it in visitEnd, because the
-                        // field's own @SuppressKafkaInternalApiUsage is visited *after* visitField.
-                        List<PublicApiViolation> buffered = new ArrayList<>();
-                        checkAsmType(Type.getType(descriptor), "INVALID_FIELD_TYPE",
-                                "Public field exposes non-public API type",
-                                cls.binaryName(), name, surface, buffered);
-                        // Walk the generic field signature too — `List<InternalFoo>` etc. is
-                        // erased to plain List in the descriptor.
-                        collectSignatureRefs(signature, "INVALID_FIELD_TYPE",
-                                "Public field signature exposes non-public API type",
-                                cls.binaryName(), name, surface, buffered);
+        @Override
+        public FieldVisitor visitField(int access, String name, String descriptor,
+                                       String signature, Object value) {
+            // KIP-1265 names field types explicitly: a Public class's externally-visible
+            // fields (public + protected) must not expose non-public types either.
+            if ((access & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) == 0) return null;
+            if ((access & Opcodes.ACC_SYNTHETIC) != 0) return null;
 
-                        return new FieldVisitor(Opcodes.ASM9) {
-                            /** Reason from a field-level {@code @SuppressKafkaInternalApiUsage}, or null. */
-                            String fieldSuppressionReason;
+            // Buffer the would-be violation and route it in visitEnd, because the
+            // field's own @SuppressKafkaInternalApiUsage is visited *after* visitField.
+            List<PublicApiViolation> buffered = new ArrayList<>();
+            checkAsmType(Type.getType(descriptor), "INVALID_FIELD_TYPE",
+                    "Public field exposes non-public API type",
+                    cls.binaryName(), name, surface, buffered);
+            // Walk the generic field signature too — `List<InternalFoo>` etc. is
+            // erased to plain List in the descriptor.
+            collectSignatureRefs(signature, "INVALID_FIELD_TYPE",
+                    "Public field signature exposes non-public API type",
+                    cls.binaryName(), name, surface, buffered);
 
-                            @Override
-                            public AnnotationVisitor visitAnnotation(String d, boolean v) {
-                                if (SUPPRESS_DESCRIPTOR.equals(d)) {
-                                    return new ReasonCaptureVisitor(r -> fieldSuppressionReason = r);
-                                }
-                                return null;
-                            }
+            return new BufferedFieldVisitor(buffered);
+        }
 
-                            @Override
-                            public void visitEnd() {
-                                String reason = fieldSuppressionReason != null ? fieldSuppressionReason
-                                        : classSuppressionReason;
-                                if (reason != null) {
-                                    for (PublicApiViolation original : buffered) {
-                                        suppressions.add(asSuppression(original, reason));
-                                    }
-                                } else {
-                                    violations.addAll(buffered);
-                                }
-                            }
-                        };
-                    }
-            }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        /**
+         * Drains {@code buffered} into either {@link #violations} or {@link #suppressions} after
+         * the member's own {@code @SuppressKafkaInternalApiUsage} (if any) has been seen. Falls
+         * back to the class-level suppression reason when the member doesn't carry its own.
+         */
+        private void flush(List<PublicApiViolation> buffered, String memberReason) {
+            String reason = memberReason != null ? memberReason : classSuppressionReason;
+            if (reason != null) {
+                for (PublicApiViolation original : buffered) {
+                    suppressions.add(asSuppression(original, reason));
+                }
+            } else {
+                violations.addAll(buffered);
+            }
+        }
+
+        /** MethodVisitor that captures a method-level suppression reason and flushes on visitEnd. */
+        private final class BufferedMemberVisitor extends MethodVisitor {
+            private final List<PublicApiViolation> buffered;
+            private String reason;
+
+            BufferedMemberVisitor(List<PublicApiViolation> buffered) {
+                super(Opcodes.ASM9);
+                this.buffered = buffered;
+            }
+
+            @Override
+            public AnnotationVisitor visitAnnotation(String d, boolean v) {
+                if (SUPPRESS_DESCRIPTOR.equals(d)) {
+                    return new ReasonCaptureVisitor(r -> reason = r);
+                }
+                return null;
+            }
+
+            @Override
+            public void visitEnd() {
+                flush(buffered, reason);
+            }
+        }
+
+        /** FieldVisitor that captures a field-level suppression reason and flushes on visitEnd. */
+        private final class BufferedFieldVisitor extends FieldVisitor {
+            private final List<PublicApiViolation> buffered;
+            private String reason;
+
+            BufferedFieldVisitor(List<PublicApiViolation> buffered) {
+                super(Opcodes.ASM9);
+                this.buffered = buffered;
+            }
+
+            @Override
+            public AnnotationVisitor visitAnnotation(String d, boolean v) {
+                if (SUPPRESS_DESCRIPTOR.equals(d)) {
+                    return new ReasonCaptureVisitor(r -> reason = r);
+                }
+                return null;
+            }
+
+            @Override
+            public void visitEnd() {
+                flush(buffered, reason);
+            }
         }
     }
 

@@ -45,6 +45,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * @see TimestampExtractor
  */
 @InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: class header signature exposes internal UnlimitedWindow (Windows<UnlimitedWindow>) — pending KIP review to promote the type or refactor")
 public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP_MS = 0L;

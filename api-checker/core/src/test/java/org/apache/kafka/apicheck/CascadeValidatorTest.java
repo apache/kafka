@@ -81,6 +81,70 @@ class CascadeValidatorTest {
     }
 
     @Test
+    void publicMethodWithInternalInGenericSignature_emitsParameterTypeViolation() throws IOException {
+        // The erased descriptor is `()Ljava/util/Map;` — no internal type. The generic signature
+        // `()Ljava/util/Map<Ljava/lang/String;Lorg/apache/kafka/internals/Internal;>;` carries
+        // the internal type as a Map value parameter. Cascade must walk the signature.
+        CheckResult r = run(owner()
+                .method(AsmClassFactory.method("getStuff")
+                        .returns("Ljava/util/Map;")
+                        .signature("()Ljava/util/Map<Ljava/lang/String;Lorg/apache/kafka/internals/Internal;>;")));
+
+        assertTrue(r.violations().stream().anyMatch(v -> "INVALID_PARAMETER_TYPE".equals(v.getViolationType())
+                        && v.getDescription().contains(INTERNAL_BIN)),
+                "generic type argument should surface as an INVALID_PARAMETER_TYPE; got: " + r.violations());
+    }
+
+    @Test
+    void publicFieldWithInternalInGenericSignature_emitsFieldTypeViolation() throws IOException {
+        // The erased descriptor is `Ljava/util/List;`. The signature
+        // `Ljava/util/List<Lorg/apache/kafka/internals/Internal;>;` exposes Internal as a
+        // List element parameter. Cascade must walk the signature.
+        CheckResult r = run(owner()
+                .field(AsmClassFactory.field("things")
+                        .ofType("Ljava/util/List;")
+                        .signature("Ljava/util/List<Lorg/apache/kafka/internals/Internal;>;")));
+
+        assertTrue(r.violations().stream().anyMatch(v -> "INVALID_FIELD_TYPE".equals(v.getViolationType())
+                        && v.getDescription().contains(INTERNAL_BIN)),
+                "generic field signature should surface as an INVALID_FIELD_TYPE; got: " + r.violations());
+    }
+
+    @Test
+    void publicClassExtendingInternalType_emitsSupertypeViolation() throws IOException {
+        // A @Public class whose superclass is an internal Kafka type exposes the supertype
+        // to consumers (it's part of the type's public contract — inherited methods, casts,
+        // etc.). The cascade catches this from the class-header visit.
+        CheckResult r = run(owner().superClass("org/apache/kafka/internals/Internal"));
+
+        assertTrue(r.violations().stream().anyMatch(v -> "INVALID_SUPERTYPE".equals(v.getViolationType())
+                        && v.getDescription().contains(INTERNAL_BIN)),
+                "extending an internal type must trigger an INVALID_SUPERTYPE; got: " + r.violations());
+    }
+
+    @Test
+    void publicClassImplementingInternalInterface_emitsSupertypeViolation() throws IOException {
+        CheckResult r = run(owner().interfaces("org/apache/kafka/internals/Internal"));
+
+        assertTrue(r.violations().stream().anyMatch(v -> "INVALID_SUPERTYPE".equals(v.getViolationType())
+                        && v.getDescription().contains(INTERNAL_BIN)),
+                "implementing an internal interface must trigger an INVALID_SUPERTYPE; got: " + r.violations());
+    }
+
+    @Test
+    void classLevelSuppress_silencesSupertypeViolation() throws IOException {
+        // Class-level @SuppressKafkaInternalApiUsage diverts the header leak to the
+        // suppressions list, same as for method-level cascade leaks.
+        CheckResult r = run(owner()
+                .suppress("legacy-base-class")
+                .superClass("org/apache/kafka/internals/Internal"));
+
+        assertTrue(r.violations().isEmpty(), "class-level suppress should silence the header leak");
+        assertTrue(r.suppressions().stream().anyMatch(s -> s.getDescription().contains("reason: legacy-base-class")),
+                "suppression must carry the annotation reason; got: " + r.suppressions());
+    }
+
+    @Test
     void deprecatedInternalType_isNotFlagged() throws IOException {
         // Internal is recorded with @Deprecated → out of scope on both sides.
         CheckResult r = runWithExtras(owner()

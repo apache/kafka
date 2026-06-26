@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceAudience;
+import org.apache.kafka.common.annotation.SuppressKafkaInternalApiUsage;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -97,6 +98,7 @@ import java.util.stream.Collectors;
  * </p>
  */
 @InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: extends internal AbstractPartitionAssignor — pending KIP review to promote the parent or refactor the assignor hierarchy")
 public class RangeAssignor extends AbstractPartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
     private static final TopicPartitionComparator PARTITION_COMPARATOR = new TopicPartitionComparator();

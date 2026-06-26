@@ -78,6 +78,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
 @InterfaceAudience.Public
+@SuppressKafkaInternalApiUsage("KIP-1265: implements internal RecordCollector.Supplier for the existing test-utility contract — pending KIP review to promote the type or refactor")
 public class MockProcessorContext<KForward, VForward> implements ProcessorContext<KForward, VForward>, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;

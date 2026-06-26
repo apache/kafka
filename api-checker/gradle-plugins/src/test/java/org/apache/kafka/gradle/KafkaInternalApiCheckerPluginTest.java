@@ -22,6 +22,7 @@ import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.testfixtures.ProjectBuilder;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,8 +43,21 @@ class KafkaInternalApiCheckerPluginTest {
                 "expected the extension to be registered");
         assertNotNull(project.getTasks().findByName("kafkaInternalApiChecker"),
                 "expected the kafkaInternalApiChecker task to be registered");
-        assertNotNull(project.getTasks().findByName("skipInternalApiCheck"),
-                "expected the skipInternalApiCheck helper task to be registered");
+    }
+
+    @Test
+    void skipProperty_disablesTheChecker() {
+        // -PkafkaInternalApiChecker.skip flips extension.enabled to false at configure time
+        // (replacement for the old execution-phase skipInternalApiCheck task, whose doLast
+        // mutation never reliably propagated).
+        Project project = ProjectBuilder.builder().build();
+        project.getExtensions().getExtraProperties().set("kafkaInternalApiChecker.skip", "true");
+        project.getPlugins().apply(KafkaInternalApiCheckerPlugin.class);
+
+        KafkaInternalApiCheckerExtension extension = (KafkaInternalApiCheckerExtension)
+                project.getExtensions().getByName("kafkaInternalApiChecker");
+        assertFalse(extension.getEnabled().get(),
+                "extension.enabled must flip to false when the skip property is set");
     }
 
     @Test
