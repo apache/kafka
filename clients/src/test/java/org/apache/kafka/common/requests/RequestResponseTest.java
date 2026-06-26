@@ -928,6 +928,24 @@ public class RequestResponseTest {
             UnsupportedVersionException.class, () -> bld.build((short) 2).serialize());
         assertTrue(exception.getMessage().contains("Attempted to write a non-default producerId at version 2"));
         bld.build((short) 3);
+
+        InitProducerIdRequest.Builder twoPcBuilder = new InitProducerIdRequest.Builder(
+            new InitProducerIdRequestData().setTransactionTimeoutMs(1000)
+                .setTransactionalId("abracadabra")
+                .setEnable2Pc(true));
+        assertEquals(6, twoPcBuilder.oldestAllowedVersion());
+        assertEquals(6, twoPcBuilder.latestAllowedVersion());
+        assertThrows(UnsupportedVersionException.class, () -> twoPcBuilder.build((short) 5));
+        twoPcBuilder.build((short) 6);
+
+        InitProducerIdRequest.Builder keepPreparedBuilder = new InitProducerIdRequest.Builder(
+            new InitProducerIdRequestData().setTransactionTimeoutMs(1000)
+                .setTransactionalId("abracadabra")
+                .setKeepPreparedTxn(true));
+        assertEquals(6, keepPreparedBuilder.oldestAllowedVersion());
+        assertEquals(6, keepPreparedBuilder.latestAllowedVersion());
+        assertThrows(UnsupportedVersionException.class, () -> keepPreparedBuilder.build((short) 5));
+        keepPreparedBuilder.build((short) 6);
     }
 
     @Test

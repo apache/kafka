@@ -82,6 +82,11 @@ object TransactionCoordinator {
   private def initTransactionMetadata(txnMetadata: TxnTransitMetadata): InitProducerIdResult = {
     new InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE)
   }
+
+  private def initPreparedTransactionMetadata(txnMetadata: TransactionMetadata): InitProducerIdResult = {
+    new InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE,
+      txnMetadata.producerId, txnMetadata.producerEpoch)
+  }
 }
 
 /**
@@ -108,6 +113,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   private type VerifyPartitionsCallback = AddPartitionsToTxnResult => Unit
   private type EndTxnCallback = (Errors, Long, Short) => Unit
   private type ApiResult[T] = Either[Errors, T]
+  private type InitProducerIdTransition = Either[InitProducerIdResult, (Int, TxnTransitMetadata)]
 
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
@@ -139,10 +145,6 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       // 2PC functionality is disabled, clients that attempt to use this functionality
       // would receive an authorization failed error.
       responseCallback(initTransactionError(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
-    } else if (keepPreparedTxn) {
-      // if the request is to keep the prepared transaction, then return an
-      // unsupported version error since the feature hasn't been implemented yet.
-      responseCallback(initTransactionError(Errors.UNSUPPORTED_VERSION))
     } else if (!txnManager.validateTransactionTimeoutMs(enableTwoPCFlag, transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
@@ -171,22 +173,29 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
         case Some(epochAndTxnMetadata) => Right(epochAndTxnMetadata)
       }
 
-      val result: ApiResult[(Int, TxnTransitMetadata)] = coordinatorEpochAndMetadata.flatMap {
+      val result: ApiResult[InitProducerIdTransition] = coordinatorEpochAndMetadata.flatMap {
         existingEpochAndMetadata =>
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
-          txnMetadata.inLock(() =>
-            prepareInitProducerIdTransit(transactionalId, resolvedTxnTimeoutMs, coordinatorEpoch, txnMetadata,
-              expectedProducerIdAndEpoch)
-          )
+          txnMetadata.inLock(() => {
+            if (keepPreparedTxn && txnMetadata.state == TransactionState.ONGOING) {
+              recoverPreparedTransaction(txnMetadata, expectedProducerIdAndEpoch).map(Left(_))
+            } else {
+              prepareInitProducerIdTransit(transactionalId, resolvedTxnTimeoutMs, coordinatorEpoch, txnMetadata,
+                expectedProducerIdAndEpoch).map(Right(_))
+            }
+          })
       }
 
       result match {
         case Left(error) =>
           responseCallback(initTransactionError(error))
 
-        case Right((coordinatorEpoch, newMetadata)) =>
+        case Right(Left(preparedTransactionMetadata)) =>
+          responseCallback(preparedTransactionMetadata)
+
+        case Right(Right((coordinatorEpoch, newMetadata))) =>
           if (newMetadata.txnState == TransactionState.PREPARE_EPOCH_FENCE) {
             // abort the ongoing transaction and then return CONCURRENT_TRANSACTIONS to let client wait and retry
             def sendRetriableErrorCallback(error: Errors, newProducerId: Long, newProducerEpoch: Short): Unit = {
@@ -225,31 +234,37 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     }
   }
 
+  private def recoverPreparedTransaction(txnMetadata: TransactionMetadata,
+                                         expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[InitProducerIdResult] = {
+    if (txnMetadata.pendingTransitionInProgress) {
+      Left(Errors.CONCURRENT_TRANSACTIONS)
+    } else if (!expectedProducerIdAndEpoch.forall(isValidProducerId(txnMetadata, _))) {
+      Left(Errors.PRODUCER_FENCED)
+    } else if (!txnMetadata.isDistributedTwoPhaseCommitTxn) {
+      Left(Errors.INVALID_TXN_STATE)
+    } else {
+      Right(initPreparedTransactionMetadata(txnMetadata))
+    }
+  }
+
+  private def isValidProducerId(txnMetadata: TransactionMetadata,
+                                producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
+    txnMetadata.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH ||
+      producerIdAndEpoch.producerId == txnMetadata.producerId ||
+      (producerIdAndEpoch.producerId == txnMetadata.prevProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
+  }
+
   private def prepareInitProducerIdTransit(transactionalId: String,
                                            transactionTimeoutMs: Int,
                                            coordinatorEpoch: Int,
                                            txnMetadata: TransactionMetadata,
                                            expectedProducerIdAndEpoch: Option[ProducerIdAndEpoch]): ApiResult[(Int, TxnTransitMetadata)] = {
 
-    def isValidProducerId(producerIdAndEpoch: ProducerIdAndEpoch): Boolean = {
-      // If a producer ID and epoch are provided by the request, fence the producer unless one of the following is true:
-      //   1. The producer epoch is equal to -1, which implies that the metadata was just created. This is the case of a
-      //      producer recovering from an UNKNOWN_PRODUCER_ID error, and it is safe to return the newly-generated
-      //      producer ID.
-      //   2. The expected producer ID matches the ID in current metadata (the epoch will be checked when we try to
-      //      increment it)
-      //   3. The expected producer ID matches the previous one and the expected epoch is exhausted, in which case this
-      //      could be a retry after a valid epoch bump that the producer never received the response for
-      txnMetadata.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH ||
-        producerIdAndEpoch.producerId == txnMetadata.producerId ||
-        (producerIdAndEpoch.producerId == txnMetadata.prevProducerId && TransactionMetadata.isEpochExhausted(producerIdAndEpoch.epoch))
-    }
-
     if (txnMetadata.pendingTransitionInProgress) {
       // return a retriable exception to let the client backoff and retry
       Left(Errors.CONCURRENT_TRANSACTIONS)
     }
-    else if (!expectedProducerIdAndEpoch.forall(isValidProducerId)) {
+    else if (!expectedProducerIdAndEpoch.forall(isValidProducerId(txnMetadata, _))) {
       Left(Errors.PRODUCER_FENCED)
     } else {
       // caller should have synchronized on txnMetadata already

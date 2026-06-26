@@ -1613,22 +1613,21 @@ public class TransactionManager {
             Errors error = initProducerIdResponse.error();
 
             if (error == Errors.NONE) {
-                ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
-                        initProducerIdResponse.data().producerEpoch());
-                setProducerIdAndEpoch(producerIdAndEpoch);
-                // If this is a transaction with keepPreparedTxn=true, transition directly
-                // to PREPARED_TRANSACTION state IFF there is an ongoing transaction.
                 if (builder.data.keepPreparedTxn() &&
                     initProducerIdResponse.data().ongoingTxnProducerId() != RecordBatch.NO_PRODUCER_ID
                 ) {
-                    transitionTo(State.PREPARED_TRANSACTION);
-                    // Update the preparedTxnState with the ongoing pid and epoch from the response.
-                    // This will be used to complete the transaction later.
-                    TransactionManager.this.preparedTxnState = new ProducerIdAndEpoch(
+                    ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
                         initProducerIdResponse.data().ongoingTxnProducerId(),
                         initProducerIdResponse.data().ongoingTxnProducerEpoch()
                     );
+                    setProducerIdAndEpoch(producerIdAndEpoch);
+                    transitionTo(State.PREPARED_TRANSACTION);
+                    TransactionManager.this.preparedTxnState = producerIdAndEpoch;
+                    transactionStarted = true;
                 } else {
+                    ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
+                            initProducerIdResponse.data().producerEpoch());
+                    setProducerIdAndEpoch(producerIdAndEpoch);
                     transitionTo(State.READY);
                 }
                 lastError = null;
