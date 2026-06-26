@@ -146,9 +146,6 @@ public class KRaftBenchmarkingCounters {
         if (operations == 0) {
             return 0.0;
         }
-        // JMH SUMs Type.EVENTS results across all measurement data points (forks x iterations), so
-        // pre-divide the per-iteration per-op value by that count. The SUM then reconstitutes the true
-        // per-operation value in the summary row.
         return (double) counter / operations / measurementDataPoints;
     }
 }
