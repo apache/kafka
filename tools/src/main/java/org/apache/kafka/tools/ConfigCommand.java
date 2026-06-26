@@ -92,7 +92,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 
 /**
- * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups dynamically
+ * This script can be used to change configs for topics/clients/users/brokers/controllers/ips/client-metrics/groups dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
  *     <li> topic: {@code --topic <topic>} OR {@code --entity-type topics --entity-name <topic>}
@@ -101,15 +101,16 @@ import joptsimple.OptionSpec;
  *     <li> {@code <user, client>}: {@code --user <user-principal> --client <client-id>} OR
  *                          {@code --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>}
  *     <li> broker: {@code --broker <broker-id>} OR {@code --entity-type brokers --entity-name <broker-id>}
+ *     <li> controller: {@code --entity-type controllers --entity-name <controller-id>}
  *     <li> broker-logger: {@code --broker-logger <broker-id>} OR {@code --entity-type broker-loggers --entity-name <broker-id>}
  *     <li> ip: {@code --ip <ip>} OR {@code --entity-type ips --entity-name <ip>}
  *     <li> client-metrics: {@code --client-metrics <name>} OR {@code --entity-type client-metrics --entity-name <name>}
  *     <li> group: {@code --group <group>} OR {@code --entity-type groups --entity-name <group>}
  * </ul>
- * {@code --entity-type <users|clients|brokers|ips> --entity-default} may be specified in place of {@code --entity-type <users|clients|brokers|ips> --entity-name <entityName>}
- * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
- * Alternatively, {@code --user-defaults}, {@code --client-defaults}, {@code --broker-defaults}, or {@code --ip-defaults} may be specified in place of
- * {@code --entity-type <users|clients|brokers|ips> --entity-default}, respectively.
+ * {@code --entity-type <users|clients|brokers|controllers|ips> --entity-default} may be specified in place of {@code --entity-type <users|clients|brokers|controllers|ips> --entity-name <entityName>}
+ * when describing or altering default configuration for users, clients, brokers, controllers, or ips, respectively.
+ * Alternatively, {@code --user-defaults}, {@code --client-defaults}, {@code --broker-defaults}, {@code --controller-defaults}, or {@code --ip-defaults} may be specified in place of
+ * {@code --entity-type <users|clients|brokers|controllers|ips> --entity-default}, respectively.
  */
 public class ConfigCommand {
 
@@ -120,6 +121,7 @@ public class ConfigCommand {
     private static final String TOPIC_TYPE = ConfigType.TOPIC.value();
     private static final String CLIENT_METRICS_TYPE = ConfigType.CLIENT_METRICS.value();
     private static final String BROKER_TYPE = ConfigType.BROKER.value();
+    private static final String CONTROLLER_TYPE = ConfigType.CONTROLLER.value();
     private static final String GROUP_TYPE = ConfigType.GROUP.value();
     private static final String USER_TYPE = ConfigType.USER.value();
     private static final String CLIENT_TYPE = ConfigType.CLIENT.value();
@@ -241,7 +243,7 @@ public class ConfigCommand {
         List<String> configsToBeDeleted = parseConfigsToBeDeleted(opts);
 
         if (TOPIC_TYPE.equals(entityType) || CLIENT_METRICS_TYPE.equals(entityType) ||
-                BROKER_TYPE.equals(entityType) || GROUP_TYPE.equals(entityType)) {
+                BROKER_TYPE.equals(entityType) || CONTROLLER_TYPE.equals(entityType) || GROUP_TYPE.equals(entityType)) {
             ConfigResource.Type configResourceType;
             if (TOPIC_TYPE.equals(entityType)) {
                 configResourceType = ConfigResource.Type.TOPIC;
@@ -252,6 +254,11 @@ public class ConfigCommand {
                     validateBrokerId(entityName, entityType);
                 }
                 configResourceType = ConfigResource.Type.BROKER;
+            } else if (CONTROLLER_TYPE.equals(entityType)) {
+                if (!BROKER_DEFAULT_ENTITY_NAME.equals(entityName)) {
+                    validateBrokerId(entityName, entityType);
+                }
+                configResourceType = ConfigResource.Type.CONTROLLER;
             } else {
                 configResourceType = ConfigResource.Type.GROUP;
             }
@@ -475,7 +482,8 @@ public class ConfigCommand {
         boolean describeAll = opts.options.has(opts.allOpt);
 
         String entityType = entityTypes.get(0);
-        if (TOPIC_TYPE.equals(entityType) || BROKER_TYPE.equals(entityType) || BROKER_LOGGER_CONFIG_TYPE.equals(entityType) ||
+        if (TOPIC_TYPE.equals(entityType) || BROKER_TYPE.equals(entityType) || CONTROLLER_TYPE.equals(entityType) ||
+                BROKER_LOGGER_CONFIG_TYPE.equals(entityType) ||
                 CLIENT_METRICS_TYPE.equals(entityType) || GROUP_TYPE.equals(entityType)) {
             describeResourceConfig(adminClient, entityType, entityNames.isEmpty() ? Optional.empty() : Optional.of(entityNames.get(0)), describeAll);
         } else if (USER_TYPE.equals(entityType) || CLIENT_TYPE.equals(entityType)) {
@@ -498,11 +506,11 @@ public class ConfigCommand {
                         System.out.println("The " + entityTypeSingular + " '" + name + "' doesn't exist and doesn't have dynamic config.");
                         return;
                     }
-                } else if (BROKER_TYPE.equals(entityType) || BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
+                } else if (BROKER_TYPE.equals(entityType) || BROKER_LOGGER_CONFIG_TYPE.equals(entityType) || CONTROLLER_TYPE.equals(entityType)) {
                     if (adminClient.describeCluster().nodes().get().stream().anyMatch(n -> n.idString().equals(name))) {
-                        // valid broker id
+                        // valid broker/controller id
                     } else if (BROKER_DEFAULT_ENTITY_NAME.equals(name)) {
-                        // default broker configs
+                        // default broker/controller configs
                     } else {
                         System.out.println("The " + entityTypeSingular + " '" + name + "' doesn't exist and doesn't have dynamic config.");
                         return;
@@ -535,7 +543,7 @@ public class ConfigCommand {
         } else {
             if (TOPIC_TYPE.equals(entityType)) {
                 entities = new LinkedHashSet<>(adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get());
-            } else if (BROKER_TYPE.equals(entityType) || BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
+            } else if (BROKER_TYPE.equals(entityType) || BROKER_LOGGER_CONFIG_TYPE.equals(entityType) || CONTROLLER_TYPE.equals(entityType)) {
                 Set<String> brokerIds = adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().stream()
                         .map(Node::idString)
                         .collect(Collectors.toCollection(LinkedHashSet::new));
@@ -639,6 +647,14 @@ public class ConfigCommand {
             } else {
                 validateBrokerId(entityName, entityType);
                 dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
+            }
+        } else if (CONTROLLER_TYPE.equals(entityType)) {
+            configResourceType = ConfigResource.Type.CONTROLLER;
+            if (BROKER_DEFAULT_ENTITY_NAME.equals(entityName)) {
+                dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_CONTROLLER_CONFIG;
+            } else {
+                validateBrokerId(entityName, entityType);
+                dynamicConfigSource = ConfigEntry.ConfigSource.DYNAMIC_CONTROLLER_CONFIG;
             }
         } else if (BROKER_LOGGER_CONFIG_TYPE.equals(entityType)) {
             if (!entityName.isEmpty()) {

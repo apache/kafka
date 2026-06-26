@@ -472,7 +472,7 @@ class ControllerApis(
   private def authorizeAlterResource(requestContext: RequestContext,
                                      resource: ConfigResource): ApiError = {
     resource.`type` match {
-      case ConfigResource.Type.BROKER | ConfigResource.Type.CLIENT_METRICS =>
+      case ConfigResource.Type.BROKER | ConfigResource.Type.CLIENT_METRICS | ConfigResource.Type.CONTROLLER =>
         if (authHelper.authorize(requestContext, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
           new ApiError(NONE)
         } else {

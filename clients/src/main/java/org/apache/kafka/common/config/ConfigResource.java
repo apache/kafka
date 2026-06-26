@@ -33,6 +33,7 @@ public final class ConfigResource {
      * Type of resource.
      */
     public enum Type {
+        CONTROLLER((byte) 64),
         GROUP((byte) 32),
         CLIENT_METRICS((byte) 16),
         BROKER_LOGGER((byte) 8),
