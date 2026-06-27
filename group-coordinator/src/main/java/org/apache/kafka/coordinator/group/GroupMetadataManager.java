@@ -4342,7 +4342,7 @@ public class GroupMetadataManager {
 
         if (group.assignmentEpoch() >= groupEpoch) {
             // The assignment is up to date.
-            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), group.targetAssignment());
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), targetAssignmentWithStaticRelabelling(group, updatedMember));
         }
 
         boolean canComputeNextTargetAssignment = canComputeNextTargetAssignment(
@@ -4357,7 +4357,7 @@ public class GroupMetadataManager {
                     .setStatusDetail("Assignment delayed due to the configured assignment interval.")
             ));
 
-            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), group.targetAssignment());
+            return new UpdateTargetAssignmentResult<>(group.assignmentEpoch(), targetAssignmentWithStaticRelabelling(group, updatedMember));
         }
 
         TaskAssignor assignor = streamsGroupAssignor(group.groupId());
@@ -4449,7 +4449,39 @@ public class GroupMetadataManager {
         final int numWarmupReplicas,
         final long acceptableRecoveryLag
     ) {
-        return targetAssignment.getOrDefault(member, TasksTuple.EMPTY);
+        return targetAssignment.getOrDefault(member.memberId(), TasksTuple.EMPTY);
+    }
+
+    /**
+     * Returns the group's persisted target assignment, with the relabelling of a replacing static
+     * member applied for the refiner.
+     * <p>
+     * When a static member rejoins with a new member id, the record that relabels its target
+     * assignment from the old to the new member id is queued during the heartbeat but not replayed
+     * into the in-memory assignment until afterwards. The persisted map therefore still keys the
+     * assignment under the old member id at this point. We mirror the pending relabelling in the
+     * view the refiner consumes — move the assignment to the new member id and drop the stale old
+     * entry — using the same relabelling-aware lookup as {@link StreamsGroup#targetAssignment(String, Optional)}.
+     */
+    private static Map<String, TasksTuple> targetAssignmentWithStaticRelabelling(
+        StreamsGroup group,
+        Optional<StreamsGroupMember> updatedMember
+    ) {
+        Map<String, TasksTuple> targetAssignment = group.targetAssignment();
+        if (updatedMember.isEmpty() || updatedMember.get().instanceId().isEmpty()) {
+            return targetAssignment;
+        }
+
+        StreamsGroupMember member = updatedMember.get();
+        StreamsGroupMember previousMember = group.staticMember(member.instanceId().get());
+        if (previousMember == null || previousMember.memberId().equals(member.memberId())) {
+            return targetAssignment;
+        }
+
+        Map<String, TasksTuple> relabelled = new HashMap<>(targetAssignment);
+        relabelled.remove(previousMember.memberId());
+        relabelled.put(member.memberId(), group.targetAssignment(member.memberId(), member.instanceId()));
+        return relabelled;
     }
 
     /**
