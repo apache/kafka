@@ -35,9 +35,9 @@ import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
 import org.apache.kafka.server.common.{FinalizedFeatures, ShareVersion}
-import org.apache.kafka.server.config.BrokerReconfigurableAdapter
+import org.apache.kafka.server.config.DynamicLogCleanerConfig
 import org.apache.kafka.server.fault.FaultHandler
-import org.apache.kafka.storage.internals.log.{CleanerConfig, UnifiedLog, LogManager => JLogManager}
+import org.apache.kafka.storage.internals.log.{UnifiedLog, LogManager => JLogManager}
 
 import java.util.concurrent.CompletableFuture
 
@@ -343,10 +343,7 @@ class BrokerMetadataPublisher(
       // point because LogManager#startup creates the LogCleaner object, if
       // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
       Option(logManager.cleaner).foreach(cleaner =>
-        config.dynamicConfig.addBrokerReconfigurable(BrokerReconfigurableAdapter.of(
-          cleaner,
-          brokerConfig => new CleanerConfig(brokerConfig)
-        ))
+        config.dynamicConfig.addBrokerReconfigurable(new DynamicLogCleanerConfig(cleaner))
       )
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting LogManager", t)

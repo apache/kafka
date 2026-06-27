@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
-import org.apache.kafka.config.DynamicConfigurable;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.util.ShutdownableThread;
@@ -94,7 +93,7 @@ import java.util.stream.IntStream;
  *    tombstone deletion.</li>
  * </ol>
  */
-public class LogCleaner implements DynamicConfigurable<CleanerConfig> {
+public class LogCleaner {
     private static final Logger LOG = LoggerFactory.getLogger(LogCleaner.class);
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
@@ -248,7 +247,6 @@ public class LogCleaner implements DynamicConfigurable<CleanerConfig> {
         cleanerManager.removeMetrics();
     }
 
-    @Override
     public Set<String> reconfigurableConfigs() {
         return RECONFIGURABLE_CONFIGS;
     }
@@ -258,7 +256,6 @@ public class LogCleaner implements DynamicConfigurable<CleanerConfig> {
      *
      * @param newConfig the submitted cleaner config
      */
-    @Override
     public void validateReconfiguration(CleanerConfig newConfig) {
         int numThreads = newConfig.numThreads;
         int currentThreads = config.numThreads;
@@ -282,7 +279,6 @@ public class LogCleaner implements DynamicConfigurable<CleanerConfig> {
      * @param oldConfig the old log cleaner config
      * @param newConfig the new log cleaner config reconfigured
      */
-    @Override
     public void reconfigure(CleanerConfig oldConfig, CleanerConfig newConfig) {
         config = newConfig;
 
