@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 
 /**
@@ -42,7 +43,7 @@ public class TopologyTestDriverBuilder {
     private final Topology topology;
     private final Map<String, Integer> declaredTopics = new LinkedHashMap<>();
     private Properties config = new Properties();
-    private Instant initialWallClockTime;
+    private Optional<Instant> initialWallClockTime = Optional.empty();
 
     /**
      * Start building a driver for the given topology.
@@ -72,7 +73,7 @@ public class TopologyTestDriverBuilder {
      * @return this builder
      */
     public TopologyTestDriverBuilder withInitialWallClockTime(final Instant initialWallClockTime) {
-        this.initialWallClockTime = initialWallClockTime;
+        this.initialWallClockTime = Optional.ofNullable(initialWallClockTime);
         return this;
     }
 
@@ -85,6 +86,6 @@ public class TopologyTestDriverBuilder {
         return new TopologyTestDriver(
             topology.internalTopologyBuilder,
             config,
-            initialWallClockTime != null ? initialWallClockTime.toEpochMilli() : System.currentTimeMillis());
+            initialWallClockTime.map(Instant::toEpochMilli).orElseGet(System::currentTimeMillis));
     }
 }

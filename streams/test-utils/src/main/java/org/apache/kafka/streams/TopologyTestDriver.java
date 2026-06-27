@@ -332,8 +332,8 @@ public class TopologyTestDriver implements Closeable {
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
     TopologyTestDriver(final InternalTopologyBuilder builder,
-                               final Properties config,
-                               final long initialWallClockTimeMs) {
+                       final Properties config,
+                       final long initialWallClockTimeMs) {
         final Properties configCopy = new Properties();
         configCopy.putAll(config);
         configCopy.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy-bootstrap-host:0");
