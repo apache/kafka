@@ -264,8 +264,23 @@ public class ShareSessionHandler {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
                 (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH) ||
                 (response.error() == Errors.SHARE_SESSION_LIMIT_REACHED)) {
-            log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
-                    node, nextMetadata, response.error());
+            if (response.error() == Errors.SHARE_SESSION_NOT_FOUND) {
+                // Session does not exist on the broker anymore. Recoverable and self-healing, the client re-sends a full ShareFetch request.
+                if (log.isDebugEnabled()) {
+                    log.debug("Node {} returned a {} error; the share session for member {} was likely evicted from the broker's " +
+                            "share session cache. Re-sending a full ShareFetch request to establish a new session.",
+                            node, response.error(), nextMetadata.memberId());
+                }
+            } else {
+                // Other share-session errors (e.g. INVALID_SHARE_SESSION_EPOCH, SHARE_SESSION_LIMIT_REACHED) are
+                // also recoverable and self-healing: the existing session is closed and a new one is re-established
+                // with a full ShareFetch.
+                if (log.isDebugEnabled()) {
+                    log.debug("Node {} was unable to process the ShareFetch request with {}: {}. " +
+                            "Re-sending a full ShareFetch request, which closes the existing session on the broker and establishes a new one.",
+                            node, nextMetadata, response.error());
+                }
+            }
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             return false;
         }
@@ -296,8 +311,22 @@ public class ShareSessionHandler {
     public boolean handleResponse(ShareAcknowledgeResponse response, short version) {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
                 (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH)) {
-            log.info("Node {} was unable to process the ShareAcknowledge request with {}: {}.",
-                    node, nextMetadata, response.error());
+            if (response.error() == Errors.SHARE_SESSION_NOT_FOUND) {
+                // Session does not exist on the broker anymore. Recoverable and self-healing, the client re-sends a full ShareAcknowledge request.
+                if (log.isDebugEnabled()) {
+                    log.debug("Node {} returned a {} error; the share session for member {} was likely evicted from the broker's " +
+                            "share session cache. Re-sending a full ShareAcknowledge request to establish a new session.",
+                            node, response.error(), nextMetadata.memberId());
+                }
+            } else {
+                // Other share-session errors (e.g. INVALID_SHARE_SESSION_EPOCH) are also recoverable and self-healing:
+                // the existing session is closed and a new one is re-established with a full ShareAcknowledge.
+                if (log.isDebugEnabled()) {
+                    log.debug("Node {} was unable to process the ShareAcknowledge request with {}: {}. " +
+                            "Re-sending a full ShareAcknowledge request, which closes the existing session on the broker and establishes a new one.",
+                            node, nextMetadata, response.error());
+                }
+            }
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
             return false;
         }
