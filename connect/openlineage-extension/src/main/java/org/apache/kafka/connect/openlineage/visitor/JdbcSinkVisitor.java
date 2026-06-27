@@ -30,8 +30,10 @@ import java.util.Map;
  * Extracts lineage for the Confluent JDBC Sink Connector.
  *
  * <p>Inputs are Kafka topics; outputs are database tables.  The JDBC URL is
- * parsed to derive the database namespace.  The table name mapping is
- * determined from {@code table.name.format} or defaults to the topic name.
+ * parsed to derive the database namespace and dialect-aware naming (three-part
+ * {@code database.schema.table} for Postgres/SQL Server, two-part
+ * {@code database.table} for MySQL).  The table name mapping is determined from
+ * {@code table.name.format} or defaults to the topic name.
  */
 public final class JdbcSinkVisitor implements ConnectorVisitor {
 
@@ -63,10 +65,7 @@ public final class JdbcSinkVisitor implements ConnectorVisitor {
             } else {
                 tableName = topic;
             }
-            String fullName = info.database().isEmpty()
-                ? tableName
-                : info.database() + "." + tableName;
-            outputs.add(new ConnectorLineage.Dataset(info.namespace(), fullName));
+            outputs.add(new ConnectorLineage.Dataset(info.namespace(), info.qualify(tableName)));
         }
 
         return new ConnectorLineage(inputs, outputs, "JDBC_SINK");

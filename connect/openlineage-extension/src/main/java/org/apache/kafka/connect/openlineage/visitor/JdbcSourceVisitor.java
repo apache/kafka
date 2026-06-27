@@ -80,9 +80,7 @@ public final class JdbcSourceVisitor implements ConnectorVisitor {
         }
         // If using query mode, there might be no explicit tables
         if (inputs.isEmpty() && config.containsKey("query")) {
-            final String dbName = info.database().isEmpty()
-                ? "query" : info.database() + ".query";
-            inputs.add(new ConnectorLineage.Dataset(info.namespace(), dbName));
+            inputs.add(new ConnectorLineage.Dataset(info.namespace(), info.qualify("query")));
         }
         return inputs;
     }
@@ -94,9 +92,7 @@ public final class JdbcSourceVisitor implements ConnectorVisitor {
         for (String table : tables.split(",")) {
             final String trimmed = table.trim();
             if (!trimmed.isEmpty()) {
-                final String name = info.database().isEmpty()
-                    ? trimmed : info.database() + "." + trimmed;
-                datasets.add(new ConnectorLineage.Dataset(info.namespace(), name));
+                datasets.add(new ConnectorLineage.Dataset(info.namespace(), info.qualify(trimmed)));
             }
         }
     }

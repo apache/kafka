@@ -20,15 +20,16 @@ package org.apache.kafka.connect.openlineage.visitor;
 import org.apache.kafka.connect.openlineage.ConnectorLineage;
 import org.apache.kafka.connect.openlineage.ConnectorVisitor;
 import org.apache.kafka.connect.openlineage.util.KafkaDatasetUtils;
+import org.apache.kafka.connect.openlineage.util.StorageDatasetUtils;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Extracts lineage for Confluent HDFS 2 and HDFS 3 Sink Connectors.
  *
- * <p>Inputs are Kafka topics; outputs are HDFS paths.
+ * <p>Inputs are Kafka topics; outputs are HDFS paths
+ * ({@code hdfs://{namenode}:{port}} / {@code {topics.dir}/{topic}}).
  */
 public final class HdfsSinkVisitor implements ConnectorVisitor {
 
@@ -55,9 +56,8 @@ public final class HdfsSinkVisitor implements ConnectorVisitor {
             hdfsUrl = hdfsUrl.substring(0, hdfsUrl.length() - 1);
         }
 
-        List<ConnectorLineage.Dataset> outputs = Collections.singletonList(
-            new ConnectorLineage.Dataset(hdfsUrl, topicsDir)
-        );
+        List<ConnectorLineage.Dataset> outputs =
+            StorageDatasetUtils.pathDatasets(hdfsUrl, topicsDir, config);
 
         return new ConnectorLineage(inputs, outputs, "HDFS_SINK");
     }

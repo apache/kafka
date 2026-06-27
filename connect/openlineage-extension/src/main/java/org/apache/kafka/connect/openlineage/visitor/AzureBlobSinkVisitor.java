@@ -20,15 +20,18 @@ package org.apache.kafka.connect.openlineage.visitor;
 import org.apache.kafka.connect.openlineage.ConnectorLineage;
 import org.apache.kafka.connect.openlineage.ConnectorVisitor;
 import org.apache.kafka.connect.openlineage.util.KafkaDatasetUtils;
+import org.apache.kafka.connect.openlineage.util.StorageDatasetUtils;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Extracts lineage for the Confluent Azure Blob Storage Sink Connector.
  *
- * <p>Inputs are Kafka topics; outputs are Azure Blob Storage container paths.
+ * <p>Inputs are Kafka topics; outputs are Azure paths. The namespace follows the
+ * OpenLineage Azure convention
+ * {@code abfss://{container}@{account}.dfs.core.windows.net} and the name is
+ * {@code {topics.dir}/{topic}}.
  */
 public final class AzureBlobSinkVisitor implements ConnectorVisitor {
 
@@ -47,11 +50,10 @@ public final class AzureBlobSinkVisitor implements ConnectorVisitor {
         String accountName = config.getOrDefault("azblob.account.name", "unknown-account");
         String container = config.getOrDefault("azblob.container.name", "unknown-container");
         String topicsDir = config.getOrDefault("topics.dir", "topics");
-        String namespace = "wasbs://" + container + "@" + accountName + ".blob.core.windows.net";
+        String namespace = "abfss://" + container + "@" + accountName + ".dfs.core.windows.net";
 
-        List<ConnectorLineage.Dataset> outputs = Collections.singletonList(
-            new ConnectorLineage.Dataset(namespace, topicsDir)
-        );
+        List<ConnectorLineage.Dataset> outputs =
+            StorageDatasetUtils.pathDatasets(namespace, topicsDir, config);
 
         return new ConnectorLineage(inputs, outputs, "AZURE_BLOB_SINK");
     }

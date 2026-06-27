@@ -53,7 +53,7 @@ public final class DebeziumVisitor implements ConnectorVisitor {
         final String dbName = resolveDatabaseName(config);
         final String tableList = resolveTableList(config);
 
-        final List<ConnectorLineage.Dataset> inputs = buildInputs(namespace, dbName, tableList);
+        final List<ConnectorLineage.Dataset> inputs = buildInputs(namespace, dbName, tableList, dbType);
         final List<ConnectorLineage.Dataset> outputs = buildOutputs(config, tableList);
 
         return new ConnectorLineage(inputs, outputs, "DEBEZIUM_" + dbType.toUpperCase(Locale.ROOT));
@@ -86,19 +86,38 @@ public final class DebeziumVisitor implements ConnectorVisitor {
     private static List<ConnectorLineage.Dataset> buildInputs(
             String namespace,
             String dbName,
-            String tableList) {
+            String tableList,
+            String dbType) {
         final List<ConnectorLineage.Dataset> inputs = new ArrayList<>();
         if (tableList != null && !tableList.isEmpty()) {
             for (String table : tableList.split(",")) {
                 final String trimmed = table.trim();
                 if (!trimmed.isEmpty()) {
-                    inputs.add(new ConnectorLineage.Dataset(namespace, trimmed));
+                    inputs.add(new ConnectorLineage.Dataset(namespace,
+                        qualifyTable(dbType, dbName, trimmed)));
                 }
             }
         } else if (!dbName.isEmpty()) {
             inputs.add(new ConnectorLineage.Dataset(namespace, dbName));
         }
         return inputs;
+    }
+
+    /**
+     * Apply OpenLineage naming to a Debezium source table.  Debezium's
+     * {@code table.include.list} is {@code schema.table} for Postgres/SQL Server
+     * and {@code database.table} for MySQL.  Postgres/SQL Server names are
+     * promoted to the three-part {@code database.schema.table} when the database
+     * name is known; MySQL (already {@code database.table}) is left unchanged.
+     */
+    private static String qualifyTable(String dbType, String dbName, String table) {
+        final boolean threePart = "postgresql".equals(dbType)
+            || "postgres".equals(dbType)
+            || "sqlserver".equals(dbType);
+        if (threePart && !dbName.isEmpty() && table.indexOf('.') >= 0) {
+            return dbName + "." + table;
+        }
+        return table;
     }
 
     private static List<ConnectorLineage.Dataset> buildOutputs(

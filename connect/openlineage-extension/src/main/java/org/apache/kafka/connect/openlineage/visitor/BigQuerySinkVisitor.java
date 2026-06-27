@@ -28,7 +28,9 @@ import java.util.Map;
 /**
  * Extracts lineage for the WePay BigQuery Sink Connector.
  *
- * <p>Inputs are Kafka topics; outputs are BigQuery tables.
+ * <p>Inputs are Kafka topics; outputs are BigQuery tables. Per the OpenLineage
+ * naming spec the namespace is the constant {@code bigquery} and the name is the
+ * fully-qualified {@code {project}.{dataset}.{table}}.
  */
 public final class BigQuerySinkVisitor implements ConnectorVisitor {
 
@@ -47,15 +49,16 @@ public final class BigQuerySinkVisitor implements ConnectorVisitor {
         String project = config.getOrDefault("project", "unknown-project");
         String defaultDataset = config.getOrDefault("defaultDataset",
             config.getOrDefault("datasets", "unknown-dataset"));
-        String namespace = "bigquery://" + project;
+        // OpenLineage BigQuery naming: namespace is the literal "bigquery",
+        // name is {project}.{dataset}.{table}.
+        String namespace = "bigquery";
 
-        // Each topic maps to a table; by default the table name is the topic
-        // name
+        // Each topic maps to a table; by default the table name is the topic name
         List<ConnectorLineage.Dataset> outputs = new ArrayList<>();
         List<String> topics = KafkaDatasetUtils.parseTopics(config);
         for (String topic : topics) {
             outputs.add(new ConnectorLineage.Dataset(namespace,
-                defaultDataset + "." + topic));
+                project + "." + defaultDataset + "." + topic));
         }
 
         return new ConnectorLineage(inputs, outputs, "BIGQUERY_SINK");

@@ -58,8 +58,8 @@ public class VisitorRegistryTest {
         assertEquals("JDBC_SOURCE", lineage.jobType());
         assertEquals(2, lineage.inputs().size());
         assertEquals("postgres://dbhost:5432", lineage.inputs().get(0).namespace());
-        assertEquals("mydb.users", lineage.inputs().get(0).name());
-        assertEquals("mydb.orders", lineage.inputs().get(1).name());
+        assertEquals("mydb.public.users", lineage.inputs().get(0).name());
+        assertEquals("mydb.public.orders", lineage.inputs().get(1).name());
         assertFalse(lineage.outputs().isEmpty());
     }
 
@@ -93,7 +93,7 @@ public class VisitorRegistryTest {
         assertEquals(2, lineage.inputs().size());
         assertEquals(2, lineage.outputs().size());
         assertEquals("postgres://dbhost:5432", lineage.outputs().get(0).namespace());
-        assertEquals("warehouse.orders", lineage.outputs().get(0).name());
+        assertEquals("warehouse.public.orders", lineage.outputs().get(0).name());
     }
 
     @Test
@@ -105,7 +105,50 @@ public class VisitorRegistryTest {
         config.put("table.name.format", "stg_${topic}");
 
         ConnectorLineage lineage = registry.extractLineage(config);
-        assertEquals("warehouse.stg_orders", lineage.outputs().get(0).name());
+        assertEquals("warehouse.public.stg_orders", lineage.outputs().get(0).name());
+    }
+
+    @Test
+    public void testJdbcSinkMySqlIsTwoPart() {
+        // MySQL OpenLineage naming is database.table (no schema level).
+        Map<String, String> config = new HashMap<>();
+        config.put("connector.class", "io.confluent.connect.jdbc.JdbcSinkConnector");
+        config.put("connection.url", "jdbc:mysql://dbhost:3306/warehouse");
+        config.put("topics", "orders");
+
+        ConnectorLineage lineage = registry.extractLineage(config);
+        assertEquals("mysql://dbhost:3306", lineage.outputs().get(0).namespace());
+        assertEquals("warehouse.orders", lineage.outputs().get(0).name());
+    }
+
+    @Test
+    public void testJdbcSinkSchemaQualifiedTableNotDoubled() {
+        // A table.name.format that is already schema-qualified must not get a
+        // second (default) schema injected.
+        Map<String, String> config = new HashMap<>();
+        config.put("connector.class", "io.confluent.connect.jdbc.JdbcSinkConnector");
+        config.put("connection.url", "jdbc:postgresql://dbhost:5432/warehouse");
+        config.put("topics", "orders");
+        config.put("table.name.format", "sales.${topic}");
+
+        ConnectorLineage lineage = registry.extractLineage(config);
+        assertEquals("warehouse.sales.orders", lineage.outputs().get(0).name());
+    }
+
+    @Test
+    public void testKafkaNamespaceUsesBootstrapServers() {
+        // When bootstrap.servers is present (LifecycleMonitor injects the worker
+        // value), the Kafka topic namespace must use the real broker rather than
+        // the kafka://localhost:9092 fallback.
+        Map<String, String> config = new HashMap<>();
+        config.put("connector.class", "io.confluent.connect.jdbc.JdbcSinkConnector");
+        config.put("connection.url", "jdbc:postgresql://dbhost:5432/warehouse");
+        config.put("topics", "orders");
+        config.put("bootstrap.servers", "broker-1:9092,broker-2:9092");
+
+        ConnectorLineage lineage = registry.extractLineage(config);
+        assertEquals("kafka://broker-1:9092", lineage.inputs().get(0).namespace());
+        assertEquals("orders", lineage.inputs().get(0).name());
     }
 
     // ---------------------------------------------------------------
@@ -123,9 +166,10 @@ public class VisitorRegistryTest {
         ConnectorLineage lineage = registry.extractLineage(config);
         assertEquals("S3_SINK", lineage.jobType());
         assertEquals(2, lineage.inputs().size());
-        assertEquals(1, lineage.outputs().size());
+        assertEquals(2, lineage.outputs().size());
         assertEquals("s3://my-data-lake", lineage.outputs().get(0).namespace());
-        assertEquals("raw", lineage.outputs().get(0).name());
+        assertEquals("raw/events", lineage.outputs().get(0).name());
+        assertEquals("raw/logs", lineage.outputs().get(1).name());
     }
 
     // ---------------------------------------------------------------
@@ -142,6 +186,7 @@ public class VisitorRegistryTest {
         ConnectorLineage lineage = registry.extractLineage(config);
         assertEquals("GCS_SINK", lineage.jobType());
         assertEquals("gs://my-gcs-bucket", lineage.outputs().get(0).namespace());
+        assertEquals("topics/events", lineage.outputs().get(0).name());
     }
 
     // ---------------------------------------------------------------
@@ -159,7 +204,7 @@ public class VisitorRegistryTest {
 
         ConnectorLineage lineage = registry.extractLineage(config);
         assertEquals("AZURE_BLOB_SINK", lineage.jobType());
-        assertEquals("wasbs://mycontainer@myaccount.blob.core.windows.net",
+        assertEquals("abfss://mycontainer@myaccount.dfs.core.windows.net",
             lineage.outputs().get(0).namespace());
     }
 
@@ -318,8 +363,8 @@ public class VisitorRegistryTest {
         ConnectorLineage lineage = registry.extractLineage(config);
         assertEquals("BIGQUERY_SINK", lineage.jobType());
         assertEquals(1, lineage.outputs().size());
-        assertEquals("bigquery://my-gcp-project", lineage.outputs().get(0).namespace());
-        assertEquals("raw_data.events", lineage.outputs().get(0).name());
+        assertEquals("bigquery", lineage.outputs().get(0).namespace());
+        assertEquals("my-gcp-project.raw_data.events", lineage.outputs().get(0).name());
     }
 
     // ---------------------------------------------------------------

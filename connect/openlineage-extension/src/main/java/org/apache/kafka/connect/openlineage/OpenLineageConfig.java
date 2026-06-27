@@ -99,6 +99,7 @@ public final class OpenLineageConfig {
     private final String namespace;
     private final long pollIntervalMs;
     private final long runningIntervalMs;
+    private final String bootstrapServers;
 
     public OpenLineageConfig(Map<String, ?> workerProps) {
         // Try to load YAML config from env var
@@ -136,6 +137,13 @@ public final class OpenLineageConfig {
         String runningStr = resolve(workerProps, "running.interval.ms", null,
             String.valueOf(DEFAULT_RUNNING_INTERVAL_MS));
         this.runningIntervalMs = Long.parseLong(runningStr);
+
+        // Worker-level bootstrap.servers (not prefixed with openlineage.) — used
+        // to build the Kafka dataset namespace so topics are named
+        // kafka://<broker>:<port> rather than the kafka://localhost:9092 fallback.
+        Object bootstrap = workerProps.get("bootstrap.servers");
+        this.bootstrapServers = (bootstrap != null && !bootstrap.toString().trim().isEmpty())
+            ? bootstrap.toString().trim() : null;
 
         log.info("OpenLineage config: transport={}, url={}, endpoint={}, namespace={}, poll={}ms, running={}ms",
             transportType, transportUrl, transportEndpoint, namespace, pollIntervalMs, runningIntervalMs);
@@ -175,6 +183,14 @@ public final class OpenLineageConfig {
 
     public long runningIntervalMs() {
         return runningIntervalMs;
+    }
+
+    /**
+     * The Connect worker's {@code bootstrap.servers}, used to build the Kafka
+     * dataset namespace ({@code kafka://<bootstrap>}); {@code null} if unset.
+     */
+    public String bootstrapServers() {
+        return bootstrapServers;
     }
 
     private static String resolve(Map<String, ?> workerProps, String key,

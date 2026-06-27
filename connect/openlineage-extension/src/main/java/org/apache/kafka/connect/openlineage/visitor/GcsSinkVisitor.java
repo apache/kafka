@@ -20,15 +20,16 @@ package org.apache.kafka.connect.openlineage.visitor;
 import org.apache.kafka.connect.openlineage.ConnectorLineage;
 import org.apache.kafka.connect.openlineage.ConnectorVisitor;
 import org.apache.kafka.connect.openlineage.util.KafkaDatasetUtils;
+import org.apache.kafka.connect.openlineage.util.StorageDatasetUtils;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Extracts lineage for the Confluent GCS Sink Connector.
  *
- * <p>Inputs are Kafka topics; outputs are GCS bucket paths.
+ * <p>Inputs are Kafka topics; outputs are GCS object paths
+ * ({@code gs://{bucket}} / {@code {topics.dir}/{topic}}).
  */
 public final class GcsSinkVisitor implements ConnectorVisitor {
 
@@ -48,9 +49,8 @@ public final class GcsSinkVisitor implements ConnectorVisitor {
         String topicsDir = config.getOrDefault("topics.dir", "topics");
         String namespace = "gs://" + bucket;
 
-        List<ConnectorLineage.Dataset> outputs = Collections.singletonList(
-            new ConnectorLineage.Dataset(namespace, topicsDir)
-        );
+        List<ConnectorLineage.Dataset> outputs =
+            StorageDatasetUtils.pathDatasets(namespace, topicsDir, config);
 
         return new ConnectorLineage(inputs, outputs, "GCS_SINK");
     }

@@ -215,6 +215,23 @@ public final class LifecycleMonitor {
         }
     }
 
+    /**
+     * The per-connector config from {@link ConnectClusterState} does not include
+     * the worker-level {@code bootstrap.servers}, so Kafka dataset namespaces
+     * would otherwise fall back to {@code kafka://localhost:9092}.  Inject the
+     * worker's bootstrap servers (unless the connector specifies its own) so
+     * topics are named {@code kafka://<broker>:<port>} per the OpenLineage spec.
+     */
+    private Map<String, String> withWorkerBootstrap(Map<String, String> connConfig) {
+        String bootstrap = config.bootstrapServers();
+        if (bootstrap == null || bootstrap.isEmpty() || connConfig.containsKey("bootstrap.servers")) {
+            return connConfig;
+        }
+        Map<String, String> enriched = new HashMap<>(connConfig);
+        enriched.put("bootstrap.servers", bootstrap);
+        return enriched;
+    }
+
     private void emitEvent(String connectorName,
                            OpenLineageEventBuilder.EventType eventType,
                            String errorMessage) {
@@ -240,7 +257,8 @@ public final class LifecycleMonitor {
                     connectorName, e.getMessage());
                 connConfig = Map.of();
             }
-            ConnectorLineage freshLineage = visitorRegistry.extractLineage(connConfig);
+            ConnectorLineage freshLineage =
+                visitorRegistry.extractLineage(withWorkerBootstrap(connConfig));
             if (!freshLineage.inputs().isEmpty() || !freshLineage.outputs().isEmpty()) {
                 lineage = freshLineage;
                 cachedLineage.put(connectorName, lineage);
