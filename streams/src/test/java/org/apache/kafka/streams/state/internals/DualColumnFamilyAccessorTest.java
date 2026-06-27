@@ -28,8 +28,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ReadOptions;
+import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
-import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatchInterface;
 
 import java.nio.ByteBuffer;
@@ -39,9 +39,11 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -339,64 +341,186 @@ public class DualColumnFamilyAccessorTest extends AbstractColumnFamilyAccessorTe
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldCreateRangeIterator() {
-        final RocksIterator iterNewFormat = mock(RocksIterator.class);
-        final RocksIterator oldIterFormat = mock(RocksIterator.class);
-        when(dbAccessor.newIterator(newCF)).thenReturn(iterNewFormat);
-        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
-
+        final ManagedKeyValueIterator<Bytes, byte[]> iterNew = mock(ManagedKeyValueIterator.class);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterOld = mock(ManagedKeyValueIterator.class);
         final Bytes from = new Bytes("a".getBytes());
         final Bytes to = new Bytes("z".getBytes());
+        when(dbAccessor.range(newCF, STORE_NAME, from, to, true, true)).thenReturn(iterNew);
+        when(dbAccessor.range(oldCF, STORE_NAME, from, to, true, true)).thenReturn(iterOld);
 
         final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.range(dbAccessor, from, to, true);
 
         assertNotNull(iterator);
-        verify(dbAccessor).newIterator(newCF);
-        verify(dbAccessor).newIterator(oldCF);
+        verify(dbAccessor).range(newCF, STORE_NAME, from, to, true, true);
+        verify(dbAccessor).range(oldCF, STORE_NAME, from, to, true, true);
+        verify(dbAccessor, never()).newIterator(any());
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldCreateAllIteratorForward() {
-        final RocksIterator newIterFormat = mock(RocksIterator.class);
-        final RocksIterator oldIterFormat = mock(RocksIterator.class);
-        when(dbAccessor.newIterator(newCF)).thenReturn(newIterFormat);
-        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterNew = mock(ManagedKeyValueIterator.class);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterOld = mock(ManagedKeyValueIterator.class);
+        when(dbAccessor.all(newCF, STORE_NAME, true)).thenReturn(iterNew);
+        when(dbAccessor.all(oldCF, STORE_NAME, true)).thenReturn(iterOld);
 
         final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.all(dbAccessor, true);
 
         assertNotNull(iterator);
-        verify(oldIterFormat).seekToFirst();
-        verify(oldIterFormat).seekToFirst();
+        verify(dbAccessor).all(newCF, STORE_NAME, true);
+        verify(dbAccessor).all(oldCF, STORE_NAME, true);
+        verify(dbAccessor, never()).newIterator(any());
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldCreateAllIteratorReverse() {
-        final RocksIterator newIterFormat = mock(RocksIterator.class);
-        final RocksIterator oldIterFormat = mock(RocksIterator.class);
-        when(dbAccessor.newIterator(newCF)).thenReturn(newIterFormat);
-        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterNew = mock(ManagedKeyValueIterator.class);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterOld = mock(ManagedKeyValueIterator.class);
+        when(dbAccessor.all(newCF, STORE_NAME, false)).thenReturn(iterNew);
+        when(dbAccessor.all(oldCF, STORE_NAME, false)).thenReturn(iterOld);
 
         final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.all(dbAccessor, false);
 
         assertNotNull(iterator);
-        verify(newIterFormat).seekToLast();
-        verify(oldIterFormat).seekToLast();
+        verify(dbAccessor).all(newCF, STORE_NAME, false);
+        verify(dbAccessor).all(oldCF, STORE_NAME, false);
+        verify(dbAccessor, never()).newIterator(any());
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldCreatePrefixScanIterator() {
-        final RocksIterator newIterFormat = mock(RocksIterator.class);
-        final RocksIterator oldIterFormat = mock(RocksIterator.class);
-        when(dbAccessor.newIterator(newCF)).thenReturn(newIterFormat);
-        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
-
+        final ManagedKeyValueIterator<Bytes, byte[]> iterNew = mock(ManagedKeyValueIterator.class);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterOld = mock(ManagedKeyValueIterator.class);
         final Bytes prefix = new Bytes("prefix".getBytes());
+        when(dbAccessor.prefixScan(eq(newCF), eq(STORE_NAME), eq(prefix), any())).thenReturn(iterNew);
+        when(dbAccessor.prefixScan(eq(oldCF), eq(STORE_NAME), eq(prefix), any())).thenReturn(iterOld);
 
         final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.prefixScan(dbAccessor, prefix);
 
         assertNotNull(iterator);
-        verify(dbAccessor).newIterator(newCF);
-        verify(dbAccessor).newIterator(oldCF);
+        verify(dbAccessor).prefixScan(eq(newCF), eq(STORE_NAME), eq(prefix), any());
+        verify(dbAccessor).prefixScan(eq(oldCF), eq(STORE_NAME), eq(prefix), any());
+        verify(dbAccessor, never()).newIterator(any());
+    }
+
+    @Test
+    public void shouldMergeEntriesFromBothColumnFamiliesInForwardOrder() throws RocksDBException {
+        final InMemoryRocksDBAccessor inMemory = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        inMemory.put(oldCF, "a".getBytes(), "old-a".getBytes());
+        inMemory.put(oldCF, "c".getBytes(), "old-c".getBytes());
+        inMemory.put(newCF, "b".getBytes(), "new-b".getBytes());
+        inMemory.put(newCF, "d".getBytes(), "new-d".getBytes());
+
+        final ManagedKeyValueIterator<Bytes, byte[]> it = accessor.all(inMemory, true);
+        it.onClose(() -> { });
+
+        assertTrue(it.hasNext());
+        final KeyValue<Bytes, byte[]> kv0 = it.next();
+        assertArrayEquals("a".getBytes(), kv0.key.get());
+        assertTrue(new String(kv0.value).contains("old-a"), "expected converted old-a value");
+
+        assertTrue(it.hasNext());
+        final KeyValue<Bytes, byte[]> kv1 = it.next();
+        assertArrayEquals("b".getBytes(), kv1.key.get());
+        assertArrayEquals("new-b".getBytes(), kv1.value);
+
+        assertTrue(it.hasNext());
+        final KeyValue<Bytes, byte[]> kv2 = it.next();
+        assertArrayEquals("c".getBytes(), kv2.key.get());
+        assertTrue(new String(kv2.value).contains("old-c"), "expected converted old-c value");
+
+        assertTrue(it.hasNext());
+        final KeyValue<Bytes, byte[]> kv3 = it.next();
+        assertArrayEquals("d".getBytes(), kv3.key.get());
+        assertArrayEquals("new-d".getBytes(), kv3.value);
+
+        assertFalse(it.hasNext());
+    }
+
+    @Test
+    public void shouldMergeEntriesFromBothColumnFamiliesInReverseOrder() throws RocksDBException {
+        final InMemoryRocksDBAccessor inMemory = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        inMemory.put(oldCF, "a".getBytes(), "old-a".getBytes());
+        inMemory.put(oldCF, "c".getBytes(), "old-c".getBytes());
+        inMemory.put(newCF, "b".getBytes(), "new-b".getBytes());
+        inMemory.put(newCF, "d".getBytes(), "new-d".getBytes());
+
+        final ManagedKeyValueIterator<Bytes, byte[]> it = accessor.all(inMemory, false);
+        it.onClose(() -> { });
+
+        final List<Bytes> keys = new ArrayList<>();
+        while (it.hasNext()) {
+            keys.add(it.next().key);
+        }
+        assertEquals(4, keys.size());
+        assertTrue(new String(keys.get(0).get()).compareTo(new String(keys.get(1).get())) > 0,
+                "expected descending order");
+        assertTrue(new String(keys.get(1).get()).compareTo(new String(keys.get(2).get())) > 0,
+                "expected descending order");
+        assertTrue(new String(keys.get(2).get()).compareTo(new String(keys.get(3).get())) > 0,
+                "expected descending order");
+    }
+
+    @Test
+    public void shouldRespectRangeBoundsAcrossBothColumnFamilies() throws RocksDBException {
+        final InMemoryRocksDBAccessor inMemory = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        inMemory.put(oldCF, "a".getBytes(), "old-a".getBytes());
+        inMemory.put(oldCF, "c".getBytes(), "old-c".getBytes());
+        inMemory.put(newCF, "b".getBytes(), "new-b".getBytes());
+        inMemory.put(newCF, "d".getBytes(), "new-d".getBytes());
+
+        final ManagedKeyValueIterator<Bytes, byte[]> it =
+                accessor.range(inMemory, Bytes.wrap("b".getBytes()), Bytes.wrap("c".getBytes()), true);
+        it.onClose(() -> { });
+
+        final List<byte[]> keys = new ArrayList<>();
+        while (it.hasNext()) {
+            keys.add(it.next().key.get());
+        }
+        assertEquals(2, keys.size());
+        assertArrayEquals("b".getBytes(), keys.get(0));
+        assertArrayEquals("c".getBytes(), keys.get(1));
+    }
+
+    @Test
+    public void shouldRespectPrefixScanAcrossBothColumnFamilies() throws RocksDBException {
+        final InMemoryRocksDBAccessor inMemory = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        inMemory.put(oldCF, "foo:1".getBytes(), "old-1".getBytes());
+        inMemory.put(newCF, "foo:2".getBytes(), "new-2".getBytes());
+        inMemory.put(newCF, "bar:1".getBytes(), "new-bar".getBytes());
+
+        final ManagedKeyValueIterator<Bytes, byte[]> it =
+                accessor.prefixScan(inMemory, Bytes.wrap("foo:".getBytes()));
+        it.onClose(() -> { });
+
+        final List<byte[]> keys = new ArrayList<>();
+        while (it.hasNext()) {
+            keys.add(it.next().key.get());
+        }
+        assertEquals(2, keys.size());
+        assertArrayEquals("foo:1".getBytes(), keys.get(0));
+        assertArrayEquals("foo:2".getBytes(), keys.get(1));
+    }
+
+    @Test
+    public void shouldPreferNewFormatValueWhenSameKeyExistsInBothColumnFamilies() throws RocksDBException {
+        final InMemoryRocksDBAccessor inMemory = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        inMemory.put(oldCF, "x".getBytes(), "old-x".getBytes());
+        inMemory.put(newCF, "x".getBytes(), "new-x".getBytes());
+
+        final ManagedKeyValueIterator<Bytes, byte[]> it = accessor.all(inMemory, true);
+        it.onClose(() -> { });
+
+        assertTrue(it.hasNext());
+        final KeyValue<Bytes, byte[]> kv = it.next();
+        assertArrayEquals("x".getBytes(), kv.key.get());
+        assertArrayEquals("new-x".getBytes(), kv.value,
+                "new-format value should win over old-format value for the same key");
+        assertFalse(it.hasNext(), "same key should appear exactly once");
     }
 
     @Test

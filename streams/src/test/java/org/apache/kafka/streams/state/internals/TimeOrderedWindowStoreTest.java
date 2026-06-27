@@ -25,7 +25,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -1225,7 +1225,8 @@ public class TimeOrderedWindowStoreTest {
             assertThat(
                 messages,
                 hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }

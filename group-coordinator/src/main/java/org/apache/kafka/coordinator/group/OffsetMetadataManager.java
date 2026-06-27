@@ -36,10 +36,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
@@ -58,6 +57,7 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -85,7 +85,6 @@ public class OffsetMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private GroupMetadataManager groupMetadataManager = null;
-        private CoordinatorMetadataImage metadataImage = null;
         private GroupCoordinatorConfig config = null;
         private GroupCoordinatorMetricsShard metrics = null;
 
@@ -114,11 +113,6 @@ public class OffsetMetadataManager {
             return this;
         }
 
-        public Builder withMetadataImage(CoordinatorMetadataImage metadataImage) {
-            this.metadataImage = metadataImage;
-            return this;
-        }
-
         public Builder withGroupCoordinatorMetricsShard(GroupCoordinatorMetricsShard metrics) {
             this.metrics = metrics;
             return this;
@@ -127,7 +121,6 @@ public class OffsetMetadataManager {
         public OffsetMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            if (metadataImage == null) metadataImage = CoordinatorMetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
 
             if (groupMetadataManager == null) {
@@ -142,7 +135,6 @@ public class OffsetMetadataManager {
                 snapshotRegistry,
                 logContext,
                 time,
-                metadataImage,
                 groupMetadataManager,
                 config,
                 metrics
@@ -164,11 +156,6 @@ public class OffsetMetadataManager {
      * The system time.
      */
     private final Time time;
-
-    /**
-     * The metadata image.
-     */
-    private CoordinatorMetadataImage metadataImage;
 
     /**
      * The group metadata manager.
@@ -273,6 +260,16 @@ public class OffsetMetadataManager {
         }
 
         /**
+         * Snapshot-aware overload of {@link #contains(String)}: returns {@code true} if the
+         * given group had any pending transactional offsets at {@code committedOffset}. Used
+         * by read operations that must only observe committed state (e.g. the topology
+         * cleanup cycle's eligibility scan).
+         */
+        private boolean contains(String groupId, long committedOffset) {
+            return openTransactionsByGroup.containsKey(groupId, committedOffset);
+        }
+
+        /**
          * Returns {@code true} if the given group has any pending transactional offsets for the given topic and partition.
          *
          * @param groupId   The group id.
@@ -283,6 +280,21 @@ public class OffsetMetadataManager {
         private boolean contains(String groupId, String topic, int partition) {
             TimelineHashSet<Long> openTransactions = get(groupId, topic, partition);
             return openTransactions != null;
+        }
+
+        /**
+         * Snapshot-aware overload of {@link #contains(String, String, int)}: returns
+         * {@code true} if the given group had any pending transactional offsets for the
+         * given topic and partition at {@code committedOffset}.
+         */
+        private boolean contains(String groupId, String topic, int partition, long committedOffset) {
+            TimelineHashMap<String, TimelineHashMap<Integer, TimelineHashSet<Long>>> openTransactionsByTopic =
+                openTransactionsByGroup.get(groupId, committedOffset);
+            if (openTransactionsByTopic == null) return false;
+            TimelineHashMap<Integer, TimelineHashSet<Long>> openTransactionsByPartition =
+                openTransactionsByTopic.get(topic, committedOffset);
+            if (openTransactionsByPartition == null) return false;
+            return openTransactionsByPartition.containsKey(partition, committedOffset);
         }
 
         /**
@@ -431,7 +443,6 @@ public class OffsetMetadataManager {
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
-        CoordinatorMetadataImage metadataImage,
         GroupMetadataManager groupMetadataManager,
         GroupCoordinatorConfig config,
         GroupCoordinatorMetricsShard metrics
@@ -439,7 +450,6 @@ public class OffsetMetadataManager {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(OffsetMetadataManager.class);
         this.time = time;
-        this.metadataImage = metadataImage;
         this.groupMetadataManager = groupMetadataManager;
         this.config = config;
         this.metrics = metrics;
@@ -522,13 +532,17 @@ public class OffsetMetadataManager {
         try {
             group = groupMetadataManager.group(request.groupId());
         } catch (GroupIdNotFoundException ex) {
-            if (request.generationId() < 0) {
+            if (request.generationIdOrMemberEpoch() < 0) {
                 // If the group does not exist and generation id is -1, the request comes from
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
                 group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
+            } else if (TxnOffsetCommitRequest.supportsGroupIdNotFoundError((short) context.requestVersion())) {
+                // From v6 onwards, GROUP_ID_NOT_FOUND is propagated directly (KIP-1319).
+                throw ex;
             } else {
+                // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
         }
@@ -537,11 +551,16 @@ public class OffsetMetadataManager {
             return group.validateOffsetCommit(
                 request.memberId(),
                 request.groupInstanceId(),
-                request.generationId(),
+                request.generationIdOrMemberEpoch(),
                 true,
                 context.requestVersion()
             );
         } catch (StaleMemberEpochException ex) {
+            if (TxnOffsetCommitRequest.supportsStaleMemberEpochError((short) context.requestVersion())) {
+                // From v6 onwards, STALE_MEMBER_EPOCH is propagated directly (KIP-1319).
+                throw ex;
+            }
+            // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
             throw Errors.ILLEGAL_GENERATION.exception();
         }
     }
@@ -696,20 +715,10 @@ public class OffsetMetadataManager {
         final long currentTimeMs = time.milliseconds();
 
         request.topics().forEach(topic -> {
-            final TxnOffsetCommitResponseTopic topicResponse = new TxnOffsetCommitResponseTopic().setName(topic.name());
+            final TxnOffsetCommitResponseTopic topicResponse = new TxnOffsetCommitResponseTopic()
+                .setName(topic.name())
+                .setTopicId(topic.topicId());
             response.topics().add(topicResponse);
-
-            // Resolve topicId from the metadata image.
-            final Uuid resolvedTopicId = metadataImage
-                .topicMetadata(topic.name())
-                .map(CoordinatorMetadataImage.TopicMetadata::id)
-                .orElse(Uuid.ZERO_UUID);
-
-            // If the topic doesn't exist in metadata, and we need to validate the member's assignment,
-            // throw ILLEGAL_GENERATION.
-            if (resolvedTopicId.equals(Uuid.ZERO_UUID) && validator != CommitPartitionValidator.NO_OP) {
-                throw Errors.ILLEGAL_GENERATION.exception();
-            }
 
             topic.partitions().forEach(partition -> {
                 if (isMetadataInvalid(partition.committedMetadata())) {
@@ -721,15 +730,20 @@ public class OffsetMetadataManager {
                     try {
                         validator.validate(
                             topic.name(),
-                            resolvedTopicId,
+                            topic.topicId(),
                             partition.partitionIndex()
                         );
                     } catch (StaleMemberEpochException ex) {
+                        if (TxnOffsetCommitRequest.supportsStaleMemberEpochError((short) context.requestVersion())) {
+                            // From v6 onwards, STALE_MEMBER_EPOCH is propagated directly (KIP-1319).
+                            throw ex;
+                        }
+                        // For older versions, preserve the legacy mapping to ILLEGAL_GENERATION.
                         throw Errors.ILLEGAL_GENERATION.exception();
                     }
 
-                    log.debug("[GroupId {}] Committing transactional offsets {} for partition {}-{} from member {} with leader epoch {}.",
-                        request.groupId(), partition.committedOffset(), topic.name(), partition.partitionIndex(),
+                    log.debug("[GroupId {}] Committing transactional offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
+                        request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());
 
                     topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
@@ -737,7 +751,7 @@ public class OffsetMetadataManager {
                         .setErrorCode(Errors.NONE.code()));
 
                     final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRequest(
-                        Uuid.ZERO_UUID,
+                        topic.topicId(),
                         partition,
                         currentTimeMs
                     );
@@ -1047,6 +1061,58 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * Read-only counterpart to {@link #cleanupExpiredOffsets(String, List)}: returns whether
+     * every committed offset for the group is currently eligible for expiration and no pending
+     * transactional offsets remain. Used by the topology-description plugin cleanup cycle on
+     * the eligibility read side, where the sweep must not mutate any record but still needs to
+     * decide whether the group is fully expirable before driving a {@code plugin.deleteTopology}.
+     *
+     * <p>{@code committedOffset} is the snapshot point the runtime hands to the read operation
+     * that calls this method. Every timeline-backed lookup in here uses that snapshot — the
+     * runtime contract is that read operations only observe committed state, so a concurrent
+     * uncommitted offset commit or pending-transaction record must not flip the eligibility
+     * outcome on us.
+     */
+    public boolean allOffsetsExpired(String groupId, long currentTimestampMs, long committedOffset) {
+        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
+            offsets.offsetsByGroup.get(groupId, committedOffset);
+        if (offsetsByTopic == null) {
+            return !openTransactions.contains(groupId, committedOffset);
+        }
+        Group group;
+        try {
+            group = groupMetadataManager.group(groupId, committedOffset);
+        } catch (GroupIdNotFoundException e) {
+            // The group disappeared between the caller's existence check and this lookup at
+            // the same snapshot — it is not eligible for plugin cleanup, the next sweep will
+            // pick this up naturally.
+            return false;
+        }
+        Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
+        if (offsetExpirationCondition.isEmpty()) {
+            return false;
+        }
+        OffsetExpirationCondition condition = offsetExpirationCondition.get();
+        for (Map.Entry<String, TimelineHashMap<Integer, OffsetAndMetadata>> topicEntry
+                : offsetsByTopic.entrySet(committedOffset)) {
+            String topic = topicEntry.getKey();
+            if (group.isSubscribedToTopic(topic)) {
+                return false;
+            }
+            for (Map.Entry<Integer, OffsetAndMetadata> partitionEntry
+                    : topicEntry.getValue().entrySet(committedOffset)) {
+                int partition = partitionEntry.getKey();
+                OffsetAndMetadata offsetAndMetadata = partitionEntry.getValue();
+                if (!condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
+                    || openTransactions.contains(groupId, topic, partition, committedOffset)) {
+                    return false;
+                }
+            }
+        }
+        return !openTransactions.contains(groupId, committedOffset);
+    }
+
+    /**
      * Remove expired offsets for the given group.
      *
      * @param groupId The group id.
@@ -1077,9 +1143,8 @@ public class OffsetMetadataManager {
         offsetsByTopic.forEach((topic, partitions) -> {
             if (!group.isSubscribedToTopic(topic)) {
                 partitions.forEach((partition, offsetAndMetadata) -> {
-                    // We don't expire the offset yet if there is a pending transactional offset for the partition.
-                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
-                        !hasPendingTransactionalOffsets(groupId, topic, partition)) {
+                    if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs())
+                        && !hasPendingTransactionalOffsets(groupId, topic, partition)) {
                         appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {
@@ -1291,16 +1356,6 @@ public class OffsetMetadataManager {
         } else {
             log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }
-    }
-
-    /**
-     * A new metadata image is available.
-     *
-     * @param delta    The delta image.
-     * @param newImage The new metadata image.
-     */
-    public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
-        this.metadataImage = newImage;
     }
 
     /**

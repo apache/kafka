@@ -217,8 +217,8 @@ public class TargetAssignmentBuilderTest {
         }
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
-            CoordinatorMetadataImage cooridnatorMetadataImage = new KRaftCoordinatorMetadataImage(metadataImageBuilder.build());
-            TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(cooridnatorMetadataImage);
+            CoordinatorMetadataImage coordinatorMetadataImage = new KRaftCoordinatorMetadataImage(metadataImageBuilder.build());
+            TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(coordinatorMetadataImage);
             // Prepare expected member specs.
             Map<String, MemberSubscriptionAndAssignmentImpl> memberSubscriptions = new HashMap<>();
 
@@ -256,7 +256,7 @@ public class TargetAssignmentBuilderTest {
             });
 
             // Prepare the expected subscription topic metadata.
-            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(cooridnatorMetadataImage);
+            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(coordinatorMetadataImage);
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the member assignments per topic partition.
@@ -284,7 +284,7 @@ public class TargetAssignmentBuilderTest {
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(targetAssignment)
                     .withInvertedTargetAssignment(invertedTargetAssignment)
-                    .withMetadataImage(cooridnatorMetadataImage)
+                    .withMetadataImage(coordinatorMetadataImage)
                     .withResolvedRegularExpressions(resolvedRegularExpressions);
 
             // Add the updated members or delete the deleted members.

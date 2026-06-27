@@ -38,9 +38,9 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
@@ -62,7 +62,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -2085,16 +2084,14 @@ class ShareCoordinatorServiceTest {
             writer
         ));
 
-        List<String> propNames = List.of(
+        Set<String> propNames = Set.of(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.COMPRESSION_TYPE_CONFIG,
             TopicConfig.SEGMENT_BYTES_CONFIG,
             TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
             TopicConfig.RETENTION_MS_CONFIG
         );
-        Properties actual = service.shareGroupStateTopicConfigs();
-        propNames.forEach(actual::remove);
-        assertTrue(actual.isEmpty());
+        assertEquals(propNames, service.shareGroupStateTopicConfigs().keySet());
 
         service.shutdown();
     }

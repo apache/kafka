@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: 
+description: Kafka Streams architecture for tasks, threading, state, and fault tolerance.
 weight: 5
 tags: ['kafka', 'docs']
 aliases: 

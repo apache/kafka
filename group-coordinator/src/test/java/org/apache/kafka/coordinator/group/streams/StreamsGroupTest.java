@@ -26,9 +26,9 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
@@ -480,6 +480,39 @@ public class StreamsGroupTest {
         assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
         assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
         assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
+    }
+
+    @Test
+    public void testTopologyDescriptionPluginEpochs() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // KIP-1331: both fields default to -1, meaning "no topology description ever stored / failed".
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(7);
+        group.setFailedDescriptionTopologyEpoch(5);
+        assertEquals(7, group.storedDescriptionTopologyEpoch());
+        assertEquals(5, group.failedDescriptionTopologyEpoch());
+
+        group.setStoredDescriptionTopologyEpoch(-1);
+        group.setFailedDescriptionTopologyEpoch(-1);
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(-1, group.failedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testCurrentTopologyEpochReflectsLatestTopology() {
+        StreamsGroup group = createStreamsGroup("foo");
+
+        // No topology yet → -1.
+        assertEquals(-1, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(3, Map.of()));
+        assertEquals(3, group.currentTopologyEpoch());
+
+        group.setTopology(new StreamsTopology(4, Map.of()));
+        assertEquals(4, group.currentTopologyEpoch());
     }
 
     @Test

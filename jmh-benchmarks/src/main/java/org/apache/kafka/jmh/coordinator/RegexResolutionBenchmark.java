@@ -18,8 +18,8 @@ package org.apache.kafka.jmh.coordinator;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.modern.consumer.TopicRegexResolver;
 import org.apache.kafka.image.MetadataDelta;

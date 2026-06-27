@@ -168,6 +168,11 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void close() {
         store.close();
     }

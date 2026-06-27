@@ -25,8 +25,8 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentR
 import org.apache.kafka.clients.consumer.internals.events.CreateFetchRequestsEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.util.List;
 import java.util.Map;

@@ -453,7 +453,7 @@ public class KStreamKTableJoinTest {
     @ValueSource(booleans = {false, true})
     public void shouldLogAndMeterWhenSkippingNullLeftKey(final boolean withHeaders) {
         setUp(withHeaders);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoinProcessor.class)) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(null, "A");
@@ -484,7 +484,7 @@ public class KStreamKTableJoinTest {
     @ValueSource(booleans = {false, true})
     public void shouldLogAndMeterWhenSkippingNullLeftValue(final boolean withHeaders) {
         setUp(withHeaders);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoinProcessor.class)) {
             final TestInputTopic<Integer, String> inputTopic =
                 driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
             inputTopic.pipeInput(1, null);

@@ -201,7 +201,7 @@ public class QuorumControllerIntegrationTestUtils {
                     setReplicationFactor((short) replicationFactor));
         }
         CreateTopicsResponseData response =
-            controller.createTopics(ANONYMOUS_CONTEXT, request, describable).get();
+            controller.createTopics(ANONYMOUS_CONTEXT, request, describable, false).get();
         for (int i = 0; i < numTopics; i++) {
             CreatableTopicResult result = response.topics().find(prefix + i);
             if (result.errorCode() != Errors.TOPIC_ALREADY_EXISTS.code()) {

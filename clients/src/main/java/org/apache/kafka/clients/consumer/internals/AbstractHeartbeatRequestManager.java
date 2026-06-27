@@ -28,9 +28,9 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -445,7 +445,6 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
                     logger.info("{} received GROUP_ID_NOT_FOUND for group {} while unsubscribed. ",
                             heartbeatRequestName(), membershipManager().groupId());
-                    membershipManager().onHeartbeatRequestSkipped();
                 } else {
                     // Else, this is a fatal error, we should throw it and transition to fatal state.
                     logger.error("{} failed due to unexpected error {}: {}", heartbeatRequestName(), error, errorMessage);

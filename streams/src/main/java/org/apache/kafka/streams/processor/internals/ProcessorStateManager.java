@@ -18,8 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.internals.FixedOrderMap;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -36,6 +36,8 @@ import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.LegacyCheckpointingStateStore;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+import org.apache.kafka.streams.state.internals.WithRetentionPeriod;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import org.slf4j.Logger;
 
@@ -103,6 +105,8 @@ public class ProcessorStateManager implements StateManager {
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
+        private final long retentionPeriod;
+
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
@@ -113,6 +117,7 @@ public class ProcessorStateManager implements StateManager {
             this.changelogPartition = null;
             this.corrupted = false;
             this.offset = null;
+            this.retentionPeriod = -1L;
         }
 
         private StateStoreMetadata(final StateStore stateStore,
@@ -130,10 +135,22 @@ public class ProcessorStateManager implements StateManager {
             this.commitCallback = commitCallback;
             this.recordConverter = recordConverter;
             this.offset = null;
+            this.retentionPeriod = extractRetentionPeriod(stateStore);
         }
 
         private void setOffset(final Long offset) {
             this.offset = offset;
+        }
+
+        private static long extractRetentionPeriod(final StateStore stateStore) {
+            StateStore current = stateStore;
+            while (current instanceof WrappedStateStore) {
+                current = ((WrappedStateStore<?, ?, ?>) current).wrapped();
+            }
+            if (current instanceof WithRetentionPeriod) {
+                return ((WithRetentionPeriod) current).retentionPeriod();
+            }
+            return -1L;
         }
 
         // the offset is exposed to the changelog reader to determine if restoration is completed
@@ -143,6 +160,11 @@ public class ProcessorStateManager implements StateManager {
 
         Long endOffset() {
             return this.endOffset;
+        }
+
+        // the retentionPeriod is exposed to the changelog reader for window restoration
+        long retentionPeriod() {
+            return retentionPeriod;
         }
 
         public void setEndOffset(final Long endOffset) {
@@ -174,6 +196,7 @@ public class ProcessorStateManager implements StateManager {
 
     private final TaskId taskId;
     private final boolean eosEnabled;
+    private final boolean transactionalStateStoresEnabled;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -203,6 +226,7 @@ public class ProcessorStateManager implements StateManager {
     public ProcessorStateManager(final TaskId taskId,
                                  final TaskType taskType,
                                  final boolean eosEnabled,
+                                 final boolean transactionalStateStoresEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
@@ -214,6 +238,7 @@ public class ProcessorStateManager implements StateManager {
         this.taskId = taskId;
         this.taskType = taskType;
         this.eosEnabled = eosEnabled;
+        this.transactionalStateStoresEnabled = transactionalStateStoresEnabled;
         this.sourcePartitions = sourcePartitions;
         this.upgradeFrom = upgradeFrom;
 
@@ -231,11 +256,12 @@ public class ProcessorStateManager implements StateManager {
     public ProcessorStateManager(final TaskId taskId,
                                  final TaskType taskType,
                                  final boolean eosEnabled,
+                                 final boolean transactionalStateStoresEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
-        this(taskId, taskType, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
+        this(taskId, taskType, eosEnabled, transactionalStateStoresEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
     }
 
     /**
@@ -249,7 +275,7 @@ public class ProcessorStateManager implements StateManager {
                                                                final StateDirectory stateDirectory,
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
+        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, false, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
@@ -315,7 +341,7 @@ public class ProcessorStateManager implements StateManager {
                     // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
                     // and hence we are uncertain that the current local state only contains committed data;
                     // in that case we need to treat it as a task-corrupted exception
-                    if (eosEnabled && !storeDirIsEmpty) {
+                    if (eosEnabled && !storeDirIsEmpty && !transactionalStateStoresEnabled) {
                         log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
                                 "since under EOS it has the risk of getting uncommitted data in stores we have to " +
                                 "treat it as a task corruption error and wipe out the local state of task {} " +
@@ -395,6 +421,10 @@ public class ProcessorStateManager implements StateManager {
 
     Set<TopicPartition> changelogPartitions() {
         return Collections.unmodifiableSet(changelogOffsets().keySet());
+    }
+
+    boolean hasCorruptedStores() {
+        return stores.values().stream().anyMatch(m -> m.corrupted);
     }
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
@@ -597,6 +627,14 @@ public class ProcessorStateManager implements StateManager {
         if (firstException != null) {
             throw firstException;
         }
+    }
+
+    long approximateNumUncommittedBytes() {
+        long total = 0;
+        for (final StateStoreMetadata metadata : stores.values()) {
+            total += metadata.stateStore.approximateNumUncommittedBytes();
+        }
+        return total;
     }
 
     /**

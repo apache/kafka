@@ -1,6 +1,6 @@
 ---
 title: Administration
-description: Administration
+description: Kafka Connect administration with REST APIs, connector and task states, and rebalancing.
 weight: 4
 tags: ['kafka', 'docs']
 aliases: 

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -30,8 +31,8 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -48,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -62,6 +64,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -202,6 +205,8 @@ public class DefaultStateUpdater implements StateUpdater {
 
             final long checkpointStartTimeMs = time.milliseconds();
             maybeCheckpointTasks(checkpointStartTimeMs);
+
+            updateTaskEndOffsetSumSnapshot();
 
             final long waitStartTimeMs = time.milliseconds();
             waitIfAllChangelogsCompletelyRead();
@@ -440,6 +445,43 @@ public class DefaultStateUpdater implements StateUpdater {
             } finally {
                 exceptionsAndFailedTasksLock.unlock();
             }
+        }
+
+        // Current offset sums are sourced from the StateDirectory (see TaskManager#maybeUpdateTaskOffsetSumSnapshot);
+        // end-offsets are not tracked there, so the end-offset-sum is computed here from the changelog reader's
+        // (logical) end-offsets for the tasks the state updater is currently restoring/updating.
+        private void updateTaskEndOffsetSumSnapshot() {
+            final Map<TopicPartition, Long> changelogEndOffsets;
+            if (!updatingTasks.isEmpty()) {
+                changelogEndOffsets = changelogReader.logicalChangelogEndOffsets();
+            } else {
+                changelogEndOffsets = Collections.emptyMap();
+            }
+
+            final Map<StreamsRebalanceData.TaskId, Long> endOffsetSnapshot = new HashMap<>(updatingTasks.size());
+
+            for (final Task task : updatingTasks.values()) {
+                long endSum = 0L; // ok to init with zero, as we have at least one changelog topic partition
+                for (final TopicPartition partition : task.changelogPartitions()) {
+                    final Long endOffset = changelogEndOffsets.get(partition);
+                    if (endOffset == null) {
+                        endSum = Long.MAX_VALUE;
+                        break;
+                    }
+                    if (endSum > Long.MAX_VALUE - endOffset) {
+                        endSum = Long.MAX_VALUE;
+                        break;
+                    }
+                    endSum += endOffset;
+                }
+
+                endOffsetSnapshot.put(
+                    new StreamsRebalanceData.TaskId(String.valueOf(task.id().subtopology()), task.id().partition()),
+                    endSum
+                );
+            }
+
+            taskEndOffsetSumSnapshot.set(Collections.unmodifiableMap(endOffsetSnapshot));
         }
 
         private void waitIfAllChangelogsCompletelyRead() {
@@ -818,6 +860,8 @@ public class DefaultStateUpdater implements StateUpdater {
     private final long commitIntervalMs;
     private long lastCommitMs;
 
+    private final AtomicReference<Map<StreamsRebalanceData.TaskId, Long>> taskEndOffsetSumSnapshot = new AtomicReference<>(Map.of());
+
     private StateUpdaterThread stateUpdaterThread = null;
 
     public DefaultStateUpdater(final String name,
@@ -1052,6 +1096,11 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public KafkaFutureImpl<Uuid> restoreConsumerInstanceId(final Duration timeout) {
         return stateUpdaterThread.restoreConsumerInstanceId(timeout);
+    }
+
+    @Override
+    public Map<StreamsRebalanceData.TaskId, Long> taskEndOffsetSumSnapshot() {
+        return taskEndOffsetSumSnapshot.get();
     }
 
     public boolean isRunning() {

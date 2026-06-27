@@ -1,6 +1,6 @@
 ---
 title: Use Cases
-description: 
+description: Explore common Kafka use cases for messaging, activity tracking, stream processing, and storing event data.
 weight: 2
 tags: ['kafka', 'docs']
 aliases: 

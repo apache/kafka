@@ -150,7 +150,7 @@ public final class NodeManager {
     private final NodeHeartbeat heartbeat;
 
     /**
-     * A future which can be used to cancel the periodic hearbeat task.
+     * A future which can be used to cancel the periodic heartbeat task.
      */
     private ScheduledFuture<?> heartbeatFuture;
 

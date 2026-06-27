@@ -18,8 +18,8 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.VotersRecord;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.ExternalKRaftMetrics;

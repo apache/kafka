@@ -568,9 +568,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testConsecutiveConfigChange(groupProtocol: String): Unit = {
     val topic2 = "testtopic2"
-    val topicProps = new Properties
-    topicProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
-    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicProps)
+    val topicConfigs = util.Map.of(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
+    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicConfigs)
 
     def getLogOrThrow(tp: TopicPartition): UnifiedLog = {
       var (logOpt, found) = TestUtils.computeUntilTrue {
@@ -1255,21 +1254,32 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   private def alterConfigsOnServer(server: KafkaBroker, props: Properties): Unit = {
     val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
-    val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+    val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString), configEntries)
     adminClients.head.incrementalAlterConfigs(alterConfigs)
     props.asScala.foreach { case (k, v) => waitForConfigOnServer(server, k, v) }
   }
 
   private def alterConfigs(servers: Seq[KafkaBroker], adminClient: Admin, props: Properties,
-                   perBrokerConfig: Boolean): AlterConfigsResult = {
+                           perBrokerConfig: Boolean): Unit = {
+    alterConfigsAsync(servers, adminClient, props, perBrokerConfig).all.get()
+    // Skip config-provider placeholders (e.g. "${file:...}"): the broker stores the resolved value,
+    // so waiting on the literal placeholder would never match. Callers using placeholders must wait
+    // on the resolved value themselves.
+    props.asScala.foreach { case (k, v) =>
+      if (!v.contains("${")) waitForConfig(k, v)
+    }
+  }
+
+  private def alterConfigsAsync(servers: Seq[KafkaBroker], adminClient: Admin, props: Properties,
+                                perBrokerConfig: Boolean): AlterConfigsResult = {
     val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), OpType.SET) }.toList.asJava
     val configs = if (perBrokerConfig) {
-      val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+      val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
       servers.foreach(server => alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString), configEntries))
       alterConfigs
     } else {
-      val alterConfigs = new java.util.HashMap[ConfigResource, java.util.Collection[AlterConfigOp]]()
+      val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
       alterConfigs.put(new ConfigResource(ConfigResource.Type.BROKER, ""), configEntries)
       alterConfigs
     }
@@ -1277,7 +1287,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String), expectFailure: Boolean = false): Unit = {
-    val alterResult = alterConfigs(servers, adminClients.head, newProps, perBrokerConfig)
+    val alterResult = alterConfigsAsync(servers, adminClients.head, newProps, perBrokerConfig)
     if (expectFailure) {
       val oldProps = servers.head.config.values.asScala.filter { case (k, _) => newProps.containsKey(k) }
       val brokerResources = if (perBrokerConfig)

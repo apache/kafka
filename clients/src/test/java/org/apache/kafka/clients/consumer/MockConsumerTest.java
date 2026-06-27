@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -230,4 +231,108 @@ public class MockConsumerTest {
         assertTrue(records.isEmpty());
     }
 
+    @Test
+    public void testLosePartitionsCallsOnPartitionsLost() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+        List<TopicPartition> assigned = List.of(tp0, tp1);
+
+        List<TopicPartition> lost = new ArrayList<>();
+        List<TopicPartition> revoked = new ArrayList<>();
+        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                revoked.addAll(partitions);
+            }
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            @Override
+            public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                lost.addAll(partitions);
+            }
+        });
+
+        consumer.rebalance(assigned);
+        consumer.losePartitions(List.of(tp0));
+
+        assertEquals(List.of(tp0), lost);
+        assertTrue(revoked.isEmpty());
+    }
+
+    @Test
+    public void testLosePartitionsRemovesFromAssignment() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+
+        consumer.subscribe(List.of("test"));
+        consumer.rebalance(List.of(tp0, tp1));
+        consumer.losePartitions(List.of(tp0));
+
+        assertFalse(consumer.assignment().contains(tp0));
+        assertTrue(consumer.assignment().contains(tp1));
+    }
+
+    @Test
+    public void testLosePartitionsThrowsIfNotAssigned() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+
+        consumer.subscribe(List.of("test"));
+        consumer.rebalance(List.of(tp0));
+
+        assertThrows(IllegalStateException.class,
+                () -> consumer.losePartitions(List.of(tp1)));
+    }
+
+    @Test
+    public void testLosePartitionsClearsOnlyLostRecords() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+
+        consumer.subscribe(List.of("test"));
+        consumer.rebalance(List.of(tp0, tp1));
+        consumer.updateBeginningOffsets(new HashMap<>() {{
+                put(tp0, 0L);
+                put(tp1, 0L);
+            }});
+        consumer.seek(tp0, 0);
+        consumer.seek(tp1, 0);
+
+        consumer.addRecord(new ConsumerRecord<>("test", 0, 0, null, null));
+        consumer.addRecord(new ConsumerRecord<>("test", 1, 0, null, null));
+
+        consumer.losePartitions(List.of(tp0));
+
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+        assertEquals(1, records.count());
+
+        var record = records.iterator().next();
+        assertEquals(tp1, new TopicPartition(record.topic(), record.partition()));
+    }
+
+    @Test
+    public void testLosePartitionsThenRebalance() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+        TopicPartition tp2 = new TopicPartition("test", 2);
+
+        List<TopicPartition> assigned = new ArrayList<>();
+        consumer.subscribe(List.of("test"), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                assigned.addAll(partitions);
+            }
+        });
+
+        consumer.rebalance(List.of(tp0, tp1));
+        assigned.clear();
+
+        consumer.losePartitions(List.of(tp0));
+        consumer.rebalance(Arrays.asList(tp1, tp2));
+
+        assertEquals(List.of(tp2), assigned);
+        assertEquals(Set.of(tp1, tp2), consumer.assignment());
+    }
 }

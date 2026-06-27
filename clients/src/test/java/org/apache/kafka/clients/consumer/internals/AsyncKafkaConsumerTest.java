@@ -51,6 +51,7 @@ import org.apache.kafka.clients.consumer.internals.events.LeaveGroupOnCloseEvent
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.PartitionsAssignedEvent;
 import org.apache.kafka.clients.consumer.internals.events.PartitionsRemovedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PausePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
@@ -87,10 +88,10 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.TestUtils;
 
@@ -609,6 +610,7 @@ public class AsyncKafkaConsumerTest {
             // Do NOT mark reconciliation check complete - simulating background hasn't processed it yet
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+        consumer.setHasPendingReconciliation(true);
 
         // Poll should return empty because reconciliation check is not complete.
         ConsumerRecords<?, ?> result1 = consumer.poll(Duration.ZERO);
@@ -621,6 +623,60 @@ public class AsyncKafkaConsumerTest {
         // Next poll should return the records since reconciliation check is now complete
         ConsumerRecords<?, ?> result2 = consumer.poll(Duration.ZERO);
         assertEquals(2, result2.count(), "Expected 2 records after reconciliation check is complete");
+    }
+
+    @Test
+    public void testPollDoesNotWaitForReconciliationCheckIfNoPendingReconciliation() {
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+                new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+                new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                new ConsumerInterceptors<>(Collections.emptyList(), metrics),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions);
+
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        // PositionsValidator starts with metadataUpdateVersion=-1. Stub metadata.updateVersion() to match,
+        // so canSkipUpdateFetchPositions() passes and we test the reconciliation check path.
+        doReturn(-1).when(metadata).updateVersion();
+
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+        // Simulate partition assignment from group coordinator
+        subscriptions.assignFromSubscribed(singleton(tp));
+
+        // Set up position so canSkipUpdateFetchPositions() returns true (partition in FETCHING state)
+        completeSeekUnvalidatedEventSuccessfully();
+        subscriptions.seek(tp, 0);
+
+        // Set up fetch collector to return records when called
+        doReturn(Fetch.forPartition(tp, records, true, new OffsetAndMetadata(4, Optional.of(0), "")))
+                .when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        // Capture the AsyncPollEvent but leave the reconciliation check incomplete.
+        // Since there is no pending reconciliation, poll should not wait for it.
+        AtomicReference<AsyncPollEvent> capturedEvent = new AtomicReference<>();
+        doAnswer(invocation -> {
+            AsyncPollEvent event = invocation.getArgument(0);
+            assertTrue(capturedEvent.compareAndSet(null, event));
+            // Do NOT mark reconciliation check complete - simulating background hasn't processed it yet
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(AsyncPollEvent.class));
+        consumer.setHasPendingReconciliation(false);
+        
+        // Poll does not wait AsyncPollEvent if there is no pending reconciliation.
+        ConsumerRecords<?, ?> result = consumer.poll(Duration.ZERO);
+
+        assertNotNull(capturedEvent.get(), "AsyncPollEvent should have been captured");
+        assertFalse(capturedEvent.get().isReconciliationCheckComplete(), "Reconciliation check should still be incomplete");
+        assertEquals(2, result.count(), "Expected records without waiting when no reconciliation is pending");
     }
 
     @Test
@@ -850,6 +906,66 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testCloseRunsRevocationCallbackAndSendsLeaveGroupEventOnInterrupt() {
+        final String topicName = "topic";
+        final Set<TopicPartition> partitions = singleton(new TopicPartition(topicName, 0));
+
+        final AtomicReference<Set<TopicPartition>> revokedPartitions = new AtomicReference<>();
+        final AtomicBoolean revocationCallbackCalled = new AtomicBoolean(false);
+        final AtomicReference<LeaveGroupOnCloseEvent> leaveGroupEvent = new AtomicReference<>();
+
+        final ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+                assertTrue(Thread.currentThread().isInterrupted());
+                revocationCallbackCalled.set(true);
+                revokedPartitions.set(Set.copyOf(partitions));
+            }
+
+            @Override
+            public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+                // no-op
+            }
+
+            @Override
+            public void onPartitionsLost(final Collection<TopicPartition> partitions) {
+                fail("Expected assigned partitions to be revoked on close");
+            }
+        };
+
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumer(requiredConsumerConfigAndGroupId("consumerGroup"));
+            completeTopicSubscriptionChangeEventSuccessfully();
+            consumer.subscribe(singletonList(topicName), listener);
+            consumer.subscriptions().assignFromSubscribed(partitions);
+            consumer.setGroupAssignmentSnapshot(partitions);
+
+            final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
+            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(1), "memberId");
+
+            doAnswer(invocation -> {
+                LeaveGroupOnCloseEvent event = invocation.getArgument(0);
+                leaveGroupEvent.set(event);
+                assertTrue(Thread.currentThread().isInterrupted());
+                throw new InterruptException("Thread was interrupted");
+            }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(LeaveGroupOnCloseEvent.class));
+
+            try {
+                Thread.currentThread().interrupt();
+                assertThrows(InterruptException.class, () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
+            } finally {
+                Thread.interrupted();
+            }
+        }
+
+        assertTrue(revocationCallbackCalled.get());
+        assertEquals(partitions, revokedPartitions.get());
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(LeaveGroupOnCloseEvent.class));
+        assertNotNull(leaveGroupEvent.get());
+        assertEquals(CloseOptions.GroupMembershipOperation.DEFAULT, leaveGroupEvent.get().membershipOperation());
+    }
+
+    @Test
     public void testCommitSyncAllConsumed() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
@@ -869,6 +985,47 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).add(eventCaptor.capture());
         SyncCommitEvent capturedEvent = eventCaptor.getValue();
         assertFalse(capturedEvent.offsets().isPresent(), "Expected empty optional offsets");
+    }
+
+    /**
+     * This behaviour is common to the Classic (cooperative) and Consumer protocols: paused partitions
+     * remain paused after a rebalance as long as they remain assigned to the same consumer.
+     * It is tested separately for each consumer because the rebalance-related calls differ.
+     * See {@link org.apache.kafka.clients.consumer.KafkaConsumerTest#testPauseFlagPreservedForRetainedPartitionAcrossRebalance(GroupProtocol)}.
+     */
+    @Test
+    public void testPauseFlagPreservedForRetainedPartitionAcrossRebalance() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions);
+        completeTopicSubscriptionChangeEventSuccessfully();
+        completePausePartitionsEventSuccessfully();
+
+        final String topicName = "topic1";
+        final TopicPartition tp0 = new TopicPartition(topicName, 0);
+        final TopicPartition tp1 = new TopicPartition(topicName, 1);
+        final TopicPartition tp2 = new TopicPartition(topicName, 2);
+
+        consumer.subscribe(singleton(topicName), mock(ConsumerRebalanceListener.class));
+
+        // Simulate rebalance that reconciled a new assignment of tp0 and tp1
+        subscriptions.assignFromSubscribedAwaitingCallback(Set.of(tp0, tp1), Set.of(tp0, tp1));
+        assertEquals(Set.of(tp0, tp1), consumer.assignment());
+
+        // Pause tp0, the partition that will be retained across the rebalance.
+        consumer.pause(Set.of(tp0));
+        assertEquals(Set.of(tp0), consumer.paused());
+
+        // Reconcile a new assignment that retains tp0, revokes tp1, and adds tp2.
+        subscriptions.assignFromSubscribedAwaitingCallback(Set.of(tp0, tp2), Set.of(tp2));
+
+        // tp0 is retained across the rebalance, so its pause state must be preserved.
+        // The newly added tp2 starts unpaused.
+        assertEquals(Set.of(tp0, tp2), consumer.assignment());
+        assertEquals(Set.of(tp0), consumer.paused(), "Partition that remain assigned should keep the pause state");
     }
 
     @Test
@@ -1507,7 +1664,7 @@ public class AsyncKafkaConsumerTest {
     public void testStreamRebalanceData() {
         final String groupId = "consumerGroupA";
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
-            StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+            StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
             final Optional<StreamsRebalanceData> groupMetadataUpdateListener = captureStreamRebalanceData(requestManagers);
             assertTrue(groupMetadataUpdateListener.isPresent());
@@ -2374,6 +2531,15 @@ public class AsyncKafkaConsumerTest {
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicSubscriptionChangeEvent.class));
     }
 
+    private void completePausePartitionsEventSuccessfully() {
+        doAnswer(invocation -> {
+            PausePartitionsEvent event = invocation.getArgument(0);
+            event.partitions().forEach(consumer.subscriptions()::pause);
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(PausePartitionsEvent.class));
+    }
+
     private void completeTopicPatternSubscriptionChangeEventSuccessfully() {
         doAnswer(invocation -> {
             TopicPatternSubscriptionChangeEvent event = invocation.getArgument(0);
@@ -2422,7 +2588,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseInvokesStreamsRebalanceListenerOnTasksRevokedWhenMemberEpochPositive() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
@@ -2442,7 +2608,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseInvokesStreamsRebalanceListenerOnAllTasksLostWhenMemberEpochZeroOrNegative() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
@@ -2462,7 +2628,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testCloseWrapsStreamsRebalanceListenerException() {
         final String groupId = "streamsGroup";
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
@@ -2527,7 +2693,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testStreamsTasksAssignedEventSendsErrorWhenApplyAssignmentFails() {
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         final InterruptException applyAssignmentError = new InterruptException("Thread was interrupted");
 
         consumer = newConsumerWithStreamRebalanceData(
