@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.internals.Plugin;
@@ -25,10 +25,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.network.Request;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
-import org.apache.kafka.server.quota.ClientQuotaCallback;
-import org.apache.kafka.server.quota.ClientQuotaManager;
-import org.apache.kafka.server.quota.QuotaType;
-import org.apache.kafka.server.quota.QuotaUtils;
 
 import java.util.Map;
 import java.util.Optional;

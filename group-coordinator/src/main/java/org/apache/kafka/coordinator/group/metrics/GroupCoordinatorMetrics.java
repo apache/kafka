@@ -122,6 +122,10 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
     public static final String SHARE_GROUP_REBALANCES_SENSOR_NAME = "ShareGroupRebalances";
     public static final String STREAMS_GROUP_REBALANCES_SENSOR_NAME = "StreamsGroupRebalances";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupCycleRuns";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupEligibleGroups";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteSuccess";
+    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteError";
 
     private final MetricName offsetCountMetricName;
     private final MetricName classicGroupCountMetricName;
@@ -398,6 +402,46 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 METRICS_GROUP,
                 "The total number of streams group rebalances")));
 
+        Sensor streamsGroupTopologyDescriptionCleanupCycleRunsSensor =
+            metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME);
+        streamsGroupTopologyDescriptionCleanupCycleRunsSensor.add(new Meter(
+            metrics.metricName("streams-group-topology-description-cleanup-cycle-rate",
+                METRICS_GROUP,
+                "The rate at which the topology-description cleanup cycle fires"),
+            metrics.metricName("streams-group-topology-description-cleanup-cycle-count",
+                METRICS_GROUP,
+                "The total number of topology-description cleanup cycles that ran")));
+
+        Sensor streamsGroupTopologyDescriptionCleanupEligibleGroupsSensor =
+            metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME);
+        streamsGroupTopologyDescriptionCleanupEligibleGroupsSensor.add(new Meter(
+            metrics.metricName("streams-group-topology-description-cleanup-eligible-rate",
+                METRICS_GROUP,
+                "The rate of streams groups identified as eligible for topology-description cleanup"),
+            metrics.metricName("streams-group-topology-description-cleanup-eligible-count",
+                METRICS_GROUP,
+                "The total number of streams groups identified as eligible for topology-description cleanup")));
+
+        Sensor streamsGroupTopologyDescriptionDeleteSuccessSensor =
+            metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME);
+        streamsGroupTopologyDescriptionDeleteSuccessSensor.add(new Meter(
+            metrics.metricName("streams-group-topology-description-delete-success-rate",
+                METRICS_GROUP,
+                "The rate of successful plugin.deleteTopology calls (DeleteGroups and periodic cleanup combined)"),
+            metrics.metricName("streams-group-topology-description-delete-success-count",
+                METRICS_GROUP,
+                "The total number of successful plugin.deleteTopology calls (DeleteGroups and periodic cleanup combined)")));
+
+        Sensor streamsGroupTopologyDescriptionDeleteErrorSensor =
+            metrics.sensor(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME);
+        streamsGroupTopologyDescriptionDeleteErrorSensor.add(new Meter(
+            metrics.metricName("streams-group-topology-description-delete-error-rate",
+                METRICS_GROUP,
+                "The rate of failed plugin.deleteTopology calls (DeleteGroups and periodic cleanup combined)"),
+            metrics.metricName("streams-group-topology-description-delete-error-count",
+                METRICS_GROUP,
+                "The total number of failed plugin.deleteTopology calls (DeleteGroups and periodic cleanup combined)")));
+
         globalSensors = Collections.unmodifiableMap(Utils.mkMap(
             Utils.mkEntry(OFFSET_COMMITS_SENSOR_NAME, offsetCommitsSensor),
             Utils.mkEntry(OFFSET_EXPIRED_SENSOR_NAME, offsetExpiredSensor),
@@ -405,8 +449,35 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Utils.mkEntry(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, classicGroupCompletedRebalancesSensor),
             Utils.mkEntry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor),
             Utils.mkEntry(SHARE_GROUP_REBALANCES_SENSOR_NAME, shareGroupRebalanceSensor),
-            Utils.mkEntry(STREAMS_GROUP_REBALANCES_SENSOR_NAME, streamsGroupRebalanceSensor)
+            Utils.mkEntry(STREAMS_GROUP_REBALANCES_SENSOR_NAME, streamsGroupRebalanceSensor),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME,
+                streamsGroupTopologyDescriptionCleanupCycleRunsSensor),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME,
+                streamsGroupTopologyDescriptionCleanupEligibleGroupsSensor),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME,
+                streamsGroupTopologyDescriptionDeleteSuccessSensor),
+            Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME,
+                streamsGroupTopologyDescriptionDeleteErrorSensor)
         ));
+    }
+
+    /**
+     * Record a single observation against a global sensor by name. No-op if the sensor is not
+     * configured (e.g. tests that build the metrics without the streams plugin scaffolding).
+     */
+    public void recordSensor(String name) {
+        Sensor sensor = globalSensors.get(name);
+        if (sensor != null) sensor.record();
+    }
+
+    /**
+     * Record a numeric observation against a global sensor by name. No-op if the sensor is
+     * not configured. Used by the topology-description cleanup cycle to report the eligible
+     * group count per cycle.
+     */
+    public void recordSensor(String name, double value) {
+        Sensor sensor = globalSensors.get(name);
+        if (sensor != null) sensor.record(value);
     }
 
     private Long numOffsets() {
@@ -491,7 +562,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME,
             CONSUMER_GROUP_REBALANCES_SENSOR_NAME,
             SHARE_GROUP_REBALANCES_SENSOR_NAME,
-            STREAMS_GROUP_REBALANCES_SENSOR_NAME
+            STREAMS_GROUP_REBALANCES_SENSOR_NAME,
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME,
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME,
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME,
+            STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME
         ).forEach(metrics::removeSensor);
     }
 
