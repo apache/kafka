@@ -13,10 +13,11 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up GraalVM
-      uses: actions/setup-java@v4
+      uses: graalvm/setup-graalvm@v1
       with:
         java-version: '22'
-        distribution: 'graalvm-community'
+        distribution: 'graalvm'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Build with Gradle
       uses: gradle/actions/setup-gradle@v3
