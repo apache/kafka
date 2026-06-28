@@ -1,0 +1,35 @@
+name: Native Build
+
+on:
+  push:
+    branches: [ main, feature/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up GraalVM
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: '22'
+        distribution: 'graalvm'
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Build with Gradle
+      uses: gradle/actions/setup-gradle@v3
+      
+    - name: Run Tests
+      run: ./gradlew test
+      
+    - name: Build Native Image
+      run: ./gradlew nativeCompile
+      
+    - name: Upload Native Image Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: edgeml-broker
+        path: build/native/nativeCompile/edgeml-broker

@@ -1,0 +1,43 @@
+plugins {
+    id 'java'
+    id 'org.graalvm.buildtools.native' version '0.10.1'
+}
+
+group = 'org.edgeml'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'net.openhft:chronicle-map:3.24ea1'
+    implementation 'org.slf4j:slf4j-api:2.0.12'
+    implementation 'org.slf4j:slf4j-simple:2.0.12'
+    
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(22)
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'edgeml-broker'
+            mainClass = 'org.edgeml.broker.EdgeBroker'
+            buildArgs.add('-O3')
+            buildArgs.add('--gc=serial')
+            buildArgs.add('--initialize-at-build-time=org.slf4j')
+        }
+    }
+}
