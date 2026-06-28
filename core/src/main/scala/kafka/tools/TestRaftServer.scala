@@ -37,7 +37,7 @@ import org.apache.kafka.common.utils.internals.Exit
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
-import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, KRaftConfigs, LeaderAndEpoch, QuorumConfig, RaftClient, RaftManager}
+import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, KRaftConfigs, LeaderAndEpoch, NodeEndpointProvider, QuorumConfig, RaftClient, RaftManager}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
@@ -109,6 +109,7 @@ class TestRaftServer(
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
       endpoints,
+      NodeEndpointProvider.NOOP,
       new ProcessTerminatingFaultHandler.Builder().build()
     )
 

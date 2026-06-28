@@ -183,6 +183,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final boolean canBecomeVoter;
     private final String clusterId;
     private final Endpoints localListeners;
+    private final NodeEndpointProvider nodeEndpointProvider;
     private final SupportedVersionRange localSupportedKRaftVersion;
     private final NetworkChannel channel;
     private final RaftLog log;
@@ -222,8 +223,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private volatile RemoveVoterHandler removeVoterHandler;
     private volatile UpdateVoterHandler updateVoterHandler;
 
-    private volatile NodeEndpointProvider nodeEndpointProvider = NodeEndpointProvider.NOOP;
-
     /**
      * Create a new instance.
      *
@@ -246,6 +245,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
+        NodeEndpointProvider nodeEndpointProvider,
         SupportedVersionRange localSupportedKRaftVersion,
         QuorumConfig quorumConfig
     ) {
@@ -264,6 +264,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             clusterId,
             bootstrapServers,
             localListeners,
+            nodeEndpointProvider,
             localSupportedKRaftVersion,
             logContext,
             new Random(),
@@ -286,6 +287,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         String clusterId,
         Collection<InetSocketAddress> bootstrapServers,
         Endpoints localListeners,
+        NodeEndpointProvider nodeEndpointProvider,
         SupportedVersionRange localSupportedKRaftVersion,
         LogContext logContext,
         Random random,
@@ -308,6 +310,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.time = time;
         this.clusterId = clusterId;
         this.localListeners = localListeners;
+        this.nodeEndpointProvider = Objects.requireNonNull(nodeEndpointProvider);
         this.localSupportedKRaftVersion = localSupportedKRaftVersion;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.canBecomeVoter = canBecomeVoter;
@@ -339,10 +342,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 random
             );
         }
-    }
-
-    public void setNodeEndpointProvider(NodeEndpointProvider nodeEndpointProvider) {
-        this.nodeEndpointProvider = Objects.requireNonNull(nodeEndpointProvider);
     }
 
     private void updateFollowerHighWatermark(
@@ -2313,14 +2312,17 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 .filter(key -> key.id() == data.voterId())
                 .toList();
             if (matchingObservers.size() > 1) {
-                throw new IllegalArgumentException(
-                    String.format("Multiple observers with node ID %d detected (%s).", data.voterId(), matchingObservers)
-                );
+                throw new IllegalArgumentException(String.format(
+                    "Multiple observers with node ID %d were found: %s. " +
+                        "Remove all but one of these observers and try again.",
+                    data.voterId(),
+                    matchingObservers
+                ));
             } else if (matchingObservers.isEmpty() || matchingObservers.get(0).directoryId().isEmpty()) {
                 throw new IllegalArgumentException(
                     String.format(
                         "Could not find a unique observer with node ID %d to derive its directory ID. " +
-                            "Ensure the node is running and fetching before adding it as a voter.",
+                            "Ensure the node is running and fetching before adding it as a voter",
                         data.voterId()
                     )
                 );
@@ -2345,8 +2347,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (endpoints.address(channel.listenerName()).isEmpty()) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Add voter request didn't include the endpoint (%s) for the default listener %s",
-                    endpoints,
+                    "Could not find an endpoint for voter %d on listener %s.",
+                    data.voterId(),
                     channel.listenerName()
                 )
             );
@@ -2486,7 +2488,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 .filter(voterKey -> voterKey.directoryId().isPresent())
                 .orElseThrow(() -> new IllegalArgumentException(
                     String.format(
-                        "Could not find voter with node ID %d in the current voter set to derive its directory ID.",
+                        "Could not find voter with node ID %d in the current voter set to derive its directory ID",
                         data.voterId()
                     )
                 ));

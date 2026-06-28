@@ -63,9 +63,9 @@ class MetadataQuorumCommandTest {
 
         assertTrue(header.matches("NodeId\\s+DirectoryId\\s+LogEndOffset\\s+Lag\\s+LastFetchTimestamp\\s+LastCaughtUpTimestamp\\s+Status\\s+"));
 
-        if (cluster.type() == Type.CO_KRAFT)
+        if (cluster.type() == Type.CO_KRAFT) 
             assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), data.size());
-        else
+        else 
             assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), data.size());
 
         Pattern leaderPattern = Pattern.compile("\\d+\\s+\\S+\\s+\\d+\\s+\\d+\\s+-?\\d+\\s+-?\\d+\\s+Leader\\s*");
@@ -214,6 +214,7 @@ class MetadataQuorumCommandTest {
                     .filter(cluster.controllerIds()::contains)
                     .findFirst()
                     .orElseThrow(() -> new AssertionError("No controller observer found in quorum info " + info)));
+                assertEquals(1, info.voters().size());
             });
         }
 

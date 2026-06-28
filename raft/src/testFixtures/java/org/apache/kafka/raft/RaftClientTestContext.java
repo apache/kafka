@@ -185,6 +185,7 @@ public final class RaftClientTestContext {
         private boolean canBecomeVoter = false;
         private VoterSet startingVoters = VoterSet.empty();
         private Endpoints localListeners = Endpoints.empty();
+        private NodeEndpointProvider nodeEndpointProvider = NodeEndpointProvider.NOOP;
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
         private int fetchSnapshotMaxBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES;
@@ -391,6 +392,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withNodeEndpointProvider(NodeEndpointProvider nodeEndpointProvider) {
+            this.nodeEndpointProvider = nodeEndpointProvider;
+            return this;
+        }
+
         Builder withAutoJoin(boolean autoJoin) {
             this.autoJoin = autoJoin;
             return this;
@@ -473,6 +479,7 @@ public final class RaftClientTestContext {
                 clusterId,
                 computedBootstrapServers,
                 localListeners,
+                nodeEndpointProvider,
                 Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
