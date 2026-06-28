@@ -1147,12 +1147,10 @@ public class ShareCoordinatorService implements ShareCoordinator {
         }
 
         boolean enabled = isShareGroupsEnabled(newImage);
-        // enabled    periodicJobsEnabled result (XOR)
-        // 0            0               no op on flag, do not call jobs
-        // 0            1               disable flag, do not call jobs                      => action
-        // 1            0               enable flag, call jobs as they are not recursing    => action
-        // 1            1               no op on flag, do not call jobs
-        if (enabled ^ periodicJobsEnabled) {
+        // Only act when the enabled state actually changes. Each change bumps the
+        // generation, which fences any jobs from the previous generation so they
+        // stop rescheduling. A fresh set of jobs is started only when enabling.
+        if (enabled != periodicJobsEnabled) {
             periodicJobsEnabled = enabled;
             long generation = periodicJobGeneration.incrementAndGet();
             if (enabled) {

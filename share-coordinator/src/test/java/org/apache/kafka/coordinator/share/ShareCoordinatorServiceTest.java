@@ -2102,9 +2102,12 @@ class ShareCoordinatorServiceTest {
         when(disabledImage.features().finalizedVersions().getOrDefault(eq(ShareVersion.FEATURE_NAME), anyShort())).thenReturn((short) 0);
 
         MetadataImage enabledImage = mockMetadataImageWithShareGroupsEnabled();
-        service.onMetadataUpdate(mock(MetadataDelta.class), enabledImage);
 
+        // Enable the feature: schedules the prune and snapshot jobs (generation 1).
+        service.onMetadataUpdate(mock(MetadataDelta.class), enabledImage);
         verify(timer, times(2)).add(any());
+
+        // Fire both jobs. Their futures stay pending, so they are still in flight.
         timer.advanceClock(30001L);
         verify(runtime, times(1)).scheduleWriteOperation(
             eq("write-state-record-prune"),
@@ -2116,15 +2119,38 @@ class ShareCoordinatorServiceTest {
             any()
         );
 
+        // Disable then re-enable while the generation 1 jobs are still in flight.
+        // Re-enabling bumps the generation and schedules a fresh pair of jobs.
         service.onMetadataUpdate(mock(MetadataDelta.class), disabledImage);
-
         service.onMetadataUpdate(mock(MetadataDelta.class), enabledImage);
         verify(timer, times(4)).add(any());
 
+        // The stale generation 1 jobs now complete. They are fenced, so they must
+        // not reschedule themselves: the timer count stays at 4.
         firstPruneFuture.complete(Optional.empty());
         firstSnapshotFuture.complete(null);
-
         verify(timer, times(4)).add(any());
+
+        // Fire the current generation jobs. This is their second run overall
+        // (hence times(2)), and their futures are again left in flight.
+        timer.advanceClock(30001L);
+        verify(runtime, times(2)).scheduleWriteOperation(
+            eq("write-state-record-prune"),
+            any(),
+            any()
+        );
+        verify(runtime, times(2)).scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any()
+        );
+
+        // Completing each current generation job reschedules itself, so the timer
+        // count grows one at a time: 4 -> 5 (prune) -> 6 (snapshot).
+        secondPruneFuture.complete(Optional.empty());
+        verify(timer, times(5)).add(any());
+
+        secondSnapshotFuture.complete(null);
+        verify(timer, times(6)).add(any());
 
         checkMetrics(metrics);
 
