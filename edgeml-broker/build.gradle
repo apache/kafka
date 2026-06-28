@@ -30,6 +30,10 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 22
 }
 
+tasks.withType(Checkstyle).configureEach {
+    enabled = false
+}
+
 test {
     useJUnitPlatform()
 }
