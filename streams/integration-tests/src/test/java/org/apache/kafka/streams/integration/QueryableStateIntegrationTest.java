@@ -30,10 +30,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyQueryMetadata;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.LagInfo;
+import org.apache.kafka.streams.StateListenerStub;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -294,7 +294,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyAllKVKeys(final List<KafkaStreams> streamsList,
                                  final KafkaStreams streams,
-                                 final KafkaStreamsTest.StateListenerStub stateListener,
+                                 final StateListenerStub stateListener,
                                  final Set<String> keys,
                                  final String storeName,
                                  final long timeout,
@@ -346,7 +346,7 @@ public class QueryableStateIntegrationTest {
 
     private void verifyAllWindowedKeys(final List<KafkaStreams> streamsList,
                                        final KafkaStreams streams,
-                                       final KafkaStreamsTest.StateListenerStub stateListenerStub,
+                                       final StateListenerStub stateListenerStub,
                                        final Set<String> keys,
                                        final String storeName,
                                        final Long from,
@@ -531,7 +531,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleToQueryDuringRebalance() throws Exception {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
-        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
+        final List<StateListenerStub> listeners = new ArrayList<>(numThreads);
 
         final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
         producerRunnable.run();
@@ -546,7 +546,7 @@ public class QueryableStateIntegrationTest {
             props.put(StreamsConfig.CLIENT_ID_CONFIG, "instance-" + i);
             final KafkaStreams streams =
                 createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
-            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            final StateListenerStub listener = new StateListenerStub();
             streams.setStateListener(listener);
             listeners.add(listener);
             streamsList.add(streams);
@@ -632,7 +632,7 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleQueryStandbyStateDuringRebalance() throws Exception {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final List<KafkaStreams> streamsList = new ArrayList<>(numThreads);
-        final List<KafkaStreamsTest.StateListenerStub> listeners = new ArrayList<>(numThreads);
+        final List<StateListenerStub> listeners = new ArrayList<>(numThreads);
 
         final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
         producerRunnable.run();
@@ -649,7 +649,7 @@ public class QueryableStateIntegrationTest {
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("shouldBeAbleQueryStandbyStateDuringRebalance-" + i).getPath());
             final KafkaStreams streams =
                 createCountStream(streamThree, outputTopicThree, outputTopicConcurrentWindowed, storeName, windowStoreName, props);
-            final KafkaStreamsTest.StateListenerStub listener = new KafkaStreamsTest.StateListenerStub();
+            final StateListenerStub listener = new StateListenerStub();
             streams.setStateListener(listener);
             listeners.add(listener);
             streamsList.add(streams);

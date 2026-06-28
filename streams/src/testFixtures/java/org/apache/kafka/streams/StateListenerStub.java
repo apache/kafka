@@ -14,24 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.integration;
+package org.apache.kafka.streams;
 
-import org.junit.platform.suite.api.SelectClasses;
-import org.junit.platform.suite.api.Suite;
+import java.util.HashMap;
+import java.util.Map;
 
-/**
- * This suite runs the integration tests related to querying StateStores (IQ).
- *
- * It can be used from an IDE to selectively just run these integration tests. The unit tests for
- * StateStore querying live in the {@code streams} module; see
- * {@code org.apache.kafka.streams.state.internals.StoreQuerySuite}.
- *
- * Tests ending in the word "Suite" are excluded from the gradle build because it
- * already runs the component tests individually.
- */
-@Suite
-@SelectClasses({
-    QueryableStateIntegrationTest.class,
-})
-public class StoreQuerySuite {
+public class StateListenerStub implements KafkaStreams.StateListener {
+    public int numChanges = 0;
+    public KafkaStreams.State oldState;
+    public KafkaStreams.State newState;
+    public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
+
+    @Override
+    public void onChange(final KafkaStreams.State newState,
+                         final KafkaStreams.State oldState) {
+        final long prevCount = mapStates.containsKey(newState) ? mapStates.get(newState) : 0;
+        numChanges++;
+        this.oldState = oldState;
+        this.newState = newState;
+        mapStates.put(newState, prevCount + 1);
+    }
 }

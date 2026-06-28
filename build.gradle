@@ -2681,8 +2681,8 @@ project(':tools') {
     testImplementation project(':storage:storage-api').sourceSets.main.output
     testImplementation testFixtures(project(':storage'))
     testImplementation project(':streams')
-    testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':streams:integration-tests').sourceSets.test.output
+    testImplementation testFixtures(project(':streams'))
+    testImplementation testFixtures(project(':streams:integration-tests'))
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -2832,6 +2832,8 @@ project(':streams') {
     archivesName = "kafka-streams"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   configurations {
@@ -2846,6 +2848,12 @@ project(':streams') {
     implementation libs.jacksonAnnotations
     implementation libs.jacksonDatabind
     implementation libs.slf4jApi
+
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation libs.hamcrest
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation libs.mockitoCore
+    testFixturesImplementation libs.slf4jApi
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
@@ -2996,7 +3004,7 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    testImplementation project(':streams').sourceSets.test.output
+    testImplementation testFixtures(project(':streams'))
     testImplementation testFixtures(project(':clients'))
     testImplementation project(':streams:test-utils')
 
@@ -3043,16 +3051,34 @@ project(':streams:integration-tests') {
     archivesName = "kafka-streams-integration-tests"
   }
 
+  apply plugin: 'java-test-fixtures'
+
   dependencies {
     implementation libs.slf4jApi
 
+    testFixturesImplementation testFixtures(project(':clients'))
+    testFixturesImplementation testFixtures(project(':server-common'))
+    testFixturesImplementation testFixtures(project(':streams'))
+    testFixturesImplementation project(':group-coordinator')
+    testFixturesImplementation project(':server')
+    testFixturesImplementation project(':server-common')
+    testFixturesImplementation project(':storage')
+    testFixturesImplementation project(':streams')
+    testFixturesImplementation project(':streams:test-utils')
+    testFixturesImplementation project(':test-common:test-common-runtime')
+    testFixturesImplementation project(':transaction-coordinator')
+    testFixturesImplementation libs.hamcrest
+    testFixturesImplementation libs.junitJupiter
+    testFixturesImplementation libs.slf4jApi
+
     testImplementation testFixtures(project(':clients'))
+    testImplementation testFixtures(project(':streams'))
     testImplementation project(':group-coordinator')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation project(':storage')
-    testImplementation project(':streams').sourceSets.test.output
+    testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':tools')
     testImplementation project(':transaction-coordinator')
@@ -3065,6 +3091,11 @@ project(':streams:integration-tests') {
     testImplementation project(':streams:test-utils')
 
     testRuntimeOnly runtimeTestLibs
+    // opentelemetryProto is an implementation dep of ':clients' that gets shaded into the clients
+    // shadow JAR. When testFixtures(project(':clients')) puts raw (unshaded) client class files on
+    // the classpath, ClientTelemetryProvider references the unshaded io.opentelemetry.proto.* classes
+    // directly, so the unshaded JAR must be present at runtime as well.
+    testRuntimeOnly libs.opentelemetryProto
   }
 }
 
@@ -4177,6 +4208,8 @@ gradle.projectsEvaluated {
     'metadata': ':metadata',
     'raft': ':raft',
     'connect/runtime': ':connect:runtime',
+    'streams': ':streams',
+    'streams/integration-tests': ':streams:integration-tests',
   ]
   allprojects { proj ->
     proj.configurations.all { config ->
