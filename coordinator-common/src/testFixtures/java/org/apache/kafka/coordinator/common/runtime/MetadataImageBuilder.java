@@ -75,10 +75,6 @@ public class MetadataImageBuilder {
         return this;
     }
 
-    /**
-     * Finalizes a feature (e.g. group.version) at the given level so that callers can exercise
-     * feature-gated coordinator behavior.
-     */
     public MetadataImageBuilder addFeature(String featureName, short featureLevel) {
         delta.replay(new FeatureLevelRecord().setName(featureName).setFeatureLevel(featureLevel));
         return this;

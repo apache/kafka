@@ -2646,7 +2646,9 @@ public class GroupMetadataManager {
      * @return Whether the cluster's group.version enables partition-expansion classification (GV_2+, KIP-1327).
      */
     private boolean isNewPartitionsClassificationEnabled() {
-        return metadataImage.finalizedFeatureLevel(GroupVersion.FEATURE_NAME) >= GroupVersion.GV_2.featureLevel();
+        return GroupVersion.fromFeatureLevel(
+            metadataImage.finalizedFeatureLevel(GroupVersion.FEATURE_NAME)
+        ).isNewPartitionsClassificationSupported();
     }
 
     /**

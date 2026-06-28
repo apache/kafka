@@ -27,8 +27,6 @@ public enum GroupVersion implements FeatureVersion {
     GV_1(1, MetadataVersion.IBP_4_0_IV0, Map.of()),
 
     // Version 2 enables partition-expansion classification for consumer groups (KIP-1327).
-    // It depends on metadata.version IBP_4_4_IV1 so that partition.creationTime is available
-    // in the metadata image when the coordinator computes NewPartitions.
     GV_2(2, MetadataVersion.IBP_4_4_IV1, Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_4_IV1.featureLevel()));
 
     public static final String FEATURE_NAME = "group.version";
