@@ -26,6 +26,10 @@ java {
     }
 }
 
+tasks.withType(JavaCompile).configureEach {
+    options.release = 22
+}
+
 test {
     useJUnitPlatform()
 }
