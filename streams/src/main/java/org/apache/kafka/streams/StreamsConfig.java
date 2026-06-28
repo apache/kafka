@@ -1628,12 +1628,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
-            final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
-            if (instanceId != null && !instanceId.isEmpty()) {
-                throw new ConfigException("Streams rebalance protocol does not support static membership. "
-                    + "Please set group.protocol=classic or remove group.instance.id from the configuration.");
-            }
             if (getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG) != 0) {
                 log.warn("Warmup replicas are not supported yet with the streams protocol and will be ignored. "
                     + "If you want to use warmup replicas, please set group.protocol=classic.");

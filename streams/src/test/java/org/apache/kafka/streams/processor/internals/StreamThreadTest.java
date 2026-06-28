@@ -1703,7 +1703,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of);
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         thread = new StreamThread(
             mockTime, config, null,
             mainConsumer, consumer,
@@ -1736,7 +1736,7 @@ public class StreamThreadTest {
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
-            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of);
+            UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of(), Map::of, Map::of);
         thread = new StreamThread(
             mockTime, config, null,
             mainConsumer, consumer,
@@ -2982,6 +2982,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -3939,6 +3940,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
@@ -4001,6 +4003,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -4104,6 +4107,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
@@ -4177,6 +4181,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
@@ -4242,6 +4247,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -4305,6 +4311,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -4378,6 +4385,7 @@ public class StreamThreadTest {
             Optional.empty(),
             Map.of(),
             Map.of(),
+            Map::of,
             Map::of
         );
 
@@ -4505,6 +4513,52 @@ public class StreamThreadTest {
                 equalTo(0L)
         );
     }
+
+    @Test
+    public void shouldPopulateWireTopologyDescriptionWhenPushEnabled() {
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, "input-topic");
+        internalTopologyBuilder.addSink("sink1", "output-topic", null, null, null, "source1");
+
+        final StreamsConfig config = new StreamsConfig(configProps(false, false));
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+
+        final StreamsRebalanceData rebalanceData = StreamThread.initStreamsRebalanceData(
+            UUID.randomUUID(),
+            config,
+            Optional.empty(),
+            Optional.empty(),
+            topologyMetadata,
+            Map::of,
+            Map::of
+        );
+
+        assertNotNull(rebalanceData.wireTopologyDescription());
+        assertFalse(rebalanceData.wireTopologyDescription().subtopologies().isEmpty());
+    }
+
+    @Test
+    public void shouldNotPopulateWireTopologyDescriptionWhenPushDisabled() {
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, "input-topic");
+        internalTopologyBuilder.addSink("sink1", "output-topic", null, null, null, "source1");
+
+        final Properties props = configProps(false, false);
+        props.setProperty(StreamsConfig.TOPOLOGY_DESCRIPTION_PUSH_ENABLED_CONFIG, "false");
+        final StreamsConfig config = new StreamsConfig(props);
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+
+        final StreamsRebalanceData rebalanceData = StreamThread.initStreamsRebalanceData(
+            UUID.randomUUID(),
+            config,
+            Optional.empty(),
+            Optional.empty(),
+            topologyMetadata,
+            Map::of,
+            Map::of
+        );
+
+        assertNull(rebalanceData.wireTopologyDescription());
+    }
+
 
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);

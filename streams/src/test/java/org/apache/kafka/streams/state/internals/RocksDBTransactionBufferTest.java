@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -258,6 +259,58 @@ public class RocksDBTransactionBufferTest {
         latch.await();
 
         assertEquals(List.of("a", "b", "c", "d"), result.get());
+    }
+
+    @Test
+    public void shouldHandleConcurrentStageDeleteRangeAndNonOwnerReads() throws Exception {
+        final int readerCount = 4;
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        final AtomicReference<Throwable> failure = new AtomicReference<>();
+        final List<Thread> readers = new ArrayList<>();
+        for (int r = 0; r < readerCount; r++) {
+            final Thread reader = new Thread(() -> {
+                try {
+                    while (!stop.get()) {
+                        buffer.get(key("k50"));
+                        // Non-owner scan → snapshotScan: must never throw and must be sorted, even
+                        // while the owner concurrently runs stageDeleteRange (subMap().clear()).
+                        try (KeyValueIterator<Bytes, byte[]> iter = buffer.all(true)) {
+                            Bytes prev = null;
+                            while (iter.hasNext()) {
+                                final Bytes k = iter.next().key;
+                                if (prev != null && prev.compareTo(k) >= 0) {
+                                    throw new AssertionError("non-owner scan returned unsorted keys: " + prev + " >= " + k);
+                                }
+                                prev = k;
+                            }
+                        }
+                    }
+                } catch (final Throwable t) {
+                    failure.compareAndSet(null, t);
+                }
+            });
+            readers.add(reader);
+            reader.start();
+        }
+        try {
+            for (int i = 0; i < 5_000; i++) {
+                buffer.stage(key(String.format("k%02d", i % 80)), val("v" + i));
+                if (i % 50 == 0) {
+                    buffer.stageDeleteRange(cfHandle, key("k10"), key("k30"));
+                }
+                if (i % 200 == 0) {
+                    buffer.commit();
+                }
+            }
+        } finally {
+            stop.set(true);
+            for (final Thread reader : readers) {
+                reader.join();
+            }
+        }
+        if (failure.get() != null) {
+            throw new AssertionError("concurrent non-owner reader failed", failure.get());
+        }
     }
 
     @Test

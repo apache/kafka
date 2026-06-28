@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -621,6 +622,95 @@ class DefaultStateUpdaterTest {
         final InOrder orderVerifier = inOrder(changelogReader, task1, task2);
         orderVerifier.verify(changelogReader, times(2)).enforceRestoreActive();
         orderVerifier.verify(changelogReader).transitToUpdateStandby();
+    }
+
+    @Test
+    public void shouldPublishEmptyTaskEndOffsetSumSnapshotBeforeStart() {
+        assertThat(stateUpdater.taskEndOffsetSumSnapshot(), is(Collections.emptyMap()));
+    }
+
+    @Test
+    public void shouldPublishTaskEndOffsetSumSnapshotForRestoringTask() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        when(task.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 42L));
+        when(changelogReader.logicalChangelogEndOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 100L));
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
+        stateUpdater.add(task);
+        stateUpdater.start();
+
+        assertEndOffsetSnapshotEntry(TASK_0_0, 100L);
+    }
+
+    @Test
+    public void shouldReportMaxValueInEndOffsetSnapshotWhenAnyPartitionIsUnknown() throws Exception {
+        // Unknown end-offset for any partition saturates the task's end-offset-sum to MAX_VALUE.
+        // This biases reported lag upward — the conservative direction for warm-up promotion.
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_A_1)).inState(State.RESTORING).build();
+        when(task.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 7L, TOPIC_PARTITION_A_1, 8L));
+        when(changelogReader.logicalChangelogEndOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 100L));
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
+        stateUpdater.add(task);
+        stateUpdater.start();
+
+        assertEndOffsetSnapshotEntry(TASK_0_0, Long.MAX_VALUE);
+    }
+
+    @Test
+    public void shouldReportMaxValueInEndOffsetSnapshotOnOverflow() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0, TOPIC_PARTITION_A_1)).inState(State.RESTORING).build();
+        when(task.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 1L, TOPIC_PARTITION_A_1, 2L));
+        when(changelogReader.logicalChangelogEndOffsets()).thenReturn(Map.of(
+            TOPIC_PARTITION_A_0, Long.MAX_VALUE - 1L,
+            TOPIC_PARTITION_A_1, 100L
+        ));
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
+        stateUpdater.add(task);
+        stateUpdater.start();
+
+        assertEndOffsetSnapshotEntry(TASK_0_0, Long.MAX_VALUE);
+    }
+
+    @Test
+    public void shouldPublishTaskEndOffsetSumSnapshotForMultipleRestoringTasks() throws Exception {
+        final StreamTask t1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StandbyTask t2 = standbyTask(TASK_1_0, Set.of(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
+        when(t1.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_A_0, 1L));
+        when(t2.changelogOffsets()).thenReturn(Map.of(TOPIC_PARTITION_B_0, 2L));
+        when(changelogReader.logicalChangelogEndOffsets()).thenReturn(Map.of(
+            TOPIC_PARTITION_A_0, 100L,
+            TOPIC_PARTITION_B_0, 200L
+        ));
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        when(changelogReader.restore(anyMap())).thenReturn(1L);
+        stateUpdater.add(t1);
+        stateUpdater.add(t2);
+        stateUpdater.start();
+
+        waitForCondition(
+            () -> {
+                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskEndOffsetSumSnapshot();
+                return s.size() == 2
+                    && Long.valueOf(100L).equals(s.get(new StreamsRebalanceData.TaskId("0", 0)))
+                    && Long.valueOf(200L).equals(s.get(new StreamsRebalanceData.TaskId("1", 0)));
+            },
+            VERIFICATION_TIMEOUT,
+            "End-offset snapshot did not publish both restoring tasks"
+        );
+    }
+
+    private void assertEndOffsetSnapshotEntry(final TaskId taskId, final long expectedSum) throws Exception {
+        final StreamsRebalanceData.TaskId key = new StreamsRebalanceData.TaskId(String.valueOf(taskId.subtopology()), taskId.partition());
+        waitForCondition(
+            () -> {
+                final Map<StreamsRebalanceData.TaskId, Long> s = stateUpdater.taskEndOffsetSumSnapshot();
+                return s.size() == 1 && Long.valueOf(expectedSum).equals(s.get(key));
+            },
+            VERIFICATION_TIMEOUT,
+            () -> "End-offset snapshot did not publish expected entry " + key + "=" + expectedSum + "; got " + stateUpdater.taskEndOffsetSumSnapshot()
+        );
     }
 
     @Test

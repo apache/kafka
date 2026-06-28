@@ -10913,6 +10913,55 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testClearStoredDescriptionTopologyEpochClearsWhenEpochMatches() {
+        // the cleanup cycle echoes the storedEpoch it observed at scan time into
+        // the conditional clear. When the persisted value still matches, the write emits a
+        // metadata record setting StoredDescriptionTopologyEpoch back to -1 while preserving
+        // the other tagged fields (FailedDescriptionTopologyEpoch in particular).
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), 7, 3));
+
+        CoordinatorResult<Void, CoordinatorRecord> result =
+            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, 7);
+
+        assertEquals(1, result.records().size());
+        // Apply the record and verify storedEpoch is cleared and failedEpoch preserved.
+        context.replay(result.records().get(0));
+        StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(groupId);
+        assertEquals(-1, group.storedDescriptionTopologyEpoch());
+        assertEquals(3, group.failedDescriptionTopologyEpoch());
+    }
+
+    @Test
+    public void testClearStoredDescriptionTopologyEpochNoOpsWhenEpochMismatches() {
+        // A concurrent setTopology has advanced storedEpoch between the cycle's scan and this
+        // write. The clear must be a no-op to preserve the newer push instead of silently
+        // undoing it.
+        String groupId = "streams-group";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(
+            groupId, 1, 0L, -1, Map.of(), 9, -1));
+
+        CoordinatorResult<Void, CoordinatorRecord> result =
+            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, 7);
+
+        assertEquals(List.of(), result.records());
+    }
+
+    @Test
+    public void testClearStoredDescriptionTopologyEpochNoOpsForMissingGroup() {
+        // Missing groups must not throw — the next cycle will simply not see them again.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        CoordinatorResult<Void, CoordinatorRecord> result =
+            context.groupMetadataManager.clearStoredDescriptionTopologyEpoch("missing-group", 7);
+
+        assertEquals(List.of(), result.records());
+    }
+
+    @Test
     public void testStreamsGroupMetadataReplayRoundTripsTopologyDescriptionEpochs() {
         // KIP-1331: replay must read storedDescriptionTopologyEpoch and failedDescriptionTopologyEpoch from the record
         // and apply them to the in-memory streams group.

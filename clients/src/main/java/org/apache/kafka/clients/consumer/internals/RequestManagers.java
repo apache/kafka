@@ -61,6 +61,7 @@ public class RequestManagers implements Closeable {
     public final FetchRequestManager fetchRequestManager;
     public final Optional<ShareConsumeRequestManager> shareConsumeRequestManager;
     public final Optional<StreamsGroupHeartbeatRequestManager> streamsGroupHeartbeatRequestManager;
+    public final Optional<StreamsGroupTopologyDescriptionRequestManager> streamsGroupTopologyDescriptionRequestManager;
     private final List<RequestManager> entries;
     private final IdempotentCloser closer = new IdempotentCloser();
 
@@ -73,6 +74,7 @@ public class RequestManagers implements Closeable {
                            Optional<ConsumerHeartbeatRequestManager> heartbeatRequestManager,
                            Optional<ConsumerMembershipManager> membershipManager,
                            Optional<StreamsGroupHeartbeatRequestManager> streamsGroupHeartbeatRequestManager,
+                           Optional<StreamsGroupTopologyDescriptionRequestManager> streamsGroupTopologyDescriptionRequestManager,
                            Optional<StreamsMembershipManager> streamsMembershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
@@ -84,6 +86,7 @@ public class RequestManagers implements Closeable {
         this.consumerHeartbeatRequestManager = heartbeatRequestManager;
         this.shareHeartbeatRequestManager = Optional.empty();
         this.streamsGroupHeartbeatRequestManager = streamsGroupHeartbeatRequestManager;
+        this.streamsGroupTopologyDescriptionRequestManager = streamsGroupTopologyDescriptionRequestManager;
         this.consumerMembershipManager = membershipManager;
         this.streamsMembershipManager = streamsMembershipManager;
         this.shareMembershipManager = Optional.empty();
@@ -94,6 +97,7 @@ public class RequestManagers implements Closeable {
         heartbeatRequestManager.ifPresent(list::add);
         membershipManager.ifPresent(list::add);
         streamsGroupHeartbeatRequestManager.ifPresent(list::add);
+        streamsGroupTopologyDescriptionRequestManager.ifPresent(list::add);
         streamsMembershipManager.ifPresent(list::add);
         list.add(offsetsRequestManager);
         list.add(topicMetadataRequestManager);
@@ -112,6 +116,7 @@ public class RequestManagers implements Closeable {
         this.commitRequestManager = Optional.empty();
         this.consumerHeartbeatRequestManager = Optional.empty();
         this.streamsGroupHeartbeatRequestManager = Optional.empty();
+        this.streamsGroupTopologyDescriptionRequestManager = Optional.empty();
         this.shareHeartbeatRequestManager = shareHeartbeatRequestManager;
         this.consumerMembershipManager = Optional.empty();
         this.streamsMembershipManager = Optional.empty();
@@ -199,6 +204,7 @@ public class RequestManagers implements Closeable {
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commitRequestManager = null;
                 StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = null;
+                StreamsGroupTopologyDescriptionRequestManager streamsGroupTopologyDescriptionRequestManager = null;
                 StreamsMembershipManager streamsMembershipManager = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
@@ -246,6 +252,16 @@ public class RequestManagers implements Closeable {
                             backgroundEventHandler,
                             metrics,
                             streamsRebalanceData.get()
+                        );
+
+                        streamsGroupTopologyDescriptionRequestManager = new StreamsGroupTopologyDescriptionRequestManager(
+                            logContext,
+                            time,
+                            retryBackoffMs,
+                            retryBackoffMaxMs,
+                            streamsMembershipManager,
+                            streamsRebalanceData.get(),
+                            coordinator
                         );
                     } else {
                         membershipManager = new ConsumerMembershipManager(
@@ -308,6 +324,7 @@ public class RequestManagers implements Closeable {
                         Optional.ofNullable(heartbeatRequestManager),
                         Optional.ofNullable(membershipManager),
                         Optional.ofNullable(streamsGroupHeartbeatRequestManager),
+                        Optional.ofNullable(streamsGroupTopologyDescriptionRequestManager),
                         Optional.ofNullable(streamsMembershipManager)
                 );
             }

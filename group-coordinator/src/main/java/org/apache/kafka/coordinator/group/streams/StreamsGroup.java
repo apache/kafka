@@ -989,6 +989,18 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * Snapshot-aware counterpart to {@link #isEmpty()}: returns whether the group was in the
+     * {@code EMPTY} state at {@code committedOffset}. Used by read operations (e.g. the
+     * topology-description cleanup eligibility scan) that must observe committed state only —
+     * a member-join write that has been committed but not yet applied to the live state, or
+     * vice versa, would otherwise widen the scan-vs-clear race window beyond what the runtime
+     * contract allows.
+     */
+    public boolean isEmpty(long committedOffset) {
+        return state.get(committedOffset) == StreamsGroupState.EMPTY;
+    }
+
+    /**
      * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
      *
      * @return The offset expiration condition for the group or Empty if no such condition exists.

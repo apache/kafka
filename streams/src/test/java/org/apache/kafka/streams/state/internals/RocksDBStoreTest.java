@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -54,6 +55,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -217,6 +219,13 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private InternalMockProcessorContext<?, ?> getEOSProcessorContext(final File stateDir) {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        return getProcessorContext(stateDir, streamsProps);
+    }
+
+    private InternalMockProcessorContext<?, ?> getTransactionalEOSProcessorContext(final File stateDir) {
+        final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
+        streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        streamsProps.setProperty(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, "true");
         return getProcessorContext(stateDir, streamsProps);
     }
 
@@ -1332,6 +1341,182 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             dbOptions.close();
             columnFamilyOptions.close();
         }
+    }
+
+    @Test
+    public void readOnlyCommittedShouldHideStagedPutWhileUncommittedExposesIt() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes key = new Bytes(stringSerializer.serialize(null, "k"));
+        rocksDBStore.put(key, stringSerializer.serialize(null, "committed"));
+        rocksDBStore.commit(Map.of());
+
+        rocksDBStore.put(key, stringSerializer.serialize(null, "staged"));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+        assertEquals("staged", stringDeserializer.deserialize(null, uncommitted.get(key)));
+        assertEquals("committed", stringDeserializer.deserialize(null, committed.get(key)));
+    }
+
+    @Test
+    public void readOnlyCommittedShouldNotSeeStagedDelete() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes key = new Bytes(stringSerializer.serialize(null, "k"));
+        rocksDBStore.put(key, stringSerializer.serialize(null, "v"));
+        rocksDBStore.commit(Map.of());
+
+        rocksDBStore.delete(key);
+
+        assertNull(rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED).get(key));
+        assertEquals("v", stringDeserializer.deserialize(null,
+            rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED).get(key)));
+    }
+
+    @Test
+    public void readOnlyRangeAndAllShouldRespectIsolationLevel() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        final Bytes k3 = new Bytes(stringSerializer.serialize(null, "k3"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "a"));
+        rocksDBStore.put(k2, stringSerializer.serialize(null, "b"));
+        rocksDBStore.commit(Map.of());
+
+        rocksDBStore.put(k3, stringSerializer.serialize(null, "c"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "a2"));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+        final List<KeyValue<String, String>> uncommittedAll;
+        try (KeyValueIterator<Bytes, byte[]> it = uncommitted.all()) {
+            uncommittedAll = getDeserializedList(it);
+        }
+        final List<KeyValue<String, String>> committedAll;
+        try (KeyValueIterator<Bytes, byte[]> it = committed.all()) {
+            committedAll = getDeserializedList(it);
+        }
+        assertEquals(List.of(KeyValue.pair("k1", "a2"), KeyValue.pair("k2", "b"), KeyValue.pair("k3", "c")), uncommittedAll);
+        assertEquals(List.of(KeyValue.pair("k1", "a"), KeyValue.pair("k2", "b")), committedAll);
+
+        final List<KeyValue<String, String>> uncommittedRange;
+        try (KeyValueIterator<Bytes, byte[]> it = uncommitted.range(k1, k3)) {
+            uncommittedRange = getDeserializedList(it);
+        }
+        final List<KeyValue<String, String>> committedRange;
+        try (KeyValueIterator<Bytes, byte[]> it = committed.range(k1, k3)) {
+            committedRange = getDeserializedList(it);
+        }
+        assertEquals(List.of(KeyValue.pair("k1", "a2"), KeyValue.pair("k2", "b"), KeyValue.pair("k3", "c")), uncommittedRange);
+        assertEquals(List.of(KeyValue.pair("k1", "a"), KeyValue.pair("k2", "b")), committedRange);
+    }
+
+    @Test
+    public void readOnlyReverseRangeAndReverseAllShouldRespectIsolationLevel() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        final Bytes k3 = new Bytes(stringSerializer.serialize(null, "k3"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "a"));
+        rocksDBStore.put(k2, stringSerializer.serialize(null, "b"));
+        rocksDBStore.commit(Map.of());
+
+        rocksDBStore.put(k3, stringSerializer.serialize(null, "c"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "a2"));
+
+        final ReadOnlyKeyValueStore<Bytes, byte[]> uncommitted = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED);
+        final ReadOnlyKeyValueStore<Bytes, byte[]> committed = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED);
+
+        final List<KeyValue<String, String>> uncommittedReverseAll;
+        try (KeyValueIterator<Bytes, byte[]> it = uncommitted.reverseAll()) {
+            uncommittedReverseAll = getDeserializedList(it);
+        }
+        final List<KeyValue<String, String>> committedReverseAll;
+        try (KeyValueIterator<Bytes, byte[]> it = committed.reverseAll()) {
+            committedReverseAll = getDeserializedList(it);
+        }
+        assertEquals(List.of(KeyValue.pair("k3", "c"), KeyValue.pair("k2", "b"), KeyValue.pair("k1", "a2")), uncommittedReverseAll);
+        assertEquals(List.of(KeyValue.pair("k2", "b"), KeyValue.pair("k1", "a")), committedReverseAll);
+
+        final List<KeyValue<String, String>> uncommittedReverseRange;
+        try (KeyValueIterator<Bytes, byte[]> it = uncommitted.reverseRange(k1, k3)) {
+            uncommittedReverseRange = getDeserializedList(it);
+        }
+        final List<KeyValue<String, String>> committedReverseRange;
+        try (KeyValueIterator<Bytes, byte[]> it = committed.reverseRange(k1, k3)) {
+            committedReverseRange = getDeserializedList(it);
+        }
+        assertEquals(List.of(KeyValue.pair("k3", "c"), KeyValue.pair("k2", "b"), KeyValue.pair("k1", "a2")), uncommittedReverseRange);
+        assertEquals(List.of(KeyValue.pair("k2", "b"), KeyValue.pair("k1", "a")), committedReverseRange);
+    }
+
+    @Test
+    public void readOnlyReverseRangeShouldReturnEmptyIteratorWhenFromIsGreaterThanTo() {
+        rocksDBStore.init(context, rocksDBStore);
+        final Bytes k1 = new Bytes(stringSerializer.serialize(null, "k1"));
+        final Bytes k2 = new Bytes(stringSerializer.serialize(null, "k2"));
+        rocksDBStore.put(k1, stringSerializer.serialize(null, "a"));
+        rocksDBStore.put(k2, stringSerializer.serialize(null, "b"));
+
+        try (KeyValueIterator<Bytes, byte[]> it =
+                 rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED).reverseRange(k2, k1)) {
+            assertFalse(it.hasNext());
+        }
+    }
+
+    @Test
+    public void readOnlyPrefixScanShouldRespectIsolationLevel() {
+        rocksDBStore.close();
+        final InternalMockProcessorContext<?, ?> eosContext = getTransactionalEOSProcessorContext(dir);
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(eosContext, rocksDBStore);
+
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "p-1")), stringSerializer.serialize(null, "a"));
+        rocksDBStore.commit(Map.of());
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "p-2")), stringSerializer.serialize(null, "b"));
+        rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "q-1")), stringSerializer.serialize(null, "z"));
+
+        final List<KeyValue<String, String>> uncommittedPrefix;
+        try (KeyValueIterator<Bytes, byte[]> it = rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED)
+                .prefixScan("p-", stringSerializer)) {
+            uncommittedPrefix = getDeserializedList(it);
+        }
+        final List<KeyValue<String, String>> committedPrefix;
+        try (KeyValueIterator<Bytes, byte[]> it = rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED)
+                .prefixScan("p-", stringSerializer)) {
+            committedPrefix = getDeserializedList(it);
+        }
+        assertEquals(List.of(KeyValue.pair("p-1", "a"), KeyValue.pair("p-2", "b")), uncommittedPrefix);
+        assertEquals(List.of(KeyValue.pair("p-1", "a")), committedPrefix);
+    }
+
+    @Test
+    public void readOnlyOnNonTransactionalStoreShouldBehaveIdenticallyAcrossLevels() {
+        rocksDBStore.init(context, rocksDBStore);
+        final Bytes key = new Bytes(stringSerializer.serialize(null, "k"));
+        rocksDBStore.put(key, stringSerializer.serialize(null, "v"));
+
+        assertEquals("v", stringDeserializer.deserialize(null,
+            rocksDBStore.readOnly(IsolationLevel.READ_UNCOMMITTED).get(key)));
+        assertEquals("v", stringDeserializer.deserialize(null,
+            rocksDBStore.readOnly(IsolationLevel.READ_COMMITTED).get(key)));
     }
 
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
