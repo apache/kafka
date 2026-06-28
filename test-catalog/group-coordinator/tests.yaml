@@ -1626,3 +1626,11 @@ org.apache.kafka.coordinator.group.util.OverlayMapTest:
 - testRemove
 - testRemoveExistingKey
 - testSize
+org.apache.kafka.coordinator.group.util.UpdatedMembersAndTargetAssignmentViewTest:
+- testAddMember
+- testAddStaticMember
+- testRemoveMember
+- testRemoveStaticMember
+- testReplaceMember
+- testReplaceStaticMemberWithDifferentMemberId
+- testReplaceStaticMemberWithSameMemberId
