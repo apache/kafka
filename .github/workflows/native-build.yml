@@ -32,4 +32,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: edgeml-broker
-        path: edgeml-broker/build/native/nativeCompile/edgeml-broker
+        path: edgeml-broker/build/native/nativeCompile/
