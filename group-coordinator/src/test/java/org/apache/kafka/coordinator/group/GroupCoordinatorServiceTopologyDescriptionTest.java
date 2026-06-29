@@ -955,8 +955,8 @@ public class GroupCoordinatorServiceTopologyDescriptionTest {
     @Test
     public void testCleanupCycleBatchesClearWritesPerPartition() {
         // Two eligible groups land on the same partition's eligibility read — they must trigger
-        // exactly one scheduleWriteOperation carrying both conditional clears (dajac's per-shard
-        // batching suggestion), not one write per group.
+        // exactly one scheduleWriteOperation carrying both conditional clears, not one write per
+        // group.
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         StreamsGroupTopologyDescriptionPlugin plugin = mock(StreamsGroupTopologyDescriptionPlugin.class);
         when(plugin.deleteTopology("foo")).thenReturn(CompletableFuture.completedFuture(null));

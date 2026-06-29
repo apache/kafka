@@ -927,6 +927,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<Void> clearStoredDescriptionTopologyEpochBatchAsync(
         Map<String, Integer> expectedStoredEpochByGroupId
     ) {
+        if (expectedStoredEpochByGroupId.isEmpty()) return CompletableFuture.completedFuture(null);
         TopicPartition tp = topicPartitionFor(expectedStoredEpochByGroupId.keySet().iterator().next());
         return runtime.scheduleWriteOperation(
             "clear-stored-topology-epoch",
@@ -934,8 +935,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             coordinator -> coordinator.clearStoredDescriptionTopologyEpochBatch(expectedStoredEpochByGroupId)
         ).handle((__, throwable) -> {
             if (throwable != null) {
-                log.warn("Failed to clear StoredDescriptionTopologyEpoch for {} group(s) on partition {}; the next cleanup cycle will retry.",
-                    expectedStoredEpochByGroupId.size(), tp, throwable);
+                log.warn("Failed to clear StoredDescriptionTopologyEpoch for groups {} on partition {}; the next cleanup cycle will retry.",
+                    expectedStoredEpochByGroupId.keySet(), tp, throwable);
             }
             return null;
         });

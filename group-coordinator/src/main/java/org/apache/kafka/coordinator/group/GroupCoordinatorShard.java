@@ -1045,6 +1045,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * shard instead of one per group. Groups whose stored epoch no longer matches yield no
      * record (the GMM-level method returns an empty list for those), matching the single-group
      * variant's silent skip.
+     *
+     * <p>The result is non-atomic ({@code isAtomic=false}): the conditional clear records are
+     * independent per group, so the runtime is free to split them across multiple log batches
+     * if a single batch would exceed the limit. Any per-record write failure is retried
+     * naturally on the next cycle because the persisted storedEpoch is still non-default.
      */
     public CoordinatorResult<Void, CoordinatorRecord> clearStoredDescriptionTopologyEpochBatch(
         Map<String, Integer> expectedStoredEpochByGroupId
@@ -1052,7 +1057,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<CoordinatorRecord> records = new ArrayList<>(expectedStoredEpochByGroupId.size());
         expectedStoredEpochByGroupId.forEach((groupId, expectedStoredEpoch) ->
             records.addAll(groupMetadataManager.clearStoredDescriptionTopologyEpoch(groupId, expectedStoredEpoch).records()));
-        return new CoordinatorResult<>(records);
+        return new CoordinatorResult<>(records, false);
     }
 
     /**
@@ -1127,14 +1132,17 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      */
     public CoordinatorResult<Void, CoordinatorRecord> cleanupGroupMetadata() {
         long startMs = time.milliseconds();
-        boolean topologyPluginConfigured = config.isStreamsGroupTopologyDescriptionPluginConfigured();
         List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
             Group group = groupMetadataManager.group(groupId);
-            if (!group.shouldExpire()) return;
+            // Offset cleanup runs for every group regardless of whether shouldExpire(config)
+            // returns true — see Group.shouldExpire's javadoc — so a group whose metadata is
+            // pinned (e.g. a streams group with a pending topology-plugin clean-up) still has
+            // its expired committed offsets tombstoned, which is what feeds the topology
+            // cleanup cycle's "no offsets remaining" eligibility check.
             boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
             if (!allOffsetsExpired) return;
-            if (deferStreamsGroupTombstoneForPluginCleanup(topologyPluginConfigured, group)) return;
+            if (!group.shouldExpire(config)) return;
             groupMetadataManager.maybeDeleteGroup(groupId, records);
         });
 
@@ -1146,27 +1154,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
         return new CoordinatorResult<>(records, false);
-    }
-
-    /**
-     * Decide whether the natural-expiration sweep must defer tombstoning {@code group} so the
-     * broker-level topology-description cleanup cycle can drive {@code plugin.deleteTopology}
-     * and clear {@code StoredDescriptionTopologyEpoch} first. Returns true only when all of:
-     * a plugin is configured on this broker (otherwise no cycle would ever clear the field
-     * and the gate would prevent natural expiration indefinitely), the group is a streams
-     * group, and its {@code StoredDescriptionTopologyEpoch} is not the {@code -1} default.
-     *
-     * <p>The {@code (StreamsGroup) group} cast is safe because the {@code group.type() == STREAMS}
-     * check precedes it via short-circuit evaluation; pulling this out of the sweep lambda
-     * keeps the gate's intent and the cast's precondition next to each other.
-     */
-    private static boolean deferStreamsGroupTombstoneForPluginCleanup(
-        boolean topologyPluginConfigured,
-        Group group
-    ) {
-        return topologyPluginConfigured
-            && group.type() == Group.GroupType.STREAMS
-            && ((StreamsGroup) group).storedDescriptionTopologyEpoch() != -1;
     }
 
     /**
