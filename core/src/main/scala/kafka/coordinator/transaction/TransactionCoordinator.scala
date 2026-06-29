@@ -139,10 +139,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       // 2PC functionality is disabled, clients that attempt to use this functionality
       // would receive an authorization failed error.
       responseCallback(initTransactionError(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
-    } else if (keepPreparedTxn) {
-      // if the request is to keep the prepared transaction, then return an
-      // unsupported version error since the feature hasn't been implemented yet.
-      responseCallback(initTransactionError(Errors.UNSUPPORTED_VERSION))
+    } else if (keepPreparedTxn && !enableTwoPCFlag) {
+      // keepPreparedTxn is only meaningful for 2PC recovery
+      responseCallback(initTransactionError(Errors.INVALID_REQUEST))
     } else if (!txnManager.validateTransactionTimeoutMs(enableTwoPCFlag, transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
@@ -171,6 +170,23 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
         case Some(epochAndTxnMetadata) => Right(epochAndTxnMetadata)
       }
 
+      // 2PC recovery: if the client wants to keep a prepared transaction and an ongoing 2PC
+      // transaction exists, preserve it and return its producer id/epoch so the client can
+      // finalize it. There is no state change, so respond directly without a log append.
+      val preservedResult = coordinatorEpochAndMetadata.toOption.flatMap { existingEpochAndMetadata =>
+        val txnMetadata = existingEpochAndMetadata.transactionMetadata
+        txnMetadata.inLock(() =>
+          if (keepPreparedTxn && txnMetadata.state == TransactionState.ONGOING && txnMetadata.isDistributedTwoPhaseCommitTxn)
+            Some(new InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch,
+              txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE))
+          else
+            None
+        )
+      }
+
+      if (preservedResult.isDefined) {
+        responseCallback(preservedResult.get)
+      } else {
       val result: ApiResult[(Int, TxnTransitMetadata)] = coordinatorEpochAndMetadata.flatMap {
         existingEpochAndMetadata =>
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
@@ -221,6 +237,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata,
               sendPidResponseCallback, requestLocal = requestLocal)
           }
+      }
       }
     }
   }
