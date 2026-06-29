@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -28,12 +29,18 @@ public class InitProducerIdRequest extends AbstractRequest {
         public final InitProducerIdRequestData data;
 
         public Builder(InitProducerIdRequestData data) {
-            super(ApiKeys.INIT_PRODUCER_ID);
+            // enable2Pc/keepPreparedTxn are v6-only (KIP-939); v6 is the unstable latest
+            // version, so only allow it when a 2PC field is set.
+            super(ApiKeys.INIT_PRODUCER_ID, data.enable2Pc() || data.keepPreparedTxn());
             this.data = data;
         }
 
         @Override
         public InitProducerIdRequest build(short version) {
+            if (version < 6 && (data.enable2Pc() || data.keepPreparedTxn()))
+                throw new UnsupportedVersionException("Cannot use 2PC (enable2Pc/keepPreparedTxn) with InitProducerId v"
+                    + version + "; the broker does not support InitProducerId v6 (KIP-939).");
+
             if (data.transactionTimeoutMs() <= 0)
                 throw new IllegalArgumentException("transaction timeout value is not positive: " + data.transactionTimeoutMs());
 
