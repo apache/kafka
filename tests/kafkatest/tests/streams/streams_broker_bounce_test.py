@@ -18,7 +18,11 @@ from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
 from ducktape.mark import matrix
 from kafkatest.services.kafka import KafkaService, quorum
-from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
+from kafkatest.services.streams import (
+    INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS,
+    StreamsSmokeTestDriverService,
+    StreamsSmokeTestJobRunnerService,
+)
 import time
 import signal
 from random import randint
@@ -164,10 +168,11 @@ class StreamsBrokerBounceTest(Test):
     def setup_system(self, start_processor=True, num_threads=3, group_protocol='classic'):
         # Setup phase
         use_streams_groups = True if group_protocol == 'streams' else False
+        topology_description_plugin_class = INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS if use_streams_groups else None
         self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=None, topics=self.topics, server_prop_overrides=[
             ["offsets.topic.num.partitions", self.partitions],
             ["offsets.topic.replication.factor", self.replication]
-        ], use_streams_groups=use_streams_groups)
+        ], use_streams_groups=use_streams_groups, streams_group_topology_description_plugin_class=topology_description_plugin_class)
         self.kafka.start()
 
         # allow some time for topics to be created

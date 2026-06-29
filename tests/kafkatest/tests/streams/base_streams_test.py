@@ -18,6 +18,7 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.kafka import KafkaService
+from kafkatest.services.streams import INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS
 
 
 class BaseStreamsTest(Test):
@@ -40,9 +41,10 @@ class BaseStreamsTest(Test):
             None, topics=self.topics,
             controller_num_nodes_override=self.num_controllers,
             use_streams_groups=True,
+            streams_group_topology_description_plugin_class=INMEMORY_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS,
             server_prop_overrides=[
                 [ "group.streams.min.session.timeout.ms", "10000" ], # Need to up the lower bound
-                [ "group.streams.session.timeout.ms", "10000" ] # As in classic groups, set this to 10s
+                [ "group.streams.session.timeout.ms", "10000" ], # As in classic groups, set this to 10s
             ]
         )
 
