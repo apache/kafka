@@ -1312,12 +1312,8 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testConsumerGroupHeartbeatComputesNewPartitions() {
-        // KIP-1327: when group.version is GV_2, the coordinator classifies partitions whose
-        // creation time postdates the group's creation time as newly expanded and reports them
-        // in the per-topic NewPartitions side channel of the heartbeat assignment.
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
         Uuid barTopicId = Uuid.randomUuid();
@@ -1383,7 +1379,6 @@ public class GroupMetadataManagerTest {
     public void testConsumerGroupHeartbeatDoesNotComputeNewPartitionsWhenFeatureDisabled() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
