@@ -144,7 +144,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
 
     protected StateStoreContext context;
-    protected Position position;
+    // VisibleForTesting
+    Position position;
     private TaskId taskId;
 
     public RocksDBStore(final String name,
@@ -1526,18 +1527,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         synchronized (position) {
             return position.copy().merge(dbAccessor.uncommittedPositionDeltas());
         }
-    }
-
-    // Visible for testing. Returns a snapshot of the committed Position only (no pending writes).
-    Position committedPositionForTest() {
-        synchronized (position) {
-            return position.copy();
-        }
-    }
-
-    // Visible for testing. Returns a snapshot of the pending-only Position deltas.
-    Position pendingPositionForTest() {
-        return dbAccessor.uncommittedPositionDeltas();
     }
 
     /**

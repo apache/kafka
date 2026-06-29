@@ -1533,8 +1533,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         eosContext.setRecordContext(new ProcessorRecordContext(0, 5L, 0, "input", new RecordHeaders()));
         rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "k2")), stringSerializer.serialize(null, "v2"));
 
-        assertEquals(Map.of(0, 1L), rocksDBStore.committedPositionForTest().getPartitionPositions("input"));
-        assertEquals(Map.of(0, 5L), rocksDBStore.pendingPositionForTest().getPartitionPositions("input"));
+        assertEquals(Map.of(0, 1L), rocksDBStore.position.getPartitionPositions("input"));
+        assertEquals(Map.of(0, 5L), rocksDBStore.dbAccessor.uncommittedPositionDeltas().getPartitionPositions("input"));
         assertEquals(Map.of(0, 5L), rocksDBStore.getPosition().getPartitionPositions("input"));
     }
 
@@ -1553,8 +1553,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "k2")), stringSerializer.serialize(null, "v2"));
         rocksDBStore.commit(Map.of());
 
-        assertEquals(Map.of(0, 9L), rocksDBStore.committedPositionForTest().getPartitionPositions("input"));
-        assertTrue(rocksDBStore.pendingPositionForTest().getTopics().isEmpty());
+        assertEquals(Map.of(0, 9L), rocksDBStore.position.getPartitionPositions("input"));
+        assertTrue(rocksDBStore.dbAccessor.uncommittedPositionDeltas().getTopics().isEmpty());
     }
 
     @Test
@@ -1564,8 +1564,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         context.setRecordContext(new ProcessorRecordContext(0, 7L, 0, "input", new RecordHeaders()));
         rocksDBStore.put(new Bytes(stringSerializer.serialize(null, "k")), stringSerializer.serialize(null, "v"));
 
-        assertEquals(Map.of(0, 7L), rocksDBStore.committedPositionForTest().getPartitionPositions("input"));
-        assertTrue(rocksDBStore.pendingPositionForTest().getTopics().isEmpty());
+        assertEquals(Map.of(0, 7L), rocksDBStore.position.getPartitionPositions("input"));
+        assertTrue(rocksDBStore.dbAccessor.uncommittedPositionDeltas().getTopics().isEmpty());
     }
 
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
