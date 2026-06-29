@@ -36,12 +36,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import io.opentelemetry.proto.metrics.v1.Metric;
-import io.opentelemetry.proto.metrics.v1.MetricsData;
-import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
-import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
-import io.opentelemetry.proto.resource.v1.Resource;
-
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -59,24 +53,22 @@ public class PushTelemetryRequestTest {
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     public void testMetricsDataCompression(CompressionType compressionType) throws IOException {
-        MetricsData metricsData = getMetricsData();
-        PushTelemetryRequest req = getPushTelemetryRequest(metricsData, compressionType);
+        ByteBuffer serialized = ClientTelemetryUtils.serializeMetricsData(sampleMetrics());
+        byte[] raw = Utils.toArray(serialized.duplicate());
+        PushTelemetryRequest req = getPushTelemetryRequest(serialized, raw, compressionType);
 
         ByteBuffer receivedMetricsBuffer = req.metricsData(1024 * 1024);
         assertNotNull(receivedMetricsBuffer);
         assertTrue(receivedMetricsBuffer.capacity() > 0);
-
-        MetricsData receivedData = ClientTelemetryUtils.deserializeMetricsData(receivedMetricsBuffer);
-        assertEquals(metricsData, receivedData);
+        assertArrayEquals(raw, Utils.toArray(receivedMetricsBuffer));
     }
 
-    private PushTelemetryRequest getPushTelemetryRequest(MetricsData metricsData, CompressionType compressionType) throws IOException {
-        ByteBuffer compressedData = ClientTelemetryUtils.compress(metricsData, compressionType);
-        byte[] data = metricsData.toByteArray();
+    private PushTelemetryRequest getPushTelemetryRequest(ByteBuffer serializedMetrics, byte[] raw, CompressionType compressionType) throws IOException {
+        ByteBuffer compressedData = ClientTelemetryUtils.compress(serializedMetrics, compressionType);
         if (compressionType != CompressionType.NONE) {
-            assertTrue(compressedData.limit() < data.length);
+            assertTrue(compressedData.limit() < raw.length);
         } else {
-            assertArrayEquals(Utils.toArray(compressedData), data);
+            assertArrayEquals(Utils.toArray(compressedData), raw);
         }
 
         return new PushTelemetryRequest.Builder(
@@ -85,36 +77,19 @@ public class PushTelemetryRequestTest {
                 .setCompressionType(compressionType.id)).build();
     }
 
-    private MetricsData getMetricsData() {
-        List<Metric> metricsList = new ArrayList<>();
-        metricsList.add(SinglePointMetric.sum(
-                new MetricKey("metricName"), 1.0, true, Instant.now(), null, Collections.emptySet())
-            .builder().build());
-        metricsList.add(SinglePointMetric.sum(
-                new MetricKey("metricName1"), 100.0, false, Instant.now(),  Instant.now(), Collections.emptySet())
-            .builder().build());
-        metricsList.add(SinglePointMetric.deltaSum(
-                new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Collections.emptySet())
-            .builder().build());
-        metricsList.add(SinglePointMetric.gauge(
-                new MetricKey("metricName3"), 1.0, Instant.now(), Collections.emptySet())
-            .builder().build());
-        metricsList.add(SinglePointMetric.gauge(
-                new MetricKey("metricName4"), Long.valueOf(100), Instant.now(), Collections.emptySet())
-            .builder().build());
-
-        MetricsData.Builder builder = MetricsData.newBuilder();
-        for (Metric metric : metricsList) {
-            ResourceMetrics rm = ResourceMetrics.newBuilder()
-                .setResource(Resource.newBuilder().build())
-                .addScopeMetrics(ScopeMetrics.newBuilder()
-                    .addMetrics(metric)
-                    .build()
-                ).build();
-            builder.addResourceMetrics(rm);
-        }
-
-        return builder.build();
+    private List<SinglePointMetric> sampleMetrics() {
+        List<SinglePointMetric> metrics = new ArrayList<>();
+        metrics.add(SinglePointMetric.sum(
+            new MetricKey("metricName"), 1.0, true, Instant.now(), null, Collections.emptySet()));
+        metrics.add(SinglePointMetric.sum(
+            new MetricKey("metricName1"), 100.0, false, Instant.now(), Instant.now(), Collections.emptySet()));
+        metrics.add(SinglePointMetric.deltaSum(
+            new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Collections.emptySet()));
+        metrics.add(SinglePointMetric.gauge(
+            new MetricKey("metricName3"), 1.0, Instant.now(), Collections.emptySet()));
+        metrics.add(SinglePointMetric.gauge(
+            new MetricKey("metricName4"), Long.valueOf(100), Instant.now(), Collections.emptySet()));
+        return metrics;
     }
 
 }

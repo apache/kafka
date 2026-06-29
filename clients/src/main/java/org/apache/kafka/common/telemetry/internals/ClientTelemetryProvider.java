@@ -23,6 +23,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.metrics.MetricsContext;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -133,6 +134,19 @@ public class ClientTelemetryProvider implements Configurable {
      */
     Resource resource() {
         return resource;
+    }
+
+    /**
+     * The resource attributes as plain labels.
+     *
+     * @return resource attributes keyed by label name, preserving insertion order.
+     */
+    Map<String, String> resourceLabels() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (KeyValue attribute : resource.getAttributesList()) {
+            labels.put(attribute.getKey(), attribute.getValue().getStringValue());
+        }
+        return labels;
     }
 
     /**

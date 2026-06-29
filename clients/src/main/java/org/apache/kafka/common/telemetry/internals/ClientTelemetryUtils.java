@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 
 import org.slf4j.Logger;
@@ -43,6 +44,9 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 import io.opentelemetry.proto.metrics.v1.MetricsData;
+import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
+import io.opentelemetry.proto.metrics.v1.ScopeMetrics;
+import io.opentelemetry.proto.resource.v1.Resource;
 
 public class ClientTelemetryUtils {
 
@@ -203,15 +207,28 @@ public class ClientTelemetryUtils {
                 .orElse(CompressionType.NONE);
     }
 
-    public static ByteBuffer compress(MetricsData metrics, CompressionType compressionType) throws IOException {
+    public static ByteBuffer compress(ByteBuffer serializedMetrics, CompressionType compressionType) throws IOException {
         try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
             Compression compression = Compression.of(compressionType).build();
             try (OutputStream out = compression.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
-                metrics.writeTo(out);
+                out.write(Utils.toArray(serializedMetrics.duplicate()));
             }
             compressedOut.buffer().flip();
             return compressedOut.buffer();
         }
+    }
+
+    public static ByteBuffer serializeMetricsData(List<SinglePointMetric> metrics) {
+        MetricsData.Builder builder = MetricsData.newBuilder();
+        for (SinglePointMetric metric : metrics) {
+            builder.addResourceMetrics(ResourceMetrics.newBuilder()
+                .setResource(Resource.newBuilder().build())
+                .addScopeMetrics(ScopeMetrics.newBuilder()
+                    .addMetrics(metric.builder())
+                    .build())
+                .build());
+        }
+        return ByteBuffer.wrap(builder.build().toByteArray());
     }
 
     public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType, int maxDecompressedBytes) {
@@ -232,14 +249,6 @@ public class ClientTelemetryUtils {
             return out.buffer();
         } catch (IOException e) {
             throw new KafkaException("Failed to decompress metrics data", e);
-        }
-    }
-
-    public static MetricsData deserializeMetricsData(ByteBuffer serializedMetricsData) {
-        try {
-            return MetricsData.parseFrom(serializedMetricsData);
-        } catch (IOException e) {
-            throw new KafkaException("Unable to parse MetricsData payload", e);
         }
     }
 

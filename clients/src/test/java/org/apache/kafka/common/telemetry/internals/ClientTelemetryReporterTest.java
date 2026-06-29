@@ -62,8 +62,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import io.opentelemetry.proto.common.v1.KeyValue;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -102,11 +100,9 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
         assertNotNull(clientTelemetryReporter.metricsCollector());
-        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
-        assertEquals(1, clientTelemetryReporter.telemetryProvider().resource().getAttributesCount());
-        assertEquals(
-            ClientTelemetryProvider.CLIENT_RACK, clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getKey());
-        assertEquals("rack", clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getValue().getStringValue());
+        Map<String, String> labels = clientTelemetryReporter.telemetryProvider().resourceLabels();
+        assertEquals(1, labels.size());
+        assertEquals("rack", labels.get(ClientTelemetryProvider.CLIENT_RACK));
     }
 
     @Test
@@ -130,17 +126,11 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(new KafkaMetricsContext("kafka.producer"));
         assertNotNull(clientTelemetryReporter.metricsCollector());
-        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
-        List<KeyValue> attributes = clientTelemetryReporter.telemetryProvider().resource().getAttributesList();
-        assertEquals(2, attributes.size());
-        attributes.forEach(attribute -> {
-            if (attribute.getKey().equals(ClientTelemetryProvider.CLIENT_RACK)) {
-                assertEquals("rack", attribute.getValue().getStringValue());
-            } else if (attribute.getKey().equals(ClientTelemetryProvider.TRANSACTIONAL_ID)) {
-                assertEquals("transaction-id", attribute.getValue().getStringValue());
-            }
-        });
+        Map<String, String> labels = clientTelemetryReporter.telemetryProvider().resourceLabels();
+        assertEquals(2, labels.size());
+        assertEquals("rack", labels.get(ClientTelemetryProvider.CLIENT_RACK));
+        assertEquals("transaction-id", labels.get(ClientTelemetryProvider.TRANSACTIONAL_ID));
     }
 
     @Test
@@ -154,19 +144,12 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(new KafkaMetricsContext("kafka.consumer"));
         assertNotNull(clientTelemetryReporter.metricsCollector());
-        assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
-        List<KeyValue> attributes = clientTelemetryReporter.telemetryProvider().resource().getAttributesList();
-        assertEquals(3, attributes.size());
-        attributes.forEach(attribute -> {
-            if (attribute.getKey().equals(ClientTelemetryProvider.CLIENT_RACK)) {
-                assertEquals("rack", attribute.getValue().getStringValue());
-            } else if (attribute.getKey().equals(ClientTelemetryProvider.GROUP_ID)) {
-                assertEquals("group-id", attribute.getValue().getStringValue());
-            } else if (attribute.getKey().equals(ClientTelemetryProvider.GROUP_INSTANCE_ID)) {
-                assertEquals("group-instance-id", attribute.getValue().getStringValue());
-            }
-        });
+        Map<String, String> labels = clientTelemetryReporter.telemetryProvider().resourceLabels();
+        assertEquals(3, labels.size());
+        assertEquals("rack", labels.get(ClientTelemetryProvider.CLIENT_RACK));
+        assertEquals("group-id", labels.get(ClientTelemetryProvider.GROUP_ID));
+        assertEquals("group-instance-id", labels.get(ClientTelemetryProvider.GROUP_INSTANCE_ID));
     }
 
     @Test
@@ -188,34 +171,19 @@ public class ClientTelemetryReporterTest {
     public void testUpdateMetricsLabels() {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
-        assertTrue(clientTelemetryReporter.telemetryProvider().resource().getAttributesList().isEmpty());
+        assertTrue(clientTelemetryReporter.telemetryProvider().resourceLabels().isEmpty());
 
         clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key1", "value1"));
-        assertEquals(1, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
-        assertEquals("key1", clientTelemetryReporter.telemetryProvider().resource().getAttributesList().get(0).getKey());
-        assertEquals("value1", clientTelemetryReporter.telemetryProvider().resource().getAttributesList().get(0).getValue().getStringValue());
+        assertEquals(Collections.singletonMap("key1", "value1"),
+            clientTelemetryReporter.telemetryProvider().resourceLabels());
 
         clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key2", "value2"));
-        assertEquals(2, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
-        clientTelemetryReporter.telemetryProvider().resource().getAttributesList().forEach(attribute -> {
-            if (attribute.getKey().equals("key1")) {
-                assertEquals("value1", attribute.getValue().getStringValue());
-            } else {
-                assertEquals("key2", attribute.getKey());
-                assertEquals("value2", attribute.getValue().getStringValue());
-            }
-        });
+        assertEquals(Map.of("key1", "value1", "key2", "value2"),
+            clientTelemetryReporter.telemetryProvider().resourceLabels());
 
         clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key2", "valueUpdated"));
-        assertEquals(2, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
-        clientTelemetryReporter.telemetryProvider().resource().getAttributesList().forEach(attribute -> {
-            if (attribute.getKey().equals("key1")) {
-                assertEquals("value1", attribute.getValue().getStringValue());
-            } else {
-                assertEquals("key2", attribute.getKey());
-                assertEquals("valueUpdated", attribute.getValue().getStringValue());
-            }
-        });
+        assertEquals(Map.of("key1", "value1", "key2", "valueUpdated"),
+            clientTelemetryReporter.telemetryProvider().resourceLabels());
     }
 
     @Test

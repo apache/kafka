@@ -17,6 +17,7 @@
 package org.apache.kafka.common.telemetry.internals;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -48,6 +49,60 @@ public class SinglePointMetric implements MetricKeyable {
 
     public Metric.Builder builder() {
         return metricBuilder;
+    }
+
+    boolean hasSum() {
+        return metricBuilder.hasSum();
+    }
+
+    boolean hasGauge() {
+        return metricBuilder.hasGauge();
+    }
+
+    boolean isMonotonic() {
+        return metricBuilder.getSum().getIsMonotonic();
+    }
+
+    boolean isDeltaTemporality() {
+        return metricBuilder.getSum().getAggregationTemporality() == AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA;
+    }
+
+    int dataPointsCount() {
+        return metricBuilder.hasSum()
+            ? metricBuilder.getSum().getDataPointsCount()
+            : metricBuilder.getGauge().getDataPointsCount();
+    }
+
+    long timeUnixNano() {
+        return dataPoint().getTimeUnixNano();
+    }
+
+    long startTimeUnixNano() {
+        return dataPoint().getStartTimeUnixNano();
+    }
+
+    double doubleValue() {
+        return dataPoint().getAsDouble();
+    }
+
+    long longValue() {
+        return dataPoint().getAsInt();
+    }
+
+    int attributesCount() {
+        return dataPoint().getAttributesCount();
+    }
+
+    Map<String, String> attributes() {
+        Map<String, String> attributes = new LinkedHashMap<>();
+        for (KeyValue attribute : dataPoint().getAttributesList()) {
+            attributes.put(attribute.getKey(), attribute.getValue().getStringValue());
+        }
+        return attributes;
+    }
+
+    private NumberDataPoint dataPoint() {
+        return metricBuilder.hasSum() ? metricBuilder.getSum().getDataPoints(0) : metricBuilder.getGauge().getDataPoints(0);
     }
 
     /*
