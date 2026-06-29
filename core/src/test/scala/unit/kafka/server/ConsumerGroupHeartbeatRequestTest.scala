@@ -138,7 +138,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
       .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
-        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+        .setPartitions(List[Integer](0, 1, 2).asJava)
+        .setNewPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
     // Heartbeats until the partitions are assigned.
     consumerGroupHeartbeatResponse = null
@@ -218,7 +219,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       var expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
         .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
           .setTopicId(topicId)
-          .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+          .setPartitions(List[Integer](0, 1, 2).asJava)
+          .setNewPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
       // Heartbeats until the partitions are assigned.
       consumerGroupHeartbeatResponse = null
@@ -421,7 +423,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
       .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
-        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+        .setPartitions(List[Integer](0, 1, 2).asJava)
+        .setNewPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
     // Heartbeats until the partitions are assigned.
     consumerGroupHeartbeatResponse = null
@@ -532,7 +535,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
       .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
-        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+        .setPartitions(List[Integer](0, 1, 2).asJava)
+        .setNewPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
     // Heartbeats until the partitions are assigned.
     consumerGroupHeartbeatResponse = null
@@ -743,7 +747,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
       .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
         .setTopicId(topicId)
-        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+        .setPartitions(List[Integer](0, 1, 2).asJava)
+        .setNewPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
     // Wait until partitions are assigned and member epoch advances.
     TestUtils.waitUntilTrue(() => {
