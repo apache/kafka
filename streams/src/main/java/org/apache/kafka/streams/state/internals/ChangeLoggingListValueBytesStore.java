@@ -21,6 +21,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 public class ChangeLoggingListValueBytesStore extends ChangeLoggingKeyValueBytesStore {
 
+    // Unlike ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders, this store reads the headers to
+    // log straight from internalContext.recordContext() rather than parsing them back out of the
+    // stored value bytes. That is safe here because this store is always built with caching disabled
+    // (see OuterStreamJoinStoreFactory.withCachingDisabled()): log() runs synchronously within the
+    // same process() call as the put, so recordContext() still refers to the record currently being
+    // processed — i.e. the very record whose headers were just stored. There is therefore no need for
+    // a dedicated *WithHeaders subclass that recovers the headers from the value blob.
     ChangeLoggingListValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
     }
