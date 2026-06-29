@@ -320,10 +320,13 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldHandleTimestampedKeyWithHeadersQueryOnNativeStore(final boolean cachingEnabled) {
-        // Only the native store persists headers; the adapter and in-memory builds drop them on write.
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.NATIVE, cachingEnabled);
+    @CsvSource({"NATIVE, true", "NATIVE, false", "IN_MEMORY, true", "IN_MEMORY, false"})
+    public void shouldReturnHeadersForTimestampedKeyWithHeadersQueryOnHeaderPersistingStore(
+            final StoreType storeType, final boolean cachingEnabled) {
+        // The native and in-memory builds both persist headers: the native store keeps them in its
+        // headers column family, and the in-memory marker stores the value bytes verbatim (the metered
+        // layer serializes the headers into those bytes). The adapter build is the one that drops them.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(storeType, cachingEnabled);
         try {
             final Headers headers = headersWith("h", "x");
             store.put("k", ValueTimestampHeaders.make("v", 123L, headers));
@@ -344,18 +347,26 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         }
     }
 
-    @Test
-    public void shouldReturnEmptyHeadersForTimestampedKeyWithHeadersQueryOnAdapterStore() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReflectFlushTimingForTimestampedKeyWithHeadersQueryOnAdapterStore(final boolean cachingEnabled) {
         // Feeding a non-header supplier into the WithHeaders builder yields an adapter-built store
         // (TimestampedToHeadersStoreAdapter over a plain timestamped store), which cannot persist
-        // headers. Caching is disabled so the query reads through the adapter to the underlying store:
-        // the query still succeeds and the value/timestamp round-trip, but headers come back empty
-        // (never null) even though the record was written with headers.
-        // (With caching enabled the not-yet-flushed value is still served from the record cache with
-        // its headers intact, so that path is covered by the native/round-trip tests instead.)
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.ADAPTER, false);
+        // headers. The metered layer still serializes headers into the value bytes, and the record
+        // cache sits above the adapter, so the header result depends on who serves the read:
+        //   - store-served (caching disabled, or -- when caching is enabled -- once the entry has been
+        //     evicted/flushed out of the cache): the read goes through the adapter, which stripped the
+        //     headers on write, so they come back empty (never null) even though they were written;
+        //   - cache-served (caching enabled, entry still warm): returned with headers intact
+        //     (read-your-writes), since the cache holds the full serialized bytes.
+        // The cache is the only thing preserving headers on this build. The caching-disabled run reads
+        // through the same adapter a post-eviction cache miss would, so it covers the store-served
+        // (empty) outcome; the caching-enabled run covers the cache-served (headers) outcome.
+        // value/timestamp round-trip either way.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.ADAPTER, cachingEnabled);
         try {
-            store.put("k", ValueTimestampHeaders.make("v", 123L, headersWith("h", "x")));
+            final Headers headers = headersWith("h", "x");
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headers));
 
             final QueryResult<ReadOnlyRecord<String, String>> result =
                 store.query(TimestampedKeyWithHeadersQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false));
@@ -365,7 +376,10 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             assertEquals("k", record.key());
             assertEquals("v", record.value());
             assertEquals(123L, record.timestamp());
-            assertEquals(new RecordHeaders(), record.headers());
+            // Cache-served (caching enabled, warm) -> written headers; store-served (caching disabled,
+            // or a post-eviction cache miss) -> empty, since the adapter stripped them on write.
+            final Headers expectedHeaders = cachingEnabled ? headers : new RecordHeaders();
+            assertEquals(expectedHeaders, record.headers());
             assertNotNull(result.getPosition(), "Expected position to be set");
         } finally {
             store.close();
