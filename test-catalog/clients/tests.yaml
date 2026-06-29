@@ -840,7 +840,6 @@ org.apache.kafka.clients.consumer.CooperativeStickyAssignorTest:
 - testUniformSubscriptionTransferOwnershipListIsRight
 org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - configurableObjectsShouldSeeGeneratedClientId
-- fetchResponseWithUnexpectedPartitionIsIgnored
 - shouldIgnoreGroupInstanceIdForEmptyGroupId
 - testAssignOnEmptyTopicInPartition
 - testAssignOnEmptyTopicPartition
@@ -887,6 +886,7 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testExplicitlyOnlyEnableClientTelemetryReporter
 - testExplicitlyOnlyEnableJmxReporter
 - testFetchProgressWithMissingPartitionPosition
+- testFetchResponseWithUnexpectedPartitionIsIgnored
 - testFetchStableOffsetThrowInCommitted
 - testFetchStableOffsetThrowInPoll
 - testFetchStableOffsetThrowInPosition
@@ -1975,6 +1975,7 @@ org.apache.kafka.clients.consumer.internals.FetchRequestManagerTest:
 - testFetchResponseMetricsWithOnePartitionAtTheWrongOffset
 - testFetchResponseMetricsWithOnePartitionError
 - testFetchResponseMetricsWithSkippedOffset
+- testFetchResponseWithUnexpectedPartitionIsIgnored
 - testFetchResultNotProcessedForPartitionsAwaitingCallbackCompletion
 - testFetchSessionIdError
 - testFetchSkipsBlackedOutNodes
