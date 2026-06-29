@@ -207,6 +207,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  dynamicRaftQuorum=False,
                  use_transactions_v2=False,
                  use_streams_groups=False,
+                 streams_group_topology_description_plugin_class=None,
                  enable_assignment_batching=None
                  ):
         """
@@ -272,6 +273,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
         :param use_streams_groups: When true, enables the use of streams groups introduced in KIP-1071
+        :param streams_group_topology_description_plugin_class: When set, configures group.streams.topology.description.plugin.class on the broker (KIP-1331). Requires use_streams_groups=True.
         :param enable_assignment_batching: When true, enables assignment batching introduced in KIP-1263. If not specified, defaults to True.
         """
 
@@ -288,6 +290,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.use_transactions_v2 = use_transactions_v2
         self.use_streams_groups = use_streams_groups
+        self.streams_group_topology_description_plugin_class = streams_group_topology_description_plugin_class
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -361,6 +364,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum,
                     use_transactions_v2=self.use_transactions_v2,
                     use_streams_groups=self.use_streams_groups,
+                    streams_group_topology_description_plugin_class=self.streams_group_topology_description_plugin_class,
                     enable_assignment_batching=self.enable_assignment_batching
                 )
                 self.controller_quorum = self.isolated_controller_quorum
@@ -785,6 +789,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if self.use_streams_groups is True:
             override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
             override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
+            if self.streams_group_topology_description_plugin_class is not None:
+                override_configs[config_property.STREAMS_GROUP_TOPOLOGY_DESCRIPTION_PLUGIN_CLASS] = self.streams_group_topology_description_plugin_class
 
         if self.enable_assignment_batching:
             # Assignment batching is enabled by default in Kafka
