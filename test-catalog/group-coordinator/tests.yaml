@@ -1119,13 +1119,9 @@ org.apache.kafka.coordinator.group.modern.SubscribedTopicMetadataTest:
 org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilderTest:
 - testAssignmentHasNotChanged
 - testAssignmentSwapped
-- testDeleteMember
 - testEmpty
-- testNewMember
 - testPartialAssignmentUpdate
 - testRegularExpressions
-- testReplaceStaticMember
-- testUpdateMember
 org.apache.kafka.coordinator.group.modern.TopicIdsTest:
 - testContains
 - testContainsAll
@@ -1453,12 +1449,8 @@ org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilderTest:
 - testAssignmentSwapped
 - testBuildEmptyAssignmentWhenTopologyNotReady
 - testCreateAssignmentMemberSpec
-- testDeleteMember
 - testEmpty
-- testNewMember
 - testPartialAssignmentUpdate
-- testReplaceStaticMember
-- testUpdateMember
 org.apache.kafka.coordinator.group.streams.TasksTupleTest:
 - testContainsAny
 - testFromTargetAssignmentRecord
