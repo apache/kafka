@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
+import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import org.junit.jupiter.api.Test;
 
@@ -37,6 +38,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -79,34 +81,38 @@ class ShareGroupDLQRecordFetcherTest {
 
     // ---- helpers ----
 
+    // A read result carrying the given data and error. Other read metadata is irrelevant to the fetcher.
+    private static LogReadResult logReadResult(FetchDataInfo info, Errors error) {
+        return new LogReadResult(info, Optional.empty(), 0L, 0L, 0L, 0L, -1L, OptionalLong.empty(), error);
+    }
+
     // A successful read carrying the given records (offsets assigned from 0 by MemoryRecords#withRecords).
-    private static LogReader.AsyncReadResult success(SimpleRecord... records) {
-        return new LogReader.AsyncReadResult(
+    private static LogReadResult success(SimpleRecord... records) {
+        return logReadResult(
             new FetchDataInfo(null, MemoryRecords.withRecords(Compression.NONE, records)), Errors.NONE);
     }
 
     // A failed read - partial-data tolerant, so it still carries a (here empty) FetchDataInfo.
-    private static LogReader.AsyncReadResult failure(Errors error) {
-        return new LogReader.AsyncReadResult(new FetchDataInfo(null, MemoryRecords.EMPTY), error);
+    private static LogReadResult failure(Errors error) {
+        return logReadResult(new FetchDataInfo(null, MemoryRecords.EMPTY), error);
     }
 
-    private static CompletableFuture<LogReader.AsyncReadResult> done(LogReader.AsyncReadResult result) {
-        return CompletableFuture.completedFuture(result);
-    }
-
-    private static Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> resultMap(
-            CompletableFuture<LogReader.AsyncReadResult> future) {
-        LinkedHashMap<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> map = new LinkedHashMap<>();
-        map.put(TOPIC_ID_PARTITION, future);
+    private static LinkedHashMap<TopicIdPartition, LogReadResult> resultMap(LogReadResult result) {
+        LinkedHashMap<TopicIdPartition, LogReadResult> map = new LinkedHashMap<>();
+        map.put(TOPIC_ID_PARTITION, result);
         return map;
     }
 
+    private static CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> done(LogReadResult result) {
+        return CompletableFuture.completedFuture(resultMap(result));
+    }
+
     @SafeVarargs
-    private void whenReadAsync(CompletableFuture<LogReader.AsyncReadResult> first,
-                              CompletableFuture<LogReader.AsyncReadResult>... rest) {
-        var stub = when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(resultMap(first));
-        for (CompletableFuture<LogReader.AsyncReadResult> future : rest) {
-            stub = stub.thenReturn(resultMap(future));
+    private void whenReadAsync(CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> first,
+                              CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>>... rest) {
+        var stub = when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(first);
+        for (CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> future : rest) {
+            stub = stub.thenReturn(future);
         }
     }
 
@@ -184,7 +190,8 @@ class ShareGroupDLQRecordFetcherTest {
     @Test
     public void testMissingPartitionResultYieldsNoRecords() throws Exception {
         // readAsync returns no entry for the partition - nothing can be read.
-        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(new LinkedHashMap<>());
+        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean()))
+            .thenReturn(CompletableFuture.completedFuture(new LinkedHashMap<>()));
 
         Map<Long, Record> result = fetch(param(0L, 2L));
 
@@ -228,13 +235,13 @@ class ShareGroupDLQRecordFetcherTest {
     public void testAsyncReadResumesLoopWhenPending() throws Exception {
         // A not-yet-complete future (e.g. an in-flight remote read) suspends the loop; the fetch returns
         // before the read completes and resumes from the callback.
-        CompletableFuture<LogReader.AsyncReadResult> pending = new CompletableFuture<>();
-        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(resultMap(pending));
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> pending = new CompletableFuture<>();
+        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(pending);
 
         CompletableFuture<Map<Long, Record>> resultFuture = fetcher(param(0L, 2L)).fetch();
         assertFalse(resultFuture.isDone(), "Fetch should be waiting on the pending read");
 
-        pending.complete(success(record("k0", "v0"), record("k1", "v1"), record("k2", "v2")));
+        pending.complete(resultMap(success(record("k0", "v0"), record("k1", "v1"), record("k2", "v2"))));
 
         Map<Long, Record> result = resultFuture.get(10, TimeUnit.SECONDS);
         assertEquals(3, result.size());
@@ -245,29 +252,29 @@ class ShareGroupDLQRecordFetcherTest {
 
     @Test
     public void testAsyncReadResumeWithNoProgressCompletesEmpty() throws Exception {
-        CompletableFuture<LogReader.AsyncReadResult> pending = new CompletableFuture<>();
-        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(resultMap(pending));
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> pending = new CompletableFuture<>();
+        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(pending);
 
         CompletableFuture<Map<Long, Record>> resultFuture = fetcher(param(0L, 2L)).fetch();
         assertFalse(resultFuture.isDone());
 
         // Completing with no records makes no progress, so the resumed loop stops and completes empty.
-        pending.complete(success());
+        pending.complete(resultMap(success()));
 
         assertTrue(resultFuture.get(10, TimeUnit.SECONDS).isEmpty());
     }
 
     @Test
     public void testAsyncReadResumeCompletesEmptyWhenProcessingThrows() throws Exception {
-        CompletableFuture<LogReader.AsyncReadResult> pending = new CompletableFuture<>();
-        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(resultMap(pending));
+        CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> pending = new CompletableFuture<>();
+        when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean())).thenReturn(pending);
 
         CompletableFuture<Map<Long, Record>> resultFuture = fetcher(param(0L, 2L)).fetch();
 
         // An unexpected error while processing the resumed records must not escape the callback.
         Records throwing = mock(Records.class);
         when(throwing.batches()).thenThrow(new RuntimeException("boom"));
-        pending.complete(new LogReader.AsyncReadResult(new FetchDataInfo(null, throwing), Errors.NONE));
+        pending.complete(resultMap(logReadResult(new FetchDataInfo(null, throwing), Errors.NONE)));
 
         assertTrue(resultFuture.get(10, TimeUnit.SECONDS).isEmpty());
     }

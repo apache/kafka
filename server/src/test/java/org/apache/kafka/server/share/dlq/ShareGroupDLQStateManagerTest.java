@@ -47,6 +47,7 @@ import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
+import org.apache.kafka.storage.internals.log.LogReadResult;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -63,6 +64,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -1575,20 +1577,25 @@ class ShareGroupDLQStateManagerTest {
         return new FetchDataInfo(null, MemoryRecords.withRecords(Compression.NONE, records));
     }
 
-    private static Map<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> asyncReadMap(
-            TopicIdPartition topicIdPartition, LogReader.AsyncReadResult result) {
-        LinkedHashMap<TopicIdPartition, CompletableFuture<LogReader.AsyncReadResult>> map = new LinkedHashMap<>();
-        map.put(topicIdPartition, CompletableFuture.completedFuture(result));
-        return map;
+    // A read result carrying the given data and error. Other read metadata is irrelevant to the fetcher.
+    private static LogReadResult logReadResult(FetchDataInfo info, Errors error) {
+        return new LogReadResult(info, Optional.empty(), 0L, 0L, 0L, 0L, -1L, OptionalLong.empty(), error);
+    }
+
+    private static CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> asyncReadMap(
+            TopicIdPartition topicIdPartition, LogReadResult result) {
+        LinkedHashMap<TopicIdPartition, LogReadResult> map = new LinkedHashMap<>();
+        map.put(topicIdPartition, result);
+        return CompletableFuture.completedFuture(map);
     }
 
     // Stubs logReader.readAsync to return, in order, the given per-call results for the partition,
     // each wrapped in an already-complete future.
     private static void whenReadAsync(LogReader logReader, TopicIdPartition topicIdPartition,
-                                      LogReader.AsyncReadResult first, LogReader.AsyncReadResult... rest) {
+                                      LogReadResult first, LogReadResult... rest) {
         var stub = when(logReader.readAsync(any(), anySet(), any(), any(), anyBoolean()))
             .thenReturn(asyncReadMap(topicIdPartition, first));
-        for (LogReader.AsyncReadResult result : rest) {
+        for (LogReadResult result : rest) {
             stub = stub.thenReturn(asyncReadMap(topicIdPartition, result));
         }
     }
@@ -1617,7 +1624,7 @@ class ShareGroupDLQStateManagerTest {
         byte[] keyData3 = "key3".getBytes(StandardCharsets.UTF_8);
         byte[] valueData3 = "value3".getBytes(StandardCharsets.UTF_8);
         LogReader logReader = mock(LogReader.class);
-        whenReadAsync(logReader, param.topicIdPartition(), new LogReader.AsyncReadResult(recordsInfo(
+        whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
             new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
             new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
             new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)), Errors.NONE));
@@ -1654,7 +1661,7 @@ class ShareGroupDLQStateManagerTest {
             // resolution then maps to exactly one logReader.readAsync() call.
             ShareGroupDLQRecordParameter param = param();
             LogReader logReader = mock(LogReader.class);
-            whenReadAsync(logReader, param.topicIdPartition(), new LogReader.AsyncReadResult(recordsInfo(
+            whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
                 new SimpleRecord(MOCK_TIME.milliseconds(), "key0".getBytes(StandardCharsets.UTF_8), "value0".getBytes(StandardCharsets.UTF_8)),
                 new SimpleRecord(MOCK_TIME.milliseconds(), "key1".getBytes(StandardCharsets.UTF_8), "value1".getBytes(StandardCharsets.UTF_8)),
                 new SimpleRecord(MOCK_TIME.milliseconds(), "key2".getBytes(StandardCharsets.UTF_8), "value2".getBytes(StandardCharsets.UTF_8))), Errors.NONE));
@@ -1754,10 +1761,10 @@ class ShareGroupDLQStateManagerTest {
         LogReader logReader = mock(LogReader.class);
         // First read returns 2 records; the next read contains the 3rd offset as well.
         whenReadAsync(logReader, param.topicIdPartition(),
-            new LogReader.AsyncReadResult(recordsInfo(
+            logReadResult(recordsInfo(
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)), Errors.NONE),
-            new LogReader.AsyncReadResult(recordsInfo(
+            logReadResult(recordsInfo(
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)), Errors.NONE));
@@ -1807,7 +1814,7 @@ class ShareGroupDLQStateManagerTest {
         LogReader logReader = mock(LogReader.class);
         // Every read returns only 2 records (offsets 0 and 1); the 3rd offset is never read, so the
         // loop makes no further progress and the record is produced with headers only.
-        whenReadAsync(logReader, param.topicIdPartition(), new LogReader.AsyncReadResult(recordsInfo(
+        whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
             new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
             new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2)), Errors.NONE));
 
@@ -1852,7 +1859,7 @@ class ShareGroupDLQStateManagerTest {
         LogReader logReader = mock(LogReader.class);
         // The read fails; record copy is skipped and the DLQ record is produced with headers only.
         whenReadAsync(logReader, param.topicIdPartition(),
-            new LogReader.AsyncReadResult(recordsInfo(), Errors.UNKNOWN_SERVER_ERROR));
+            logReadResult(recordsInfo(), Errors.UNKNOWN_SERVER_ERROR));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);
@@ -1895,7 +1902,7 @@ class ShareGroupDLQStateManagerTest {
 
         LogReader logReader = mock(LogReader.class);
         // readAsync resolves the (possibly tiered) records and returns them in a single read.
-        whenReadAsync(logReader, param.topicIdPartition(), new LogReader.AsyncReadResult(recordsInfo(
+        whenReadAsync(logReader, param.topicIdPartition(), logReadResult(recordsInfo(
             new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
             new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
             new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)), Errors.NONE));
@@ -1943,9 +1950,9 @@ class ShareGroupDLQStateManagerTest {
         // First read returns offset 0; the next read returns the batch covering the remaining offsets
         // (records at or before the already-read position are skipped by the fetcher).
         whenReadAsync(logReader, param.topicIdPartition(),
-            new LogReader.AsyncReadResult(recordsInfo(
+            logReadResult(recordsInfo(
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1)), Errors.NONE),
-            new LogReader.AsyncReadResult(recordsInfo(
+            logReadResult(recordsInfo(
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData1, valueData1),
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData2, valueData2),
                 new SimpleRecord(MOCK_TIME.milliseconds(), keyData3, valueData3)), Errors.NONE));
@@ -1986,7 +1993,7 @@ class ShareGroupDLQStateManagerTest {
         // readAsync cannot read the (tiered) data; the offsets are gracefully skipped and the DLQ
         // record is produced with headers only.
         whenReadAsync(logReader, param.topicIdPartition(),
-            new LogReader.AsyncReadResult(recordsInfo(), Errors.UNKNOWN_SERVER_ERROR));
+            logReadResult(recordsInfo(), Errors.UNKNOWN_SERVER_ERROR));
 
         ShareGroupDLQMetadataCacheHelper cacheHelper = cacheHelper(DEFAULT_LEADER);
         when(cacheHelper.isShareGroupDlqCopyRecordEnabled(any())).thenReturn(true);

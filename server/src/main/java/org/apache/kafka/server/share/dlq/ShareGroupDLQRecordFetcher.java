@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.share.LogReader;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
+import org.apache.kafka.storage.internals.log.LogReadResult;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,11 +110,6 @@ public class ShareGroupDLQRecordFetcher {
         return result;
     }
 
-    // Visibility for testing
-    CompletableFuture<Map<Long, Record>> result() {
-        return result;
-    }
-
     /**
      * Drives the reads in a loop via {@link LogReader#readAsync}. When the per-offset read is already
      * complete (local data, or remote data already resolved) the loop continues in place; when it is still
@@ -125,24 +121,19 @@ public class ShareGroupDLQRecordFetcher {
         while (nextOffset <= endOffset) {
             offsets.put(tp, nextOffset);
 
-            CompletableFuture<LogReader.AsyncReadResult> future =
-                logReader.readAsync(fetchParams, Set.of(tp), offsets, maxBytesMap, true).get(tp);
-            if (future == null) {
-                // No result was produced for the partition; nothing more we can do.
-                complete();
-                return;
-            }
+            CompletableFuture<LinkedHashMap<TopicIdPartition, LogReadResult>> future =
+                logReader.readAsync(fetchParams, Set.of(tp), offsets, maxBytesMap, true);
 
             if (!future.isDone()) {
                 // A remote read is in flight: resume from the callback so the calling thread is unblocked.
                 long readFrom = nextOffset;
-                future.whenComplete((asyncReadResult, exception) -> resume(readFrom, asyncReadResult, exception));
+                future.whenComplete((results, exception) -> resume(readFrom, logReadResult(results), exception));
                 return;
             }
 
             // Safe (non-blocking) because the future is done. readAsync is partial-data tolerant, so it
             // completes normally; any unexpected exceptional completion is caught by fetch().
-            long advanced = collect(nextOffset, future.getNow(null));
+            long advanced = collect(nextOffset, logReadResult(future.getNow(null)));
             if (advanced <= nextOffset) {
                 complete();     // no progress, stop
                 return;
@@ -153,17 +144,25 @@ public class ShareGroupDLQRecordFetcher {
     }
 
     /**
+     * Extracts the read result for the partition being fetched, or {@code null} when none was produced
+     * (e.g. the read returned no entry for the partition).
+     */
+    private LogReadResult logReadResult(LinkedHashMap<TopicIdPartition, LogReadResult> results) {
+        return results == null ? null : results.get(tp);
+    }
+
+    /**
      * Resumes the read loop after an asynchronous (remote) read completes. Runs after runFrom() has already
      * returned, so invoking runFrom() here does not grow the original call stack.
      */
-    private void resume(long readFrom, LogReader.AsyncReadResult asyncReadResult, Throwable exception) {
+    private void resume(long readFrom, LogReadResult logReadResult, Throwable exception) {
         try {
             if (exception != null) {
                 log.warn("Unable to read records at offset {} for {}. Skipping it.", readFrom, param, exception);
                 complete();
                 return;
             }
-            long advanced = collect(readFrom, asyncReadResult);
+            long advanced = collect(readFrom, logReadResult);
             if (advanced <= readFrom) {
                 complete();         // no progress, stop
             } else {
@@ -180,16 +179,16 @@ public class ShareGroupDLQRecordFetcher {
      * A read that failed (carries an error) or returned no usable data leaves the offsets unread (skipped),
      * which the loop treats as no progress.
      */
-    private long collect(long readFrom, LogReader.AsyncReadResult asyncReadResult) {
-        if (asyncReadResult == null) {
+    private long collect(long readFrom, LogReadResult logReadResult) {
+        if (logReadResult == null) {
             return readFrom;
         }
-        if (asyncReadResult.error() != Errors.NONE) {
+        if (logReadResult.error() != Errors.NONE) {
             log.warn("Unable to read records at offset {} for {} due to error {}. Skipping it.",
-                readFrom, param, asyncReadResult.error());
+                readFrom, param, logReadResult.error());
             return readFrom;
         }
-        return collectRecords(asyncReadResult.fetchDataInfo().records, readFrom);
+        return collectRecords(logReadResult.info().records, readFrom);
     }
 
     /**
