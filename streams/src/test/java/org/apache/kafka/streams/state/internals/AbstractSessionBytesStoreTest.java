@@ -179,10 +179,19 @@ public abstract class AbstractSessionBytesStoreTest {
 
     abstract StoreType storeType();
 
+    /** Overridden by subclasses to exercise the transactional (staged-write) code path. */
+    boolean transactional() {
+        return false;
+    }
+
     @BeforeEach
     public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         recordCollector = new MockRecordCollector();
+        final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
+        if (transactional()) {
+            streamsConfig.put(StreamsConfig.TRANSACTIONAL_STATE_STORES_CONFIG, true);
+        }
         context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -191,7 +200,8 @@ public abstract class AbstractSessionBytesStoreTest {
             new ThreadCache(
                 new LogContext("testCache"),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(streamsConfig));
         context.setTime(1L);
 
         sessionStore.init(context, sessionStore);
