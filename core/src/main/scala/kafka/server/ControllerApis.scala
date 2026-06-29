@@ -224,8 +224,8 @@ class ControllerApis(
     request: DeleteTopicsRequestData,
     apiVersion: Int,
     hasClusterAuth: Boolean,
-    getDescribableTopics: lang.Iterable[String] => util.Set[String],
-    getDeletableTopics: lang.Iterable[String] => util.Set[String]
+    getDescribableTopics: util.Collection[String] => util.Set[String],
+    getDeletableTopics: util.Collection[String] => util.Set[String]
   ): CompletableFuture[util.List[DeletableTopicResult]] = {
     // Check if topic deletion is enabled at all.
     if (!config.deleteTopicEnable) {
@@ -391,8 +391,8 @@ class ControllerApis(
     context: ControllerRequestContext,
     request: CreateTopicsRequestData,
     hasClusterAuth: Boolean,
-    getCreatableTopics: lang.Iterable[String] => util.Set[String],
-    getDescribableTopics: lang.Iterable[String] => util.Set[String],
+    getCreatableTopics: util.Collection[String] => util.Set[String],
+    getDescribableTopics: util.Collection[String] => util.Set[String],
     forwarded: Boolean
   ): CompletableFuture[CreateTopicsResponseData] = {
     val topicNames = new util.HashSet[String]()
@@ -798,7 +798,7 @@ class ControllerApis(
   }
 
   private def handleCreatePartitions(request: Request): CompletableFuture[Unit] = {
-    def filterAlterAuthorizedTopics(topics: lang.Iterable[String]): util.Set[String] = {
+    def filterAlterAuthorizedTopics(topics: util.Collection[String]): util.Set[String] = {
       authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics, (n: String) => n)
     }
     val createPartitionsRequest = request.body(classOf[CreatePartitionsRequest])
@@ -830,7 +830,7 @@ class ControllerApis(
   def createPartitions(
     context: ControllerRequestContext,
     request: CreatePartitionsRequestData,
-    getAlterAuthorizedTopics: lang.Iterable[String] => util.Set[String]
+    getAlterAuthorizedTopics: util.Collection[String] => util.Set[String]
   ): CompletableFuture[util.List[CreatePartitionsTopicResult]] = {
     val responses = new util.ArrayList[CreatePartitionsTopicResult]()
     val duplicateTopicNames = new util.HashSet[String]()

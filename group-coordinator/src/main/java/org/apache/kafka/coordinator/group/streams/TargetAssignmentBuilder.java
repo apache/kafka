@@ -72,11 +72,6 @@ public class TargetAssignmentBuilder {
     private final Map<String, String> assignmentConfigs;
 
     /**
-     * The members which have been updated or deleted. A null value signals deleted members.
-     */
-    private final Map<String, StreamsGroupMember> updatedMembers = new HashMap<>();
-
-    /**
      * The members in the group.
      */
     private Map<String, StreamsGroupMember> members = Map.of();
@@ -95,11 +90,6 @@ public class TargetAssignmentBuilder {
      * The topology.
      */
     private ConfiguredTopology topology;
-
-    /**
-     * The static members in the group.
-     */
-    private Map<String, String> staticMembers = Map.of();
 
     /**
      * Constructs the object.
@@ -162,19 +152,6 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds all the existing static members.
-     *
-     * @param staticMembers The existing static members in the streams group.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withStaticMembers(
-        Map<String, String> staticMembers
-    ) {
-        this.staticMembers = staticMembers;
-        return this;
-    }
-
-    /**
      * Adds the metadata image to use.
      *
      * @param metadataImage The metadata image.
@@ -214,33 +191,6 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds or updates a member. This is useful when the updated member is not yet materialized in memory.
-     *
-     * @param memberId The member ID.
-     * @param member   The member to add or update.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder addOrUpdateMember(
-        String memberId,
-        StreamsGroupMember member
-    ) {
-        this.updatedMembers.put(memberId, member);
-        return this;
-    }
-
-    /**
-     * Removes a member. This is useful when the removed member is not yet materialized in memory.
-     *
-     * @param memberId The member ID.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder removeMember(
-        String memberId
-    ) {
-        return addOrUpdateMember(memberId, null);
-    }
-
-    /**
      * Builds the new target assignment.
      *
      * @return A TargetAssignmentResult which contains the records to update the existing target assignment.
@@ -254,30 +204,6 @@ public class TargetAssignmentBuilder {
             member,
             targetAssignment.getOrDefault(memberId, org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY)
         )));
-
-        // Update the member spec if updated or deleted members.
-        updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
-            if (updatedMemberOrNull == null) {
-                memberSpecs.remove(memberId);
-            } else {
-                org.apache.kafka.coordinator.group.streams.TasksTuple assignment = targetAssignment.getOrDefault(memberId,
-                    org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY);
-
-                // A new static member joins and needs to replace an existing departed one.
-                if (updatedMemberOrNull.instanceId().isPresent()) {
-                    String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId().get());
-                    if (previousMemberId != null && !previousMemberId.equals(memberId)) {
-                        assignment = targetAssignment.getOrDefault(previousMemberId,
-                            org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY);
-                    }
-                }
-
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
-                    updatedMemberOrNull,
-                    assignment
-                ));
-            }
-        });
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment;

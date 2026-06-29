@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
@@ -41,6 +42,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
@@ -744,6 +746,107 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             return ((TransactionalDBAccessor) dbAccessor).buffer.approximateNumUncommittedBytes();
         }
         return 0;
+    }
+
+    @Override
+    public ReadOnlyKeyValueStore<Bytes, byte[]> readOnly(final IsolationLevel isolationLevel) {
+        Objects.requireNonNull(isolationLevel, "isolationLevel cannot be null");
+        final DBAccessor viewAccessor;
+        if (isolationLevel == IsolationLevel.READ_COMMITTED && dbAccessor instanceof TransactionalDBAccessor) {
+            viewAccessor = ((TransactionalDBAccessor) dbAccessor).underlying;
+        } else {
+            viewAccessor = dbAccessor;
+        }
+        return new ReadOnlyView(viewAccessor);
+    }
+
+    /**
+     * Read-only view of this store bound to a specific {@link DBAccessor}. Reads go through the
+     * chosen accessor so IQ callers can pick {@code READ_COMMITTED} (direct) or
+     * {@code READ_UNCOMMITTED} (through the transaction buffer) without affecting the
+     * processor-thread's view of the store.
+     */
+    private final class ReadOnlyView implements ReadOnlyKeyValueStore<Bytes, byte[]> {
+
+        private final DBAccessor viewAccessor;
+
+        ReadOnlyView(final DBAccessor viewAccessor) {
+            this.viewAccessor = viewAccessor;
+        }
+
+        @Override
+        public byte[] get(final Bytes key) {
+            Objects.requireNonNull(key, "key cannot be null");
+            validateStoreOpen();
+            try {
+                return cfAccessor.get(viewAccessor, key.get());
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error while getting value for key from store " + name, e);
+            }
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+            return doRange(from, to, true);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+            return doRange(from, to, false);
+        }
+
+        private KeyValueIterator<Bytes, byte[]> doRange(final Bytes from, final Bytes to, final boolean forward) {
+            if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
+                return KeyValueIterators.emptyIterator();
+            }
+            validateStoreOpen();
+            final ManagedKeyValueIterator<Bytes, byte[]> iter = cfAccessor.range(viewAccessor, from, to, forward);
+            openIterators.add(iter);
+            iter.onClose(() -> openIterators.remove(iter));
+            return iter;
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> all() {
+            return doAll(true);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> reverseAll() {
+            return doAll(false);
+        }
+
+        private KeyValueIterator<Bytes, byte[]> doAll(final boolean forward) {
+            validateStoreOpen();
+            final ManagedKeyValueIterator<Bytes, byte[]> iter = cfAccessor.all(viewAccessor, forward);
+            openIterators.add(iter);
+            iter.onClose(() -> openIterators.remove(iter));
+            return iter;
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                        final PS prefixKeySerializer) {
+            Objects.requireNonNull(prefix, "prefix cannot be null");
+            Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
+            validateStoreOpen();
+            final Bytes prefixBytes = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+            final ManagedKeyValueIterator<Bytes, byte[]> iter = cfAccessor.prefixScan(viewAccessor, prefixBytes);
+            openIterators.add(iter);
+            iter.onClose(() -> openIterators.remove(iter));
+            return iter;
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            validateStoreOpen();
+            try {
+                final long n = cfAccessor.approximateNumEntries(viewAccessor);
+                return isOverflowing(n) ? Long.MAX_VALUE : n;
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error fetching property from store " + name, e);
+            }
+        }
     }
 
     @Override

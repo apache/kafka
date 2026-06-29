@@ -54,7 +54,7 @@
     <suppress id="dontUseSystemExit"
               files="Exit.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(AbstractFetch|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|Utils|TransactionManager|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin|RaftClientTestContext|TestingMetricsInterceptingAdminClient|SaslServerAuthenticator|SaslAuthenticatorTest|Errors|AbstractRequest|AbstractResponse).java"/>
+              files="(AbstractFetch|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|Utils|TransactionManager|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin|RaftClientTestContext|TestingMetricsInterceptingAdminClient|SaslServerAuthenticator|SaslAuthenticatorTest|Errors|AbstractRequest|AbstractResponse|StreamsGroupHeartbeatRequestManagerTest).java"/>
     <suppress checks="NPathComplexity"
               files="(SaslServerAuthenticator).java"/>
 

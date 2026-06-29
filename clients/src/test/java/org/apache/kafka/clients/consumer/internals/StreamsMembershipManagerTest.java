@@ -1466,36 +1466,6 @@ public class StreamsMembershipManagerTest {
     }
 
     @Test
-    public void testLeaveGroupEpochIsDynamicMemberEpochForStaticMemberWithLeaveGroupOperation() {
-        try (final Metrics localMetrics = new Metrics(time)) {
-            final StreamsMembershipManager staticMember = new StreamsMembershipManager(
-                GROUP_ID,
-                Optional.of(INSTANCE_ID),
-                streamsRebalanceData, subscriptionState, backgroundEventHandler,
-                new LogContext("test"), time, localMetrics
-            );
-            staticMember.registerStateListener(memberStateListener);
-            staticMember.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
-            assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, staticMember.leaveGroupEpoch());
-        }
-    }
-
-    @Test
-    public void testLeaveGroupEpochIsStaticMemberEpochForStaticMemberWithRemainInGroup() {
-        try (final Metrics localMetrics = new Metrics(time)) {
-            final StreamsMembershipManager staticMember = new StreamsMembershipManager(
-                GROUP_ID,
-                Optional.of(INSTANCE_ID),
-                streamsRebalanceData, subscriptionState, backgroundEventHandler,
-                new LogContext("test"), time, localMetrics
-            );
-            staticMember.registerStateListener(memberStateListener);
-            staticMember.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
-            assertEquals(StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH, staticMember.leaveGroupEpoch());
-        }
-    }
-
-    @Test
     public void testIsLeavingGroupReturnsTrueForStaticMemberWithRemainInGroupOperation() {
         setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, "topic");
         try (final Metrics localMetrics = new Metrics(time)) {
