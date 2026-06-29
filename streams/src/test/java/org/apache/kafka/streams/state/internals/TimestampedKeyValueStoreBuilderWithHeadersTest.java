@@ -241,12 +241,13 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     //   IN_MEMORY -> InMemoryKeyValueStore via the in-memory headers marker
     // ----------------------------------------------------------------------------------------------
 
-    private enum StoreType { NATIVE, ADAPTER, IN_MEMORY }
+    private enum StoreType { NATIVE, ADAPTER, PLAIN_ADAPTER, IN_MEMORY }
 
     private KeyValueStore<Bytes, byte[]> innerStore(final StoreType storeType) {
         switch (storeType) {
             case NATIVE:    return new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope");
             case ADAPTER:   return new RocksDBTimestampedStore("test-store", "metrics-scope");
+            case PLAIN_ADAPTER: return new RocksDBStore("test-store", "metrics-scope");
             case IN_MEMORY: return new InMemoryKeyValueStore("test-store");
             default:        throw new IllegalArgumentException("unknown store type: " + storeType);
         }
@@ -380,6 +381,45 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             // or a post-eviction cache miss) -> empty, since the adapter stripped them on write.
             final Headers expectedHeaders = cachingEnabled ? headers : new RecordHeaders();
             assertEquals(expectedHeaders, record.headers());
+            assertNotNull(result.getPosition(), "Expected position to be set");
+        } finally {
+            store.close();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldReflectFlushTimingForTimestampedKeyWithHeadersQueryOnPlainLegacyStore(final boolean cachingEnabled) {
+        // A plain (non-timestamped) legacy supplier is wrapped in PlainToHeadersStoreAdapter, which can
+        // persist neither headers nor a timestamp: on write it keeps only the raw value, and on read it
+        // rebuilds the header format with empty headers and timestamp = -1. So the result depends on who
+        // serves the read:
+        //   - cache-served (caching enabled, entry still warm): the cache holds the full serialized bytes
+        //     the metered layer wrote, so the query succeeds with the real value, timestamp, and headers;
+        //   - store-served (caching disabled, or once the entry is evicted/flushed): the value comes back
+        //     with timestamp -1, which cannot be represented as a Record, so the query fails with
+        //     STORE_EXCEPTION -- unlike the timestamped adapter (which keeps the timestamp and just
+        //     returns empty headers), a plain store loses the timestamp too.
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = buildAndInitStore(StoreType.PLAIN_ADAPTER, cachingEnabled);
+        try {
+            final Headers headers = headersWith("h", "x");
+            store.put("k", ValueTimestampHeaders.make("v", 123L, headers));
+
+            final QueryResult<ReadOnlyRecord<String, String>> result =
+                store.query(TimestampedKeyWithHeadersQuery.withKey("k"), PositionBound.unbounded(), new QueryConfig(false));
+
+            if (cachingEnabled) {
+                assertTrue(result.isSuccess(), "Expected a cache-served read to succeed");
+                final ReadOnlyRecord<String, String> record = result.getResult();
+                assertEquals("k", record.key());
+                assertEquals("v", record.value());
+                assertEquals(123L, record.timestamp());
+                assertEquals(headers, record.headers());
+            } else {
+                assertFalse(result.isSuccess(),
+                    "A store-served read on a plain build has ts=-1 and must fail, not return empty headers");
+                assertEquals(FailureReason.STORE_EXCEPTION, result.getFailureReason());
+            }
             assertNotNull(result.getPosition(), "Expected position to be set");
         } finally {
             store.close();

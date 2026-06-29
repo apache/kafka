@@ -31,8 +31,19 @@ import java.util.Objects;
  * {@link TimestampedKeyQuery} returns a {@link org.apache.kafka.streams.state.ValueAndTimestamp}
  * (value and timestamp only, no key or headers).
  *
- * <p>Headers are only returned when the queried store was built with a KIP-1271
- * {@code WithHeaders} supplier. Against a plain (non-headers) store, this query type is
+ * <p>Headers are persisted and returned only when the store is backed by a native headers store,
+ * i.e. built with a KIP-1271 {@code WithHeaders} byte-store supplier (e.g.
+ * {@code Stores.persistentTimestampedKeyValueStoreWithHeaders}). A {@code WithHeaders} store built
+ * over a legacy (non-headers) supplier cannot persist headers, so the result depends on who serves
+ * the read: with caching enabled, a not-yet-evicted entry is served from the record cache and
+ * returns the written value, timestamp, and headers (read-your-writes); once served from the
+ * underlying store, the headers are gone. Over a timestamped legacy supplier (e.g.
+ * {@code Stores.persistentTimestampedKeyValueStore}) the store-served read succeeds with empty
+ * {@code headers()}; over a plain legacy supplier (e.g. {@code Stores.persistentKeyValueStore}),
+ * which keeps no timestamp either, the store-served read has no representable timestamp and the
+ * query fails with {@link FailureReason#STORE_EXCEPTION}.
+ *
+ * <p>Against a plain store not built with the {@code WithHeaders} builder at all, this query type is
  * unsupported and fails with {@link FailureReason#UNKNOWN_QUERY_TYPE}.
  *
  * @param <K> Type of keys
