@@ -532,22 +532,22 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final PositionBound positionBound,
         final QueryConfig config) {
 
-        final Position queryPosition;
         synchronized (position) {
+            final Position queryPosition;
             if (config.getIsolationLevel() == IsolationLevel.READ_COMMITTED) {
-                queryPosition = position.copy();
+                queryPosition = position;
             } else {
                 queryPosition = position.copy().merge(dbAccessor.uncommittedPositionDeltas());
             }
+            return StoreQueryUtils.handleBasicQueries(
+                query,
+                positionBound,
+                config,
+                this,
+                queryPosition,
+                context
+            );
         }
-        return StoreQueryUtils.handleBasicQueries(
-            query,
-            positionBound,
-            config,
-            this,
-            queryPosition,
-            context
-        );
     }
 
     @Override
@@ -901,8 +901,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             return;
         }
         try {
-            cfAccessor.commit(dbAccessor, changelogOffsets);
             synchronized (position) {
+                cfAccessor.commit(dbAccessor, changelogOffsets);
                 dbAccessor.mergeUncommittedPositionInto(position);
             }
         } catch (final RocksDBException e) {
