@@ -65,13 +65,6 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
           boolean includeAuthorizedOperations,
           boolean includeTopologyDescription,
           LogContext logContext) {
-        this(includeAuthorizedOperations, false, logContext);
-    }
-
-    public DescribeStreamsGroupsHandler(
-          boolean includeAuthorizedOperations,
-          boolean includeTopologyDescription,
-          LogContext logContext) {
         this.includeAuthorizedOperations = includeAuthorizedOperations;
         this.includeTopologyDescription = includeTopologyDescription;
         this.log = logContext.logger(DescribeStreamsGroupsHandler.class);
@@ -347,10 +340,6 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
     private StreamsGroupMemberDescription.Endpoint convertEndpoint(final StreamsGroupDescribeResponseData.Endpoint endpoint) {
         return new StreamsGroupMemberDescription.Endpoint(endpoint.host(), endpoint.port());
     }
-
-    private static final byte NODE_TYPE_SOURCE = 1;
-    private static final byte NODE_TYPE_PROCESSOR = 2;
-    private static final byte NODE_TYPE_SINK = 3;
 
     private static StreamsGroupTopologyDescription convertTopologyDescription(
             final StreamsGroupDescribeResponseData.TopologyDescription wire) {

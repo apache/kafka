@@ -673,7 +673,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             }
         }
 
-        boolean previouslyRequired = streamsRebalanceData.topologyDescriptionRequired();
+        boolean previouslyRequired = streamsRebalanceData.topologyPushRequired();
         boolean nowRequired = data.topologyDescriptionRequired();
         if (previouslyRequired && !nowRequired) {
             // A true→false transition without an intervening successful push usually means the
@@ -681,7 +681,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             // but it never arrived" with the actual wire sequence.
             logger.debug("Heartbeat cleared TopologyDescriptionRequired without an intervening successful push.");
         }
-        streamsRebalanceData.setTopologyDescriptionRequired(nowRequired);
+        streamsRebalanceData.setTopologyPushRequired(nowRequired);
 
         membershipManager.onHeartbeatSuccess(response);
     }

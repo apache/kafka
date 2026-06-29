@@ -128,10 +128,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
     public static final String SHARE_GROUP_REBALANCES_SENSOR_NAME = "ShareGroupRebalances";
     public static final String STREAMS_GROUP_REBALANCES_SENSOR_NAME = "StreamsGroupRebalances";
-    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_CYCLE_RUNS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupCycleRuns";
-    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_CLEANUP_ELIGIBLE_GROUPS_SENSOR_NAME = "StreamsGroupTopologyDescriptionCleanupEligibleGroups";
-    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteSuccess";
-    public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionDeleteError";
 
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_SUCCESS_SENSOR_NAME = "StreamsGroupTopologyDescriptionSetSuccess";
     public static final String STREAMS_GROUP_TOPOLOGY_DESCRIPTION_SET_ERROR_SENSOR_NAME = "StreamsGroupTopologyDescriptionSetError";
@@ -474,25 +470,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Utils.mkEntry(STREAMS_GROUP_TOPOLOGY_DESCRIPTION_DELETE_ERROR_SENSOR_NAME,
                 streamsGroupTopologyDescriptionDeleteErrorSensor)
         ));
-    }
-
-    /**
-     * Record a single observation against a global sensor by name. No-op if the sensor is not
-     * configured (e.g. tests that build the metrics without the streams plugin scaffolding).
-     */
-    public void recordSensor(String name) {
-        Sensor sensor = globalSensors.get(name);
-        if (sensor != null) sensor.record();
-    }
-
-    /**
-     * Record a numeric observation against a global sensor by name. No-op if the sensor is
-     * not configured. Used by the topology-description cleanup cycle to report the eligible
-     * group count per cycle.
-     */
-    public void recordSensor(String name, double value) {
-        Sensor sensor = globalSensors.get(name);
-        if (sensor != null) sensor.record(value);
     }
 
     private Long numOffsets() {
