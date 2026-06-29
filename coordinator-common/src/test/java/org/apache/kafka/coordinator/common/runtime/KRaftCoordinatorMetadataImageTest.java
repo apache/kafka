@@ -110,6 +110,57 @@ class KRaftCoordinatorMetadataImageTest {
     }
 
     @Test
+    public void testFinalizedFeatureLevel() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addFeature("group.version", (short) 2)
+            .build();
+
+        KRaftCoordinatorMetadataImage image = new KRaftCoordinatorMetadataImage(metadataImage);
+
+        // Finalized feature returns its level.
+        assertEquals((short) 2, image.finalizedFeatureLevel("group.version"));
+        // A feature that is not finalized returns 0.
+        assertEquals((short) 0, image.finalizedFeatureLevel("does.not.exist"));
+    }
+
+    @Test
+    public void testPartitionCreationTimeMs() {
+        Uuid topicWithTimeId = Uuid.randomUuid();
+        String topicWithTime = "topic-with-time";
+        Uuid topicWithoutTimeId = Uuid.randomUuid();
+        String topicWithoutTime = "topic-without-time";
+
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicWithTimeId, topicWithTime, 2, 4242L)
+            .addTopic(topicWithoutTimeId, topicWithoutTime, 2)
+            .build();
+
+        KRaftCoordinatorMetadataImage image = new KRaftCoordinatorMetadataImage(metadataImage);
+
+        image.topicMetadata(topicWithTime).ifPresentOrElse(
+            topicMetadata -> {
+                // The recorded creation time is returned for existing partitions.
+                assertEquals(4242L, topicMetadata.partitionCreationTimeMs(0));
+                assertEquals(4242L, topicMetadata.partitionCreationTimeMs(1));
+                // A partition that does not exist returns -1.
+                assertEquals(-1L, topicMetadata.partitionCreationTimeMs(5));
+            },
+            () -> fail("Expected topic metadata for " + topicWithTime)
+        );
+
+        image.topicMetadata(topicWithoutTime).ifPresentOrElse(
+            // Partitions created without a creation time (e.g. predating KIP-1327) return -1.
+            topicMetadata -> assertEquals(-1L, topicMetadata.partitionCreationTimeMs(0)),
+            () -> fail("Expected topic metadata for " + topicWithoutTime)
+        );
+    }
+
+    @Test
+    public void testEmptyImageFinalizedFeatureLevel() {
+        assertEquals((short) 0, CoordinatorMetadataImage.EMPTY.finalizedFeatureLevel("group.version"));
+    }
+
+    @Test
     public void testEqualsAndHashcode() {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "test-topic";

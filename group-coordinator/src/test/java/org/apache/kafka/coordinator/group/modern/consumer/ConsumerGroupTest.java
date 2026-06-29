@@ -1222,6 +1222,42 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testCreationTimeMsIsWriteOnce() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+
+        // A group created with a known creation time keeps it...
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo", 1000L);
+        assertEquals(1000L, group.creationTimeMs());
+        // ...and a subsequent set is ignored because the value is already set (write-once).
+        group.setCreationTimeMs(2000L);
+        assertEquals(1000L, group.creationTimeMs());
+
+        // A group created with the -1 placeholder (the replay path) accepts the first value...
+        ConsumerGroup persisted = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-bar", -1L);
+        assertEquals(-1L, persisted.creationTimeMs());
+        persisted.setCreationTimeMs(1000L);
+        assertEquals(1000L, persisted.creationTimeMs());
+        // ...but ignores later values, so replaying the same field again is idempotent.
+        persisted.setCreationTimeMs(5000L);
+        assertEquals(1000L, persisted.creationTimeMs());
+    }
+
+    @Test
+    public void testCreationTimeMsIsSnapshotted() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo", -1L);
+        snapshotRegistry.idempotentCreateSnapshot(0);
+
+        group.setCreationTimeMs(1000L);
+        snapshotRegistry.idempotentCreateSnapshot(1);
+
+        // The value is read per committed offset from the timeline.
+        assertEquals(-1L, group.creationTimeMs(0));
+        assertEquals(1000L, group.creationTimeMs(1));
+        assertEquals(1000L, group.creationTimeMs());
+    }
+
+    @Test
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id-1", -1L);
