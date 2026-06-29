@@ -144,6 +144,7 @@ public class ClientOAuthIntegrationTest {
         var listenerPrefix = "listener.name.external.oauthbearer.";
         serverProperties.put(listenerPrefix + SaslConfigs.SASL_JAAS_CONFIG, OAuthBearerLoginModule.class.getName() + " required ;");
         serverProperties.put(listenerPrefix + SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, ISSUER_ID);
+        serverProperties.put(listenerPrefix + SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, mockOAuthServer.issuerUrl(ISSUER_ID).toString());
         serverProperties.put(listenerPrefix + SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, jwksUrl);
         serverProperties.put(
             listenerPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
