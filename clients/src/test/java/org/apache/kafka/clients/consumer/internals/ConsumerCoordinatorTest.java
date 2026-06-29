@@ -1514,6 +1514,16 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testRackAwareConsumerRebalanceWithUnavailableRack() {
+        // tests the case where a broker in a rack-aware cluster goes down, causing the client's known racks
+        // to shrink, ensuring that there is not a rebalance in this case
+        verifyRackAwareConsumerRebalance(
+                Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                Arrays.asList(Arrays.asList(1, 6), Arrays.asList(1, 2), Arrays.asList(2, 0)),
+                true, false);
+    }
+
+    @Test
     public void testRackAwareConsumerRebalanceWithNewPartitions() {
         verifyRackAwareConsumerRebalance(
                 Arrays.asList(Arrays.asList(0, 1), Arrays.asList(1, 2), Arrays.asList(2, 0)),
